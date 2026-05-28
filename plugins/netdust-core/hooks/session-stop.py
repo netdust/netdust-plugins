@@ -318,17 +318,48 @@ def append_todos_from_tags(cwd: str, todos: list[str], date: str) -> bool:
     return True
 
 
+def _netdust_plugin_dirs() -> list[Path]:
+    """
+    Locate all installed netdust-* plugin dirs.
+
+    Marketplace install layout (Claude Code 2.1+):
+        ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/
+
+    Climbs from CLAUDE_PLUGIN_ROOT (this hook's own plugin install path) up
+    two levels to reach the marketplace dir, then enumerates siblings.
+    For each sibling, picks the latest-mtime version dir (proxy for "active").
+
+    Falls back to globbing ~/.claude/plugins/netdust-* if env var is unset
+    (legacy/dev layout). Returns absolute paths to the version dirs.
+    """
+    root_env = os.environ.get("CLAUDE_PLUGIN_ROOT")
+    if root_env:
+        # cache/<marketplace>/<self-plugin>/<version> — climb to <marketplace>
+        marketplace_dir = Path(root_env).parent.parent
+        result = []
+        for sibling in marketplace_dir.iterdir():
+            if not sibling.is_dir() or not sibling.name.startswith("netdust-"):
+                continue
+            versions = [v for v in sibling.iterdir() if v.is_dir()]
+            if not versions:
+                continue
+            latest = max(versions, key=lambda p: p.stat().st_mtime)
+            result.append(latest)
+        return result
+
+    # Legacy fallback: pre-monorepo flat layout.
+    plugins_root = Path.home() / ".claude" / "plugins"
+    if not plugins_root.exists():
+        return []
+    return [p for p in plugins_root.glob("netdust-*") if p.is_dir()]
+
+
 def append_skill_edge(skill: str, edge_case: str, date: str, source_project: str) -> bool:
     """
     Append a SKILL-EDGE entry to the named skill's lessons.md.
-    Searches all netdust-* plugin dirs (core, wp, statamic, future bun-react, etc.).
-    Flat skill layout: ~/.claude/plugins/netdust-*/skills/<skill>/SKILL.md
+    Searches all installed netdust-* plugin dirs (core, wp, statamic, etc.).
     """
-    plugins_root = Path.home() / ".claude" / "plugins"
-    if not plugins_root.exists():
-        return False
-    # Try exact <plugin>/skills/<skill>/SKILL.md match across all netdust-* plugins
-    for plugin_dir in plugins_root.glob("netdust-*"):
+    for plugin_dir in _netdust_plugin_dirs():
         candidate = plugin_dir / "skills" / skill / "SKILL.md"
         if candidate.exists():
             lessons_path = candidate.parent / "lessons.md"

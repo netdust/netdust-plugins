@@ -23,7 +23,7 @@ note() {
 }
 
 # ── Harness GLOBAL.md ───────────────────────────────────────────────────────
-HARNESS_GLOBAL="$HOME/.claude/plugins/netdust-core/memory/GLOBAL.md"
+HARNESS_GLOBAL="${CLAUDE_PLUGIN_ROOT}/memory/GLOBAL.md"
 note harness_global "$HARNESS_GLOBAL"
 if [[ -f "$HARNESS_GLOBAL" ]]; then
   OUTPUT+="## Netdust harness — GLOBAL\n"
