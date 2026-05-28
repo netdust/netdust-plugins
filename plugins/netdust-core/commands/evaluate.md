@@ -62,7 +62,7 @@ For the commit range, capture:
 2. **Per-session metrics**: span (first→last commit), commit count, average gap.
 3. **Total active dev time**: sum of session spans. NOT calendar time.
 4. **Per-commit min/avg/max**.
-5. **Cleanup ratio**: (BUG-* + letter-prefix-fix + plan-correction commits) / total implementation commits. Report as percentage.
+5. **Cleanup ratio**: (BUG-* + letter-prefix-fix commits) / total implementer commits. Plan-correction commits are excluded from the numerator AND the denominator — they are audit-side meta-work, not implementer cleanup, and counting them inflates the implementer's apparent cleanup rate. Report as percentage.
 6. **First-commit cold-start tax**: time between branch HEAD-at-start-of-session and first commit. If the first session is the first session of the sub-phase, this is the warm-up tax.
 
 ## Step 4 — Cross-reference plan vs. shipped
@@ -109,6 +109,14 @@ Harder to detect from git alone; here are the heuristics:
 5. **First-commit cold-start tax > 30 min**: signals harness-warmup overhead worth investigating (could be a startup-skill or memory-loading gap).
 6. **No commits referencing `Skill("netdust-core:testing-workflow")` in their bodies**: signals the subagent invocation discipline isn't working. (Won't always be detectable since the Skill invocation lives in transcripts, not commits. Flag as "unable to verify from git alone — investigate in next session.")
 
+**Each gap MUST declare its own resolution disposition.** Use one of:
+
+- **SHOULD_FIX** — gap has a concrete remediation that should land before the next sub-phase starts. Goes in §Recommendations as an action item. Auto-actionable: the retro itself (or a follow-up commit) ships the fix.
+- **MONITOR** — gap is real but discipline held by other means, OR sample size too small to act yet. Goes in §Harness gaps only, NOT in §Recommendations and NOT in §Follow-ups. Re-evaluated at the next /evaluate run.
+- **HUMAN_DECISION** — gap involves a tradeoff the retro can't unilaterally decide (e.g., "drop a reviewer stage given low blocker rate"). Goes in §Follow-ups for human review AND `tasks/retro-follow-ups.md`, NOT in §Recommendations.
+
+**A gap MUST appear in exactly one of those three destinations — never two.** If the retro flags the same finding as both a recommendation (auto-actionable) and a follow-up (human decision), one of the two is wrong. Pick one.
+
 ## Step 7 — Write the retro
 
 Write `${RETRO_PATH}` with this structure verbatim:
@@ -150,19 +158,27 @@ Write `${RETRO_PATH}` with this structure verbatim:
 
 ## Harness gaps identified
 
-[Numbered list of gaps with evidence and remediation suggestions:]
+[Numbered list of gaps. Each MUST declare a disposition: SHOULD_FIX | MONITOR | HUMAN_DECISION. See Step 6 of the command spec.]
 
-1. **<Gap name>** — <evidence>. **Remediation:** <concrete change to a skill / hook / plan template>.
+1. **<Gap name>** — <evidence>. **Disposition:** SHOULD_FIX | MONITOR | HUMAN_DECISION. **Remediation:** <concrete change to a skill / hook / plan template — only if SHOULD_FIX>.
 
 ## Recommendations
 
-[Short list, prioritized:]
+[Only gaps with disposition SHOULD_FIX go here. If a gap is MONITOR or HUMAN_DECISION, it does NOT appear in this section.]
 
 1. **Action:** … **Why:** … **Cost:** …
 
 ## Follow-ups for human review
 
-[Anything that needs human judgment, not auto-action. Goes into tasks/retro-follow-ups.md too.]
+[Only gaps with disposition HUMAN_DECISION go here. Also written to tasks/retro-follow-ups.md per Step 10.]
+
+[If zero HUMAN_DECISION gaps: write the literal sentence "No human-decision items this sub-phase." Do not omit the section.]
+
+## Memory updates
+
+[Mandatory section. List every memory file modified, with line counts. See Step 9.]
+
+[If zero memory writes: write the literal sentence "No memory updates this sub-phase." Do not omit the section.]
 ```
 
 ## Step 8 — Auto-commit plan corrections
@@ -218,24 +234,47 @@ Skill-lessons entries use this shape:
 
 DO NOT write the same finding to multiple memory files. Pick the most specific scope.
 
+**The retro's "Memory updates" section in Step 7 MUST list every file modified by this step, with line counts.** Example:
+
+```
+## Memory updates
+
+- `+12 lines` to ~/.claude/plugins/netdust-core/skills/testing-workflow/lessons.md (skill-invocation gap entry)
+- `+8 lines` to ~/.claude/projects/-home-ntdst-Projects-folio/memory/feedback_drizzle-migrate-is-idempotent.md (new project auto-memory)
+- `+6 lines` to memory/lessons.md (project-local: workspaces.test.ts assertion drift on builtin flips)
+```
+
+If the section is empty, the retro found nothing worth memory — that's a valid signal too, but the empty section must be PRESENT in the retro, not omitted. Empty = audited and found nothing; missing = step skipped.
+
 ## Step 10 — Write follow-ups for human review
 
-If any finding requires human judgment (e.g. "should we drop the Stage 2 reviewer agent given 0% blocker rate?"), append it to `tasks/retro-follow-ups.md` (create if missing). One bullet per item, with:
+**Mandatory file write.** For every gap classified `HUMAN_DECISION` in Step 6, append a bullet to `tasks/retro-follow-ups.md` (create if missing). This file is the input to the next planning session — without it, the inline "Follow-ups for human review" section in the retro will not be re-read.
 
-- The finding
-- The decision the human needs to make
-- The skill or file that would change if the decision is YES
+Each bullet contains:
 
-This file is the input to the next planning session. Don't auto-act on these.
+- The finding (1 sentence)
+- The decision the human needs to make (1 sentence with YES/NO framing)
+- The skill or file that would change if the decision is YES (concrete path)
+- Link back to the retro: `(surfaced by ${RETRO_PATH})`
+
+If Step 6 classified zero gaps as `HUMAN_DECISION`, write nothing to this file. But the retro's §Follow-ups section MUST then explicitly say "No human-decision items this sub-phase." — empty is a valid result; missing is a skipped step.
+
+**Failure mode the wording above closes:** the first `/evaluate` run wrote follow-ups inline in the retro but did NOT create `tasks/retro-follow-ups.md`. The inline section was unreachable by future sessions. Both writes are required.
 
 ## Step 11 — Stamp + commit the retro
 
-1. `git add ${RETRO_PATH}` (+ tasks/retro-follow-ups.md if modified).
-2. Commit:
+This step has three sub-steps, all REQUIRED. If any fails or is skipped, the retro is incomplete and the next /evaluate will misbehave.
+
+1. **Write `NEW_SHA` to `.claude/.last-evaluate`.** Create the directory + file if missing. Verify the write succeeded by reading the file back. **Without this stamp, the next /evaluate falls back to `merge-base HEAD main` and retrospects over already-evaluated commits, producing duplicate findings.**
+
+2. `git add ${RETRO_PATH} .claude/.last-evaluate` (+ `tasks/retro-follow-ups.md` if modified).
+
+3. Commit:
    ```
    ${PHASE}: retro — sub-phase ${SUB_PHASE} (${HOURS}h, ${N} commits, ${DEFECTS} plan defects surfaced)
    ```
-3. Write `NEW_SHA` to `.claude/.last-evaluate` for the next /evaluate's range computation. Create the file if missing.
+
+**Failure mode this wording closes:** the first /evaluate run on Folio's phase-3 branch did NOT write `.claude/.last-evaluate`. Treating the stamp as optional is what allowed the skip. It is not optional.
 
 ## Step 12 — Report
 
