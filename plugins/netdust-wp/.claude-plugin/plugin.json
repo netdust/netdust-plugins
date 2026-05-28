@@ -1,0 +1,11 @@
+{
+  "name": "netdust-wp",
+  "version": "0.2.0",
+  "description": "Netdust WordPress plugin — WP discipline (security, database, bedrock-composer), WP reference (frontend, testing, infra), ntdst-core framework (architecture, data, patterns, yootheme), and WP commands (/wp-new-project, /scaffold-plugin, /sync-db, /setup-tests). Layers on top of netdust-core for memory, hooks, dev-stack, server management, code review, cross-domain skills, and /deploy.",
+  "author": {
+    "name": "Stefan Vermeulen",
+    "email": "stefan@netdust.be",
+    "url": "https://netdust.be"
+  },
+  "license": "UNLICENSED"
+}

@@ -1,0 +1,42 @@
+@~/.claude/plugins/netdust-wp/CLAUDE.md
+
+# {{PROJECT_NAME}}
+
+{{PROJECT_DESCRIPTION}}
+
+**Read `site.yml` before any operational command.** It is the single source of truth for hosting, SSH, remote paths, deploy method.
+
+---
+
+## Project-specific notes
+
+(Add anything that overrides or extends the harness here. Examples:)
+
+- LearnDash version: TBD
+- Custom plugins: TBD
+- Disabled harness skills: (list any harness skills that don't apply to this project)
+
+---
+
+## Memory + tasks
+
+- `memory/STATE.md` — current state, decisions, risks. Updated by Stop hook + manually.
+- `memory/lessons.md` — gotchas, append-only.
+- `tasks/todo.md` — carried-forward work.
+- `site.yml` — operational config (deploy, SSH, hosting, paths).
+
+The SessionStart hook injects all of these into Claude's initial context.
+
+---
+
+## Tag conventions
+
+When something important happens during a session, write:
+
+- `DECISION: ...` for choices made
+- `RISK: ...` for fragile spots
+- `LESSON: ...` for gotchas
+- `TODO: ...` for carried-forward work
+- `SKILL-EDGE: <skill>: ...` for cases an existing skill missed
+
+The Stop hook lifts these tags into the right memory file deterministically. No AI guessing.

@@ -1,0 +1,104 @@
+# Makefile.tmpl — Netdust WordPress harness
+#
+# This file contains MULTIPLE deploy-method variants. /wp-new-project copies
+# only the section matching the chosen deploy method.
+#
+# Variants below:
+#   ── VARIANT: makefile ──         (git bundle deploy — Stride/Fuse pattern)
+#   ── VARIANT: git-push ──         (Ploi auto-deploy on push)
+#   ── VARIANT: git-bundle-makefile ── (explicit git-bundle — Netdust/VAD)
+#
+# Replace {{PROJECT_NAME}}, {{STAGING_HOST}}, {{STAGING_PATH}} etc. with site.yml values.
+
+# ═══════════════════════════════════════════════════════════════════════════
+#                          VARIANT: makefile
+# ═══════════════════════════════════════════════════════════════════════════
+# Use when site.yml deploy.method == makefile
+# WORKFLOW: setup → dev → save → deploy → ship
+
+PROJECT_NAME := {{PROJECT_NAME}}
+STAGING_HOST := {{STAGING_HOST}}
+STAGING_PATH := {{STAGING_PATH}}
+STAGING_URL := {{STAGING_URL}}
+PRODUCTION_HOST := {{PRODUCTION_HOST}}
+PRODUCTION_PATH := {{PRODUCTION_PATH}}
+PRODUCTION_URL := {{PRODUCTION_URL}}
+
+# Bedrock paths (adjust for custom-app: WP_CORE := wp, CONTENT_DIR := content)
+WEB_ROOT := web
+WP_CORE := $(WEB_ROOT)/wp
+CONTENT_DIR := $(WEB_ROOT)/app
+UPLOADS_DIR := $(CONTENT_DIR)/uploads
+PLUGINS_DIR := $(CONTENT_DIR)/plugins
+THEMES_DIR := $(CONTENT_DIR)/themes
+MU_PLUGINS_DIR := $(CONTENT_DIR)/mu-plugins
+
+# Colors
+RED := \033[31m
+GREEN := \033[32m
+YELLOW := \033[33m
+RESET := \033[0m
+
+.PHONY: help dev stop save deploy-staging deploy-production ship feature finish
+
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(RESET) %s\n", $$1, $$2}'
+
+dev: ## Start DDEV
+	ddev start
+
+stop: ## Stop DDEV
+	ddev stop
+
+save: ## Commit + push current branch
+	@git status
+	@read -p "Commit message: " msg; \
+		git add -A && git commit -m "$$msg" && git push
+
+deploy-staging: ## Deploy current branch to staging via git bundle
+	@printf "$(YELLOW)Deploying to staging ($(STAGING_URL))...$(RESET)\n"
+	git bundle create /tmp/$(PROJECT_NAME)-staging.bundle HEAD
+	scp /tmp/$(PROJECT_NAME)-staging.bundle $(STAGING_HOST):/tmp/
+	ssh $(STAGING_HOST) "cd $(STAGING_PATH) && git pull /tmp/$(PROJECT_NAME)-staging.bundle HEAD && composer install --no-dev --optimize-autoloader"
+	@printf "$(GREEN)✓ deployed to staging$(RESET)\n"
+
+deploy-production: ## Deploy to production (requires confirmation)
+	@printf "$(RED)PRODUCTION DEPLOY — $(PRODUCTION_URL)$(RESET)\n"
+	@read -p "Type 'production' to confirm: " confirm; \
+		[ "$$confirm" = "production" ] || (echo "aborted"; exit 1)
+	git bundle create /tmp/$(PROJECT_NAME)-production.bundle main
+	scp /tmp/$(PROJECT_NAME)-production.bundle $(PRODUCTION_HOST):/tmp/
+	ssh $(PRODUCTION_HOST) "cd $(PRODUCTION_PATH) && git pull /tmp/$(PROJECT_NAME)-production.bundle main && composer install --no-dev --optimize-autoloader"
+	@printf "$(GREEN)✓ deployed to production$(RESET)\n"
+
+ship: deploy-staging ## Merge staging → main + deploy to production
+	git checkout main && git merge staging && git push
+	$(MAKE) deploy-production
+
+feature: ## Create feature branch from staging (NAME=feature-name)
+	@[ -n "$(NAME)" ] || (echo "usage: make feature NAME=feature-name"; exit 1)
+	git checkout staging && git pull
+	git checkout -b feature/$(NAME)
+
+finish: ## Merge current feature branch into staging
+	@current=$$(git branch --show-current); \
+		[ "$${current#feature/}" != "$$current" ] || (echo "not on a feature branch"; exit 1); \
+		git checkout staging && git merge --no-ff "$$current" && git push
+
+# ═══════════════════════════════════════════════════════════════════════════
+#                          VARIANT: git-push (Ploi)
+# ═══════════════════════════════════════════════════════════════════════════
+# Use when site.yml deploy.method == git-push
+# Ploi auto-deploys on push to the configured branch.
+# Replace the deploy-staging / deploy-production targets above with:
+
+# deploy-staging: ## Push staging branch — Ploi auto-deploys
+# 	@printf "$(YELLOW)Pushing staging branch...$(RESET)\n"
+# 	git push origin staging
+# 	@printf "$(GREEN)✓ pushed. Ploi auto-deploy will fire.$(RESET)\n"
+#
+# deploy-production: ## Push main — Ploi auto-deploys to production
+# 	@read -p "Type 'production' to confirm: " confirm; \
+# 		[ "$$confirm" = "production" ] || (echo "aborted"; exit 1)
+# 	git push origin main
+# 	@printf "$(GREEN)✓ pushed. Ploi auto-deploy will fire.$(RESET)\n"

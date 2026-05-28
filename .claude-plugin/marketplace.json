@@ -1,0 +1,34 @@
+{
+  "name": "netdust-plugins",
+  "owner": {
+    "name": "Stefan Vermeulen",
+    "email": "stefan@netdust.be"
+  },
+  "metadata": {
+    "description": "Netdust harness plugins — core (cross-stack discipline, hooks, memory), wp (WordPress framework knowledge), statamic (Statamic 6 + Peak). Stack-agnostic core; layered WP + Statamic plugins.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "netdust-core",
+      "source": "./plugins/netdust-core",
+      "description": "Netdust harness core — memory + hooks + cross-stack skills (research, marketing, brand-voice, code-audit, shake-out, testing-workflow, ntdst-execute-with-tests, secure-server, ploi, dev-stack) + 7 code-reviewer agents + 9-method /deploy + /integration + /shakeout + ploi MCP. Stack-agnostic. Layered on by netdust-wp, netdust-statamic.",
+      "version": "0.1.0",
+      "strict": false
+    },
+    {
+      "name": "netdust-wp",
+      "source": "./plugins/netdust-wp",
+      "description": "Netdust WordPress plugin — WP discipline, WP reference, ntdst-core framework, WP commands. Layers on netdust-core.",
+      "version": "0.2.0",
+      "strict": false
+    },
+    {
+      "name": "netdust-statamic",
+      "source": "./plugins/netdust-statamic",
+      "description": "Netdust Statamic plugin — Statamic 6 + Peak skills, build playbook, shake-out, scaffolding commands. Layers on netdust-core.",
+      "version": "0.1.0",
+      "strict": false
+    }
+  ]
+}

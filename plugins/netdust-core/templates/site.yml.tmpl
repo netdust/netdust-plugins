@@ -1,0 +1,71 @@
+# site.yml — operational config for {{PROJECT_NAME}}
+# Read by /deploy, /wp-new-project, and Claude when managing this site.
+# Single source of truth for hosting, SSH, remote paths, deploy method.
+
+site:
+  name: {{PROJECT_NAME}}
+  domain: {{PROJECT_DOMAIN}}
+  risk: {{RISK_LEVEL}}                # low | medium | high
+  description: "{{PROJECT_DESCRIPTION}}"
+
+structure:
+  type: {{STACK_TYPE}}                # bedrock | custom-app | custom-app-public | custom-site | statamic | laravel | bun-react | static
+  webroot: {{WEBROOT}}                # relative path to webroot (web for bedrock, app for custom-app, public for static/statamic/laravel, dist for bun-react)
+  wpcli_path: {{WPCLI_PATH}}          # WP-only — --path= value for WP-CLI (or "auto" if wp-cli.yml handles it). Leave blank for non-WP.
+
+hosting:
+  provider: {{HOSTING_PROVIDER}}      # ploi | combell | other
+  ssh_staging: {{SSH_STAGING_ALIAS}}
+  ssh_production: {{SSH_PRODUCTION_ALIAS}}
+  remote_path_staging: {{REMOTE_PATH_STAGING}}
+  remote_path_production: {{REMOTE_PATH_PRODUCTION}}
+
+# ── Deploy block — uncomment ONE of the following (the chosen DEPLOY_METHOD) ──
+
+deploy:
+  method: {{DEPLOY_METHOD}}           # makefile | git-push | rsync | rsync-staging-prod | manual | ftp | autogit | git-bundle-makefile | tbd
+
+  # post_deploy_hooks: optional list of commands /deploy runs on the target env
+  # AFTER the main deploy command. Each entry runs via SSH to hosting.ssh_<env>.
+  # Examples per stack:
+  #   Statamic: php please stache:warm
+  #   Laravel:  php artisan config:cache && php artisan route:cache
+  #   WP:       (usually empty — Ploi auto-runs composer install --no-dev)
+  #
+  # post_deploy_hooks:
+  #   - cd /home/ploi/{{PROJECT_NAME}}/current && php please stache:warm
+
+# ── Method-specific deploy config ──
+# Uncomment + edit the block matching your chosen method.
+
+# --- For method: makefile or git-bundle-makefile ---
+#  staging_command: make deploy-staging
+#  production_command: make deploy-production
+
+# --- For method: git-push ---
+#  staging_branch: staging
+#  production_branch: main
+#  remote: origin                     # git remote name
+
+# --- For method: rsync ---
+#  command: rsync -avz --delete --exclude node_modules --exclude .git ./public/ {{SSH_STAGING_ALIAS}}:{{REMOTE_PATH_STAGING}}/
+#  note: "Review changes before --delete removes remote files"
+
+# --- For method: rsync-staging-prod (VAD style) ---
+#  staging:
+#    method: rsync
+#    command: rsync -avz app/ {{SSH_STAGING_ALIAS}}:{{REMOTE_PATH_STAGING}}/
+#  production:
+#    method: rsync
+#    command: rsync -avz app/ {{SSH_PRODUCTION_ALIAS}}:{{REMOTE_PATH_PRODUCTION}}/
+
+# --- For method: manual or ftp or autogit ---
+#  note: "Explain here how to deploy — Claude will refuse to act and print this note instead."
+
+local:
+  ddev_project: {{PROJECT_NAME}}
+  start: ddev start
+  url: https://{{PROJECT_NAME}}.ddev.site
+
+notes:
+  - "Add cross-cutting rules here (e.g. 'never flush Redis without checking object-cache.php exclusions')"
