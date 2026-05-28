@@ -3,72 +3,83 @@ name: ntdst-execute-with-tests
 description: Use when executing a written implementation plan in a Netdust project — wraps superpowers:executing-plans and superpowers:subagent-driven-development with mandatory testing-workflow gates. Triggers on "execute the plan", "implement the plan", "run subagents on this plan", "work the plan", "start building", "execute todo.md", "build out the plan", "run this plan". Required for any plan execution in WordPress, Statamic, or Bun projects under this harness.
 ---
 
-# Execute With Tests — Netdust plan execution wrapper
+<objective>
+Wrap the chosen superpowers execution skill with two additions the upstream skills do not provide: (1) mandatory invocation of `netdust-core:testing-workflow` at every task close, and (2) a structured Test-evidence + STATUS block at the end of every subagent's report so the discipline is auditable from the transcript, not honor-system.
 
-Plain `superpowers:executing-plans` and `superpowers:subagent-driven-development` do not enforce `testing-workflow`. In this harness, that's a regression — `testing-workflow` exists precisely to gate task/phase sign-off with real tests, but upstream skills never reference it. This skill is the front door that wires them together.
+Everything else — TDD, two-stage review, dispatch shape, status handling, escalation — belongs to the upstream skill. Do not duplicate upstream content here.
+</objective>
 
-## When to use
+<extremely_important>
+This skill is a sequencer with one job: load the right upstream skill, then add the netdust-specific addendum to every dispatch. It is NOT a place to think about execution shape, do pre-flight checks, run grep/ls, or improvise.
 
-- Any time you're about to invoke `superpowers:executing-plans` or `superpowers:subagent-driven-development` in a Netdust project (WordPress, Statamic, Bun, plain HTML).
-- After `superpowers:writing-plans` produces a plan file and you're ready to build.
-- Trigger phrases: "execute the plan", "implement the plan", "run subagents on this plan", "work the plan", "start building", "execute todo.md", "build out the plan".
+If you find yourself running Bash, Read, or Grep in the controller session BEFORE invoking the upstream skill in step 1 of `<process>` below, **stop**. That is the upstream skill's job, or a subagent's job, never yours. Pre-flight reasoning before the upstream invocation is the exact failure mode this skill exists to prevent. See `<red_flags>`.
+</extremely_important>
 
-**Do not use when:**
-- No plan exists yet → use `superpowers:brainstorming` then `superpowers:writing-plans`.
-- One-off bug fix with no plan → use `superpowers:systematic-debugging` + `testing-workflow` directly.
-- Already mid-build inside `superpowers:executing-plans` → invoke `testing-workflow` directly at the next task boundary.
+<intake>
+Before any other action, answer this question in your transcript (one sentence, explicit):
 
-## What this skill does
+**Which upstream skill does this plan need?**
 
-It's a sequencer with three mandatory steps and no shortcuts.
-
-### Step 1 — Load the upstream execution skill
-
-Pick one based on the plan shape:
-
-| Plan shape | Skill to invoke |
+| Plan shape | Upstream skill |
 |---|---|
-| Independent tasks suitable for parallel subagents | `superpowers:subagent-driven-development` |
-| Sequential tasks needing shared context, or single agent | `superpowers:executing-plans` |
+| Independent tasks suitable for parallel subagents (most common) | `superpowers:subagent-driven-development` |
+| Sequential tasks needing shared context, or solo execution | `superpowers:executing-plans` |
 
-Invoke it via the Skill tool. Follow its checklist exactly. Do not deviate from upstream discipline.
+You must state your choice and one-sentence reason before proceeding. Examples:
 
-### Step 2 — Gate every task with testing-workflow
+> "Sub-phase B's 8 tasks are mostly independent (B-2/B-3/B-5/B-7 can parallelize after B-1), so I'm using subagent-driven-development."
+>
+> "This is a 3-task refactor where each task builds on the previous file structure, so I'm using executing-plans."
 
-```
-NON-NEGOTIABLE:
-Every task is considered "in progress" until testing-workflow has been invoked
-for it and reports green. Not "I ran the tests" — invoked via the Skill tool.
-```
+If you cannot pick, the plan is ambiguous — ask your human partner. Do not improvise.
+</intake>
 
-The pattern per task:
+<process>
 
-1. Subagent (or you, if single-agent) implements the task.
-2. Before marking the task done, invoke `Skill("testing-workflow")` with the task description as context.
-3. `testing-workflow` produces the task-complete checklist. Walk it.
-4. Only after all boxes are checked does the task get marked complete.
+**Step 1 — Invoke the upstream skill.** Use the Skill tool. Follow its checklist EXACTLY. Its content is your primary instruction set from here on; this skill is only an addendum.
 
-**For parallel subagents:** append the **ready-to-paste dispatch-prompt template** below to every Agent-tool prompt. Copy verbatim — do not summarize or paraphrase. This is the load-bearing language that makes the discipline auditable.
+**Step 2 — Apply the netdust addendum to every dispatch prompt.** For each subagent dispatch the upstream skill produces (implementer, spec reviewer, code-quality reviewer), append the block below VERBATIM to the prompt body. Do not summarize, paraphrase, or selectively include.
+
+See `<addendum_for_dispatch>` below.
+
+**Step 3 — Gate every task close on testing-workflow.** A task is not done until:
+1. The subagent's report ends with the structured Test-evidence + STATUS blocks defined in the addendum.
+2. The subagent has invoked `Skill("netdust-core:testing-workflow")` in its transcript.
+
+If either is missing, treat the task as DONE_WITH_CONCERNS or NEEDS_CONTEXT (depending on which is absent) per the upstream skill's status handling. Do not mark complete without both.
+
+**Step 4 — Phase-close handoff.** After all tasks in a phase complete, follow the upstream skill's final-review step. Then invoke `Skill("netdust-core:shake-out")` (or stack-specific override like `netdust-statamic:shake-out-statamic`). Then `superpowers:finishing-a-development-branch`.
+
+</process>
+
+<addendum_for_dispatch>
+
+Append this block VERBATIM at the bottom of every implementer dispatch prompt. It supplements (does not replace) the upstream `implementer-prompt.md` template.
 
 ```
 ---
 
-## Mandatory close-out for this task
+## Netdust addendum — mandatory close-out
 
 Before reporting STATUS, you MUST:
 
-1. Invoke `Skill("netdust-core:testing-workflow")` via the Skill tool. Walk
-   the task-complete checklist it produces, in your transcript.
-2. Run the affected app's full unit suite from the app's directory (NOT from
-   the repo root). Confirm test count delta matches the plan's expectation.
-3. Run static analysis on the touched files. For TS: `bun x tsc --noEmit`
-   from the affected app's directory.
-4. End your final message with this block, verbatim and complete:
+1. Invoke `Skill("netdust-core:testing-workflow")` via the Skill tool.
+   Walk the task-complete checklist it produces. The invocation itself —
+   not the prose summary — is what makes this gate auditable.
+
+2. Run the affected app's full unit suite from the APP's directory
+   (never from repo root). Confirm the test-count delta matches the
+   plan's expectation.
+
+3. Run static analysis on touched files. For TypeScript:
+   `bun x tsc --noEmit` from the affected app's directory.
+
+4. End your final message with these two blocks, verbatim and complete:
 
    ## Test evidence
    - Test file(s): <list of paths touched>
-   - RED proof: <command you ran> → <1-3 line snippet showing the test failed>
-   - GREEN proof: <command you ran> → <1-3 line snippet showing the test passed>
+   - RED proof: <command you ran> → <1-3 line snippet showing fail>
+   - GREEN proof: <command you ran> → <1-3 line snippet showing pass>
    - Suite delta: <app> was <N>, now <M>, <K> fails
    - Typecheck: <command> → <clean | errors>
 
@@ -78,76 +89,63 @@ Before reporting STATUS, you MUST:
    FILES TOUCHED: <list>
    DIVERGENCES FROM PLAN: <list, or "matched plan verbatim">
 
-Missing any item in either block = task NOT done. Do not rationalize. Do not
-substitute prose for the structured form. The structure is what makes the
-audit possible.
+Missing any item in either block = task NOT done. Do not rationalize.
+Do not substitute prose for the structured form. The structure is what
+makes the audit possible.
 
 ---
 ```
 
-The block above MUST appear at the bottom of every subagent dispatch prompt for any code-touching task. Doc-only and tooling-only tasks may omit the test evidence block but MUST still include the STATUS block.
+For **doc-only or tooling-only tasks** (no code-touching changes), the implementer may omit the Test evidence block but MUST still include the STATUS block.
 
-The SubagentStop hook (netdust-core) detects when a subagent finishes without having invoked `testing-workflow` and will surface a reminder. That reminder is a backstop, not the primary mechanism — **the dispatch prompt is**. Skipping the verbatim block above breaks the discipline at the source; the hook only catches what the prompt failed to enforce.
+For **reviewer subagents** (spec compliance, code quality), only the STATUS block is required — they do not run tests themselves.
 
-### Calibration data behind this template
+</addendum_for_dispatch>
 
-The verbatim template was hardened by retros from real harness runs:
+<red_flags>
 
-- **Folio Phase 3 Sub-phase A** (2026-05-28): 7 tasks shipped with the earlier weaker version of this template ("you MUST invoke Skill..." as a one-liner). Result: across all 7 task dispatches, ZERO subagents actually invoked `Skill("netdust-core:testing-workflow")` — they internalized the TDD discipline via the dispatch-prompt prose but bypassed the invocation gate. The discipline held by other means (RED→GREEN cycles + test-count deltas) but the audit trail was unverifiable. The `/evaluate` retro flagged this as Gap #5: "skill-invocation contract bypassed."
-- The fix: make the invocation a literal structured demand with a structured response shape (the Test evidence + STATUS blocks above). A subagent that returns the structured form has, in producing it, also done the invocation. A subagent that returns prose has skipped both.
+These thoughts mean you are about to skip the upstream skill. Stop.
 
-If the structured form starts to feel like "ceremony," that's a sign it's working — subagents that find it onerous to produce it are subagents that would otherwise skip it.
-
-### Step 3 — Gate every phase with testing-workflow
-
-After all tasks in a phase complete:
-
-1. Invoke `Skill("testing-workflow")` again, this time with the phase description.
-2. Walk the phase-complete checklist (integration + acceptance tests).
-3. Only after phase sign-off proceed to the next phase, or to `shake-out`.
-
-### Step 4 — Hand off
-
-When the plan is complete:
-
-1. Invoke `Skill("netdust-core:shake-out")` (or the stack-specific override, e.g. `netdust-statamic:shake-out-statamic`). This is the QA phase that catches what unit/integration tests don't.
-2. After shake-out: invoke `superpowers:finishing-a-development-branch`.
-
-## Boundary with testing-workflow
-
-`testing-workflow` is a discipline skill — it tells you what to test and how. This skill is a sequencer — it tells you **when** to invoke testing-workflow. Keep them separate:
-
-- This skill: orchestration, ordering, handoff between upstream skills.
-- testing-workflow: the actual test discipline (unit / integration / acceptance, fix loop, anti-patterns).
-
-If you find yourself copying testing-workflow content into this skill, stop. Invoke testing-workflow instead.
-
-## Boundary with shake-out
-
-| Phase | Owner |
+| Thought | Reality |
 |---|---|
-| Build loop (per task + per phase) | This skill + testing-workflow |
-| Post-build QA in real environment | shake-out |
-| Branch close-out | superpowers:finishing-a-development-branch |
+| "Let me think about execution shape before invoking the upstream skill" | The upstream skill IS how you think about execution shape. Invoke it first. |
+| "I'll do a quick pre-flight grep before dispatching" | Pre-flight belongs to the controller's coordination work, AFTER the upstream skill is loaded. Not before. |
+| "I already know what subagent-driven-development says" | Skills evolve. Invoke and read the current version every time. |
+| "The wrapper is enough — I don't need the upstream" | The wrapper is an addendum. It only works on top of upstream content. |
+| "Two-stage review feels like ceremony for a simple task" | The upstream skill's review loop catches what TDD doesn't. Do not skip it. |
+| "Skipping the verbatim addendum saves a few lines" | The verbatim form is what closes the audit gap. Skipping it = reverting to honor-system, which is the failure mode this skill exists to prevent. |
+| "I'll invoke testing-workflow after the commit, not before reporting" | The order is: invoke testing-workflow → walk checklist → report. The invocation is in the same transcript as the report, or the gate is bypassed. |
 
-testing-workflow has already proven the contracts known at plan time. shake-out finds what plan time missed. Do not re-run the full test suite during shake-out's Phase 1 sweep — assume it's green from the phase-complete gate.
+If you have read this far without invoking the upstream skill from `<process>` Step 1, your next action MUST be that invocation. Not "let me check one more thing."
 
-## Red flags
+</red_flags>
 
-Stop immediately if you catch yourself:
+<success_criteria>
 
-- "I'll skip testing-workflow for this task, it's trivial" — trivial tasks still need a unit test.
-- "The subagent already ran the tests, no need to invoke the skill" — invocation is what makes it auditable. The hook checks for it.
-- "We'll add integration tests at the end" — phase gate exists so this doesn't happen.
-- Marking a task complete without the task-complete checklist visible in the transcript.
+This skill has succeeded when:
 
-## Integration
+1. The upstream skill (`subagent-driven-development` or `executing-plans`) was invoked via the Skill tool and its checklist was followed.
+2. Every implementer subagent's dispatch prompt contained the verbatim addendum block.
+3. Every implementer subagent's report ended with the structured Test-evidence + STATUS blocks.
+4. Every implementer subagent's transcript shows an explicit `Skill("netdust-core:testing-workflow")` invocation.
+5. Phase close handed off cleanly to `netdust-core:shake-out` and then `superpowers:finishing-a-development-branch`.
+
+If any of (1)-(4) is missing, the wrapper failed at its specific job, even if the code shipped correctly. The wrapper exists for audit-trail durability, not for code correctness — the upstream skill is what handles code correctness.
+
+</success_criteria>
+
+<integration>
 
 | Skill | Relationship |
 |---|---|
-| `superpowers:executing-plans` | **WRAPPED.** Invoked in Step 1 for sequential plans. |
-| `superpowers:subagent-driven-development` | **WRAPPED.** Invoked in Step 1 for parallel plans. |
-| `testing-workflow` (netdust-core) | **MANDATORY GATE.** Invoked per task and per phase. |
-| `shake-out` (netdust-core) | **DOWNSTREAM.** Invoked after the plan completes. |
+| `superpowers:subagent-driven-development` | **WRAPPED — primary branch.** Invoked in `<process>` Step 1 for plans with parallel-independent tasks. |
+| `superpowers:executing-plans` | **WRAPPED — secondary branch.** Invoked in `<process>` Step 1 for sequential or solo execution. |
+| `superpowers:using-superpowers` | **OVERRIDDEN where they conflict** per `using-superpowers`'s own Instruction Priority — user/project rules (e.g. this skill's testing-workflow mandate) take precedence. |
+| `netdust-core:testing-workflow` | **MANDATORY GATE.** Invoked by every implementer subagent at task close. The addendum forces this. |
+| `netdust-core:shake-out` | **DOWNSTREAM.** Invoked at phase close after upstream's final-review. |
 | `superpowers:finishing-a-development-branch` | **DOWNSTREAM.** Invoked after shake-out. |
-| netdust-core `subagent-stop.py` hook | **BACKSTOP.** Detects missing testing-workflow invocations. |
+| netdust-core `subagent-stop.py` hook | **BACKSTOP.** Detects when a subagent finished without invoking `testing-workflow` and surfaces a reminder. The reminder is a backstop, not the primary mechanism — the addendum is. |
+
+**Calibration data behind the verbatim addendum:** Folio Phase 3 Sub-phase A (2026-05-28), 7 tasks shipped with a weaker one-liner version of the addendum. Zero of 7 subagents invoked `Skill("netdust-core:testing-workflow")` despite the prose instruction; discipline held by other means (RED→GREEN cycles, test-count deltas in commit messages, full-suite re-runs) but the audit trail was unverifiable from transcripts. The current structured addendum was hardened in response. See `~/Projects/folio/docs/superpowers/retros/2026-05-28-phase-3-sub-phase-A-retro.md` Gap #5.
+
+</integration>
