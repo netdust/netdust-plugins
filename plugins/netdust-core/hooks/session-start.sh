@@ -22,6 +22,26 @@ note() {
   fi
 }
 
+# ── Stable plugin path symlinks ─────────────────────────────────────────────
+# Claude Code 2.1+ installs plugins to ~/.claude/plugins/cache/<marketplace>/
+#   <plugin>/<version>/ — a versioned path that changes on every update.
+# Docs, agents, commands, and templates across all three netdust plugins
+# reference each other via the stable user-facing path
+#   ~/.claude/plugins/<plugin>/...
+# We maintain those as symlinks pointing at the active cache version, refreshed
+# on every session start so updates flip automatically. Idempotent.
+PLUGIN_CACHE="$HOME/.claude/plugins/cache/netdust-plugins"
+if [[ -d "$PLUGIN_CACHE" ]]; then
+  for plugin in netdust-core netdust-wp netdust-statamic; do
+    plugin_dir="$PLUGIN_CACHE/$plugin"
+    [[ -d "$plugin_dir" ]] || continue
+    # Pick most recently modified version dir as "active".
+    latest_version=$(ls -1t "$plugin_dir" 2>/dev/null | head -1)
+    [[ -n "$latest_version" ]] || continue
+    ln -sfn "$plugin_dir/$latest_version" "$HOME/.claude/plugins/$plugin"
+  done
+fi
+
 # ── Harness GLOBAL.md ───────────────────────────────────────────────────────
 HARNESS_GLOBAL="${CLAUDE_PLUGIN_ROOT}/memory/GLOBAL.md"
 note harness_global "$HARNESS_GLOBAL"
