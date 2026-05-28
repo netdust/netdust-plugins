@@ -49,6 +49,22 @@ claude plugin marketplace add ./   # if not already added from a local clone
 Releases are tagged per-plugin via `claude plugin tag plugins/<name>` which
 creates a `<name>--v<version>` git tag (validated against plugin.json).
 
+### After every commit: `./scripts/sync.sh`
+
+Claude Code keeps two separate caches for an installed plugin:
+1. `~/.claude/plugins/marketplaces/netdust-plugins/` — git clone of this repo
+2. `~/.claude/plugins/cache/netdust-plugins/<plugin>/<version>/` — extracted install
+
+`claude plugin marketplace update` refreshes #1. `claude plugin update` refreshes
+#2 — but only when the plugin's version bumps. During heavy iteration we ship
+many commits at the same version, so the install cache silently stays stale
+and active sessions read the old content.
+
+`./scripts/sync.sh` refreshes both caches from the working tree in one shot.
+**Run it after every `git push`.** Idempotent. Verifies the sync at the end.
+
+Restart Claude Code (or open a fresh session) to pick up SKILL/command changes.
+
 ## Open follow-ups
 
 ### Cross-plugin imports in user-project CLAUDE.md
