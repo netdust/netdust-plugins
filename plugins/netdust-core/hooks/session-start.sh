@@ -66,6 +66,14 @@ STATE="$CWD/memory/STATE.md"
 note state "$STATE"
 if [[ -f "$STATE" ]]; then
   OUTPUT+="## Project State\n"
+  # Size-guard: STATE.md is a SNAPSHOT, not an archive. It loads into every
+  # session, so bloat costs context tokens on every turn. Nudge (don't block)
+  # when it crosses ~40 KB — move historical sections to memory/ARCHIVE.md
+  # (which this hook does NOT load).
+  STATE_BYTES=$(wc -c <"$STATE" 2>/dev/null || echo 0)
+  if (( STATE_BYTES > 40960 )); then
+    OUTPUT+="> ⚠️ STATE.md is $((STATE_BYTES/1024)) KB ($(wc -l <"$STATE") lines) — consider archiving historical sections to \`memory/ARCHIVE.md\` (not loaded by this hook) to keep this snapshot lean.\n\n"
+  fi
   OUTPUT+="$(cat "$STATE")\n\n"
 fi
 
