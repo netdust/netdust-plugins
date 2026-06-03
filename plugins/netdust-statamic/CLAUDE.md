@@ -56,9 +56,19 @@ Per-project: `ddev composer require netdust/<addon>` then `php please install ne
 
 **Never inline domain-specific content into the starter.** Build it as an addon.
 
+## How this plugin plugs into `harnessed-development`
+
+`netdust-core:harnessed-development` is the stack-agnostic entry skill that sequences the full harness (design → plan + threat-modeling + architecture-invariants → execute + per-task testing-workflow + Step 2.5 → shake-out → finish). **For any non-trivial Statamic work, that is the entry point** — invoking it engages every gate. The Statamic overrides it defers to:
+
+- **Design (Stage 0)** — `superpowers:brainstorming` (Statamic has no rigid framework-design skill).
+- **Execute (Stage 2)** — `statamic-build` is the executor (PRE-WRITE → WRITE → VERIFY), under the harness's testing-workflow gate.
+- **Shake-out (Stage 3)** — `shake-out-statamic` replaces the generic shake-out.
+
+`/new-feature` is the convenience wrapper that invokes the harness with these overrides pre-wired. Use it for new features; it is no longer a separate pipeline.
+
 ## Slash commands (Statamic-specific)
 
-- `/new-feature` — full brainstorm → plan → implement → shake-out workflow for a new Statamic feature
+- `/new-feature` — invokes `harnessed-development` with Statamic overrides (design → plan + gates → statamic-build → shake-out-statamic → finish)
 - `/new-collection` — scaffold a collection by copying from blog/pages (no Peak CLI dep)
 - `/new-block` — scaffold a page-builder block by copying from an existing one
 - `/new-service` — scaffold a Service class (thin-controller / service-layer pattern)
