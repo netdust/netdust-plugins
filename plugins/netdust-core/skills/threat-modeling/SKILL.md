@@ -253,7 +253,7 @@ If `/code-review` keeps surfacing NEW critical-class findings the threat model d
 | Skill | Relationship |
 |---|---|
 | `superpowers:writing-plans` | **COMPANION.** This skill runs ALONGSIDE writing-plans, not as a replacement. writing-plans produces the functional spec + task breakdown; threat-modeling produces the security section that sits before the task breakdown. Same plan file, two skills' output. |
-| `netdust-core:ntdst-execute-with-tests` | **DOWNSTREAM.** When the plan is executed, the controller pre-flight verifies tasks include the mitigations. testing-workflow doesn't change — it still gates per-task. The threat model gates at /code-review at sub-phase close. |
+| `netdust-core:harnessed-development` | **UPSTREAM + DOWNSTREAM.** harnessed-development FIRES this skill at Stage 1a (by trigger list, or on an ad-hoc security diff in Class D). When the plan is then executed, the controller pre-flight verifies tasks include the mitigations; testing-workflow still gates per-task; the threat model gates at /code-review at sub-phase close. |
 | `/code-review` | **CONSUMER.** Reviews are invoked with the threat model as context. Reports converge against the named mitigations. |
 | `/evaluate` | **CONSUMER.** Retros list any missing mitigations as plan-correction defects, and surface "the threat model was too shallow" findings if new critical issues emerged. |
 | `superpowers:brainstorming` | **UPSTREAM.** During brainstorming for a feature that touches surfaces in `<when_to_use>`, the brainstormer should note "this needs a threat model" so writing-plans + this skill collaborate to produce it. |
