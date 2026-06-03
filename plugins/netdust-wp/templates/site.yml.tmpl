@@ -1,0 +1,30 @@
+# site.yml — operational config for {{PROJECT_NAME}}
+# Read into context at session start by netdust-core's session-start hook.
+# Keep the top-level keys (site / structure / hosting / deploy / local) — the
+# hook greps for them to surface deploy + risk info BEFORE you're asked to ship.
+
+site:
+  name: {{PROJECT_NAME}}
+  domain: {{DOMAIN}}                 # production domain, e.g. example.com
+  description: {{DESCRIPTION}}        # one line: what this site is
+  risk: {{RISK}}                      # low | medium | high — "high" means triple-check destructive ops
+
+structure:
+  type: {{STACK_TYPE}}               # bedrock | custom-app | custom-site
+  webroot: web                       # bedrock: web | custom-app: app | custom-site: .
+  wpcli_path: web/wp                 # bedrock: web/wp | custom-app: app/wp (matches wp-cli.yml --path)
+
+hosting:
+  provider: {{HOSTING_PROVIDER}}     # ploi | combell | other
+  ssh_staging: {{SSH_STAGING}}       # ssh alias for staging (or "" if none)
+  ssh_production: {{SSH_PRODUCTION}}  # ssh alias for production
+
+deploy:
+  method: {{DEPLOY_METHOD}}          # one of the canonical 9 (see /deploy + netdust-core deploy-patterns.md)
+  staging_command: {{STAGING_COMMAND}}        # command or make target for staging deploy
+  production_command: {{PRODUCTION_COMMAND}}   # command or make target for prod deploy (gated on confirmation)
+  note: {{DEPLOY_NOTE}}              # anything non-obvious about this site's deploy
+
+local:
+  ddev_project: {{PROJECT_NAME}}     # DDEV project name
+  url: https://{{PROJECT_NAME}}.ddev.site

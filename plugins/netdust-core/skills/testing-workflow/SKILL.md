@@ -340,4 +340,4 @@ Load the appropriate patterns file for concrete code examples:
 - **writing-plans** — Plans MUST include test expectations per task and per phase
 - **subagent-driven-development** — Every subagent invokes task-complete before reporting done
 - **test-driven-development** — Governs RED→GREEN within a task; this skill governs the workflow around it
-- **ntdst-brainstorm** — Both standard and rigorous modes require unit tests; rigorous adds deeper review
+- **ntdst-architecture / ntdst-data / ntdst-patterns** (WP design skills) — design must still yield per-task unit-test expectations; rigorous review adds deeper checks

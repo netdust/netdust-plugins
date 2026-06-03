@@ -32,6 +32,17 @@ For these, see `netdust-core/CLAUDE.md`:
 - The 9-method deploy catalog (`memory/deploy-patterns.md`)
 - Voice (`SOUL.md`) and universal rules (`RULES.md`)
 
+## How this plugin plugs into `harnessed-development`
+
+`netdust-core:harnessed-development` is the stack-agnostic entry skill that sequences the full harness (design → plan + gates → execute + tests → shake-out → finish). It defers to the loaded stack sub-plugin for stack-specific tools. On a WordPress project, those overrides are:
+
+- **Design stage (Stage 0/1).** WP work does **not** use generic `superpowers:brainstorming`. The framework design skills replace it: `ntdst-architecture` (service lifecycle, DI, boundaries — self-triggers on "add a service" and is "MUST be consulted during implementation planning"), `ntdst-data` (data layer, CPTs, repositories, REST), and `ntdst-patterns` (where files live). Invoke these to design before planning.
+- **Plan-time security/data gates.** The core `threat-modeling` + `architecture-invariants` gates still fire per their triggers; on WP, `wp-security` and `wp-database` self-trigger on PHP edits and reinforce them.
+- **Testing (Stage 2).** Already automatic — core `testing-workflow` detects `composer.json + WordPress` and selects Codeception/PHPUnit; `wp-testing` self-triggers on `phpunit.xml` / `Cest` / `WPTestCase`. No manual override needed.
+- **Shake-out / review (Stage 3).** Already automatic — `/shakeout` detects WP and adds the 5th reviewer `netdust-wp:ntdst-drift-reviewer` alongside the generic four.
+
+There is no `ntdst-brainstorm` skill (it was never built). For WP design, use the three framework skills above.
+
 ## WP-specific rules
 
 See this plugin's `RULES.md`. Universal rules come from netdust-core's `RULES.md`.

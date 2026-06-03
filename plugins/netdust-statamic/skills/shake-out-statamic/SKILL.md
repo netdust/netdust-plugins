@@ -225,7 +225,7 @@ If shake-out reveals the implementation approach is fundamentally wrong — e.g.
 
 1. **Continue fixing** — bugs are fixable within current architecture
 2. **Defer and ship** — known issues, ship with caveats
-3. **Abort → re-plan** — write `tasks/shake-out-abort-context.md` with: what was built, what failed and why, the architectural insight gained, recommendation for the re-plan. Then invoke `superpowers:brainstorming` (or `ntdst-brainstorm` if relevant) with that file as context.
+3. **Abort → re-plan** — write `tasks/shake-out-abort-context.md` with: what was built, what failed and why, the architectural insight gained, recommendation for the re-plan. Then invoke `superpowers:brainstorming` (or the stack sub-plugin's design skills if relevant) with that file as context.
 
 </abort_and_replan>
 
