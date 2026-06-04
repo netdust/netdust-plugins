@@ -65,7 +65,13 @@ Invoke `superpowers:writing-plans`. Follow its checklist. Then layer these netdu
 
   - This gate ALSO fires in Class D (ad-hoc security edit). There is no plan to embed it in; run the threat model on the *diff* before committing. (2026-06-03: a `validatePublicUrl` SSRF-guard edit shipped without this because the CLAUDE.md trigger was plan-only. The guard held by luck, not by a gate. Never again.)
 
-**1b. Architecture-invariants gate.** If the plan touches a convergence point named in the project's `ARCHITECTURE-INVARIANTS.md` (authorization, data access, live updates, error handling, entity modeling), invoke `netdust-core:architecture-invariants` and cite the touched invariants in the plan. If the doc doesn't exist yet, author it via `/architecture-invariants audit`.
+  - **BLOCKING — proactive, not retrospective.** The `## Threat model` must exist **BEFORE the first task is dispatched**, not be back-filled once `/code-review` surfaces findings. A threat model written *for the fix* is documentation of pain already taken, not prevention — and it does NOT earn the one-round convergence this gate exists to buy. Do not dispatch any task on a triggering surface until the section names assets → attacks → mitigations → deferrals. (Calibration: phases whose threat model was written proactively converged `/code-review` in a single round, 3–4 findings each; the one phase whose threat model was retrofitted after review — `drop-workspace-tenancy`, even though the surface plainly triggered the gate — took two rounds and 11 findings, including cross-tenant leaks the catalog *already named*. The catalog wasn't the hole; **applying it late was**.)
+
+**1b. Architecture-invariants gate.** If the plan touches a convergence point named in the project's `ARCHITECTURE-INVARIANTS.md` (authorization, data access, live updates, error handling, entity modeling), invoke `netdust-core:architecture-invariants` and cite the touched invariants in the plan.
+
+  - **If the doc doesn't exist yet, author it via `/architecture-invariants audit` NOW, at plan-time — not after `/code-review` finds the bypass.** The doc's whole value is letting reviews *mechanically* check "does this path skip the convergence point?" instead of re-discovering it; that value is only available if the convergence point is named *before* the code that would bypass it ships. An invariant authored after the leak is an autopsy.
+
+  - **Front-load it for tenancy / multi-actor surfaces.** When the work touches multi-tenancy, scope-narrowing predicates, cross-actor visibility, or a live-update/broadcast path that fans data out to differently-scoped consumers, author or refresh `ARCHITECTURE-INVARIANTS.md` at plan-time and name the *one* place "what can this actor see" is decided. This is the structural twin of threat-modeling's **traverse-clause bypass** attack class: the bug is a serve/broadcast surface that skips the visibility predicate, and the fix is always "converge it into one `visibleScopeFor(actor)` helper and route every surface through it." Naming that convergence point in the plan turns the next bypass into a one-line review finding instead of a multi-round leak hunt. *(Folio: CR-8..11 were exactly this class; the `visibleProjectIds` convergence helper was the fix — authored reactively after the leak, when an up-front invariant would have made it a mechanical check.)*
 
 **1c. Spec-level premise ground-truth (the cheapest catch there is).** Before the plan ships, if its core approach is "reuse existing infrastructure X (a component, endpoint, table, helper) for new data-type/use Y," READ X's source and confirm X actually accepts Y. This is the spec-level extension of Step 2.5 — it catches a *wrong architectural premise* two documents earlier than task-dispatch, where it is far cheaper. (2026-05-30, Sub-phase E: "the runs table renders through the existing TableView" survived spec + plan-expansion + handoff and was false — `agent_run` rows are walled off from `/documents`; one grep falsified it. Caught only at dispatch, forcing a mid-execution re-plan.)
 
@@ -86,17 +92,17 @@ If you are executing a plan someone else wrote (Class B), do Stage 1 as a **crit
 
 Invoke it via the Skill tool. Its content is your primary instruction set for execution from here on; this skill only adds the netdust gates below.
 
-**Step 2.1 — Append the netdust addendum to every dispatch prompt.** For each subagent dispatch (implementer, spec reviewer, code-quality reviewer), append the block in `<addendum_for_dispatch>` VERBATIM. Do not summarize, paraphrase, or selectively include — the verbatim form is what closes the audit gap. (Sub-phase A: a weaker one-liner version produced 0/7 subagents actually invoking the testing-workflow skill.)
+**Step 2.1 — Append the netdust addendum to every dispatch prompt.** For each subagent dispatch (implementer, spec reviewer, code-quality reviewer), append the block in `<addendum_for_dispatch>` VERBATIM. Do not summarize, paraphrase, or selectively include — the verbatim form is what closes the audit gap, because it demands the structured **Test-evidence + STATUS blocks** (tier, RED-first/Tier-B, seam, deferral) in the report. (Sub-phase A: a weaker one-liner produced 0/7 subagents re-invoking the testing-workflow skill — which is *why the audit must rest on the structured blocks, not on the invocation*. The blocks are verifiable in the report + commit; a Skill-tool call in a subagent transcript is not.)
 
 **Step 2.5 — Ground-truth the dependency surface before each dispatch (plan-freshness gate).** A written plan is a *hypothesis* about the code it integrates against; the source is truth. When the plan is more than a few days old, OR it integrates against another sub-phase's / module's code (calls its functions, names its enums, scopes, env vars, table columns, event payloads), the controller MUST — for the specific task about to be dispatched, AFTER the upstream skill is loaded (never as pre-flight before Step 2.0) — Read the actual exported signatures + types + enums of that task's named dependencies and reconcile them against the plan's code samples. Bake the verified-true signatures into the dispatch prompt and flag any drift inline so the implementer builds to reality, not the stale sample. Per-task, not whole-plan up front — verify each task's surface as you reach it. If reconciliation surfaces drift big enough to change the task's shape, correct the plan (a plan-correction commit) before dispatching.
 
   Calibration (why this is a hard rule, not advice): FOUR consecutive Folio sub-phases hit plan-vs-source drift this catch resolved — A (Zod house-style + migration columns), C.2 (an entire provider API that didn't exist), C.3 (`recoverOrphanRuns` signature + a contaminated `db:generate` migration), Phase C (triggers carry `fm.agent`, not the plan's `target_agent_id`). Every drift was caught at controller ground-truthing and corrected before/at dispatch. Skipping it ships the drift into the subagent, which builds the wrong thing confidently.
 
-**Step 2.6 — Gate every task close on testing-workflow.** A task is not done until BOTH:
-1. The subagent's report ends with the structured Test-evidence + STATUS blocks (see addendum).
-2. The subagent's transcript shows an explicit `Skill("netdust-core:testing-workflow")` invocation.
+**Step 2.6 — Gate every task close on testing-workflow's OUTPUT, not its re-invocation.** A task is not done until the subagent's report ends with the structured Test-evidence + STATUS blocks (see addendum), AND those blocks carry the testing-workflow discipline made auditable: the **tier classification** (A/B + one-sentence justification), a Tier-A **RED-first** proof (or the `no unit test: Tier B, <reason>` line), and the **deferral line** naming the risk class handed downstream.
 
-If either is missing, treat the task as DONE_WITH_CONCERNS or NEEDS_CONTEXT per the upstream skill's status handling. Do not mark complete without both. The `subagent-stop.py` hook is a backstop, not the primary mechanism — the addendum is.
+  Those blocks — visible in the report and the commit body — ARE the gate. Do **not** require the subagent to literally re-invoke `Skill("netdust-core:testing-workflow")` once per task: the gate skill itself now states (`testing-workflow` "What the discipline actually is") that *"Re-invoking the Skill tool once per task is **not** the discipline."* The discipline is classify-at-tier → verify-at-tier → full-suite + static-analysis → record the tier/deferral lines. (The subagent reads testing-workflow **once per session** to internalize it; re-invoking it per task is the ghost ritual Sub-phase A proved was bypassable — 0/7 subagents re-invoked it and the work was still correct *because the structured blocks, not the invocation, were the real evidence*.)
+
+If any required block or line is missing, treat the task as DONE_WITH_CONCERNS or NEEDS_CONTEXT per the upstream skill's status handling. Do not mark complete without them. The `subagent-stop.py` hook is a backstop, not the primary mechanism — the structured blocks are.
 
 **Step 2.7 — Bug-fix bundles (Class C) get one TDD cycle per finding.** Each `/code-review` or `/security-review` finding is a behavior change → the Iron Law applies. Invoke `superpowers:systematic-debugging` once per bug via the Skill tool, fix one bug per cycle, re-sweep between. "I already see the fix, the phases are obvious here" is the exact rationalization the debugging skill's red-flags table names. (2026-05-30, Sub-phase F: bundling I2+I3 into one cycle drifted the process even though outcomes were sound.)
 
@@ -121,9 +127,13 @@ Append this block VERBATIM at the bottom of every implementer dispatch prompt. I
 
 Before reporting STATUS, you MUST:
 
-1. Invoke `Skill("netdust-core:testing-workflow")` via the Skill tool.
-   Walk the task-complete checklist it produces. The invocation itself —
-   not the prose summary — is what makes this gate auditable.
+1. Apply the `netdust-core:testing-workflow` discipline (read it once per
+   session to internalize it — you need NOT re-invoke the Skill tool per
+   task): classify the task's risk tier (A/B), verify at the tier
+   (Tier A → a RED-first behavioral test incl. the denial path; Tier B →
+   suite-green + seam reach, with a `no unit test: Tier B, <reason>` line),
+   and record the tier + deferral line. The structured blocks below — not a
+   Skill-tool re-invocation — are what makes this gate auditable.
 
 2. Run the affected app's full unit suite from the APP's directory
    (never from repo root). Confirm the test-count delta matches the
@@ -135,11 +145,17 @@ Before reporting STATUS, you MUST:
 4. End your final message with these two blocks, verbatim and complete:
 
    ## Test evidence
-   - Test file(s): <list of paths touched>
+   - Tier: <A | B> — <one-sentence justification>
+   - Test file(s): <list of paths touched, or "none — Tier B">
    - RED proof: <command you ran> → <1-3 line snippet showing fail>
+     (Tier B: replace with `no unit test: Tier B, <reason>`)
    - GREEN proof: <command you ran> → <1-3 line snippet showing pass>
+   - Seam test (if this task WIRES a piece into the real chain):
+     <1 un-mocked-chain assertion + 1 negative/adversarial case, or "n/a — not a wiring task">
    - Suite delta: <app> was <N>, now <M>, <K> fails
    - Typecheck: <command> → <clean | errors>
+   - Deferral: Risk this does NOT cover: <concurrency | adversarial-input |
+     cross-actor | multi-component | un-mocked-seam | none> → <integration-gate | /code-review | invariant-auditor | /shakeout>
 
    ## STATUS
    STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
@@ -167,6 +183,7 @@ These thoughts mean you are about to skip a gate. Stop.
 | Thought | Reality |
 |---|---|
 | "This feature doesn't really touch security, I'll skip the threat-model check" | Run the 1a trigger list literally. "BYOK + encrypted" is a property statement, not a threat model. The trigger list decides, not your gut. |
+| "I'll dispatch now and write the threat model / invariant when `/code-review` flags something" | That is the retrospective failure mode (1a BLOCKING). A threat model written for the fix doesn't prevent the bug or buy one-round convergence — it documents pain already taken. The flagship `drop-workspace-tenancy` branch did exactly this and paid two review rounds for leaks the catalog already named. Write the section BEFORE the first dispatch. |
 | "It's just a one-line edit to the URL allow-list, no plan needed" | That is Class D. The security gate fires on the *diff*. This is the exact 2026-06-03 gap this skill exists to close. |
 | "The plan was written this week, it's fresh enough" | Conventions and signatures drift within a single sub-phase. Step 2.5 is per-task and mandatory when the task integrates against other code. |
 | "We'll reuse the existing X for this, obviously it fits" | Read X's source NOW (Stage 1c). The TableView-for-runs premise survived three documents and was false. |
@@ -175,7 +192,7 @@ These thoughts mean you are about to skip a gate. Stop.
 | "Skipping the verbatim addendum saves a few lines" | The verbatim form is what closes the audit gap. Skipping it reverts to honor-system. |
 | "I see the fix for all three review findings, I'll bundle them" | One TDD cycle per finding, one systematic-debugging invocation per bug. Bundling drifts the process. |
 | "Two-stage review is ceremony for a simple task" | The review loop catches what TDD doesn't. Do not skip it. |
-| "I'll invoke testing-workflow after the commit, not before reporting" | Order is: invoke testing-workflow → walk checklist → report. Same transcript or the gate is bypassed. |
+| "I'll classify the tier and record the deferral line after the commit, not before reporting" | Order is: verify-at-tier → run full suite + static analysis → report with the tier + RED-first/Tier-B + deferral blocks. The blocks must be in the report; a commit with no tier/deferral evidence bypasses the gate. (Re-invoking the testing-workflow Skill tool per task is NOT required — the structured blocks are the evidence.) |
 
 </red_flags>
 
@@ -188,7 +205,7 @@ This skill has succeeded when:
 3. For any feature touching a named convergence point, the relevant invariants were cited.
 4. Any "reuse X for Y" premise was ground-truthed against X's source before the plan shipped.
 5. The execution upstream skill was invoked via the Skill tool and its checklist followed.
-6. Every implementer dispatch contained the verbatim addendum; every implementer report ended with the structured Test-evidence + STATUS blocks; every implementer transcript shows an explicit `Skill("netdust-core:testing-workflow")` invocation.
+6. Every implementer dispatch contained the verbatim addendum; every implementer report ended with the structured Test-evidence + STATUS blocks carrying the tier classification, the Tier-A RED-first proof (or the `no unit test: Tier B` line), and the deferral line. (The auditable evidence is those blocks + the commit body — NOT a per-task `Skill("netdust-core:testing-workflow")` re-invocation, which the gate skill itself has retired.)
 7. Step 2.5 ground-truthing was performed per-task for every task integrating against other code.
 8. Phase close handed off to `netdust-core:shake-out` and then `superpowers:finishing-a-development-branch`.
 
@@ -207,15 +224,15 @@ If any gate that *should* have fired (per the class + trigger lists) did not, th
 | `netdust-core:architecture-invariants` | **STAGE 1 GATE (1b).** Fired when a convergence point is touched. |
 | `superpowers:subagent-driven-development` | **STAGE 2 — primary branch.** Parallel-independent tasks. |
 | `superpowers:executing-plans` | **STAGE 2 — secondary branch.** Sequential / solo execution. |
-| `netdust-core:testing-workflow` | **STAGE 2 MANDATORY GATE.** Per-task close (addendum forces it) + phase-complete. |
+| `netdust-core:testing-workflow` | **STAGE 2 MANDATORY GATE.** Per-task close (the addendum's structured tier + RED-first/Tier-B + deferral blocks ARE the auditable gate — not a per-task Skill re-invocation) + phase-complete. |
 | `superpowers:systematic-debugging` | **STAGE 2 (Class C).** One invocation per bug. |
 | `netdust-core:shake-out` | **STAGE 3.** Spec-close, after upstream final-review. |
 | `superpowers:finishing-a-development-branch` | **STAGE 3.** After shake-out. |
 | `netdust-core:ntdst-execute-with-tests` | **SUPERSEDED — use this skill instead.** If you arrived via that name (older handoff docs reference it), everything it did is here, plus the planning gates. |
-| netdust-core `subagent-stop.py` hook | **BACKSTOP.** Detects a subagent that finished without invoking testing-workflow and surfaces a reminder. Backstop, not primary mechanism — the addendum is. |
+| netdust-core `subagent-stop.py` hook | **BACKSTOP.** Surfaces a reminder when a subagent finishes without the testing-workflow evidence. Backstop, not primary mechanism — the structured Test-evidence + STATUS blocks (tier / RED-first / deferral) the addendum demands are. |
 
 **Calibration data behind these rules** (all from Folio Phase 3):
-- *Verbatim addendum:* Sub-phase A — 0/7 subagents invoked the testing-workflow skill under a weaker one-liner; discipline held by other means but the audit trail was unverifiable.
+- *Verbatim addendum:* Sub-phase A — 0/7 subagents re-invoked the testing-workflow skill under a weaker one-liner, yet the work was correct. The lesson the harness took from this (2026-06-04): the audit trail must rest on the **structured Test-evidence + STATUS blocks** the addendum demands, not on a per-task Skill-tool re-invocation — which is unverifiable from git and which the testing-workflow gate skill has itself retired.
 - *Step 2.5 plan-freshness:* caught plan-vs-source drift 4 consecutive sub-phases (A, C.2, C.3, Phase C).
 - *Stage 1c spec-premise:* Sub-phase E — a false "reuse TableView" premise survived spec + plan + handoff.
 - *Stage 1a on ad-hoc diffs (Class D):* 2026-06-03 — a security-guard edit shipped without threat-modeling because the trigger was plan-only.
