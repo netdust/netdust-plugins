@@ -63,8 +63,8 @@ During FIX:
 Three phases, always in order:
 
 1. **SWEEP** — Run the artifact. Find everything broken. Fix nothing.
-2. **MANIFEST** — Present the complete bug list. Cluster by root cause. Get human sign-off.
-3. **FIX** — Work through the manifest using `systematic-debugging` per bug.
+2. **MANIFEST** — Present the complete bug list. Cluster by root cause. **Verify before fixing:** for each candidate bug, run the adversarial check in `_shared/finding-verification.md` (default N=3 votes; N=1 for a tiny sweep) so the FIX loop spends effort only on confirmed bugs and an accepted-deferral (exclusion rule 16) isn't re-opened. Get human sign-off on the confirmed list.
+3. **FIX** — Work through the confirmed manifest using `systematic-debugging` per bug.
 
 Before starting: read the plan, resolve the environment, detect project type, load the right sweep reference.
 

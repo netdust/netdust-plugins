@@ -12,7 +12,7 @@
     {
       "name": "netdust-core",
       "source": "./plugins/netdust-core",
-      "description": "Netdust harness core — memory + hooks + cross-stack skills (research, marketing, brand-voice, code-audit, shake-out, testing-workflow, ntdst-execute-with-tests, secure-server, ploi, dev-stack) + 7 code-reviewer agents + 9-method /deploy + /integration + /shakeout + ploi MCP. Stack-agnostic. Layered on by netdust-wp, netdust-statamic.",
+      "description": "Netdust harness core — memory + hooks + cross-stack skills (research, marketing, brand-voice, code-audit, shake-out, testing-workflow, test-effectiveness, secure-server, ploi, dev-stack) + 7 code-reviewer agents + 9-method /deploy + /integration + /shakeout + ploi MCP. Stack-agnostic. Layered on by netdust-wp, netdust-statamic.",
       "version": "0.1.0",
       "strict": false
     },

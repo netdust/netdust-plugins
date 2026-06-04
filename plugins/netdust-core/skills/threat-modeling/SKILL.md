@@ -200,6 +200,8 @@ List acknowledged-but-not-mitigated items. One sentence each explaining why defe
 - Downstream sub-phases: cross-reference, don't re-litigate. Extend if the surface grows.
 ```
 
+**Deciding "is this finding real / already deferred?"** This section's "out of scope" list IS the project-specific application of the shared exclusion rules in `_shared/finding-verification.md`. When a `/code-review` round raises something, verify it with that reference (adversarial skeptic → vote → cite the exclusion-rule number) rather than re-arguing each round — and promote any recurring accepted-non-issue into the deferrals list above so it inherits forward.
+
 </output_template>
 
 <worked_example>

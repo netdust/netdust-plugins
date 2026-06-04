@@ -93,28 +93,20 @@ Every task is one of two tiers. **Name the tier in your task-close report** and 
 
 **Erosion guard — these are ALWAYS Tier A, no matter how few lines:** security/auth/scope guards, untrusted-input parsing, state machines. A 3-line `if (role === 'member') return 403` is Tier A. "It's just wiring" is not a license to under-test a guard; short ≠ trivial. If you are tempted to call a guard Tier B, that is a red flag — stop and write the RED-first denial test.
 
-### What the per-task gate cannot catch (hand these downstream, don't over-test)
+### What the per-task gate cannot catch — and who owns it
 
-A per-task unit test proves one unit correct **in isolation**. It is structurally blind to bugs that only manifest across a seam. Do **not** pile on more per-task unit tests trying to cover these — they belong to the **seam test** (below), the **phase-complete integration gate**, `/code-review`, the **invariant-auditor**, and `/shakeout`:
+A per-task unit test proves one unit correct **in isolation**. It is structurally blind to the classes of bug that only manifest across a seam (wiring/mounting, wire-mocking, concurrency/timing, adversarial-input-on-a-boundary, masking-payload). **Do not pile on more per-task unit tests trying to cover these.** Those classes are owned, catalogued, and audited by `netdust-core:test-effectiveness` (the seven green-but-blind failure modes) at phase-close — and by the phase-complete integration gate, `/code-review`, the invariant-auditor, and `/shakeout`. The one piece this skill keeps at the per-task altitude is the cheap **seam test at the wiring task** below; everything else about seam/wire/concurrency coverage is `test-effectiveness`'s job, not a thing to re-test here.
 
-| Escaped class | Why per-task tests miss it | Owned by |
-|---------------|----------------------------|----------|
-| **Wiring / mounting** | The unit works but is never installed in the real chain (middleware unit-green but unmounted → cross-tenant 200) | Seam test + integration gate |
-| **Wire-mocking** | The test stubs the server to return the right shape, so it only proves the client wires up *given* server correctness | Seam test crossing the un-mocked wire + shake-out |
-| **Concurrency / timing** | A single happy-path run can't express a race; one green run passes by scheduling luck | Determinism re-run (≥3×) + `/code-review` |
-| **Adversarial input on a boundary** | Happy-path parse passes while malformed input aborts the run / leaks / DoSes | Tier-A negative-path test + threat-model review |
-| **Masking payload** | The test seeds the easy/wrong actor, so the broken path never runs | Negative/cross-actor case + invariant-auditor |
+### Seam test at the wiring task (the one per-task seam obligation)
 
-### Seam test at the wiring task
+When a task **mounts, wires, or integrates** a previously-built piece into the real app chain — registering a route, mounting middleware, wiring a reactor/trigger path, composing a multi-component layout, joining a cross-binary type union — the close requires a cheap, live proof that the wire is real:
 
-When a task **mounts, wires, or integrates** a previously-built piece into the real app chain — registering a route, mounting middleware, wiring a reactor/trigger path, composing a multi-component layout, joining a cross-binary type union — the close requires:
+1. **≥1 assertion through the REAL chain with NO mock of the boundary being wired** (an HTTP route: a real request through the mounted app; a wire contract: cross the actual client→server boundary or a shake-out `curl` — never stub the response), AND
+2. **≥1 negative / adversarial case** (denied actor, malformed input, a second tenant, or the masking-payload alternative the happy path didn't seed).
 
-1. **≥1 assertion through the REAL chain with NO mock of the boundary being wired.** For an HTTP route: drive a real request through the mounted app and assert the status/shape. For a wire contract: cross the actual client→server boundary (or add a shake-out `curl`), do not stub the response.
-2. **≥1 negative / adversarial case:** denied actor, malformed input, a *second tenant*, or the masking-payload alternative the happy path didn't seed.
+**Forbidden:** satisfying a wiring task by mocking the very seam it wires, or by pointing at a pre-existing isolated unit test of the piece (that test stays green even if the mount is mis-pathed and the guard never fires).
 
-**Forbidden:** satisfying a wiring task with a test that mocks the very seam it wires, or by pointing at a pre-existing isolated unit test of the piece (that test stays green even if the mount is mis-pathed and the guard never fires). The seam is the delta this task introduced — it is the one thing that must be exercised.
-
-Keep it cheap: **one** real-chain assertion + **one** negative case. This is not a full integration suite; it is the minimum that proves the wire is live.
+Keep it to **one** real-chain assertion + **one** negative case — the minimum that proves the wire is live. The *systematic* audit of whether every seam, wire, mount, and race across the whole phase is covered happens once, at phase-close, in `test-effectiveness` — not by multiplying per-task seam tests here.
 
 ### What to test
 
