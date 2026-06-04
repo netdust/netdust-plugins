@@ -111,8 +111,9 @@ If any required block or line is missing, treat the task as DONE_WITH_CONCERNS o
 After all tasks in a phase complete and the upstream skill's final-review step is done:
 
 1. **Phase-complete integration gate** — `testing-workflow` phase-complete (integration + acceptance), or run `/integration`.
-2. **Shake-out** — invoke `netdust-core:shake-out`, or its stack-specific replacement if the loaded sub-plugin provides one (see `<stack_overrides>`); or run `/shakeout` at spec close. This is the spec-complete / pre-merge gate: re-runs integration, runs E2E, and dispatches the reviewer agents (incl. `invariant-auditor`, plus any stack-specific reviewers the sub-plugin registers) against the full branch diff.
-3. **Finish** — `superpowers:finishing-a-development-branch`.
+2. **Test-effectiveness audit** — invoke `netdust-core:test-effectiveness` (Situation A) over the phase diff. The integration gate proved the tests *pass*; this proves they would *bite*. Walk the seven failure modes (stale fixture, test-world≠real-world, wire-mock leak, unmounted guard, happy-path-only/missing-denial, no-coverage, concurrency) over every dangerous path the diff introduced — for each guard, fixture, wire, mount, and timer, name the test that goes RED if it breaks, or record it `blind` and fix it. The resulting `covered`/`blind`/`fixed` manifest is the convergence target for the next step's reviewers — so shake-out verifies the gaps instead of re-discovering them. (Especially load-bearing on security-rich / multi-tenancy phases, where green-but-blind denial tests are the dominant escape — see the traverse-clause calibration.)
+3. **Shake-out** — invoke `netdust-core:shake-out`, or its stack-specific replacement if the loaded sub-plugin provides one (see `<stack_overrides>`); or run `/shakeout` at spec close. This is the spec-complete / pre-merge gate: re-runs integration, runs E2E, and dispatches the reviewer agents (incl. `invariant-auditor`, plus any stack-specific reviewers the sub-plugin registers) against the full branch diff.
+4. **Finish** — `superpowers:finishing-a-development-branch`.
 
 </process>
 
@@ -225,6 +226,7 @@ If any gate that *should* have fired (per the class + trigger lists) did not, th
 | `superpowers:subagent-driven-development` | **STAGE 2 — primary branch.** Parallel-independent tasks. |
 | `superpowers:executing-plans` | **STAGE 2 — secondary branch.** Sequential / solo execution. |
 | `netdust-core:testing-workflow` | **STAGE 2 MANDATORY GATE.** Per-task close (the addendum's structured tier + RED-first/Tier-B + deferral blocks ARE the auditable gate — not a per-task Skill re-invocation) + phase-complete. |
+| `netdust-core:test-effectiveness` | **STAGE 3 GATE.** Phase-close audit (Situation A), after the integration gate and before shake-out: the integration gate proved tests *pass*; this proves they would *bite*. Walks the seven green-but-blind failure modes over the phase diff; its `covered`/`blind`/`fixed` manifest is the shake-out + `/code-review` convergence target. Sibling to testing-workflow (write-time/per-task) at audit-time/per-phase altitude. |
 | `superpowers:systematic-debugging` | **STAGE 2 (Class C).** One invocation per bug. |
 | `netdust-core:shake-out` | **STAGE 3.** Spec-close, after upstream final-review. |
 | `superpowers:finishing-a-development-branch` | **STAGE 3.** After shake-out. |
