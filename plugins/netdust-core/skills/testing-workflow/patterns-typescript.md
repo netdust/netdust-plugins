@@ -4,6 +4,69 @@ Unit test patterns (Vitest) and acceptance test patterns (Playwright).
 
 ---
 
+## Triage First: the right COUNT is contract-driven
+
+Before the patterns below, decide the tier (see SKILL.md → *Task risk tier*). The number of tests is **not** a target — a Tier-B task may correctly add **0**, and one sharp Tier-A denial test outranks four happy-path mirrors. The three highest-value shapes:
+
+### Tier B — write NO test, record why
+
+```typescript
+// Task: add `cn = (...x) => twMerge(clsx(x))` — a pure pass-through over two typed libs.
+// There is no contract of cn's own to assert; any test re-asserts clsx/tailwind-merge.
+//   no unit test: Tier B, pure typed pass-through — covered by the libs' suites + TS types.
+// Do NOT write `expect(cn('p-2','p-4')).toBe('p-4')` — that asserts tailwind-merge, not cn.
+```
+
+### Tier A — RED-first denial test for a guard (one sharp test > four happy mirrors)
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { app } from '../src/app'; // exercise the guard through its real handler
+
+describe('config:write scope ceiling', () => {
+  // RED first: written against the absent guard, this returned 201 — watched it fail.
+  it('DENIES a member escalating to config:write (403)', async () => {
+    const res = await app.request('/config', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${memberToken}` },
+      body: JSON.stringify({ scopes: ['config:write'] }),
+    });
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe('FORBIDDEN');
+  });
+
+  // The companion that stops the guard from over-blocking everyone:
+  it('ALLOWS an owner to set config:write (2xx)', async () => {
+    const res = await app.request('/config', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${ownerToken}` },
+      body: JSON.stringify({ scopes: ['config:write'] }),
+    });
+    expect(res.status).toBeLessThan(300);
+  });
+});
+```
+
+A green-only assertion (`status !== 200`) would pass against a guard that 403s *everyone* — assert the denied path AND that the allowed actor still gets through.
+
+### Seam test at the wiring task — cross the un-mocked chain
+
+```typescript
+// Task: MOUNT requireResource on /documents/*. resource.test.ts already proves the fn in
+// isolation — that test stays GREEN even if the mount is mis-pathed and the guard never fires.
+// The delta is the mount; exercise IT, through the real app, no mock of the seam:
+describe('requireResource is live on /documents/*', () => {
+  it('a project-narrowed agent token gets 403 on another project (real route)', async () => {
+    const res = await app.request('/documents/other-project-doc', {
+      headers: { authorization: `Bearer ${narrowedAgentToken}` },
+    });
+    expect(res.status).toBe(403); // not 200 — proves the mount actually enforces
+  });
+});
+```
+
+---
+
 ## Unit Test Patterns
 
 ### Pure Function / Utility
