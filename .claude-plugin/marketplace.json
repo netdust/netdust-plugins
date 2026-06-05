@@ -19,8 +19,8 @@
     {
       "name": "netdust-wp",
       "source": "./plugins/netdust-wp",
-      "description": "Netdust WordPress plugin — WP discipline, WP reference, ntdst-core framework, WP commands. Layers on netdust-core.",
-      "version": "0.2.0",
+      "description": "Netdust WordPress plugin — WP discipline, WP planning (plan-requirements gate), WP reference, ntdst-core framework, WP commands. Layers on netdust-core.",
+      "version": "0.3.0",
       "strict": false
     },
     {

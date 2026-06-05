@@ -24,6 +24,7 @@ This skill lives in `netdust-core` and is stack-agnostic. The stages below refer
 
 How to apply it, at each stage:
 - **Brainstorm / plan / domain conventions** — if the stack sub-plugin provides a domain skill for the artifact you're designing (a framework-architecture, data-layer, or patterns skill), invoke it alongside or instead of the generic.
+- **Plan requirements** — if the stack sub-plugin provides a *plan-requirements* skill (one that injects mandatory stack-specific requirement sections into the plan, the way `netdust-core:threat-modeling` injects `## Threat model`), fire it at Stage 1 alongside threat-modeling/invariants so its sections are baked in **before task breakdown**. This moves stack-specific security/pattern enforcement upstream into the plan, so review verifies against named items instead of hunting. (On WordPress that skill injects WP-security four-pillar + ntdst-core layering requirements; the core skill never names it — the override rule picks it up.)
 - **Testing** — `netdust-core:testing-workflow` already auto-detects the stack and picks the right unit/integration runner. Nothing to override manually; it does the right thing per project.
 - **Shake-out / review** — if the stack sub-plugin provides a stack-specific shake-out skill or reviewer agents (PHP/WP, Statamic, etc.), the spec-close gate (Stage 3) dispatches *those* in addition to the generic reviewers. `/shakeout` already does this auto-dispatch per detected stack.
 
@@ -60,6 +61,8 @@ If the feature's intent, scope, or shape is not already pinned down, invoke `sup
 ## Stage 1 — Write the plan, with the plan-time gates baked in
 
 Invoke `superpowers:writing-plans`. Follow its checklist. Then layer these netdust gates **before task breakdown is finalized** — they are not optional add-ons, they change what tasks the plan contains:
+
+**Stack plan-requirements (override layer).** If a stack sub-plugin is loaded and provides a plan-requirements skill (see `<stack_overrides>`), invoke it HERE, alongside 1a/1b — it injects the stack's mandatory requirement sections (e.g. on WordPress: WP-security four pillars per data-flow + ntdst-core layering per new class) into the plan before task breakdown, so those become per-task acceptance criteria and the `/code-review` + drift-reviewer convergence target. Core never names the skill; the override rule resolves it per project.
 
 **1a. Threat-modeling gate.** Invoke `netdust-core:threat-modeling` and embed its `## Threat model` section inline in the plan IF the feature touches any of: user-controlled URLs (webhooks, BYOK provider URLs, OAuth redirects, embed/CMS endpoints), auth/session/token surfaces, untrusted parsing (frontmatter from external sources, AI tool-call args, webhook payloads, file uploads), BYOK credentials, multi-tenancy / workspace boundaries, or any path where the server makes outbound requests to user-supplied addresses. Named assets → named attacks → named mitigations → explicit deferrals, BEFORE task breakdown. The threat model then becomes the `/code-review` convergence target (reviews verify against named mitigations instead of free-form hunting — converges in one round instead of probabilistically over many).
 
