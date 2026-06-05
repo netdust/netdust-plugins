@@ -1,20 +1,24 @@
 # Makefile.tmpl — Netdust WordPress harness
 #
 # This file contains MULTIPLE deploy-method variants. /wp-new-project copies
-# only the section matching the chosen deploy method.
+# only the ONE section matching the chosen deploy method into the project's
+# Makefile. Each section below is a COMPLETE, standalone Makefile — copy the
+# whole section between its banner and the next banner; do NOT merge sections.
 #
-# Variants below:
-#   ── VARIANT: makefile ──         (git bundle deploy — Stride/Fuse pattern)
-#   ── VARIANT: git-push ──         (Ploi auto-deploy on push)
-#   ── VARIANT: git-bundle-makefile ── (explicit git-bundle — Netdust/VAD)
+# Variants below (each self-contained):
+#   ── VARIANT: makefile ──            (git bundle deploy — Stride/Fuse pattern)
+#   ── VARIANT: git-push ──            (Ploi auto-deploy on push)
+#   ── VARIANT: git-bundle-makefile ── (explicit two-step git-bundle — Netdust/VAD)
 #
 # Replace {{PROJECT_NAME}}, {{STAGING_HOST}}, {{STAGING_PATH}} etc. with site.yml values.
 
 # ═══════════════════════════════════════════════════════════════════════════
-#                          VARIANT: makefile
-# ═══════════════════════════════════════════════════════════════════════════
+# ╔═════════════════════════════════════════════════════════════════════════╗
+# ║                          VARIANT: makefile                              ║
+# ╚═════════════════════════════════════════════════════════════════════════╝
 # Use when site.yml deploy.method == makefile
-# WORKFLOW: setup → dev → save → deploy → ship
+# WORKFLOW: dev → save → deploy-staging → ship
+# Deploys by creating a git bundle locally and pulling it on the remote.
 
 PROJECT_NAME := {{PROJECT_NAME}}
 STAGING_HOST := {{STAGING_HOST}}
@@ -86,19 +90,144 @@ finish: ## Merge current feature branch into staging
 		git checkout staging && git merge --no-ff "$$current" && git push
 
 # ═══════════════════════════════════════════════════════════════════════════
-#                          VARIANT: git-push (Ploi)
-# ═══════════════════════════════════════════════════════════════════════════
+# ╔═════════════════════════════════════════════════════════════════════════╗
+# ║                          VARIANT: git-push (Ploi)                       ║
+# ╚═════════════════════════════════════════════════════════════════════════╝
 # Use when site.yml deploy.method == git-push
-# Ploi auto-deploys on push to the configured branch.
-# Replace the deploy-staging / deploy-production targets above with:
+# Ploi auto-deploys on push to the configured branch. There is no bundle/scp —
+# deploy == push, and Ploi's deploy script runs `composer install` server-side.
+# WORKFLOW: dev → save → deploy-staging (push staging) → ship (push main)
 
-# deploy-staging: ## Push staging branch — Ploi auto-deploys
-# 	@printf "$(YELLOW)Pushing staging branch...$(RESET)\n"
-# 	git push origin staging
-# 	@printf "$(GREEN)✓ pushed. Ploi auto-deploy will fire.$(RESET)\n"
-#
-# deploy-production: ## Push main — Ploi auto-deploys to production
-# 	@read -p "Type 'production' to confirm: " confirm; \
-# 		[ "$$confirm" = "production" ] || (echo "aborted"; exit 1)
-# 	git push origin main
-# 	@printf "$(GREEN)✓ pushed. Ploi auto-deploy will fire.$(RESET)\n"
+PROJECT_NAME := {{PROJECT_NAME}}
+STAGING_URL := {{STAGING_URL}}
+PRODUCTION_URL := {{PRODUCTION_URL}}
+STAGING_BRANCH := {{STAGING_BRANCH}}        # branch Ploi watches for staging (e.g. staging)
+PRODUCTION_BRANCH := {{PRODUCTION_BRANCH}}   # branch Ploi watches for production (e.g. main)
+
+RED := \033[31m
+GREEN := \033[32m
+YELLOW := \033[33m
+RESET := \033[0m
+
+.PHONY: help dev stop save deploy-staging deploy-production ship feature finish
+
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(RESET) %s\n", $$1, $$2}'
+
+dev: ## Start DDEV
+	ddev start
+
+stop: ## Stop DDEV
+	ddev stop
+
+save: ## Commit current branch (push handled by deploy targets)
+	@git status
+	@read -p "Commit message: " msg; \
+		git add -A && git commit -m "$$msg"
+
+deploy-staging: ## Push staging branch — Ploi auto-deploys
+	@printf "$(YELLOW)Pushing $(STAGING_BRANCH) — Ploi auto-deploy ($(STAGING_URL))...$(RESET)\n"
+	git push origin $(STAGING_BRANCH)
+	@printf "$(GREEN)✓ pushed. Ploi auto-deploy will fire.$(RESET)\n"
+
+deploy-production: ## Push production branch — Ploi auto-deploys (requires confirmation)
+	@printf "$(RED)PRODUCTION DEPLOY — $(PRODUCTION_URL)$(RESET)\n"
+	@read -p "Type 'production' to confirm: " confirm; \
+		[ "$$confirm" = "production" ] || (echo "aborted"; exit 1)
+	git push origin $(PRODUCTION_BRANCH)
+	@printf "$(GREEN)✓ pushed. Ploi auto-deploy will fire.$(RESET)\n"
+
+ship: ## Merge staging → main + push (Ploi deploys production)
+	git checkout $(PRODUCTION_BRANCH) && git merge $(STAGING_BRANCH)
+	$(MAKE) deploy-production
+
+feature: ## Create feature branch from staging (NAME=feature-name)
+	@[ -n "$(NAME)" ] || (echo "usage: make feature NAME=feature-name"; exit 1)
+	git checkout $(STAGING_BRANCH) && git pull
+	git checkout -b feature/$(NAME)
+
+finish: ## Merge current feature branch into staging
+	@current=$$(git branch --show-current); \
+		[ "$${current#feature/}" != "$$current" ] || (echo "not on a feature branch"; exit 1); \
+		git checkout $(STAGING_BRANCH) && git merge --no-ff "$$current" && git push origin $(STAGING_BRANCH)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ╔═════════════════════════════════════════════════════════════════════════╗
+# ║                  VARIANT: git-bundle-makefile (Netdust/VAD)              ║
+# ╚═════════════════════════════════════════════════════════════════════════╝
+# Use when site.yml deploy.method == git-bundle-makefile
+# Explicit two-step bundle: create the bundle locally, transfer it, then
+# fetch+merge it on the remote into a checked-out clone (no force-push, the
+# remote keeps its own working tree). Differs from `makefile` in that the
+# remote FETCHES a named ref and fast-forwards, rather than `git pull`-ing a
+# bundle onto a detached HEAD — safer for a remote that may have local state.
+# WORKFLOW: dev → save → deploy-staging → ship
+
+PROJECT_NAME := {{PROJECT_NAME}}
+STAGING_HOST := {{STAGING_HOST}}
+STAGING_PATH := {{STAGING_PATH}}
+STAGING_URL := {{STAGING_URL}}
+STAGING_BRANCH := {{STAGING_BRANCH}}         # e.g. staging
+PRODUCTION_HOST := {{PRODUCTION_HOST}}
+PRODUCTION_PATH := {{PRODUCTION_PATH}}
+PRODUCTION_URL := {{PRODUCTION_URL}}
+PRODUCTION_BRANCH := {{PRODUCTION_BRANCH}}    # e.g. main
+
+BUNDLE_DIR := /tmp
+
+RED := \033[31m
+GREEN := \033[32m
+YELLOW := \033[33m
+RESET := \033[0m
+
+.PHONY: help dev stop save deploy-staging deploy-production ship feature finish
+
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(RESET) %s\n", $$1, $$2}'
+
+dev: ## Start DDEV
+	ddev start
+
+stop: ## Stop DDEV
+	ddev stop
+
+save: ## Commit + push current branch
+	@git status
+	@read -p "Commit message: " msg; \
+		git add -A && git commit -m "$$msg" && git push
+
+deploy-staging: ## Deploy $(STAGING_BRANCH) to staging via explicit git bundle fetch
+	@printf "$(YELLOW)Bundling $(STAGING_BRANCH) → staging ($(STAGING_URL))...$(RESET)\n"
+	git bundle create $(BUNDLE_DIR)/$(PROJECT_NAME)-staging.bundle $(STAGING_BRANCH)
+	scp $(BUNDLE_DIR)/$(PROJECT_NAME)-staging.bundle $(STAGING_HOST):$(BUNDLE_DIR)/
+	ssh $(STAGING_HOST) "cd $(STAGING_PATH) && \
+		git fetch $(BUNDLE_DIR)/$(PROJECT_NAME)-staging.bundle $(STAGING_BRANCH):refs/remotes/bundle/$(STAGING_BRANCH) && \
+		git merge --ff-only refs/remotes/bundle/$(STAGING_BRANCH) && \
+		composer install --no-dev --optimize-autoloader"
+	@printf "$(GREEN)✓ deployed to staging$(RESET)\n"
+
+deploy-production: ## Deploy $(PRODUCTION_BRANCH) to production (requires confirmation)
+	@printf "$(RED)PRODUCTION DEPLOY — $(PRODUCTION_URL)$(RESET)\n"
+	@read -p "Type 'production' to confirm: " confirm; \
+		[ "$$confirm" = "production" ] || (echo "aborted"; exit 1)
+	git bundle create $(BUNDLE_DIR)/$(PROJECT_NAME)-production.bundle $(PRODUCTION_BRANCH)
+	scp $(BUNDLE_DIR)/$(PROJECT_NAME)-production.bundle $(PRODUCTION_HOST):$(BUNDLE_DIR)/
+	ssh $(PRODUCTION_HOST) "cd $(PRODUCTION_PATH) && \
+		git fetch $(BUNDLE_DIR)/$(PROJECT_NAME)-production.bundle $(PRODUCTION_BRANCH):refs/remotes/bundle/$(PRODUCTION_BRANCH) && \
+		git merge --ff-only refs/remotes/bundle/$(PRODUCTION_BRANCH) && \
+		composer install --no-dev --optimize-autoloader"
+	@printf "$(GREEN)✓ deployed to production$(RESET)\n"
+
+ship: deploy-staging ## Merge staging → main + deploy to production
+	git checkout $(PRODUCTION_BRANCH) && git merge $(STAGING_BRANCH) && git push
+	$(MAKE) deploy-production
+
+feature: ## Create feature branch from staging (NAME=feature-name)
+	@[ -n "$(NAME)" ] || (echo "usage: make feature NAME=feature-name"; exit 1)
+	git checkout $(STAGING_BRANCH) && git pull
+	git checkout -b feature/$(NAME)
+
+finish: ## Merge current feature branch into staging
+	@current=$$(git branch --show-current); \
+		[ "$${current#feature/}" != "$$current" ] || (echo "not on a feature branch"; exit 1); \
+		git checkout $(STAGING_BRANCH) && git merge --no-ff "$$current" && git push

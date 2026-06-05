@@ -36,7 +36,21 @@ Scaffold a new Netdust WordPress project in the current working directory using 
    └── todo.md      (empty)
    ```
 
-5. If deploy method is `makefile` / `git-bundle-makefile` / `git-push`, copy the matching variant from `~/.claude/plugins/netdust-wp/templates/Makefile.tmpl` (find the section for the chosen method). For other methods, do not create a Makefile.
+5. Set up deploy according to the chosen method. Every one of the 9 methods has a defined outcome — never leave the user without an explanation:
+
+   | Method | Scaffold action |
+   |---|---|
+   | `makefile` | Copy the **VARIANT: makefile** section from `templates/Makefile.tmpl` (the whole section between its banner and the next), substitute the `{{...}}` placeholders from `site.yml`. |
+   | `git-bundle-makefile` | Copy the **VARIANT: git-bundle-makefile** section, substitute placeholders. |
+   | `git-push` | Copy the **VARIANT: git-push** section, substitute placeholders (incl. `{{STAGING_BRANCH}}` / `{{PRODUCTION_BRANCH}}`). |
+   | `rsync` | No Makefile. Deploy is a direct `rsync` — record the exact `rsync` command in `site.yml` `deploy.staging_command` / `production_command`. Tell the user it runs via `/deploy`. |
+   | `rsync-staging-prod` | No Makefile. Same as `rsync` but with separate nested staging/production paths — record both commands in `site.yml`. |
+   | `ftp` | No Makefile. Deploy is PhpStorm/IDE FTP auto-upload — note in `site.yml` `deploy.note` that there is no CLI deploy; the IDE handles it. |
+   | `autogit` | No Makefile. Combell autogit symlinks handle deploy on push — note the watched branch in `site.yml`. |
+   | `manual` | No Makefile. Note in `site.yml` `deploy.note` that deploys are manual/direct edits — `/deploy` will refuse and tell the user. |
+   | `tbd` | No Makefile. Write `deploy.method: tbd` and a `deploy.note: "deploy method not yet decided — set before first ship"` so the gap is explicit, not silent. |
+
+   For any "No Makefile" method, do NOT create a `Makefile`; instead make sure `site.yml` carries enough in `deploy.*` that a later session (or `/deploy`) knows what to do.
 
 6. Initialize git if `.git/` does not exist, then commit the scaffold:
    ```bash
