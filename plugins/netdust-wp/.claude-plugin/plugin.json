@@ -1,7 +1,7 @@
 {
   "name": "netdust-wp",
-  "version": "0.2.0",
-  "description": "Netdust WordPress plugin — WP discipline (security, database, bedrock-composer), WP reference (frontend, testing, infra), ntdst-core framework (architecture, data, patterns, yootheme), and WP commands (/wp-new-project, /scaffold-plugin, /sync-db, /setup-tests). Layers on top of netdust-core for memory, hooks, dev-stack, server management, code review, cross-domain skills, and /deploy.",
+  "version": "0.3.0",
+  "description": "Netdust WordPress plugin — WP discipline (security, database, bedrock-composer), WP planning (plan-requirements injects WP-security four-pillar + ntdst-core pattern requirements into the plan at harnessed-development Stage 1), WP reference (frontend, testing, infra), ntdst-core framework (architecture, data, patterns, yootheme), and WP commands (/wp-new-project, /scaffold-plugin, /sync-db, /setup-tests). Layers on top of netdust-core for memory, hooks, dev-stack, server management, code review, cross-domain skills, and /deploy.",
   "author": {
     "name": "Stefan Vermeulen",
     "email": "stefan@netdust.be",
