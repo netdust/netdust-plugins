@@ -1,5 +1,5 @@
 ---
-description: Spec-complete gate. Run when all task groups in a spec are done — before merging the branch. Stack-agnostic. Runs the test-effectiveness audit first, re-runs the /integration checks, then Playwright if a config exists, then invokes the shake-out skill, then auto-dispatches four (or five for WP) reviewer agents in parallel on the full branch diff.
+description: Spec-complete gate. Run when all task groups in a spec are done — before merging the branch. Stack-agnostic. Runs the test-effectiveness audit and feature-acceptance verification first, re-runs the /integration checks, then Playwright if a config exists, then invokes the shake-out skill, then auto-dispatches four (or five for WP) reviewer agents in parallel on the full branch diff.
 allowed_tools: ["Bash", "Read", "Glob", "Skill", "Agent"]
 ---
 
@@ -38,6 +38,24 @@ Skill("netdust-core:test-effectiveness")
 Hand it the diff range (`$(git merge-base HEAD main)..HEAD`) as the audit target. It will walk the seven failure modes (stale fixture, test-world≠real-world, wire-mock leak, unmounted guard, happy-path-only/missing-denial, no-coverage, concurrency) over every guard, fixture, wire, mount, and timer the diff introduced, and for each either name the test that goes RED or record it `blind` and author the test that closes it.
 
 **Wait for the audit manifest before continuing.** If it surfaced `blind` paths, those tests are authored now (RED-first) and the unit suite below must include them. If the audit aborts or the suite can't be made to bite, stop and report — don't proceed to a review pass that would just re-discover the gap.
+
+## Step 0b — Feature-acceptance verification (does the FEATURE behave, not just the code)
+
+If this branch added or changed a **user-facing feature** (a view, form, wizard, interactive flow, CRUD surface, or an endpoint a client/agent drives), verify it behaves the way it's meant to be used — every intended flow, every edge — driven through the real surface. test-effectiveness (Step 0) proved the tests *bite*; this proves the *feature behaves*. These two gates are siblings: one audits code coverage, the other drives behavior.
+
+> Note: if you reached `/shakeout` via `netdust-core:harnessed-development`, Stage 1g authored an `## Acceptance flows` matrix in the plan and Stage 3 may have already driven it — point this step at that matrix rather than re-deriving. Running `/shakeout` standalone with no matrix, derive the intended-use flows from the spec/diff now.
+
+Use the Skill tool (Situation B — verify the matrix):
+
+```
+Skill("netdust-core:feature-acceptance")
+```
+
+It will drive each flow + edge through its faithful layer — **UI flows through the real browser** (a Playwright spec if one exists → else `superpowers-chrome` `use_browser` against the running dev server), **backend flows through the un-mocked wire** (a real request through the mounted app, asserting response + DB state + emitted event) — checking the six edge classes per flow (empty/zero state, denied actor, wrong-order/re-entry, concurrent/double, boundary value, mid-flow failure).
+
+**Bring up the real surface first** (start the dev server for browser flows; have the API reachable for backend flows). The skill emits a `pass`/`fail`/`not-reachable`/`unverified-no-browser` manifest. A `fail` is a bug fixed here (via `superpowers:systematic-debugging`) before proceeding. **No UI flow is marked `pass` without a real browser driving it** — if the browser can't be reached, those flows are `unverified-no-browser` and reported to the user as residual risk, never laundered to green.
+
+**Wait for the manifest before continuing.** Like Step 0's, it becomes a convergence target the Step 4 reviewers verify against.
 
 ## Step 1 — Re-run /integration's checks
 
@@ -87,7 +105,7 @@ Hand off to the skill. It will:
 
 ## Step 4 — Auto-dispatch the multi-reviewer pass
 
-Once shake-out reports green, dispatch the reviewer agents **in parallel**. This means a single assistant turn containing multiple `Agent` tool calls in one message — not sequential calls. If Step 0 produced a `covered`/`blind`/`fixed` manifest, include it in each agent's briefing as the convergence target — reviewers verify the `blind→fixed` transitions and flag any path still `blind`, rather than re-discovering coverage gaps free-form.
+Once shake-out reports green, dispatch the reviewer agents **in parallel**. This means a single assistant turn containing multiple `Agent` tool calls in one message — not sequential calls. If Step 0 produced a `covered`/`blind`/`fixed` manifest (and/or Step 0b a `pass`/`fail`/`unverified-no-browser` acceptance manifest), include them in each agent's briefing as the convergence targets — reviewers verify the `blind→fixed` transitions, the driven flow outcomes, and flag any path still `blind` or any UI flow still `unverified-no-browser`, rather than re-discovering coverage/behavior gaps free-form.
 
 Compute the diff range:
 
