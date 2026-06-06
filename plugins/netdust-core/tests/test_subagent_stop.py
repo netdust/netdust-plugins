@@ -45,9 +45,15 @@ def _edit(old: str, new: str) -> dict:
             "input": {"old_string": old, "new_string": new}}
 
 
-def _write(content: str) -> dict:
+def _write(content: str, file_path: str = "x.ts") -> dict:
     return {"type": "tool_use", "name": "Write",
-            "input": {"file_path": "x.ts", "content": content}}
+            "input": {"file_path": file_path, "content": content}}
+
+
+def _edit_path(file_path: str, old: str, new: str) -> dict:
+    return {"type": "tool_use", "name": "Edit",
+            "input": {"file_path": file_path,
+                      "old_string": old, "new_string": new}}
 
 
 def _multiedit(*pairs: tuple[str, str]) -> dict:
@@ -266,6 +272,59 @@ def run() -> list[tuple[bool, str]]:
         [_msg(_write("export const x = 1;\nexport const y = 2;\nexport const z = 3;\n")),
          _msg(_skill("netdust-core:testing-workflow")),
          _msg(_bash("bun test"))],
+    ))
+
+    # === Non-code writes do NOT trip the gate (the research-swallow fix) ===
+    # A research / spec / map subagent that writes a large .md report has
+    # nothing to test. It must pass through, not get blocked into a
+    # test-the-suite dance that swallows its findings.
+
+    results.append(_case(
+        "large .md report (no tests) → passthrough (research not gated)",
+        "passthrough",
+        [_msg(_write(
+            "# Findings\n" + "- point\n" * 50,
+            file_path="docs/superpowers/specs/2026-06-06-study.md",
+        ))],
+    ))
+
+    results.append(_case(
+        "Edit to a docs/ .md file (no tests) → passthrough",
+        "passthrough",
+        [_msg(_edit_path(
+            "docs/notes.md",
+            old="a\nb\nc\nd\ne",
+            new="x\ny\nz\nw\nv\nq\nr",
+        ))],
+    ))
+
+    results.append(_case(
+        "Write to .txt scratch file (no tests) → passthrough",
+        "passthrough",
+        [_msg(_write("line\n" * 40, file_path="/tmp/scratch.txt"))],
+    ))
+
+    # Mixed: a subagent that touches BOTH a doc AND real code is still gated
+    # on the code. The exemption must not let a code write hide behind a doc
+    # write in the same transcript.
+    results.append(_case(
+        "doc write + real code write (no tests) → block (code still gated)",
+        "block",
+        [_msg(_write("# notes\n" + "x\n" * 20, file_path="README.md")),
+         _msg(_write("export const a = 1;\nexport const b = 2;\nexport const c = 3;\n",
+                     file_path="src/foo.ts"))],
+    ))
+
+    # Safety: a code edit with NO file_path (bare Edit) must still be gated —
+    # unknown path defaults to code, never to exempt. Opening this to "exempt
+    # when unknown" would re-create the swallow-the-gate hole.
+    results.append(_case(
+        "code edit with missing file_path, net positive, no tests → block",
+        "block",
+        [_msg(_edit(
+            old="a\nb\nc\nd\ne",
+            new="x\ny\nz\nw\nv",
+        ))],
     ))
 
     # === stop_hook_active bypass ===
