@@ -40,6 +40,31 @@ CODE_EDITING_TOOLS = {"Edit", "Write", "NotebookEdit", "MultiEdit"}
 # tests actually ran (see ran_tests_via_bash).
 COACHING_SKILL = "testing-workflow"
 
+# File suffixes that are NOT code — a Write/Edit touching only these has
+# nothing to test. Research, spec, and map subagents write large .md reports;
+# gating them blocks the stop and swallows their findings (the report gets
+# replaced by the "run the suite" dance). We exempt these by PATH so an
+# implementer subagent that writes real source is still gated.
+#
+# Conservative by design: anything NOT positively recognized as a doc — and
+# any edit with NO file_path at all — counts as code (gate ON). Opening the
+# "unknown → exempt" direction would re-create the 231-false-pass swallow hole.
+NON_CODE_SUFFIXES = (
+    ".md", ".mdx", ".markdown", ".txt", ".rst",
+    ".json", ".yaml", ".yml", ".toml", ".csv",
+    ".lock", ".log",
+)
+
+
+def _is_code_path(file_path: str) -> bool:
+    """True if this path looks like source we'd want tested. Missing/empty
+    path → True (conservative: gate stays on for ambiguous edits)."""
+    if not file_path:
+        return True
+    lower = file_path.lower()
+    return not lower.endswith(NON_CODE_SUFFIXES)
+
+
 # Minimum added lines below which the gate is considered a no-op (auto-pass).
 # Captures: typo fixes, one-line tweaks, doc-string edits, formatting nudges.
 # Closes the gap where net_additions ≤ 0 missed refactor-swaps that add real
@@ -182,6 +207,12 @@ def scan_subagent_activity(messages: list[dict]) -> dict:
             tool_input = block.get("input", {}) or {}
 
             if tool_name in CODE_EDITING_TOOLS:
+                # Only count edits to code files. A subagent that writes only
+                # docs/specs/.md reports (research, planning) has nothing to
+                # test and must not be gated. Path missing/unknown → treated
+                # as code (gate stays on).
+                if not _is_code_path(tool_input.get("file_path") or ""):
+                    continue
                 edited = True
                 a, r = _edit_line_counts(tool_name, tool_input)
                 lines_added += a
