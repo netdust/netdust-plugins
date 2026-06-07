@@ -4,6 +4,14 @@
 # Logs every fire to ~/.claude/logs/memory-hook.log so you can see it working.
 
 set -u  # don't set -e — we never want a sourced file to abort the session
+
+# Claude Code injects CLAUDE_PLUGIN_ROOT when it fires the hook. Under bare
+# invocation (tests, manual runs) it's unbound, which `set -u` turns into a
+# fatal abort at first use. Self-resolve from the script's own location —
+# this file lives at <plugin_root>/hooks/session-start.sh — so the hook works
+# the same whether or not the env var was provided.
+: "${CLAUDE_PLUGIN_ROOT:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+
 CWD=$(pwd)
 LOG="$HOME/.claude/logs/memory-hook.log"
 TS=$(date '+%Y-%m-%d %H:%M:%S')
