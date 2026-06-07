@@ -93,6 +93,29 @@ if [[ -f "$TODO" ]]; then
   OUTPUT+="$(tail -50 "$TODO")\n\n"
 fi
 
+# ── Auto-memory index (Claude Code's atomic per-project memory) ─────────────
+# Claude Code keeps an atomic, frontmatter-per-fact memory at
+#   ~/.claude/projects/<cwd-with-slashes-as-dashes>/memory/
+# with a one-line-per-atom MEMORY.md index. Claude Code loads MEMORY.md itself,
+# so this hook does NOT re-dump it (that would double the tokens). What it adds
+# is what the built-in load lacks: (1) a recall affordance — the atom files are
+# readable on demand, the index is only a table of contents — and (2) a size
+# guard. The index loads with a hard ~24 KB ceiling; past it, entries silently
+# drop (observed this session). Surface that BEFORE atoms vanish unnoticed.
+AUTOMEM_DIR="$HOME/.claude/projects/$(printf '%s' "$CWD" | sed 's#/#-#g')/memory"
+AUTOMEM_INDEX="$AUTOMEM_DIR/MEMORY.md"
+note automem "$AUTOMEM_INDEX"
+if [[ -f "$AUTOMEM_INDEX" ]]; then
+  AUTOMEM_BYTES=$(wc -c <"$AUTOMEM_INDEX" 2>/dev/null || echo 0)
+  AUTOMEM_COUNT=$(find "$AUTOMEM_DIR" -maxdepth 1 -name '*.md' ! -name 'MEMORY.md' 2>/dev/null | wc -l | tr -d ' ')
+  OUTPUT+="## Auto-memory (atomic recall)\n"
+  OUTPUT+="$AUTOMEM_COUNT atomic memory files live in \`$AUTOMEM_DIR/\`. The \`MEMORY.md\` index (already in your context) is a table of contents — when an entry looks relevant to the task, **read the linked atom file for the full fact** instead of acting on the one-line summary.\n\n"
+  # ~24 KB is the index load ceiling; warn at 90% so it's actionable before drop.
+  if (( AUTOMEM_BYTES > 22000 )); then
+    OUTPUT+="> ⚠️ MEMORY.md is $((AUTOMEM_BYTES/1024)) KB — near/over the ~24 KB index ceiling, so some entries may not have loaded. Tighten index lines (move detail into the atom files, keep each index line < ~200 chars) so recall stays complete.\n\n"
+  fi
+fi
+
 # ── Memory discipline prompt (only if this project has memory scaffolding) ──
 # Drop this in when memory/STATE.md OR memory/lessons.md exists, so the
 # instructions don't appear in scratch projects without the harness layout.
