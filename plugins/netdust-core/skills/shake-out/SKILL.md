@@ -1,6 +1,6 @@
 ---
 name: shake-out
-description: Post-build QA phase that sweeps the built artifact end-to-end, compiles a bug manifest, then fixes systematically. Use after executing-plans or subagent-driven-development completes when unit tests pass but the artifact hasn't been exercised in a real environment. Triggers on "shake it out", "shakeout", "does it work", "QA this", "find the bugs", "what's broken".
+description: Post-build QA phase that sweeps the built artifact end-to-end, compiles a bug manifest, then fixes systematically. Use after executing-plans or subagent-driven-development completes when unit tests pass but the artifact hasn't been exercised in a real environment — this is the spec-complete / pre-merge gate. Triggers on "shake it out", "shakeout", "does it work", "QA this", "find the bugs", "what's broken", "spec-complete gate", "pre-merge gate", "final QA before merge".
 ---
 
 <objective>
