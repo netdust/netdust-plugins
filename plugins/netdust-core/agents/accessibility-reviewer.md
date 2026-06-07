@@ -1,5 +1,6 @@
 ---
 name: accessibility-reviewer
+tools: Read, Grep, Glob, Bash
 description: Use this agent to review code for accessibility (a11y) compliance. Invoke when reviewing UI components, HTML templates, or frontend code that users interact with. Examples: <example>Context: User has built a new form component.\nuser: "I've created a new signup form, can you check it?"\nassistant: "I'll use the accessibility-reviewer agent to ensure the form is accessible to all users."\n<commentary>Forms are critical for accessibility - labels, focus management, error announcements.</commentary></example> <example>Context: User is building a modal dialog.\nuser: "Here's my modal component"\nassistant: "Let me use the accessibility-reviewer to check focus trapping, keyboard navigation, and screen reader support."\n<commentary>Modals have specific accessibility requirements that this agent covers.</commentary></example>
 ---
 
