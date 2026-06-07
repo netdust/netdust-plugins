@@ -1,5 +1,6 @@
 ---
 name: frontend-architect
+tools: Read, Grep, Glob, Bash
 description: Use this agent to review frontend architecture, component design, state management, and UI patterns. Invoke when reviewing React/Vue/Svelte components, planning frontend structure, or assessing UI implementation approaches. Examples: <example>Context: User has designed a new component structure.\nuser: "I'm planning to structure my components like this..."\nassistant: "I'll use the frontend-architect agent to review your component architecture."\n<commentary>Component architecture is exactly what this agent evaluates.</commentary></example> <example>Context: User is deciding on state management.\nuser: "Should I use Redux or React Context for this?"\nassistant: "Let me use the frontend-architect agent to analyze your state management needs."\n<commentary>State management decisions are a key focus of this agent.</commentary></example>
 ---
 

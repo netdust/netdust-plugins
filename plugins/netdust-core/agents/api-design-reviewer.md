@@ -1,5 +1,6 @@
 ---
 name: api-design-reviewer
+tools: Read, Grep, Glob, Bash
 description: Use this agent to review API designs, endpoints, request/response structures, and REST/GraphQL patterns. Invoke when reviewing code that defines API routes, handlers, or when planning new API endpoints. Examples: <example>Context: User has designed a new REST API endpoint.\nuser: "I've added a new /users endpoint with GET, POST, PUT, DELETE methods"\nassistant: "I'll use the api-design-reviewer agent to check the endpoint design follows best practices."\n<commentary>API endpoint design is exactly what this agent reviews.</commentary></example> <example>Context: User wants feedback on their API response structure.\nuser: "Does this API response format look right?"\nassistant: "Let me use the api-design-reviewer agent to analyze your response structure."\n<commentary>Response structure review is a core function of this agent.</commentary></example>
 ---
 
