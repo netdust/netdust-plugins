@@ -26,7 +26,7 @@ The harness has proven it *fires*. The frontier is what it *produces and prevent
 
 - **Move 1 — Deterministic, not honored.** Push the highest-value gates from "the model honors them" to "a machine enforces them." Proven-reliable firing is good; deterministic enforcement covers the case where the model's judgment fails entirely (prompt injection, hallucinated path, the moment it skips).
 - **Move 2 — Outcome, not firing.** We measured *fidelity* (gates fire). We have not measured *outcome* (code has fewer bugs). That is the gap between the question ("clean, secure, bug-free") and what's proven ("the artifact exists").
-- **Anti-goal — more teaching.** Adding skill prose that explains *how to think* to a model that already thinks is **negative ROI** — it dilutes attention on the gates that matter. The improvement is *less* harness prose, *more* measurement and *more* deterministic floors. No new "teaching" skills. No prose expansion of skills the eval showed baseline already complies with (architecture-invariants, shake-out were flagged "baseline near-complete").
+- **Anti-goal (default lean, not invariant) — more teaching.** Adding skill prose that explains *how to think* to a model that already thinks is **usually negative ROI** — it dilutes attention on the gates that matter. The default improvement is *less* harness prose, *more* measurement and *more* deterministic floors: no new "teaching" skills, and no prose expansion of skills the eval showed baseline already complies with (architecture-invariants, shake-out were flagged "baseline near-complete"). **This is a lean, not a law** — it rests on the *fidelity* eval (which showed Sonnet has the spirit), not on an outcome A/B of prose-rich vs prose-lean skills, which we have not run. So Improvement 1 is explicitly *allowed to revise it*: if a non-circular replay shows a bug class is caught only when a skill teaches X, that is evidence *for* one targeted prose addition. Don't let this anti-goal pre-close the door the outcome eval exists to open.
 
 ---
 
@@ -34,11 +34,13 @@ The harness has proven it *fires*. The frontier is what it *produces and prevent
 
 **Source pattern:** SWE-bench — credibility comes from *resolving a known issue*, not from process fidelity.
 
-**The asset we already own:** every entry in `ntdst-architecture/lessons.md` and `ntdst-data/lessons.md` is a real, characterized production bug with a known fingerprint:
+**The asset we already own:** every entry in `netdust-wp/skills/ntdst-architecture/lessons.md` and `netdust-wp/skills/ntdst-data/lessons.md` is a real, characterized production bug with a known fingerprint:
 - `post_title` → `_ntdst_post_title` orphan-meta (60 corrupted posts; fingerprint: `_ntdst_post_*` keys in DB)
 - swallowed `WP_Error` → vanishing orphan registrations (fingerprint: `WP_Error`-returning call with no `is_wp_error()`)
 - `ntdst_data()->get()` direct access outside a repository / pass-through service drift
 - 867 passing unit tests, 15 wiring bugs found only by shake-out
+
+**Consequence — this is a netdust-wp-stack outcome eval.** The fingerprinted dataset lives in the `netdust-wp` sub-plugin, not in core. So Improvement 1 measures the harness *as exercised through netdust-wp* (the core gates firing against WordPress-stack work), not core in isolation. That's the right first target — it's where the labeled defects are — but the catch-rate table's verdict is stack-scoped: "the harness caught N/M on the netdust-wp stack." Generalizing to other stacks (Statamic, Bun) needs a labeled defect set for those, which doesn't exist yet. State the scope on the result; don't read a netdust-wp catch rate as a core-wide one.
 
 **Build:** replay each historical bug as a scenario, **harness-on vs harness-off**, and measure **caught-vs-escaped** in the final diff. Reuse the proven blind-judge method from the workspace eval. Judge checks the final diff against the bug's fingerprint, not "did the agent think about it."
 
@@ -121,4 +123,4 @@ The harness has proven it *fires*. The frontier is what it *produces and prevent
 - SWE-bench — outcome measurement (Imp 1) ; SWE-agent ACI — interface-as-enforcement (Imp 3)
 - OpenAI Codex / `ai-boost/awesome-harness-engineering` — pre-action authorization (Imp 2)
 - OpenHands — event-stream trajectory observability (Imp 2)
-- netdust-core `skills/*/lessons.md` — the labeled defect dataset for Imp 1 and the fingerprints for Imp 3
+- `netdust-wp/skills/*/lessons.md` (esp. `ntdst-architecture`, `ntdst-data`) — the labeled defect dataset for Imp 1 and the fingerprints for Imp 3 (WordPress-stack — see Imp 1's scope consequence)
