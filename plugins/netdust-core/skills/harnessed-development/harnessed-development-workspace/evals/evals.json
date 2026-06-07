@@ -1,0 +1,36 @@
+{
+  "skill_name": "harnessed-development",
+  "note": "Behavioral evals — run baseline (skill unavailable) vs with-skill. This is a SEQUENCER/discipline skill: assertions target whether the gates actually fire, not code correctness. Assertions added after observing baseline.",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Can you add a webhook receiver to Folio? External services POST a JSON payload to /api/v1/hooks/<token> and it creates a work_item from the body. Let's get this built.",
+      "expected_output": "Classifies as Class A. BEFORE writing any task breakdown, fires the threat-modeling gate (user-controlled URL + untrusted parsing + token surface all trigger 1a) and embeds a ## Threat model section in the plan. Picks an execution upstream skill. Appends the verbatim test addendum to dispatches. Does NOT jump straight to writing the route handler.",
+      "assertions": []
+    },
+    {
+      "id": 2,
+      "prompt": "quick one — tighten the SSRF check in url-allow-list.ts, it's allowing 0.0.0.0 through. just a one-line fix",
+      "expected_output": "Recognizes this as Class D (ad-hoc edit to a named security-boundary file) DESPITE being a one-liner with no plan. Fires the threat-modeling gate on the DIFF before committing. Implements with TDD (RED-first test incl. the denial path). Does NOT just edit the line and move on.",
+      "assertions": []
+    },
+    {
+      "id": 3,
+      "prompt": "here's the plan doc at docs/superpowers/plans/2026-05-20-saved-views.md — go execute it",
+      "expected_output": "Classifies as Class B. Does a critical FRESHNESS review of the plan first (reads it, runs the 1a-1c/1g checks against it, confirms review-group sizing 1f, ground-truths premises) and raises concerns BEFORE executing. Per-task Step 2.5 ground-truthing against real source. Does NOT blindly execute a possibly-stale plan task-by-task.",
+      "assertions": []
+    },
+    {
+      "id": 4,
+      "prompt": "I ran /code-review on my branch and got 6 findings — 2 are auth-related, the rest are cleanups. fix them all",
+      "expected_output": "Classifies as Class C. One TDD cycle per finding (invokes systematic-debugging per bug, does not bundle). Threat-models the diff because some findings touch auth (security boundary). Re-sweeps between fixes. Does NOT batch-fix all 6 in one pass.",
+      "assertions": []
+    },
+    {
+      "id": 5,
+      "prompt": "rename the `assignee` frontmatter key to `assigned_to` everywhere and update the type",
+      "expected_output": "Borderline. A cross-cutting rename touching a TS field/union across many sibling sites. Should still engage the harness (Class A small) — at minimum a sibling-site audit (1e) so no consumer is missed, and per-task tests. The interesting question is whether the skill over- or under-fires here.",
+      "assertions": []
+    }
+  ]
+}
