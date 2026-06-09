@@ -1,6 +1,6 @@
 {
   "name": "netdust-agent",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Netdust two-layer agent harness \u2014 a SKELETON layer (steps, gates, ordering: harnessed-development entry sequencer + the gates it fires: testing-workflow, threat-modeling, architecture-invariants, feature-acceptance, test-effectiveness, shake-out, compounding; with writing-plans + finishing-a-branch deferred to their superpowers bases and the process retro to the /evaluate command) and a CRAFT layer (gerund-named how-to the harness reaches for at each step: writing-tests, designing-apis, building-frontend, engineering-context, versioning-with-git, driving-the-browser, refining-ideas, sourcing-from-docs, doubting-decisions, simplifying-code, deploying; plus the dev-stack infra skill). Naming convention: gerund = craft (how), phase/gate noun = harness (when/whether). Built on superpowers (base) + addyosmani/agent-skills (craft fills, MIT) with Netdust discipline as the authoritative spine. Standalone and self-contained \u2014 the full harness, specialist reviewer agents, hooks, and commands all live here, with no dependency on any other Netdust plugin.",
   "author": {
     "name": "Stefan Vermeulen",

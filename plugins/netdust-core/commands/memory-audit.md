@@ -1,16 +1,25 @@
 ---
-description: Audit memory/STATE.md, memory/lessons.md, and tasks/todo.md for staleness. Report-only — never auto-edits the three files. Surfaces stale references, contradictions, completed-but-unchecked items, and untouched-since dates. Run on-demand when memory feels out of sync; no recommended cadence.
-allowed_tools: ["Bash", "Read", "Write", "Glob", "Grep"]
+description: Audit memory/STATE.md, memory/lessons.md, and tasks/todo.md for staleness, and (with --apply) ARCHIVE the historical bloat to memory/ARCHIVE.md so the snapshot stays lean. Default run is dry — it shows the proposed archive diff and the findings report, and writes nothing. `/memory-audit --apply` performs the archive after you've seen the diff. Run on-demand when memory feels out of sync or STATE.md is over budget.
+allowed_tools: ["Bash", "Read", "Write", "Edit", "Glob", "Grep"]
 ---
 
-Run the **memory audit**. The three files this command checks (`memory/STATE.md`, `memory/lessons.md`, `tasks/todo.md`) are the project's living state — they only stay useful if they evolve as the work evolves. This command finds where they've drifted.
+Run the **memory audit**. The three files this command checks (`memory/STATE.md`, `memory/lessons.md`, `tasks/todo.md`) are the project's living state — they only stay useful if they evolve as the work evolves. This command finds where they've drifted AND, on `--apply`, prunes the historical bloat into `memory/ARCHIVE.md`.
 
 Boundary:
 - `/integration` audits whether the code works.
 - `/evaluate` audits how a sub-phase was executed.
-- **`/memory-audit` audits whether the project's memory files reflect current reality.**
+- **`/memory-audit` audits whether the project's memory files reflect current reality — and prunes them so they keep loading under the session-start budget.**
 
-This command **never** auto-edits the three files. It produces a findings report at `tasks/memory-audit-${DATE}.md` for the human to triage.
+## Modes (read this FIRST)
+
+This command has two modes, selected by the presence of `--apply` in the arguments (`$ARGUMENTS`):
+
+- **DRY-RUN (default, no `--apply`)** — run the staleness audit (Steps 1–8 below) AND compute the proposed archive (Step A1–A4). Show the user the full proposed diff and the projected sizes. **Write NOTHING to STATE.md / lessons.md / ARCHIVE.md.** End by telling the user to re-run with `--apply` to perform it.
+- **APPLY (`--apply` present)** — re-compute the archive plan and PERFORM it: append to `memory/ARCHIVE.md`, rewrite `memory/STATE.md` and `memory/lessons.md` to the pruned snapshot. Then print the before/after sizes and confirm the result is under budget.
+
+The staleness findings report (Steps 1–8) is always written to `tasks/memory-audit-${DATE}.md` (it's a report, not one of the three living files). The ARCHIVE behavior (Steps A1–A4) is what `--apply` gates.
+
+**Hard safety rule:** in APPLY mode, you MUST have shown the diff in a prior dry-run OR show it inline immediately before writing. Never write the pruned STATE.md without the user having seen what moves out. When in doubt, stay in dry-run and ask.
 
 ## What this command does, in one line
 
@@ -195,12 +204,87 @@ either commit your cleanups or delete the report. Re-run /memory-audit to
 confirm clean.
 ```
 
+## Step A1 — Classify every STATE.md section as KEEP or ARCHIVE
+
+Read `memory/STATE.md`. Today's date is `${DATE}`. Split the file into sections at `##` / `###` headers (content before the first header is the *preamble*). Classify each section (and the preamble) as **KEEP** or **ARCHIVE**:
+
+Classification is **whitelist-driven**: a small, named set of sections is the live snapshot and is KEPT; everything else is historical and is ARCHIVED. This is deliberate — a "keep unless it looks old" rule fails on dated narrative blobs that describe shipped work but carry a recent date (e.g. a `## [2026-06-09] 🚢 ... MERGED + PUSHED` write-up is *history*, not current state, even though it's dated today). Recency does NOT protect a section; being a current-state section does.
+
+**KEEP** — only these section classes:
+- The **snapshot whitelist** (match on header keywords, case-insensitive): `current branch`, `phase` (the current-phase status section, NOT "Phase N commit list"), `what's working`, `what's not built`, `open threads` / `open questions`, `where things live`, `servers`, `live tests`, `next up`, `open ... issue` (an active UX/bug note), `deferrals` (intentional, still-pending). These describe the project's *present* — keep regardless of any date in them.
+- **Tagged-capture** blocks (`### YYYY-MM-DD — tagged capture`) dated **within the last 14 days** of `${DATE}`.
+- Any section that **describes work not yet merged** — a branch token in its header that `git branch --merged main` does NOT list. (Unmerged work is current even if it's verbose.)
+
+**ARCHIVE** — everything else, specifically:
+- **Completed-phase commit lists** — "Phase N commit list", "commit list (newest first)", or a run of `- <sha> <subject>` bullets.
+- **Dated narrative blobs** (the preamble "ARC" write-ups, `## [DATE] ...` shipped-work narratives) that describe **merged/pushed/shipped** work — REGARDLESS of the date they carry. A "🚢 MERGED + PUSHED" or "ALL FOLLOW-UPS MERGED" blob is history the moment it's written. **This is the big one** — on Folio the 109KB preamble was a dated-today merged-arc narrative; it is the primary thing to archive.
+- **"session ended (no significant changes captured)"** marker lines — pure noise, collapse to nothing (don't even keep one).
+- **Tagged-capture** blocks older than 14 days.
+- Sections whose header **names a merged branch** (`git branch --merged main` lists it, or it appears in a merge-commit subject in `git log --merges --oneline -80`).
+
+**Check order matters — evaluate in EXACTLY this order, first match wins:**
+1. **Snapshot whitelist → KEEP.** Check this FIRST. A whitelisted section (e.g. `## Servers`, `## Live tests`) is current infrastructure and stays — even if the Stop hook appended a stray "session ended" marker line into its body. (Calibration: `## Servers` was wrongly archived as "noise" because a marker line had leaked into its body; the whitelist must short-circuit before any body-content heuristic.)
+2. **Commit list → ARCHIVE.**
+3. **Tagged capture / dated `## [DATE]` writeup:**
+   - Older than 14 days → ARCHIVE.
+   - Within 14 days AND **terse** (the section is ≤ ~1.5 KB) → KEEP (a recent decision/risk in a few lines is live context).
+   - Within 14 days but **large** (> ~1.5 KB narrative blob) → ARCHIVE. A multi-KB capture is a session-end narrative that duplicates git history; the 14-day window protects terse captures, not 7 KB blobs. (Calibration: Folio's recent `2026-06-08` capture was 7.2 KB and three `[2026-06-06]` status writeups were 2–3 KB each — keeping them whole kept STATE.md at 44 KB; archiving them by the size cap brought it under 24 KB.) If a large recent capture contains a still-relevant open decision, KEEP only that decision's lines and archive the narrative tail.
+4. **A section that IS a session-ended marker → ARCHIVE.** Match only when the section is *essentially nothing but* one or more "session ended (no significant changes captured)" lines (its non-blank, non-header lines are all markers). Do NOT archive a real section merely because a marker line leaked into its body — strip the stray marker line instead and re-evaluate.
+5. **Dated narrative shipped/merged blob → ARCHIVE** regardless of date (the preamble ARC blob, `## [DATE] 🚢 ... MERGED`).
+6. **Any dated section** (`##` or `###` header beginning with or containing a `YYYY-MM-DD`, not just `tagged capture`) **older than 14 days → ARCHIVE** — e.g. `### 2026-05-25 UX cleanup batch (… all green)` is shipped history. Apply the same size-cap rule as #3 if it's within 14 days.
+7. **Otherwise → KEEP** (unsure defaults to keep).
+
+A genuine tie (whitelist AND shipped-narrative) resolves to KEEP, but trim the body to current-state facts and archive the narrative tail.
+
+**Within-section trim (for a kept section that's still bloated).** A whitelisted section can itself carry historical bulk — most often `## Phase`, a ledger whose old-phase lines are `- **Phase N (…):** shipped` history. When KEEP is still over the 24KB target and the largest KEEP section is such a ledger, trim it: keep the section's intro line, the **current phase** line, the **next/in-progress** phase line(s), and any line that is NOT purely "shipped" (open questions, deferrals, caveats); move the run of older `Phase N … shipped` lines into the ARCHIVE fold under a `### (trimmed from ## Phase)` sub-header. Keep the trim conservative — a line that says "shipped BUT <caveat>" stays. This is the only KEEP-section-internal edit the command makes, and only to hit budget when a ledger is the cause.
+
+Produce a table: `section header | KEEP/ARCHIVE | reason`. Sanity-check it: if KEEP still totals >24KB, the most likely cause is a narrative blob misclassified as KEEP — re-examine the largest KEEP sections specifically for "describes shipped+merged work."
+
+## Step A2 — Dedup identical tagged-capture blocks
+
+Among the tagged-capture blocks (both KEEP and ARCHIVE sets), find **byte-identical or near-identical** blocks (same decision/risk text — the Stop-hook double-fire produced up to 13 copies of one capture). For each dup group:
+- Keep ONE copy (the earliest-dated).
+- Replace the rest with nothing, and annotate the survivor: append ` _(captured ${N}× — Stop-hook double-fire bug, fixed 2026-06-09)_` to its header or first line.
+- Count total lines removed by dedup — report it.
+
+Apply dedup to the KEEP set too (a duplicated recent capture should still collapse to one in the live file).
+
+## Step A3 — Compose the proposed files (in memory, don't write yet)
+
+1. **Proposed `memory/STATE.md`** = the KEEP sections, deduped, in their original order, with the current-snapshot sections first. Measure its byte size. Target: **under 24 KB.** If still over 24KB after archiving everything eligible, report that and list the largest remaining KEEP sections so the user can decide — do NOT force-archive current content to hit the number.
+2. **Proposed `memory/ARCHIVE.md` append** = a dated fold:
+   ```
+   ## Archived ${DATE} (by /memory-audit)
+   <every ARCHIVE section, verbatim, in original order>
+   ```
+   Append to the existing `memory/ARCHIVE.md` (it already exists on most projects) — never overwrite it. If it doesn't exist, create it with a one-line header.
+3. **Proposed `memory/lessons.md`** — apply the SAME rules: archive lessons entries dated >14 days that reference a merged+deleted branch or a shipped phase, dedup identical entries. Lessons are higher-value than STATE captures — bias even harder toward KEEP. Target under the 16KB session-start budget; if pruning to 16KB would drop genuinely-useful recent lessons, report and stop at "everything eligible archived" rather than over-cutting.
+
+## Step A4 — Show the diff, then write only on `--apply`
+
+**Always (both modes):** present to the user, in the chat:
+- The KEEP/ARCHIVE classification table from A1.
+- Projected sizes: `STATE.md ${OLD_KB}KB → ${NEW_KB}KB`, `lessons.md ${OLD}→${NEW}`, `ARCHIVE.md grows by ${DELTA}KB`.
+- The dedup summary (`${N} duplicate capture blocks collapsed, ${LINES} lines removed`).
+- A unified-diff-style preview of what leaves STATE.md (the ARCHIVE sections' headers + first line each) so the user can spot anything current being moved by mistake.
+
+**DRY-RUN (no `--apply`):** stop here. End with:
+> Dry run — nothing written. Re-run `/memory-audit --apply` to perform this archive. Review the KEEP/ARCHIVE table above first; anything misclassified, tell me and I'll adjust the rules before applying.
+
+**APPLY (`--apply` present):**
+1. Append the A3 fold to `memory/ARCHIVE.md`.
+2. Overwrite `memory/STATE.md` with the proposed pruned content.
+3. Overwrite `memory/lessons.md` with the proposed pruned content.
+4. Re-measure all three and the projected next-session injection (run the session-start budget mentally or actually: `wc -c memory/STATE.md memory/lessons.md`).
+5. Print the final before/after table and confirm STATE.md is under 24KB (or report honestly if it isn't and why).
+6. Do NOT commit — leave the working tree dirty so the user reviews `git diff` and commits themselves. (The Stop hook may auto-commit memory/ at session end; that's fine — the user still saw the diff here.)
+
 ## What this command is NOT
 
 - NOT a code review — `/code-review` does that.
 - NOT a correctness gate — `/integration` does that.
 - NOT a process retro — `/evaluate` does that.
-- NOT an auto-cleaner — never edits the three files. The human applies the changes.
+- NOT a blind auto-cleaner — the staleness findings (Steps 1–8) never edit the three files, and the ARCHIVE (Steps A1–A4) writes ONLY on `--apply` and ONLY after showing you the diff. KEEP is always the safe default when classification is uncertain.
 
 ## When NOT to run it
 

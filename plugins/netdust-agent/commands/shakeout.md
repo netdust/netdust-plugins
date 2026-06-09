@@ -1,5 +1,5 @@
 ---
-description: Spec-complete gate. Run when all task groups in a spec are done — before merging the branch. Stack-agnostic. Runs the test-effectiveness audit and feature-acceptance verification first, re-runs the /integration checks, then Playwright if a config exists, then invokes the shake-out skill, then auto-dispatches four (or five for WP) reviewer agents in parallel on the full branch diff.
+description: Spec-complete gate. Run when all task groups in a spec are done — before merging the branch. Stack-agnostic. Runs the test-effectiveness audit and feature-acceptance verification first, re-runs the /integration checks, then Playwright if a config exists, then invokes the shake-out skill, then auto-dispatches the reviewer panel in parallel on the full branch diff — panel size set by the branch's review tier (FULL = 5/6 personas, STANDARD = 2, LIGHT = 1).
 allowed_tools: ["Bash", "Read", "Glob", "Skill", "Agent"]
 ---
 
@@ -103,7 +103,7 @@ Hand off to the skill. It will:
 
 **Wait for the skill to complete and the manifest to be either empty or fully resolved before continuing.** This is the QA gate proper.
 
-## Step 4 — Auto-dispatch the multi-reviewer pass
+## Step 4 — Auto-dispatch the multi-reviewer pass (panel sized by review tier)
 
 Once shake-out reports green, dispatch the reviewer agents **in parallel**. This means a single assistant turn containing multiple `Agent` tool calls in one message — not sequential calls. If Step 0 produced a `covered`/`blind`/`fixed` manifest (and/or Step 0b a `pass`/`fail`/`unverified-no-browser` acceptance manifest), include them in each agent's briefing as the convergence targets — reviewers verify the `blind→fixed` transitions, the driven flow outcomes, and flag any path still `blind` or any UI flow still `unverified-no-browser`, rather than re-discovering coverage/behavior gaps free-form.
 
@@ -116,20 +116,33 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD)
 SPEC=$(ls docs/superpowers/specs/*.md 2>/dev/null | tail -1)  # most recent spec, if any
 ```
 
-Detect WordPress: if `composer.json` exists AND grep finds `wordpress` / `wpackagist` / `wp-config.php`, the project is WP — include reviewer #5.
+**First, decide the branch diff's review tier (harnessed-development 1h).** The panel composition is read from the tier — do not always dispatch the full five. Tier uses the **same surface triggers as the threat-modeling gate (1a)**:
 
-Then dispatch the agents in a single message (parallel block). Each agent gets the same briefing core, varying only by lens:
+- **FULL** — the diff `<RANGE>` touches any 1a trigger surface (auth/session/token, URL allow-lists, crypto, untrusted parsing, tenancy/workspace boundaries, outbound requests to user-supplied addresses), OR a named architecture invariant, OR the data layer / migrations. Quick check:
+  ```bash
+  git diff --name-only "$RANGE" | grep -iE 'auth|session|token|scope|crypto|url.*allow|allow.*list|migrat|/db/|schema|tenan|workspace|webhook|parse|frontmatter' && echo "→ FULL candidate"
+  ```
+- **STANDARD** — multi-file behavior changes outside those surfaces (UI features, route/component work).
+- **LIGHT** — doc-only / copy / config / skill-body edits (`git diff --name-only "$RANGE"` is all `.md` / config).
 
-| # | subagent_type | Always or WP-only |
-|---|---|---|
-| 1 | `reviewer` | always — the generalist whole-diff five-pillar pass |
-| 2 | `code-simplicity-reviewer` | always |
-| 3 | `security-sentinel` | always |
-| 4 | `performance-oracle` | always |
-| 5 | `invariant-auditor` | always |
-| 6 | `netdust-wp:ntdst-drift-reviewer` | WP only |
+State the tier + one-line justification before dispatching. Then dispatch ONLY the agents the tier names, in a single parallel message:
 
-The generalist `reviewer` (#1) reads the whole diff across all five dimensions and catches the integration bugs no single-pillar specialist is looking for; #2–5 each go deep on one pillar. They run in the same parallel block.
+| # | subagent_type | FULL | STANDARD | LIGHT |
+|---|---|:--:|:--:|:--:|
+| 1 | `reviewer` (generalist five-pillar) | ✓ | ✓ | ✓ |
+| 2 | `code-simplicity-reviewer` | ✓ | ✓ | — |
+| 3 | `security-sentinel` | ✓ | — | — |
+| 4 | `performance-oracle` | ✓ | only if diff hits a `CODE-MAP.md` hot path | — |
+| 5 | `invariant-auditor` | ✓ | ✓ | — |
+| 6 | `netdust-wp:ntdst-drift-reviewer` | WP only | WP only | — |
+
+So: **FULL** = the whole panel (5, +drift on WP). **STANDARD** = `reviewer` + `invariant-auditor` (+`code-simplicity-reviewer`; +`performance-oracle` only on a named hot path) — no `security-sentinel`. **LIGHT** = a single `reviewer` pass, no fan-out.
+
+**Escalation is one-way.** If any dispatched reviewer surfaces a finding on a 1a surface, promote the branch to FULL and dispatch the skipped personas (`security-sentinel`, `performance-oracle`) on the same diff before triaging. Never de-escalate.
+
+**`/security-review` is independent of tier.** If a `## Threat model` was authored at plan time for this work, `/security-review` is still mandatory at merge regardless of the panel tier (announce it in the next-steps block below).
+
+The generalist `reviewer` (#1) reads the whole diff across all five dimensions and catches the integration bugs no single-pillar specialist is looking for; the specialists each go deep on one pillar. The dispatched set runs in the same parallel block.
 
 **Before this reviewer fan-out, the artifact sweep is owned by the `shakeout-qa` agent** — it runs the built artifact end-to-end (driving the real browser for UI flows, the un-mocked wire for backend), compiling the bug manifest the shake-out skill (Step 3) describes. Dispatch `shakeout-qa` for that sweep, or run the sweep inline per the shake-out skill; either way the artifact is exercised before the diff reviewers run.
 
@@ -160,13 +173,13 @@ Constraints:
 If your lens finds nothing, say so in one line.
 ```
 
-**Important:** the four (or five) `Agent` calls MUST go in a single assistant message so they run concurrently. Sequential calls defeat the point.
+**Important:** the dispatched `Agent` calls (however many the tier names) MUST go in a single assistant message so they run concurrently. Sequential calls defeat the point.
 
 After all reports return, present the consolidated triage to the user:
 
 ```
 ✅ /shakeout: unit + integration + type + e2e + shake-out all green
-✅ Four (or five) reviewer agents reported.
+✅ Review tier: <FULL | STANDARD | LIGHT> — <N> reviewer agents reported.
 
 Consolidated findings:
 
@@ -188,8 +201,10 @@ Next steps:
   2. SHOULD-FIX → triage with user; either fix or record in memory/STATE.md.
   3. NICE-TO-HAVE → ignore or open issues.
   4. When BLOCKERS == 0:
-       /code-review --base=main --effort=high --comment
+       /code-review --base=main --effort=<high if tier FULL, else medium> --comment
      for one final inline pass.
+  4b. If a `## Threat model` was authored for this work at plan time:
+       /security-review        ← mandatory regardless of review tier.
   5. Then invoke superpowers:finishing-a-development-branch.
 ```
 

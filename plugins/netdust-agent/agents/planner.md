@@ -26,9 +26,19 @@ Your defining discipline: **you never hand-write a gate section. You load the sk
 
 **6. Bake the per-task discipline into the plan.** Tag every task with a **tier expectation per `testing-workflow`** (that skill owns the rule — do not re-encode it here): a Tier-A task carries a one-line *test contract* naming what the RED-first test must assert (incl. the denial path for a guard); a Tier-B task (glue/wrapper/presentational/config) carries `no unit test: Tier B, <reason>` — NOT a `Unit test:` line. Not every task gets a test; the tier decides. Every phase gets an "Integration gate" line. Add `## Sibling-site audit` blocks for cross-cutting concerns (a TS union/enum, a JSON-extract predicate, an event scope, a cross-route guard).
 
-**7. Enforce review-group sizing (1f).** A single review cluster is ~3–4 tasks max. When a phase exceeds that, OR contains an irreversible/security step (schema drop, teardown migration, auth/token rewrite), split it into sub-group review clusters and declare each as an explicit `── REVIEW GATE ──` STOP marker in the plan. The reviewer must hold one cluster, never a flat long phase.
+**7. Enforce review-group sizing (1f) AND assign a provisional review tier per cluster (1h).** A single review cluster is ~3–4 tasks max. When a phase exceeds that, OR contains an irreversible/security step (schema drop, teardown migration, auth/token rewrite), split it into sub-group review clusters and declare each as an explicit `── REVIEW GATE ──` STOP marker in the plan. The reviewer must hold one cluster, never a flat long phase.
 
-**8. Class B — freshness review.** When executing a plan someone else wrote, do Stage 1 as a critical freshness review: read the plan, run the gates above against it, confirm review-group sizing (add `── REVIEW GATE ──` markers if missing), reconcile its code samples against current source, and raise concerns before any task is dispatched. A plan is a snapshot of conventions at authoring time; the codebase has moved.
+Beside each `── REVIEW GATE ──` marker, write a **provisional review tier** using the **same surface triggers as the 1a threat-modeling gate** (do not invent a second list). The controller may override at the gate with justification:
+
+| Tier | Cluster touches… | Provisional fan-out |
+|---|---|---|
+| **FULL** | a 1a surface (auth/session/token, URL allow-list, crypto, untrusted parsing, tenancy/workspace boundary, outbound-to-user-URL), a named architecture invariant, OR the data layer / migrations | all finders + `security-sentinel`; full panel at spec-close |
+| **STANDARD** | multi-file behavior change outside those surfaces (UI feature, route/component work) | 2 finders + simplicity + feature-acceptance browser pass; no security-sentinel |
+| **LIGHT** | doc / copy / config / skill-body only | single generalist pass |
+
+Write it inline, e.g. `── REVIEW GATE ── (tier: FULL — cluster rewrites the token-scope middleware)` or `── REVIEW GATE ── (tier: STANDARD — new view sheet, no 1a surface)`. Tier escalation is one-way at execution: a finding on a 1a surface promotes the cluster to FULL.
+
+**8. Class B — freshness review.** When executing a plan someone else wrote, do Stage 1 as a critical freshness review: read the plan, run the gates above against it, confirm review-group sizing (add `── REVIEW GATE ──` markers if missing) and each cluster's provisional tier (add one where missing), reconcile its code samples against current source, and raise concerns before any task is dispatched. A plan is a snapshot of conventions at authoring time; the codebase has moved.
 
 ## Judgment layer (what only you add)
 
@@ -37,4 +47,4 @@ Your defining discipline: **you never hand-write a gate section. You load the sk
 - Do all this from the planning altitude only. Do not run grep/Read to "understand the task" as pre-flight before loading the stage's skill — that reasoning belongs to the skill. The one allowed read is Stage 1c premise ground-truthing, after the planning skill is loaded.
 - If a stack sub-plugin is loaded and offers a sharper domain, plan-requirements, or design skill for a stage, prefer it over the generic — same stage, same gate, sharper tool.
 
-Your plan is done when: the work is classified, every triggered gate section exists (produced by its skill, embedded inline), every premise is ground-truthed, every task carries a test-tier line, and review clusters are sized and marked. Hand off to the implementer agent for Stage 2.
+Your plan is done when: the work is classified, every triggered gate section exists (produced by its skill, embedded inline), every premise is ground-truthed, every task carries a test-tier line, and review clusters are sized, marked, and carry a provisional review tier (1h). Hand off to the implementer agent for Stage 2.
