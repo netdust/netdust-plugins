@@ -34,7 +34,9 @@ import json
 import re
 import sys
 import os
+import hashlib
 import subprocess
+import tempfile
 import urllib.request
 import urllib.error
 import traceback
@@ -48,6 +50,10 @@ HAIKU_TIMEOUT_SEC = 20              # API call (not CLI) — fast
 MAX_TRANSCRIPT_LINES = 200          # lines of transcript to scan/summarize
 MAX_LESSONS_FILE = 80               # warn if lessons.md exceeds this
 MAX_EXISTING_STATE_LINES = 80       # context passed to Haiku to avoid redundancy
+MAX_CONTINUATION_LINES = 10         # lines a single tag may consume past its head
+MAX_CAPTURED_HASHES = 200           # cap on the sidecar dedup ring
+
+SIDECAR_NAME = ".stop-hook-state.json"  # under memory/
 
 LOG_PATH = Path.home() / ".claude" / "logs" / "memory-hook.log"
 DASHBOARD_SYNC = Path.home() / "Sites" / "netdust-wp-manager" / "scripts" / "sync-from-site.sh"
@@ -83,8 +89,34 @@ def read_transcript(path: str) -> list[dict]:
         return []
 
 
+def slice_new_messages(messages: list[dict], last_uuid: str | None) -> list[dict]:
+    """Return only the messages AFTER the one whose top-level uuid == last_uuid.
+
+    Watermark semantics:
+      • last_uuid is None  → first run, process everything.
+      • last_uuid found    → process strictly the messages after it.
+      • last_uuid missing  → can't trust the watermark (transcript replaced /
+        compacted) → fall back to a full scan; the hash dedup is the backstop.
+    """
+    if not last_uuid:
+        return messages
+    for i, msg in enumerate(messages):
+        if msg.get("uuid") == last_uuid:
+            return messages[i + 1:]
+    return messages  # uuid not found → full re-scan, hash dedup catches dupes
+
+
+def last_message_uuid(messages: list[dict]) -> str | None:
+    """The top-level uuid of the last message that carries one."""
+    for msg in reversed(messages):
+        u = msg.get("uuid")
+        if u:
+            return u
+    return None
+
+
 def extract_claude_text(messages: list[dict]) -> str:
-    """All text Claude wrote in the session, joined."""
+    """All text Claude wrote in the given messages, joined."""
     parts = []
     for msg in messages:
         if msg.get("type") != "assistant":
@@ -136,25 +168,78 @@ def read_existing_state(cwd: str) -> str:
 
 # ── Track A: deterministic tag scanner ──────────────────────────────────────
 
-TAG_PATTERNS = {
-    "decision": re.compile(r"^\s*DECISION:\s*(.+)$", re.MULTILINE | re.IGNORECASE),
-    "risk":     re.compile(r"^\s*RISK:\s*(.+)$",     re.MULTILINE | re.IGNORECASE),
-    "lesson":   re.compile(r"^\s*LESSON:\s*(.+)$",   re.MULTILINE | re.IGNORECASE),
-    "todo":     re.compile(r"^\s*TODO:\s*(.+)$",     re.MULTILINE | re.IGNORECASE),
+# Head-line matchers. A tag captures its head line PLUS any continuation
+# lines (indented, or starting with "- ") until a blank line or a new tag,
+# capped at MAX_CONTINUATION_LINES — so a multi-line DECISION isn't truncated
+# mid-sentence (the 2026-06-05 "This consolidates everything:" bug).
+TAG_HEADS = {
+    "decision":   re.compile(r"^\s*DECISION:\s*(.*)$",   re.IGNORECASE),
+    "risk":       re.compile(r"^\s*RISK:\s*(.*)$",       re.IGNORECASE),
+    "lesson":     re.compile(r"^\s*LESSON:\s*(.*)$",     re.IGNORECASE),
+    "todo":       re.compile(r"^\s*TODO:\s*(.*)$",       re.IGNORECASE),
     # SKILL-EDGE: <skill-name>: <text>
-    "skill_edge": re.compile(r"^\s*SKILL-EDGE:\s*([a-z0-9_-]+):\s*(.+)$", re.MULTILINE | re.IGNORECASE),
+    "skill_edge": re.compile(r"^\s*SKILL-EDGE:\s*([a-z0-9_-]+):\s*(.*)$", re.IGNORECASE),
 }
+
+# A line that continues the tag above it: indented, or a markdown bullet.
+_CONTINUATION = re.compile(r"^(\s+\S|\s*-\s+)")
+
+# Any line that opens a NEW tag (ends a continuation block).
+_ANY_TAG_HEAD = re.compile(
+    r"^\s*(DECISION|RISK|LESSON|TODO|SKILL-EDGE):", re.IGNORECASE
+)
+
+
+def _is_continuation(line: str) -> bool:
+    return bool(line.strip()) and bool(_CONTINUATION.match(line)) and not _ANY_TAG_HEAD.match(line)
 
 
 def scan_tags(text: str) -> dict:
-    """Extract DECISION/RISK/LESSON/TODO/SKILL-EDGE lines from Claude's output."""
-    return {
-        "decisions":   [m.group(1).strip() for m in TAG_PATTERNS["decision"].finditer(text)],
-        "risks":       [m.group(1).strip() for m in TAG_PATTERNS["risk"].finditer(text)],
-        "lessons":     [m.group(1).strip() for m in TAG_PATTERNS["lesson"].finditer(text)],
-        "todos":       [m.group(1).strip() for m in TAG_PATTERNS["todo"].finditer(text)],
-        "skill_edges": [(m.group(1).strip(), m.group(2).strip()) for m in TAG_PATTERNS["skill_edge"].finditer(text)],
-    }
+    """Extract DECISION/RISK/LESSON/TODO/SKILL-EDGE entries from Claude's output.
+
+    Each entry is the head line's text joined with its continuation lines
+    (newline-separated), so multi-line tags survive intact. The scan walks
+    line-by-line rather than per-line regex so it can consume continuations.
+    """
+    out = {"decisions": [], "risks": [], "lessons": [], "todos": [], "skill_edges": []}
+    lines = text.splitlines()
+    i = 0
+    n = len(lines)
+    while i < n:
+        line = lines[i]
+        matched_kind = None
+        for kind, pat in TAG_HEADS.items():
+            m = pat.match(line)
+            if m:
+                matched_kind = kind
+                break
+        if matched_kind is None:
+            i += 1
+            continue
+
+        # Gather continuation lines (bounded).
+        cont = []
+        j = i + 1
+        while j < n and len(cont) < MAX_CONTINUATION_LINES and _is_continuation(lines[j]):
+            cont.append(lines[j].rstrip())
+            j += 1
+
+        if matched_kind == "skill_edge":
+            skill = m.group(1).strip()
+            head = m.group(2).strip()
+            body = "\n".join([head] + cont).strip()
+            out["skill_edges"].append((skill, body))
+        else:
+            head = m.group(1).strip()
+            body = "\n".join([head] + cont).strip()
+            key = {"decision": "decisions", "risk": "risks",
+                   "lesson": "lessons", "todo": "todos"}[matched_kind]
+            if body:
+                out[key].append(body)
+
+        i = j  # resume after the consumed continuation block
+
+    return out
 
 
 def has_tag_content(tags: dict) -> bool:
@@ -248,6 +333,73 @@ If save=false, return null for state and todo."""
         return None, f"error:other:{type(e).__name__}"
 
 
+# ── Watermark sidecar (idempotency) ──────────────────────────────────────────
+
+def sidecar_path(cwd: str) -> Path:
+    return Path(cwd) / "memory" / SIDECAR_NAME
+
+
+def read_sidecar(cwd: str) -> dict:
+    """Load the watermark sidecar. Returns a well-formed default on any error."""
+    default = {"transcript_path": None, "last_processed_uuid": None, "captured_hashes": []}
+    path = sidecar_path(cwd)
+    if not path.exists():
+        return default
+    try:
+        data = json.loads(path.read_text())
+        if not isinstance(data, dict):
+            return default
+        data.setdefault("transcript_path", None)
+        data.setdefault("last_processed_uuid", None)
+        hashes = data.get("captured_hashes")
+        data["captured_hashes"] = hashes if isinstance(hashes, list) else []
+        return data
+    except Exception:
+        return default
+
+
+def write_sidecar_atomic(cwd: str, state: dict) -> None:
+    """Write the sidecar via tmp file + os.replace so a crash never leaves a
+    half-written watermark. Best-effort; never raises into the hook."""
+    path = sidecar_path(cwd)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Cap the hash ring at the most recent N.
+        state["captured_hashes"] = list(state.get("captured_hashes", []))[-MAX_CAPTURED_HASHES:]
+        fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=".stop-hook-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(state, f, indent=2)
+            os.replace(tmp_name, path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except Exception:
+                pass
+            raise
+    except Exception as e:
+        log(f"warn sidecar-write-failed cwd={cwd} err={type(e).__name__}:{e}")
+
+
+def normalized_hash(text: str) -> str:
+    """Stable hash of a tag's normalized text (whitespace-collapsed, lowercased)."""
+    norm = re.sub(r"\s+", " ", text).strip().lower()
+    return hashlib.sha256(norm.encode("utf-8")).hexdigest()[:16]
+
+
+def dedup_against_hashes(items: list, captured: set, key_of) -> list:
+    """Filter items whose normalized hash is already captured. Adds survivors'
+    hashes to `captured` (mutated in place). key_of(item) -> the text to hash."""
+    kept = []
+    for item in items:
+        h = normalized_hash(key_of(item))
+        if h in captured:
+            continue
+        captured.add(h)
+        kept.append(item)
+    return kept
+
+
 # ── File writers ─────────────────────────────────────────────────────────────
 
 def append_state(cwd: str, body: str, date: str) -> None:
@@ -268,6 +420,19 @@ def append_state_marker(cwd: str, line: str) -> None:
             f.write(line + "\n")
     except Exception:
         pass
+
+
+def daily_marker_already_written(cwd: str, date: str) -> bool:
+    """True if today's 'no significant changes' marker is already in STATE.md,
+    so we write it at most once per calendar day."""
+    path = Path(cwd) / "memory" / "STATE.md"
+    if not path.exists():
+        return False
+    try:
+        content = path.read_text()
+    except Exception:
+        return False
+    return f"[{date}] — session ended (no significant changes captured)" in content
 
 
 def append_state_from_tags(cwd: str, decisions: list[str], risks: list[str], date: str) -> bool:
@@ -373,6 +538,23 @@ def append_skill_edge(skill: str, edge_case: str, date: str, source_project: str
 
 # ── Git + dashboard ─────────────────────────────────────────────────────────
 
+def _ensure_sidecar_gitignored(cwd: str) -> None:
+    """The watermark sidecar is per-machine transient state, not memory
+    content — keep it out of the project's git history."""
+    entry = f"memory/{SIDECAR_NAME}"
+    gitignore = Path(cwd) / ".gitignore"
+    try:
+        existing = gitignore.read_text() if gitignore.exists() else ""
+        if entry in existing.splitlines():
+            return
+        with open(gitignore, "a") as f:
+            if existing and not existing.endswith("\n"):
+                f.write("\n")
+            f.write(entry + "\n")
+    except Exception as e:
+        log(f"warn gitignore-write-failed cwd={cwd} err={type(e).__name__}:{e}")
+
+
 def git_commit_memory(cwd: str) -> None:
     try:
         result = subprocess.run(
@@ -381,6 +563,8 @@ def git_commit_memory(cwd: str) -> None:
         )
         if result.returncode != 0:
             return
+
+        _ensure_sidecar_gitignored(cwd)
 
         subprocess.run(
             ["git", "add", "memory/", "tasks/"],
@@ -441,9 +625,34 @@ def main() -> None:
         log(f"skip empty-transcript cwd={cwd}")
         sys.exit(0)
 
-    # ── Track A: deterministic tag scan ─────────────────────────────────────
-    claude_text = extract_claude_text(messages)
+    # ── Idempotency watermark ────────────────────────────────────────────────
+    # Read the sidecar, process ONLY messages after the last_processed_uuid
+    # (full scan if the uuid is missing or the transcript path changed). The
+    # hash dedup below is the belt-and-braces backstop for the full-scan case.
+    sidecar = read_sidecar(cwd)
+    same_transcript = sidecar.get("transcript_path") == transcript_path
+    last_uuid = sidecar.get("last_processed_uuid") if same_transcript else None
+    new_messages = slice_new_messages(messages, last_uuid)
+
+    captured = set(sidecar.get("captured_hashes", []))
+
+    # ── Track A: deterministic tag scan (only the new slice) ────────────────
+    claude_text = extract_claude_text(new_messages)
     tags = scan_tags(claude_text)
+
+    # Did this fire SEE any tags at all (pre-dedup)? Distinguishes a genuine
+    # no-capture session (→ visibility marker) from a re-fire where tags were
+    # found but already captured (→ no marker, it's not "no changes").
+    tags_seen_pre_dedup = has_tag_content(tags)
+
+    # Belt-and-braces hash dedup: drop any tag already captured in a prior fire.
+    tags["decisions"] = dedup_against_hashes(tags["decisions"], captured, lambda x: x)
+    tags["risks"]     = dedup_against_hashes(tags["risks"], captured, lambda x: x)
+    tags["lessons"]   = dedup_against_hashes(tags["lessons"], captured, lambda x: x)
+    tags["todos"]     = dedup_against_hashes(tags["todos"], captured, lambda x: x)
+    tags["skill_edges"] = dedup_against_hashes(
+        tags["skill_edges"], captured, lambda se: f"{se[0]}:{se[1]}"
+    )
 
     written = []
 
@@ -488,12 +697,25 @@ def main() -> None:
 
     # ── Visibility marker ───────────────────────────────────────────────────
     # If nothing was written, append a one-line "session ended" marker so the
-    # file's timestamp updates and you can SEE the hook running.
-    if not written:
-        # Note haiku status only if it's an opt-in skip (no key) — that's
-        # informational, not noise. Skip-no-content and errors are log-only.
+    # file's timestamp updates and you can SEE the hook running — but:
+    #   • at most ONCE per calendar day (repeated no-tag stops don't pile up), and
+    #   • NOT on a pure re-fire. A second Stop on the same transcript has an
+    #     empty new-message slice (or fully-deduped tags); that session already
+    #     captured its content, so claiming "no significant changes" would be a
+    #     lie and would mutate STATE.md on a no-op fire.
+    genuine_empty_session = bool(new_messages) and not tags_seen_pre_dedup
+    if (not written and genuine_empty_session
+            and not daily_marker_already_written(cwd, date)):
         marker = f"[{date}] — session ended (no significant changes captured)"
         append_state_marker(cwd, marker)
+
+    # ── Advance the watermark (atomic, even on partial failure above) ───────
+    new_uuid = last_message_uuid(messages) or sidecar.get("last_processed_uuid")
+    write_sidecar_atomic(cwd, {
+        "transcript_path": transcript_path,
+        "last_processed_uuid": new_uuid,
+        "captured_hashes": list(captured),
+    })
 
     log(f"done cwd={cwd} tags=[{','.join(k for k,v in tags.items() if v)}] haiku={haiku_status} wrote=[{','.join(written)}]")
 
