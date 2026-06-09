@@ -9,6 +9,19 @@ This skill covers WHERE things go in a Netdust WordPress project. For HOW classe
 
 **Canonical implementation: `~/Sites/stride/`.** When in doubt, copy what Stride does.
 
+## Golden paths — open the worked slice before planning
+
+For a medium feature, don't assemble from rules and don't copy the nearest sibling file (siblings drift — see `lessons.md`: *match the framework, not siblings*). Open the matching **golden path** under `golden-paths/` — a complete, verified, end-to-end vertical slice extracted from real Stride/Rossi source — and **build to it**. Each slice names what changes per project and what never does.
+
+| Feature request shape | Open this golden path |
+|---|---|
+| New CPT/model with admin + frontend ("add a Testimonials/Events/Products section", "a new domain object", "register a custom post type with a list and a single page") | `golden-paths/content-type-feature.md` |
+| A form, AJAX action, or write-flow ("submit/save X", "an AJAX endpoint", "process this form", anything touching the four security pillars) | `golden-paths/form-data-flow.md` |
+| An admin settings/options page ("a settings screen", "an options page", "store config in the admin", "manage X from wp-admin") | `golden-paths/admin-settings-page.md` |
+| A YOOtheme Builder source/element (YOOtheme Pro projects only — Dynamic Content source, custom query in the builder) | `golden-paths/yootheme-integration.md` |
+
+**The instruction:** read the golden path *before* writing the plan, then build the feature to its structure. A deviation from the slice is allowed — but it must be **named and justified in the plan** (per `wp-plan-requirements`); an unnamed deviation is the drift the reviewer will flag. If a request spans two shapes (e.g. a CPT *with* a settings page *and* an enrollment form), open each relevant slice.
+
 ## Project layout (Bedrock + NTDST)
 
 ```

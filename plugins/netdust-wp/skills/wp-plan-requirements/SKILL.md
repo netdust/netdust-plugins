@@ -17,7 +17,29 @@ It does NOT replace the review-time checks. It **front-loads** them so the same 
 
 ## What to inject into the plan
 
-Add these three blocks to the plan **before task breakdown is finalized**. They change what tasks the plan contains.
+Add these blocks to the plan **before task breakdown is finalized**. They change what tasks the plan contains.
+
+### Block 0 — `## Golden path: <archetype> (deviations must be named and justified)`
+
+Before enumerating data-flows or layering rules, name the **golden-path slice** this feature builds to. The slices live in `netdust-wp:ntdst-patterns` → `golden-paths/` — complete verified vertical slices extracted from real Stride/Rossi source. Match the request shape to the slice (the routing table in `ntdst-patterns/SKILL.md` does this mapping):
+
+- content-type feature (CPT → Repository → Service → Router → frontend) → `golden-paths/content-type-feature.md`
+- form / AJAX / write-flow → `golden-paths/form-data-flow.md`
+- admin settings/options page → `golden-paths/admin-settings-page.md`
+- YOOtheme Dynamic Content source (YOOtheme projects only) → `golden-paths/yootheme-integration.md`
+
+Inject the line, naming any planned departure from the slice:
+
+```
+## Golden path: <archetype> (deviations must be named and justified in the plan)
+- [ ] Built to `golden-paths/<archetype>.md` — read before task breakdown.
+- [ ] Deviations from the slice (each named + justified, or "none"):
+      e.g. "settings save uses WP Settings API not the ntdst/api_data filter — flat
+            option set, no Alpine UI" / "frontend rendered via ntdst_router()->single()
+            not a parse_request router — no pre-query redirect needed"
+```
+
+**A deviation isn't forbidden; an unnamed one is.** The golden path names what changes per project (expected deviations: names/fields/caps/hooks) vs what never changes (the spine). Departing from the spine is what must be justified here — so the reviewer checks the diff against a *named* exception, not a re-discovery. If the feature matches no archetype (pure cron job, WP-CLI command, migration), write `## Golden path: none (no matching archetype)` and say why.
 
 ### Block 1 — `## WP security requirements (per data-flow)`
 
@@ -69,10 +91,11 @@ Acceptance: drift pre-check clean — `/drift-reviewer <touched path>` returns n
 
 State this in the plan once, under the blocks:
 
-> These three blocks are the convergence target for `/code-review` and the
+> These blocks are the convergence target for `/code-review` and the
 > `ntdst-drift-reviewer` at shake-out. Reviewers verify the diff against the
-> named pillars + categories above, not free-form — a gap is a one-line finding
-> keyed to a named item, not a re-discovery.
+> named golden-path slice + pillars + categories above, not free-form — a gap is
+> a one-line finding keyed to a named item (or an unjustified deviation from the
+> golden path), not a re-discovery.
 
 That sentence is what earns the one-round convergence. Without a named target, review reverts to probabilistic hunting.
 
@@ -90,4 +113,5 @@ That sentence is what earns the one-round convergence. Without a named target, r
 | `netdust-agent:threat-modeling` | The general-purpose twin; this is the WP-specific plan injector. Both run at Stage 1; they compose. |
 | `netdust-wp:wp-security` | Canonical source for the four pillars + sanitize/escape/authorize functions. Block 1 references it. |
 | `netdust-wp:ntdst-architecture` / `ntdst-data` / `ntdst-patterns` | Canonical source for the layering/Data-API/Service-lifecycle rules. Block 2 references them. |
+| `netdust-wp:ntdst-patterns` → `golden-paths/` | The worked vertical slices Block 0 names. The plan builds to the slice; deviations are named here. |
 | `ntdst-drift-reviewer` (agent) | The review-time enforcer of the same nine categories Block 2 names. Plan-requirement ↔ review-check are one list. |

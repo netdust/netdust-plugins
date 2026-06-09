@@ -22,6 +22,7 @@ Read these references once at the start of every audit. They are the canon you c
 - `~/.claude/plugins/netdust-wp/skills/ntdst-data/references/data-orm.md` — accepted Data API vocabulary (WP_COLUMNS), warn-on-unregistered-keys
 - `~/.claude/plugins/netdust-wp/skills/ntdst-architecture/lessons.md` — incident journal (the "why" behind the rules)
 - `~/.claude/plugins/netdust-wp/agents/ntdst-drift-reviewer.lessons.md` — your own calibration notes from past audits. Apply as additional exception rules. NEVER append to this file yourself — surface candidate entries in your report's "Suggested calibration updates" section; the human curates.
+- `~/.claude/plugins/netdust-wp/skills/ntdst-patterns/golden-paths/*.md` — the four worked vertical-slice exemplars. Read the one matching the diff's archetype ONLY when running check #11 (golden-path conformance); skip otherwise.
 
 If a project has a memory directory (`~/.claude/projects/.../memory/MEMORY.md`), skim it for project-specific exceptions. Some projects label intentional pass-throughs ("kept temporarily for X callers") — those are not violations.
 
@@ -133,6 +134,27 @@ Run each of these. For each, the **grep** column gives you the deterministic fir
 **Suggested fix:** Replace `EditionService` → `EditionRepository` in the constructor. Update the few calls.
 
 **Exception:** the service IS used for one composite/typed read (`getStatus()`, `canEnroll()`). Then keeping the service injection is correct.
+
+### 11. Golden-path structural conformance (only when the diff implements one of the four archetypes)
+
+This check runs **only** when the diff implements one of the four feature archetypes that has a golden-path slice in `netdust-wp:ntdst-patterns` → `golden-paths/`:
+
+| Archetype | Golden path | Recognise it in the diff by |
+|---|---|---|
+| Content-type feature | `content-type-feature.md` | a new `*CPT.php` + `*Repository.php` + `*Service.php` for one post type |
+| Form / data-flow | `form-data-flow.md` | a new `*Handler.php` registering `ntdst/api_data/*`, or a form processor |
+| Admin settings page | `admin-settings-page.md` | a new `add_submenu_page`/`add_options_page` + save handler |
+| YOOtheme source | `yootheme-integration.md` | a new `*SourcesService` with `Event::on('source.init')` |
+
+| Step | Then |
+|---|---|
+| Open the matching golden path. Read its "what never changes" list (the spine) and its file inventory. | Diff the implemented slice's STRUCTURE against the slice: are the same layers present (CPT/Repo/Service/Router; or handler→service; or register/render/save/store)? Does it route through the same convergence points the spine names? |
+
+**What to flag:** a *structural* departure from the spine that the plan did NOT name. Examples: a content-type feature whose Service reads `ntdst_data()` instead of going through a Repository (also caught by cat 1, but flag it here as a spine break); a form flow on `wp_ajax_*` instead of `ntdst/api_data/*` (also cat 3); a settings page that hand-rolls an `admin-post.php` save instead of the framework path; a YOOtheme source using a class-method resolver.
+
+**This is NOT a new rule** — every spine item maps to an existing category (1–10) or the `yootheme.md` anti-pattern table. Check #11 adds the *framing*: "this diff claims to be archetype X; here is where it deviates from X's proven slice." That makes the finding actionable — "deviates from the content-type golden path at the Repository layer" is more useful than ten scattered cat-1 hits.
+
+**Exception — named deviations.** If the project's plan (`## Golden path:` block, per `wp-plan-requirements` Block 0) NAMES the deviation with a justification, it is NOT a finding — the golden path explicitly permits named departures (e.g. "settings save uses the WP Settings API — flat option set, no Alpine UI"). Honour the plan's named exceptions exactly as you honour a file docblock's documented exception. Only **unnamed** structural departures are findings. If you can't see the plan, list the deviation as a Borderline finding ("deviates from `<archetype>` golden path at `<layer>` — confirm this is named/justified in the plan").
 
 ## Output format
 

@@ -56,6 +56,40 @@ Both can be expressed as a single more-general `aggregateGroupedBy(string $group
 
 **Severity:** Friction — forces well-formed code to bypass the repository; no bug, but multiplies drift surface across projects and confuses junior code-readers ("why are some counts on the repo and some on the service?"). Closing it would also let `ntdst-drift-reviewer` flag *any* `$wpdb->get_results('... GROUP BY ...')` against a known-repo table as drift, without false positives for "no framework helper exists."
 
+### 2026-06-09 — No public schema accessor on Data-Manager models forces reflection in theme/YOOtheme code
+
+**Where surfaced:** Golden-path mining of Rossi's YOOtheme layer (`ntdstheme/services/yootheme/YOOthemeDynamicContentService.php:403` `attach_post_meta()`, and `ArtistSourcesService.php:156` `clean_meta_for_yootheme()`). Both need the registered field list for a post type to (a) filter exposed meta to declared fields only and (b) coerce by field type.
+
+**The gap:** A Data-Manager model registered via `ntdst_data()->register($type, ['fields' => [...]])` exposes its field schema only through a **private `schema` property**. There is no public `getSchema()` / `getFields()` / `getFieldType($field)` accessor. Code that needs the schema does this:
+
+```php
+$model = ntdst_data()->get($post_type);
+$reflection = new \ReflectionClass($model);
+$schema_property = $reflection->getProperty('schema');
+$schema_property->setAccessible(true);            // reach into a private — fragile
+$schema = $schema_property->getValue($model);
+```
+
+This is brittle (breaks silently if the property is renamed) and appears in **two** Rossi YOOtheme files independently. Any project doing schema-aware meta hydration (YOOtheme, exporters, REST shaping) hits the same wall.
+
+**Project-side workaround:** Reflection into the private property, wrapped in a `try/catch` that fails open to "no schema" (so a rename degrades to exposing *all* meta — a quiet security/serialisation regression, not a hard error).
+
+**Suggested framework change:** Add a public read accessor to the Data-Manager model — `getSchema(): array` and a convenience `getFieldType(string $field): ?string`. The CPT field schema is already the single source of truth (CLAUDE.md INV-3); exposing it read-only removes the reflection and lets the framework own the "declared fields only" filter that `attach_post_meta()` re-implements by hand.
+
+**Severity:** Friction / Documentation — works today via reflection, but the private-property reach is fragile and undocumented, and the fail-open `catch` is a latent meta-exposure risk if the internal name changes.
+
+### 2026-06-09 — Theme templates have no ergonomic repository read, so they drift to `ntdst_data()`
+
+**Where surfaced:** Golden-path mining of Stride's content-type slice (`themes/stridence/single-vad_edition.php:88`). The template does `$editionModel = ntdst_data()->get('vad_edition'); $editionModel->getMeta($id, 'start_date')` directly — drift cat 1 (CPT access outside the repository). Its own inline comment admits the gap: *"these could be added to EditionService if needed frequently."*
+
+**The gap:** Themes can't use constructor DI, so the documented path is `ntdst_get(FooRepository::class)->getField($id, 'x')`. That works, but `ntdst_data()->get($type)->getMeta(...)` is **shorter to type and discoverable from any WP tutorial**, so production theme code keeps drifting to it. The framework provides the *correct* path but not an equally-frictionless one — and the repository class name a template must know is long and project-specific (`\Stride\Modules\Edition\EditionRepository`). The result is that even a clean module's *frontend* drifts at the last hop (this exact line is the only drift in an otherwise spotless Edition spine).
+
+**Project-side workaround:** Use `ntdst_get(Repository::class)->getField(...)` and hope reviewers catch the templates that didn't. The golden-path doc (`content-type-feature.md`) now shows the correct pattern and explicitly marks Stride's drifted line "do not copy" — but that's documentation papering over an ergonomics gap.
+
+**Suggested framework change:** Provide a thin theme-facing read helper that resolves the repository by post type, e.g. `ntdst_repo('vad_edition')->getField($id, 'start_date')` (a registry keyed on the post-type slug the CPT already declares), or a template helper `ntdst_field($id, 'start_date')` that infers the repo from `get_post_type($id)`. Either gives templates a path as short as `ntdst_data()` that still routes through the repository's caching/validation — removing the incentive to drift.
+
+**Severity:** Friction — the correct path exists but loses the ergonomics race against `ntdst_data()`, so frontend drift recurs at the last hop of otherwise-clean slices. Closing it would let `ntdst-drift-reviewer` treat *any* `ntdst_data()` in a theme file as unambiguous drift with a one-token fix.
+
 ## Resolved
 
 *Empty for now.*
