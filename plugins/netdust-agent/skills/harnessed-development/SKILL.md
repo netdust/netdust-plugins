@@ -78,6 +78,19 @@ This skill sequences GATES (when/whether). At each stage it also reaches for a C
 If a stack sub-plugin offers a sharper craft skill for a stage (a stack-specific frontend, data, or deploy how-to), prefer it — same rule as `<stack_overrides>`.
 </craft_routing>
 
+<stage_personas>
+Each stage has an agent PERSONA you can dispatch to own it. A persona is the *who* (role + judgment + dispatch context) that LOADS the stage's gates + craft skills — it does not duplicate them. Dispatch the persona for the stage, or run the stage inline yourself; the gates fire the same either way. The personas are not optional decoration — they ARE how the stage's work is dispatched when you fan out:
+
+| Stage | Persona to dispatch | What it loads / owns |
+|---|---|---|
+| Stage 0→1 — request → gated plan | `planner` | brainstorming/refining-ideas → writing-plans → the plan-time gates (1a–1g) |
+| Stage 2 — one task to done, test-gated | `implementer` (one per task, often parallel) | testing-workflow/writing-tests, building-frontend, versioning-with-git; closes with the Test-evidence + STATUS blocks |
+| Stage 3 — whole-diff review | `reviewer` (generalist, five-pillar) + the specialist reviewers | reviews the diff against the threat model, invariants, and test-effectiveness manifest |
+| Stage 3 — exercise the artifact | `shakeout-qa` | drives the acceptance matrix through the real browser / un-mocked wire; compiles the bug manifest |
+
+At Stage 3 the `/shakeout` command auto-dispatches `reviewer` + the four specialists in parallel, after `shakeout-qa` (or the inline shake-out sweep) has exercised the artifact. See `/shakeout`.
+</stage_personas>
+
 ## Stage 0 — Brainstorm (Class A only, when intent is not yet concrete)
 
 If the feature's intent, scope, or shape is not already pinned down, invoke `superpowers:brainstorming` **before** any plan exists (if a stack sub-plugin offers a brainstorming skill for this stack, prefer it — see `<stack_overrides>`). Skip only when the work is a well-specified change with no open design questions.

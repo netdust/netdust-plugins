@@ -122,11 +122,16 @@ Then dispatch the agents in a single message (parallel block). Each agent gets t
 
 | # | subagent_type | Always or WP-only |
 |---|---|---|
-| 1 | `code-simplicity-reviewer` | always |
-| 2 | `security-sentinel` | always |
-| 3 | `performance-oracle` | always |
-| 4 | `invariant-auditor` | always |
-| 5 | `netdust-wp:ntdst-drift-reviewer` | WP only |
+| 1 | `reviewer` | always — the generalist whole-diff five-pillar pass |
+| 2 | `code-simplicity-reviewer` | always |
+| 3 | `security-sentinel` | always |
+| 4 | `performance-oracle` | always |
+| 5 | `invariant-auditor` | always |
+| 6 | `netdust-wp:ntdst-drift-reviewer` | WP only |
+
+The generalist `reviewer` (#1) reads the whole diff across all five dimensions and catches the integration bugs no single-pillar specialist is looking for; #2–5 each go deep on one pillar. They run in the same parallel block.
+
+**Before this reviewer fan-out, the artifact sweep is owned by the `shakeout-qa` agent** — it runs the built artifact end-to-end (driving the real browser for UI flows, the un-mocked wire for backend), compiling the bug manifest the shake-out skill (Step 3) describes. Dispatch `shakeout-qa` for that sweep, or run the sweep inline per the shake-out skill; either way the artifact is exercised before the diff reviewers run.
 
 Briefing template (use verbatim per agent, substituting the lens):
 
