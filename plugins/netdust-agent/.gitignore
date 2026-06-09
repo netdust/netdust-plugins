@@ -2,3 +2,10 @@ __pycache__/
 *.pyc
 evals/outputs/
 evals/outputs-archive-*/
+
+# eval-run scratch (claude -p prompts may scaffold these in cwd; never commit)
+node_modules/
+package.json
+package-lock.json
+/src/
+/examples/

@@ -1,5 +1,5 @@
 ---
-description: Mine ~/Sites/*/memory/STATE.md + lessons.md for recurring patterns worth promoting to a harness skill
+description: "Mine ~/Sites/*/memory/STATE.md + lessons.md for recurring patterns worth promoting to a harness skill. Fires on 'recurring gotchas across my sites/projects', 'mine the memory/STATE.md + lessons.md files for patterns', 'what keeps coming up across projects that should be a skill', 'find patterns worth promoting across my sites' memory files'."
 allowed_tools: ["Bash", "Read"]
 ---
 

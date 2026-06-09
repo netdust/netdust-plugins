@@ -1,0 +1,32 @@
+[
+ {
+  "skill": "architecture-invariants",
+  "skill_path": "skills/architecture-invariants/SKILL.md",
+  "query": "Our app has authorization checks scattered across about 15 route handlers and it's getting hard to reason about who can see what. How should I think about this structurally before I add the next feature?",
+  "signature": "names the CONVERGENCE POINT (the single place authorization should be decided) and frames the scattered checks as bypasses to converge, rather than just suggesting to add another check or refactor ad hoc"
+ },
+ {
+  "skill": "building-frontend",
+  "skill_path": "skills/building-frontend/SKILL.md",
+  "query": "Build me a React component for a user-list table that fetches from /api/users and shows name, email, role.",
+  "signature": "addresses the non-happy states (loading/empty/error), keyboard/a11y, and where state lives — not just a component that renders the happy-path rows"
+ },
+ {
+  "skill": "compounding",
+  "skill_path": "skills/compounding/SKILL.md",
+  "query": "We just finished and merged a big multi-week feature spec. Before I move on, what should I capture so the next person (or me in 3 months) benefits from what this taught us?",
+  "signature": "proposes harvesting into a CODE-MAP patch (codebase structure) + a scoped skill-audit of touched skills, as a report-only proposal — rather than a vague 'write some docs' answer"
+ },
+ {
+  "skill": "engineering-context",
+  "skill_path": "skills/engineering-context/SKILL.md",
+  "query": "Starting a fresh session on a project I haven't touched in weeks. What context should I load before I start coding so I don't make decisions that contradict earlier ones?",
+  "signature": "directs loading from the existing layered memory (STATE.md / lessons.md / DECISIONS / atomic recall) and packing focused-not-maximal context — rather than 'just read the README' or reading everything"
+ },
+ {
+  "skill": "shake-out",
+  "skill_path": "skills/shake-out/SKILL.md",
+  "query": "All my unit tests pass and the feature is code-complete. I'm about to merge. Is there anything else I should do first?",
+  "signature": "insists on exercising the BUILT ARTIFACT end-to-end in a real environment and compiling a bug manifest before merge — treating green unit tests as insufficient — rather than saying 'tests pass, ship it'"
+ }
+]

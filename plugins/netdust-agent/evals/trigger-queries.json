@@ -1,0 +1,548 @@
+[
+  {
+    "name": "testing-workflow",
+    "desc": "Use when verifying a task before marking it done, or a phase before sign-off, in the superpowers workflow — risk-tiers what each task needs (RED-first test for logic/auth/parsing/migrations; no bespoke test for glue/wrappers/UI), and adds the seam test that catches wiring/wire-mock/concurrency bugs per-task unit tests miss. This is write-time / per-task. For AUDITING whether an already-green suite would actually go RED if a dangerous path broke — that is test-effectiveness (audit-time / per-phase), not this. Covers PHP (WordPress/Codeception/PHPUnit) and TypeScript (Vitest/Playwright).",
+    "query": "I just finished the task that adds the `resolveAgentForRun` lookup plus a thin React badge that shows the resolved agent name. About to tick it off in todo.md — do both pieces need a test, or is the badge just glue?",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "testing-workflow",
+    "desc": "Use when verifying a task before marking it done, or a phase before sign-off, in the superpowers workflow — risk-tiers what each task needs (RED-first test for logic/auth/parsing/migrations; no bespoke test for glue/wrappers/UI), and adds the seam test that catches wiring/wire-mock/concurrency bugs per-task unit tests miss. This is write-time / per-task. For AUDITING whether an already-green suite would actually go RED if a dangerous path broke — that is test-effectiveness (audit-time / per-phase), not this. Covers PHP (WordPress/Codeception/PHPUnit) and TypeScript (Vitest/Playwright).",
+    "query": "The whole agent-runner phase is green — 874 server tests passing — but I have a nagging feeling none of them would actually fail if the autonomy gate stopped denying unattended config writes. Can you check whether the suite would really catch that breaking?",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "feature-acceptance",
+    "desc": "Use when planning OR shipping a user-facing feature, to prove the feature actually works the way it's meant to be used — through every intended flow with edge/error/empty/concurrent cases, driven through the real browser AND the API layer, not just unit/integration tests. AUTHORS an `## Acceptance flows` matrix in the plan at plan-time (intended-use flows + a mandatory per-flow edge enumeration), and VERIFIES that matrix at shake-out by driving each flow through the faithful layer (Playwright/Chrome for UI, real HTTP/MCP for backend) and emitting a pass/fail/not-reachable manifest. Sibling to test-effectiveness: that audits whether the CODE'S tests bite; this proves the FEATURE behaves. Covers TypeScript (Playwright/Chrome/Hono/MCP) and PHP (Codeception/WPBrowser). Opt-in via the project's CLAUDE.md — not auto-invoked.",
+    "query": "The instance AI-keys settings screen is built — list, add, revoke. Before I merge I want to actually exercise every flow a real admin would: adding a key with an empty label, revoking the last key, a non-admin hitting the route, two tabs adding at once. Drive it for real, don't just trust the unit tests.",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "feature-acceptance",
+    "desc": "Use when planning OR shipping a user-facing feature, to prove the feature actually works the way it's meant to be used — through every intended flow with edge/error/empty/concurrent cases, driven through the real browser AND the API layer, not just unit/integration tests. AUTHORS an `## Acceptance flows` matrix in the plan at plan-time (intended-use flows + a mandatory per-flow edge enumeration), and VERIFIES that matrix at shake-out by driving each flow through the faithful layer (Playwright/Chrome for UI, real HTTP/MCP for backend) and emitting a pass/fail/not-reachable manifest. Sibling to test-effectiveness: that audits whether the CODE'S tests bite; this proves the FEATURE behaves. Covers TypeScript (Playwright/Chrome/Hono/MCP) and PHP (Codeception/WPBrowser). Opt-in via the project's CLAUDE.md — not auto-invoked.",
+    "query": "I need to open the AI-keys settings page in Chrome and click the revoke button so I can read the network panel — the DELETE request is returning something weird and I want to inspect the actual response headers.",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "doubting-decisions",
+    "desc": "CRAFT skill — no superpowers base exists for this (a genuine gap), so it carries its own content, folding in the addyosmani doubt-driven-development concept. It spins up a FRESH-CONTEXT skeptic to adversarially attack a DECISION just made (a plan's key architectural/approach choice), to catch the confirmation bias of the agent that made it. Reached for post-plan (after harnessed-development Stage 1, before Stage 2 execution) OR post-build (before shake-out), when a significant decision should be attacked before more work is committed to it. Use when a plan's core approach was just chosen and you want it stress-tested by a skeptic with no stake in it. Distinct from thinking-deeply (technical first-principles analysis) and devils-advocate (business/strategy decisions) — this is specifically an adversarial review of a DECISION/PLAN to surface what the deciding agent rationalized away. Its output feeds back as a plan-correction, or fires threat-modeling (security doubt) / architecture-invariants (convergence doubt).",
+    "query": "I just landed on storing the trigger's target agent as a frontmatter slug instead of a foreign-key id, and the plan now leans hard on that choice. Before I start building, I want someone with no skin in the game to tear that decision apart and find what I talked myself into.",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "doubting-decisions",
+    "desc": "CRAFT skill — no superpowers base exists for this (a genuine gap), so it carries its own content, folding in the addyosmani doubt-driven-development concept. It spins up a FRESH-CONTEXT skeptic to adversarially attack a DECISION just made (a plan's key architectural/approach choice), to catch the confirmation bias of the agent that made it. Reached for post-plan (after harnessed-development Stage 1, before Stage 2 execution) OR post-build (before shake-out), when a significant decision should be attacked before more work is committed to it. Use when a plan's core approach was just chosen and you want it stress-tested by a skeptic with no stake in it. Distinct from thinking-deeply (technical first-principles analysis) and devils-advocate (business/strategy decisions) — this is specifically an adversarial review of a DECISION/PLAN to surface what the deciding agent rationalized away. Its output feeds back as a plan-correction, or fires threat-modeling (security doubt) / architecture-invariants (convergence doubt).",
+    "query": "I'm still torn on the data model from first principles — is keying events by workspace_id actually right under a one-team instance, or is it leftover tenancy? Reason it through with me from the ground up.",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "designing-apis",
+    "desc": "CRAFT skill — the how-to harnessed-development Stage 1 (plan) reaches for once brainstorming / refining-ideas has concluded 'we need an API, a module boundary, or a type contract.' There is no strong superpowers base for interface design, so this skill carries the content: contract-first design, Hyrum's-Law-aware exposure, additive-only evolution, structured errors, boundary validation, predictable REST + TypeScript contract patterns — restated and extended from addyosmani/agent-skills api-and-interface-design (MIT). The Netdust layer superpowers/addy cannot know: this is where the project's architecture-invariants CONVERGENCE POINTS get designed in, so the API names them for gate 1b to later check, and where boundary-validation on untrusted input fires the threat-modeling gate 1a. Use when shaping an endpoint, an exported module surface, or a shared type.",
+    "query": "I'm about to add the `/api/v1/triggers` endpoints and the shared `Trigger` type in packages/shared. Want to get the request/response shape and the error contract right before I write any of it — what should the surface look like so we don't paint ourselves into a corner with v1.1?",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "designing-apis",
+    "desc": "CRAFT skill — the how-to harnessed-development Stage 1 (plan) reaches for once brainstorming / refining-ideas has concluded 'we need an API, a module boundary, or a type contract.' There is no strong superpowers base for interface design, so this skill carries the content: contract-first design, Hyrum's-Law-aware exposure, additive-only evolution, structured errors, boundary validation, predictable REST + TypeScript contract patterns — restated and extended from addyosmani/agent-skills api-and-interface-design (MIT). The Netdust layer superpowers/addy cannot know: this is where the project's architecture-invariants CONVERGENCE POINTS get designed in, so the API names them for gate 1b to later check, and where boundary-validation on untrusted input fires the threat-modeling gate 1a. Use when shaping an endpoint, an exported module surface, or a shared type.",
+    "query": "The `/api/v1/triggers` endpoints already exist and shipped. I want to write up the REST + MCP reference for them in docs/API.md so customers and agents can read the shapes.",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "driving-the-browser",
+    "desc": "CRAFT skill — the how-to for OPERATING Chrome, layered on superpowers-chrome:browsing (CDP mechanics, the use_browser MCP tool, multi-tab, form automation, content extraction). Reached for by the feature-acceptance gate when it must DRIVE a UI flow through the real browser, and at debugging to inspect a live failure. It teaches HOW to drive and inspect — the DevTools tool table, console-error inspection, network-request analysis, performance profiling, screenshot verification, accessibility-tree inspection — and folds in the mechanics half of addyosmani/agent-skills browser-testing-with-devtools (MIT). It does NOT decide WHAT flows to verify or own the acceptance matrix; that is the feature-acceptance gate, which this skill explicitly defers to. Use when you need to operate or inspect a running browser.",
+    "query": "The slideover on /w/acme/p/leads/work-items isn't saving and I can't tell why. Can you open it in Chrome, click into the inline title field, type, hit escape, and pull the console errors plus the failing fetch from the network tab?",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "driving-the-browser",
+    "desc": "CRAFT skill — the how-to for OPERATING Chrome, layered on superpowers-chrome:browsing (CDP mechanics, the use_browser MCP tool, multi-tab, form automation, content extraction). Reached for by the feature-acceptance gate when it must DRIVE a UI flow through the real browser, and at debugging to inspect a live failure. It teaches HOW to drive and inspect — the DevTools tool table, console-error inspection, network-request analysis, performance profiling, screenshot verification, accessibility-tree inspection — and folds in the mechanics half of addyosmani/agent-skills browser-testing-with-devtools (MIT). It does NOT decide WHAT flows to verify or own the acceptance matrix; that is the feature-acceptance gate, which this skill explicitly defers to. Use when you need to operate or inspect a running browser.",
+    "query": "Which intended user flows of the new saved-views feature do I actually need to verify before merge, and what edge cases per flow? Help me enumerate them — empty state, denied actor, double-submit, etc.",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "test-effectiveness",
+    "desc": "Use to AUDIT whether a test suite would actually catch bugs (not just whether tests exist + pass), and to AUTHOR tests that close the gap — at phase-complete, at shake-out, or whenever a green suite shipped a bug. Risk-aware sibling to testing-workflow: testing-workflow gates 'does this task need a test, at what tier?' (write-time, per-task); this gates 'would my suite go RED if the dangerous path broke?' (audit-time, per-phase). Names the seven failure modes that ship bugs past a green suite — stale fixture, test-world≠real-world, wire-mock leak, unmounted guard, happy-path-only/missing-denial, no-coverage, concurrency/timing — each with an audit move and a per-stack author pattern. Covers TypeScript (Vitest/Playwright) and PHP (PHPUnit/Codeception). Opt-in via the project's CLAUDE.md — not auto-invoked.",
+    "query": "We just shipped a bug past a fully green suite — the over-broad unique index let 'Untitled' collide and 500. The tests were passing the whole time. Audit the work-item tests and tell me which of them would actually go red if that path broke again, then write the ones that close the gap.",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "test-effectiveness",
+    "desc": "Use to AUDIT whether a test suite would actually catch bugs (not just whether tests exist + pass), and to AUTHOR tests that close the gap — at phase-complete, at shake-out, or whenever a green suite shipped a bug. Risk-aware sibling to testing-workflow: testing-workflow gates 'does this task need a test, at what tier?' (write-time, per-task); this gates 'would my suite go RED if the dangerous path broke?' (audit-time, per-phase). Names the seven failure modes that ship bugs past a green suite — stale fixture, test-world≠real-world, wire-mock leak, unmounted guard, happy-path-only/missing-denial, no-coverage, concurrency/timing — each with an audit move and a per-stack author pattern. Covers TypeScript (Vitest/Playwright) and PHP (PHPUnit/Codeception). Opt-in via the project's CLAUDE.md — not auto-invoked.",
+    "query": "I'm writing the test for the slug-dedup validator right now — it needs to cover the dedup-per-project path and the invalid-input rejection. Walk me through the RED-first version before I implement.",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "deploying",
+    "desc": "CRAFT skill — a THIN pointer to the real deploy authority: the /deploy command (9-method dispatcher driven by site.yml's deploy.method) and the dev-stack skill. Reached for at harnessed-development Stage 3 (finish), AFTER shake-out + finishing-a-branch are green. It does not re-implement deploy mechanics; it routes to /deploy + dev-stack and states the Netdust deploy discipline: NEVER deploy to prod without explicit confirmation; honor site.yml deploy.method and site.risk (high = triple-check); always test on DDEV/staging before prod. The Netdust ordering layer: deploy is downstream of the WHOLE harness — shake-out and the reviews must be green first. Use when shipping a finished, reviewed branch to an environment.",
+    "query": "Branch is merged, shake-out is green, reviews are clean. I want to push the saved-views build out to the customer's Hetzner box now — what's the right way to ship this to their environment?",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "deploying",
+    "desc": "CRAFT skill — a THIN pointer to the real deploy authority: the /deploy command (9-method dispatcher driven by site.yml's deploy.method) and the dev-stack skill. Reached for at harnessed-development Stage 3 (finish), AFTER shake-out + finishing-a-branch are green. It does not re-implement deploy mechanics; it routes to /deploy + dev-stack and states the Netdust deploy discipline: NEVER deploy to prod without explicit confirmation; honor site.yml deploy.method and site.risk (high = triple-check); always test on DDEV/staging before prod. The Netdust ordering layer: deploy is downstream of the WHOLE harness — shake-out and the reviews must be green first. Use when shipping a finished, reviewed branch to an environment.",
+    "query": "The customer's site keeps timing out and I think the box is unhealthy — can you check the Hetzner server's CPU/memory health and the recent server logs?",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "versioning-with-git",
+    "desc": "CRAFT skill — commit-craft, reached for by harnessed-development Stage 2 (execute — the atomic commit per task) and Stage 3 (finish). It is the primary source for commit hygiene (restated from addyosmani/agent-skills git-workflow-and-versioning, MIT): atomic commits, conventional messages that explain WHY, the ~100-line commit target / split anything over ~1000, the save-point pattern (test → commit on green / revert on red), and pre-commit hygiene (diff review + secret scan + run tests/lint/typecheck), plus archaeology (git bisect / blame / log --grep). It explicitly DEFERS branch-FLOW (which branch to start, staging→main git-flow, make feature/finish/ship, hotfix) to the stack's dev-stack skill, and worktree SETUP to superpowers:using-git-worktrees. Use when committing a finished task or preparing a branch to finish.",
+    "query": "I've got a 1400-line unstaged blob — the slug helper, an unrelated typo fix, and a migration all mixed together. Help me split this into clean atomic commits with messages that say why, and scan it for any leaked secrets before I commit.",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "versioning-with-git",
+    "desc": "CRAFT skill — commit-craft, reached for by harnessed-development Stage 2 (execute — the atomic commit per task) and Stage 3 (finish). It is the primary source for commit hygiene (restated from addyosmani/agent-skills git-workflow-and-versioning, MIT): atomic commits, conventional messages that explain WHY, the ~100-line commit target / split anything over ~1000, the save-point pattern (test → commit on green / revert on red), and pre-commit hygiene (diff review + secret scan + run tests/lint/typecheck), plus archaeology (git bisect / blame / log --grep). It explicitly DEFERS branch-FLOW (which branch to start, staging→main git-flow, make feature/finish/ship, hotfix) to the stack's dev-stack skill, and worktree SETUP to superpowers:using-git-worktrees. Use when committing a finished task or preparing a branch to finish.",
+    "query": "Starting the saved-views work now — which branch should I cut this off of, staging or main, and what's the make-feature flow in this repo?",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "shake-out",
+    "desc": "Post-build QA phase that sweeps the built artifact end-to-end, compiles a bug manifest, then fixes systematically. Use after executing-plans or subagent-driven-development completes when unit tests pass but the artifact hasn't been exercised in a real environment — this is the spec-complete / pre-merge gate. Triggers on \"shake it out\", \"shakeout\", \"does it work\", \"QA this\", \"find the bugs\", \"what's broken\", \"spec-complete gate\", \"pre-merge gate\", \"final QA before merge\".",
+    "query": "All the agent-runner tasks are closed and the unit suite is green, but nobody's actually used the thing end to end yet. Shake it out and give me a list of what's broken before I merge.",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "shake-out",
+    "desc": "Post-build QA phase that sweeps the built artifact end-to-end, compiles a bug manifest, then fixes systematically. Use after executing-plans or subagent-driven-development completes when unit tests pass but the artifact hasn't been exercised in a real environment — this is the spec-complete / pre-merge gate. Triggers on \"shake it out\", \"shakeout\", \"does it work\", \"QA this\", \"find the bugs\", \"what's broken\", \"spec-complete gate\", \"pre-merge gate\", \"final QA before merge\".",
+    "query": "We just finished a group of three related tasks in this sub-phase. I'm not at spec-complete yet — there's a whole other cluster coming — but I want to run the phase-boundary checks before I start the next group.",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "threat-modeling",
+    "desc": "Use when writing a plan or spec for any feature that touches user-controlled URLs, auth/session/token surfaces, untrusted parsing (frontmatter from external sources, AI tool-call args, JSON-from-network, file uploads, MD-from-third-parties), BYOK credentials, multi-tenancy boundaries, or any surface where an attacker could supply input the server will trust. Produces a `## Threat model` section that the plan embeds inline. Becomes the convergence target for /code-review on the implementing sub-phases — reviews verify against the named mitigations instead of free-form bug hunting. Opt-in via the project's CLAUDE.md — not auto-invoked.",
+    "query": "I'm planning the inbound-webhook feature where a customer's CMS posts JSON to a URL we expose and we turn it into work items. Before I break it into tasks I want the attack model baked into the plan — the payload's untrusted and we'll be fetching from a customer-supplied URL.",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "threat-modeling",
+    "desc": "Use when writing a plan or spec for any feature that touches user-controlled URLs, auth/session/token surfaces, untrusted parsing (frontmatter from external sources, AI tool-call args, JSON-from-network, file uploads, MD-from-third-parties), BYOK credentials, multi-tenancy boundaries, or any surface where an attacker could supply input the server will trust. Produces a `## Threat model` section that the plan embeds inline. Becomes the convergence target for /code-review on the implementing sub-phases — reviews verify against the named mitigations instead of free-form bug hunting. Opt-in via the project's CLAUDE.md — not auto-invoked.",
+    "query": "The webhook receiver already shipped. Audit the existing handler code in webhook-receiver.ts for actual vulnerabilities — SSRF on the callback URL, missing input validation, anything exploitable that's in there right now.",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "sourcing-from-docs",
+    "desc": "CRAFT skill — the how-to ANY harnessed-development stage (plan, execute, or debug) reaches for whenever a load-bearing decision rests on the claim 'library / framework / API X behaves like Y.' There is no superpowers base for this; it restates and extends addyosmani/agent-skills source-driven-development (MIT) to close a real discipline gap: never assert external-dependency behavior from memory (training data drifts), ground the claim in OFFICIAL docs, and record the citation inline so a reviewer can verify. Pairs with the context7 MCP (resolve-library-id → query-docs) for fetching current docs. The Netdust layer: an unverified load-bearing external-behavior claim is a Stage-1c (spec-premise) and Step-2.5 (plan-freshness) failure waiting to happen — this is the how-to those gates reach for when the premise is about an EXTERNAL dependency, not sibling code. Use the moment a behavioral claim about a third-party library is doing real work in your reasoning.",
+    "query": "My whole plan hinges on Drizzle's migrate() re-applying a migration if I call it twice — but I'm working from memory and not sure that's still true. Can we confirm the actual documented behavior before I build on it?",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "sourcing-from-docs",
+    "desc": "CRAFT skill — the how-to ANY harnessed-development stage (plan, execute, or debug) reaches for whenever a load-bearing decision rests on the claim 'library / framework / API X behaves like Y.' There is no superpowers base for this; it restates and extends addyosmani/agent-skills source-driven-development (MIT) to close a real discipline gap: never assert external-dependency behavior from memory (training data drifts), ground the claim in OFFICIAL docs, and record the citation inline so a reviewer can verify. Pairs with the context7 MCP (resolve-library-id → query-docs) for fetching current docs. The Netdust layer: an unverified load-bearing external-behavior claim is a Stage-1c (spec-premise) and Step-2.5 (plan-freshness) failure waiting to happen — this is the how-to those gates reach for when the premise is about an EXTERNAL dependency, not sibling code. Use the moment a behavioral claim about a third-party library is doing real work in your reasoning.",
+    "query": "My plan assumes our own `lib/access.ts` already exposes a `canSeeProject` helper, and that's load-bearing. Can we ground-truth that against the actual source before I build on it?",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "writing-tests",
+    "desc": "CRAFT skill — layers the Netdust harness contract ON TOP of superpowers:test-driven-development. Reached for by the testing-workflow gate once it has ruled a task Tier A. Use when you are about to write a test: it sends you to superpowers:TDD for the generic RED→GREEN→REFACTOR mechanics (AAA, test pyramid, state-over-interactions, Real>Fakes>Stubs>Mocks), then adds the things superpowers cannot know — that you are downstream of the testing-workflow gate, the Tier-A denial-path contract, the un-mocked-seam rule, the ≥3× determinism rule, and assert-from-acceptance-criteria. Does NOT decide WHETHER a test is needed or at what tier (that is the testing-workflow gate) and does NOT restate the generic TDD cycle (that is superpowers). Covers PHP (PHPUnit/Codeception) and TypeScript (Vitest/Playwright).",
+    "query": "We already decided the token-scope resolver is Tier A. Now write the actual RED test for it — cover the grant path and the denial path where a member-scoped token tries an admin write.",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "writing-tests",
+    "desc": "CRAFT skill — layers the Netdust harness contract ON TOP of superpowers:test-driven-development. Reached for by the testing-workflow gate once it has ruled a task Tier A. Use when you are about to write a test: it sends you to superpowers:TDD for the generic RED→GREEN→REFACTOR mechanics (AAA, test pyramid, state-over-interactions, Real>Fakes>Stubs>Mocks), then adds the things superpowers cannot know — that you are downstream of the testing-workflow gate, the Tier-A denial-path contract, the un-mocked-seam rule, the ≥3× determinism rule, and assert-from-acceptance-criteria. Does NOT decide WHETHER a test is needed or at what tier (that is the testing-workflow gate) and does NOT restate the generic TDD cycle (that is superpowers). Covers PHP (PHPUnit/Codeception) and TypeScript (Vitest/Playwright).",
+    "query": "This task just wires an existing toast component into the existing mutation hook. Does it even need its own test, or is it Tier B glue?",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "dev-stack",
+    "desc": "Use when working in any Netdust project — DDEV environment, git branching, Makefile workflows, generic deploy patterns, .env conventions. Triggers on file edits to Makefile, .env*, .ddev/config.yaml, package.json scripts that look like dev/build/deploy. Activates on keywords DDEV, ddev start, ddev describe, ddev wp, make dev, make save, make deploy, make ship, make feature, make finish, .env, .env.example, staging branch, git-flow, hotfix. Symptoms include setting up a new project locally, deciding what to commit, choosing a branch to start work on, deploying to staging, rolling back. Stack-agnostic — applies to WordPress, Statamic, Bun/Node, Laravel projects equally. For WP-specific infra (WP-CLI, Vite-for-WP, Bedrock Makefile patterns), see wp-infra. For stack-specific deploy variants, see the /deploy command + memory/deploy-patterns.md.",
+    "query": "Fresh clone of this repo on a new laptop — what's the right `make` target to get the dev env up, and which branch should I cut feature work from? Also need to add a FOLIO_MASTER_KEY to .env.example.",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "dev-stack",
+    "desc": "Use when working in any Netdust project — DDEV environment, git branching, Makefile workflows, generic deploy patterns, .env conventions. Triggers on file edits to Makefile, .env*, .ddev/config.yaml, package.json scripts that look like dev/build/deploy. Activates on keywords DDEV, ddev start, ddev describe, ddev wp, make dev, make save, make deploy, make ship, make feature, make finish, .env, .env.example, staging branch, git-flow, hotfix. Symptoms include setting up a new project locally, deciding what to commit, choosing a branch to start work on, deploying to staging, rolling back. Stack-agnostic — applies to WordPress, Statamic, Bun/Node, Laravel projects equally. For WP-specific infra (WP-CLI, Vite-for-WP, Bedrock Makefile patterns), see wp-infra. For stack-specific deploy variants, see the /deploy command + memory/deploy-patterns.md.",
+    "query": "I've got this 1300-line unstaged change spanning three unrelated fixes. How should I carve it up into atomic commits with good messages?",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "architecture-invariants",
+    "desc": "Use when writing a plan or spec for a non-trivial feature, OR when onboarding to / auditing an existing codebase, to name the project's CONVERGENCE POINTS — the single places where each cross-cutting property (authorization, data access, live updates, error handling, entity modeling) is DECIDED. Produces an `ARCHITECTURE-INVARIANTS.md` doc the project commits. Becomes the convergence target for /code-review and /shakeout — reviews flag any code path that bypasses a convergence point, instead of re-discovering wiring/dedup/safety concerns free-form each round. Sibling to threat-modeling (which does this for attacks). Opt-in via the project's CLAUDE.md — not auto-invoked.",
+    "query": "I'm onboarding to this Folio codebase and I want to write down the convergence points — where authorization is actually decided, where all writes funnel, where the live-update events get emitted — so future reviews can flag anything that routes around them. Let's author the invariants doc.",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "architecture-invariants",
+    "desc": "Use when writing a plan or spec for a non-trivial feature, OR when onboarding to / auditing an existing codebase, to name the project's CONVERGENCE POINTS — the single places where each cross-cutting property (authorization, data access, live updates, error handling, entity modeling) is DECIDED. Produces an `ARCHITECTURE-INVARIANTS.md` doc the project commits. Becomes the convergence target for /code-review and /shakeout — reviews flag any code path that bypasses a convergence point, instead of re-discovering wiring/dedup/safety concerns free-form each round. Sibling to threat-modeling (which does this for attacks). Opt-in via the project's CLAUDE.md — not auto-invoked.",
+    "query": "We already have ARCHITECTURE-INVARIANTS.md. This diff adds a new write route — check whether it routes through `requireScope` or bypasses the authorization convergence point.",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "simplifying-code",
+    "desc": "CRAFT skill — the how-to that the code-simplicity-reviewer agent and the /simplify command embody: reduce complexity while PRESERVING behavior. Restated from addyosmani/agent-skills code-simplification (MIT): YAGNI, remove unnecessary abstraction/indirection, delete dead code, prefer the simpler construct. Reached for at harnessed-development Stage 3 (review), or any time a fix feels hacky ('knowing what I know now, the elegant version'). The Netdust layer: simplification must NOT change behavior, so the testing-workflow suite is the safety net — green before AND after the change is the proof it stayed behavior-preserving; this skill is quality-only and never hunts for bugs (that is /code-review). Aligns with the Netdust core principle 'Simplicity First / impact minimal code.' Use when reducing complexity of working code.",
+    "query": "This rowsToMessages function I just wrote works but it's an ugly three-layer reduce with a helper that's only called once. Knowing what I know now, what's the elegant version that does the same thing?",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "simplifying-code",
+    "desc": "CRAFT skill — the how-to that the code-simplicity-reviewer agent and the /simplify command embody: reduce complexity while PRESERVING behavior. Restated from addyosmani/agent-skills code-simplification (MIT): YAGNI, remove unnecessary abstraction/indirection, delete dead code, prefer the simpler construct. Reached for at harnessed-development Stage 3 (review), or any time a fix feels hacky ('knowing what I know now, the elegant version'). The Netdust layer: simplification must NOT change behavior, so the testing-workflow suite is the safety net — green before AND after the change is the proof it stayed behavior-preserving; this skill is quality-only and never hunts for bugs (that is /code-review). Aligns with the Netdust core principle 'Simplicity First / impact minimal code.' Use when reducing complexity of working code.",
+    "query": "This rowsToMessages function looks suspicious to me — I think it might have an off-by-one when coalescing consecutive same-role rows. Can you hunt for the actual bug?",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "compounding",
+    "desc": "Use at spec-close (after finishing-a-development-branch) to harvest what the work taught and write it where it compounds instead of evaporating — a proposed patch to docs/architecture/CODE-MAP.md (codebase knowledge) plus a scoped skill-audit over the skills touched this spec (tool knowledge). Report-only: emits a proposed-deltas manifest you approve; never auto-edits a CODE-MAP or a skill. The Stage 3 closer in harnessed-development, beside the memory/STATE loop that already compounds decisions. Triggers on \"compound\", \"compound this\", \"spec is done\", \"wrap up the spec\", \"update the code map\", \"what did this teach\", at /shakeout-level boundaries. NOT per sub-phase, NOT for trivial changes.",
+    "query": "The whole cockpit-chat spec is done and merged. Let's wrap it up — harvest what it taught about the operator code and propose updates to the CODE-MAP plus an audit of the skills we leaned on this spec.",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "compounding",
+    "desc": "Use at spec-close (after finishing-a-development-branch) to harvest what the work taught and write it where it compounds instead of evaporating — a proposed patch to docs/architecture/CODE-MAP.md (codebase knowledge) plus a scoped skill-audit over the skills touched this spec (tool knowledge). Report-only: emits a proposed-deltas manifest you approve; never auto-edits a CODE-MAP or a skill. The Stage 3 closer in harnessed-development, beside the memory/STATE loop that already compounds decisions. Triggers on \"compound\", \"compound this\", \"spec is done\", \"wrap up the spec\", \"update the code map\", \"what did this teach\", at /shakeout-level boundaries. NOT per sub-phase, NOT for trivial changes.",
+    "query": "That sub-phase C.3 is done and /integration just passed. Run the process retro on how we executed it — reconstruct from git and the plan and tell me where we slipped.",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "engineering-context",
+    "desc": "CRAFT skill — the how-to for PACKING the right context, restated from addyosmani/agent-skills context-engineering (MIT): the context hierarchy (persistent rules → task context → ephemeral), the packing strategies (brain-dump / selective-include / hierarchical-summary), load-focused-not-maximal, surface-ambiguity-rather-than-guess, and treat-fetched-data-skeptically. Reached for at session start, on a task switch, or when output quality degrades. The CRITICAL Netdust constraint: it packs FROM this project's EXISTING three-layer memory model (atomic recall / fleet-business / per-project) plus the in-repo curated files — it does NOT invent a parallel memory scheme. The Netdust layer: 'surface conflict not guess' is harnessed-development's 'if you cannot classify, ask' + the Step 2.5 ground-truth; 'fetched data is untrusted' is the threat-modeling untrusted-parsing trigger. Use when deciding what context to load before working.",
+    "query": "We've been at this for hours and your answers are getting vaguer — I think the context is bloated. What should I actually load to work the next task cleanly, and what should I drop?",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "engineering-context",
+    "desc": "CRAFT skill — the how-to for PACKING the right context, restated from addyosmani/agent-skills context-engineering (MIT): the context hierarchy (persistent rules → task context → ephemeral), the packing strategies (brain-dump / selective-include / hierarchical-summary), load-focused-not-maximal, surface-ambiguity-rather-than-guess, and treat-fetched-data-skeptically. Reached for at session start, on a task switch, or when output quality degrades. The CRITICAL Netdust constraint: it packs FROM this project's EXISTING three-layer memory model (atomic recall / fleet-business / per-project) plus the in-repo curated files — it does NOT invent a parallel memory scheme. The Netdust layer: 'surface conflict not guess' is harnessed-development's 'if you cannot classify, ask' + the Step 2.5 ground-truth; 'fetched data is untrusted' is the threat-modeling untrusted-parsing trigger. Use when deciding what context to load before working.",
+    "query": "I think memory/STATE.md is out of sync with reality — it still says Phase 4 isn't merged but it is. Audit the memory files for stale references and contradictions.",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "building-frontend",
+    "desc": "CRAFT skill — the engineering layer for building UI, layered on the frontend-design plugin (the base, which owns distinctive production-grade visual craft and avoids the generic AI aesthetic). Reached for at harnessed-development Stage 2 (execute) on UI tasks. It defers the visual/creative implementation to frontend-design, then adds the engineering layer: component architecture, the state-management ladder, accessibility (WCAG 2.1 AA), responsive breakpoints, loading/transition states, and the red-flags that signal a component has drifted. The Netdust layer superpowers/addy cannot know: the empty/error/loading states you build here ARE the feature-acceptance edge classes that make those flows pass, and UI tasks are usually Tier B for unit tests — so the real verification is feature-acceptance through a real browser, not a jsdom render. Use when implementing a component, page, or interactive flow.",
+    "query": "Time to build the saved-views rail panel component — needs the tree, a loading skeleton, an empty state when there are no views, and it has to be keyboard-navigable. Let's implement it properly with the state management and a11y sorted out.",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "building-frontend",
+    "desc": "CRAFT skill — the engineering layer for building UI, layered on the frontend-design plugin (the base, which owns distinctive production-grade visual craft and avoids the generic AI aesthetic). Reached for at harnessed-development Stage 2 (execute) on UI tasks. It defers the visual/creative implementation to frontend-design, then adds the engineering layer: component architecture, the state-management ladder, accessibility (WCAG 2.1 AA), responsive breakpoints, loading/transition states, and the red-flags that signal a component has drifted. The Netdust layer superpowers/addy cannot know: the empty/error/loading states you build here ARE the feature-acceptance edge classes that make those flows pass, and UI tasks are usually Tier B for unit tests — so the real verification is feature-acceptance through a real browser, not a jsdom render. Use when implementing a component, page, or interactive flow.",
+    "query": "The rail panel's flex column isn't scrolling right — the overflow is clipping the bottom items. I need to figure out the actual computed heights in the live DOM to fix the CSS.",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "refining-ideas",
+    "desc": "CRAFT skill — layers ON TOP of superpowers:brainstorming as its convergent SIBLING. Brainstorming GENERATES an idea (explores intent, requirements, design space); refining-ideas SHARPENS an already-generated-but-still-vague idea before it becomes a plan — a divergent→convergent refinement pass. Reached for at harnessed-development Stage 0, alongside brainstorming, when an idea exists but is fuzzy and needs stress-testing first. Use when you have a rough idea/feature/approach that is not yet crisp enough to plan: it sends you to superpowers:brainstorming for the generative base, then adds the Netdust layer — the divergent lenses, the convergent stress-tests, the explicit Not-Doing list, and how its output feeds Stage 1 (writing-plans), Stage 1's scope boundaries, and Stage 1c spec-premise ground-truth. Does NOT replace brainstorming and does NOT plan (that is writing-plans).",
+    "query": "I have this fuzzy idea that Folio should have a 'callcenter' shared-inbox mode, but it's still mush in my head. Help me sharpen it into something crisp enough to plan — pin down what it is and isn't before I write anything.",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "refining-ideas",
+    "desc": "CRAFT skill — layers ON TOP of superpowers:brainstorming as its convergent SIBLING. Brainstorming GENERATES an idea (explores intent, requirements, design space); refining-ideas SHARPENS an already-generated-but-still-vague idea before it becomes a plan — a divergent→convergent refinement pass. Reached for at harnessed-development Stage 0, alongside brainstorming, when an idea exists but is fuzzy and needs stress-testing first. Use when you have a rough idea/feature/approach that is not yet crisp enough to plan: it sends you to superpowers:brainstorming for the generative base, then adds the Netdust layer — the divergent lenses, the convergent stress-tests, the explicit Not-Doing list, and how its output feeds Stage 1 (writing-plans), Stage 1's scope boundaries, and Stage 1c spec-premise ground-truth. Does NOT replace brainstorming and does NOT plan (that is writing-plans).",
+    "query": "I don't have any idea yet — I just know customers keep asking for 'better collaboration.' Let's explore the problem space from scratch and generate some directions.",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "harnessed-development",
+    "desc": "The single entry point for any non-trivial work in a Netdust project — sequences the FULL harness end to end so no session can skip a gate. Brainstorm → write-plan (with threat-modeling + architecture-invariants when triggered) → execute (subagent/TDD + mandatory testing-workflow at every task close) → shake-out → finish-branch. Triggers on \"build a feature\", \"start a feature\", \"implement X\", \"work the plan\", \"execute the plan\", \"execute todo.md\", \"run subagents on this plan\", \"start building\", \"do this properly\", \"the whole harness\", \"ship X\", \"fix the code-review findings\", \"fix the findings from /code-review or /security-review\", \"address the review feedback on the branch\". Also the entry point for ad-hoc security-boundary edits (auth/token/URL-allow-list/crypto) even with no plan. NOT for read-only questions, trivial one-file edits, formatting, dependency bumps, prose, or research — those need no harness. Required for any non-trivial work under this harness, on any stack (WordPress, Statamic, Bun/React, …) — it is stack-agnostic and defers to the loaded stack sub-plugin for stack-specific skills, reviewers, and test runners. Replaces the deleted `ntdst-execute-with-tests` skill (its \"execute the plan\" / \"work the plan\" triggers resolve here).",
+    "query": "Let's build the saved-views-in-the-rail feature properly, start to finish — brainstorm it, plan it with the gates, build it, shake it out, the whole thing.",
+    "should_trigger": true,
+    "type": "skill"
+  },
+  {
+    "name": "harnessed-development",
+    "desc": "The single entry point for any non-trivial work in a Netdust project — sequences the FULL harness end to end so no session can skip a gate. Brainstorm → write-plan (with threat-modeling + architecture-invariants when triggered) → execute (subagent/TDD + mandatory testing-workflow at every task close) → shake-out → finish-branch. Triggers on \"build a feature\", \"start a feature\", \"implement X\", \"work the plan\", \"execute the plan\", \"execute todo.md\", \"run subagents on this plan\", \"start building\", \"do this properly\", \"the whole harness\", \"ship X\", \"fix the code-review findings\", \"fix the findings from /code-review or /security-review\", \"address the review feedback on the branch\". Also the entry point for ad-hoc security-boundary edits (auth/token/URL-allow-list/crypto) even with no plan. NOT for read-only questions, trivial one-file edits, formatting, dependency bumps, prose, or research — those need no harness. Required for any non-trivial work under this harness, on any stack (WordPress, Statamic, Bun/React, …) — it is stack-agnostic and defers to the loaded stack sub-plugin for stack-specific skills, reviewers, and test runners. Replaces the deleted `ntdst-execute-with-tests` skill (its \"execute the plan\" / \"work the plan\" triggers resolve here).",
+    "query": "Quick one — bump the drizzle-orm dependency to the latest patch in package.json and re-run the lockfile.",
+    "should_trigger": false,
+    "type": "skill"
+  },
+  {
+    "name": "reviewer",
+    "desc": "Use this agent for the whole-diff, pre-merge code review of a finished branch — it is the generalist Staff-Engineer pass that reads the ENTIRE branch diff at once (holistic, not per-task) across five dimensions: correctness, readability/simplicity, architecture, security, and performance. It reviews against the harness's convergence targets (the plan's `## Threat model`, `ARCHITECTURE-INVARIANTS.md`, the test-effectiveness covered/blind manifest) rather than free-form hunting, and reports findings bucketed Critical / Important / Suggestion with file:line + remediation. Dispatch it at Stage 3 (shake-out) on the branch diff, alongside — not instead of — this plugin's specialist reviewers. <example>Context: A feature branch is code-complete and all tasks closed green; the user is about to merge.\\nuser: \"The saved-views branch is done and tests pass — give it a review before I merge.\"\\nassistant: \"I'll dispatch the reviewer agent for the whole-diff pre-merge pass; it'll read the branch diff across all five dimensions and check it against the plan's threat model and the invariants doc before bucketing findings.\"\\n<commentary>Code-complete, pre-merge, whole branch — this is the reviewer's holistic Stage 3 pass; it reads the full diff at once rather than per task.</commentary></example> <example>Context: The shake-out gate is dispatching its reviewer fan-out on a branch that touches auth and a hot query path.\\nuser: \"Run the reviewers on this diff — it changes the session guard and a list endpoint.\"\\nassistant: \"I'll dispatch the reviewer agent as the generalist whole-diff pass and run it alongside the plugin's security-sentinel and performance-oracle; the generalist covers all five pillars holistically while the specialists go deep on their one.\"\\n<commentary>The reviewer is the five-pillar generalist; it runs in parallel with the deep specialists, not in place of them — cite that relationship.</commentary></example> <example>Context: The user wants the branch checked specifically for whether it bypasses a documented convergence point.\\nuser: \"Does this diff route around our authorization helper anywhere?\"\\nassistant: \"I'll dispatch the reviewer agent; it checks the diff against ARCHITECTURE-INVARIANTS.md and flags any path that bypasses a named convergence point, keyed to the invariant number.\"\\n<commentary>Checking the diff against the invariants doc is exactly the reviewer's architecture dimension — it flags bypasses keyed to the invariant, the same convergence-target discipline the invariant-auditor enforces.</commentary></example>",
+    "query": "The saved-views branch is code-complete and all the tasks closed green. Give it a proper staff-engineer review across the whole diff — correctness, architecture, security, the lot — before I merge.",
+    "should_trigger": true,
+    "type": "agent"
+  },
+  {
+    "name": "reviewer",
+    "desc": "Use this agent for the whole-diff, pre-merge code review of a finished branch — it is the generalist Staff-Engineer pass that reads the ENTIRE branch diff at once (holistic, not per-task) across five dimensions: correctness, readability/simplicity, architecture, security, and performance. It reviews against the harness's convergence targets (the plan's `## Threat model`, `ARCHITECTURE-INVARIANTS.md`, the test-effectiveness covered/blind manifest) rather than free-form hunting, and reports findings bucketed Critical / Important / Suggestion with file:line + remediation. Dispatch it at Stage 3 (shake-out) on the branch diff, alongside — not instead of — this plugin's specialist reviewers. <example>Context: A feature branch is code-complete and all tasks closed green; the user is about to merge.\\nuser: \"The saved-views branch is done and tests pass — give it a review before I merge.\"\\nassistant: \"I'll dispatch the reviewer agent for the whole-diff pre-merge pass; it'll read the branch diff across all five dimensions and check it against the plan's threat model and the invariants doc before bucketing findings.\"\\n<commentary>Code-complete, pre-merge, whole branch — this is the reviewer's holistic Stage 3 pass; it reads the full diff at once rather than per task.</commentary></example> <example>Context: The shake-out gate is dispatching its reviewer fan-out on a branch that touches auth and a hot query path.\\nuser: \"Run the reviewers on this diff — it changes the session guard and a list endpoint.\"\\nassistant: \"I'll dispatch the reviewer agent as the generalist whole-diff pass and run it alongside the plugin's security-sentinel and performance-oracle; the generalist covers all five pillars holistically while the specialists go deep on their one.\"\\n<commentary>The reviewer is the five-pillar generalist; it runs in parallel with the deep specialists, not in place of them — cite that relationship.</commentary></example> <example>Context: The user wants the branch checked specifically for whether it bypasses a documented convergence point.\\nuser: \"Does this diff route around our authorization helper anywhere?\"\\nassistant: \"I'll dispatch the reviewer agent; it checks the diff against ARCHITECTURE-INVARIANTS.md and flags any path that bypasses a named convergence point, keyed to the invariant number.\"\\n<commentary>Checking the diff against the invariants doc is exactly the reviewer's architecture dimension — it flags bypasses keyed to the invariant, the same convergence-target discipline the invariant-auditor enforces.</commentary></example>",
+    "query": "The branch reads the diff fine but I don't trust the diff is the whole story — actually run the built feature end to end and tell me if it behaves, not whether the code looks right.",
+    "should_trigger": false,
+    "type": "agent"
+  },
+  {
+    "name": "planner",
+    "desc": "Use this agent to turn a feature request or spec into a gated, executable plan — it owns harnessed-development Stage 0 (brainstorm) through Stage 1 (write the plan with all plan-time gates baked in). It classifies the work, fires the threat-model / architecture-invariant / feature-acceptance gates by trigger, ground-truths the plan's premises against real source, sizes review clusters, and writes a plan with per-task test-tier lines. Use it BEFORE any implementation, whenever a request is non-trivial (3+ steps or an architectural decision). <example>Context: The user wants to add a webhook-receiving endpoint and isn't sure of the shape yet.\\nuser: \"I want Folio to accept inbound webhooks from a customer's CMS and create work items from them.\"\\nassistant: \"This is a new feature touching user-controlled URLs and untrusted parsing — I'll use the planner agent to brainstorm the shape and write a gated plan with the threat model baked in before any code.\"\\n<commentary>Non-trivial feature on a security-triggering surface (inbound payloads, outbound-from-user-URL) — the planner owns Stage 0→1 and will fire the 1a threat-modeling gate, so use it before implementation.</commentary></example> <example>Context: The user hands over a plan a teammate wrote last week and wants it executed.\\nuser: \"Here's the plan doc for the saved-views feature, can we just run it?\"\\nassistant: \"Before executing I'll run the planner agent as a Class B freshness review — it'll reconcile the plan against current source, confirm review-group sizing, and re-check the gates.\"\\n<commentary>Executing someone else's plan is Class B: the planner does Stage 1 as a critical freshness review (premises drift between authoring and execution) before the implementer touches code.</commentary></example> <example>Context: The user describes a CRUD settings screen.\\nuser: \"Add an admin screen to manage instance AI keys — list, add, revoke.\"\\nassistant: \"This is a user-facing CRUD surface, so I'll use the planner agent to write the plan with an acceptance-flows matrix and the threat model for the credential surface embedded up front.\"\\n<commentary>User-facing feature touching BYOK credentials — fires both the 1g feature-acceptance gate and the 1a threat-modeling gate; the planner embeds both in the plan before task breakdown.</commentary></example>",
+    "query": "I want Folio to accept inbound webhooks from a customer's CMS and create work items from them. Turn this into a real gated plan with the tasks broken out and the gates fired before anyone writes code.",
+    "should_trigger": true,
+    "type": "agent"
+  },
+  {
+    "name": "planner",
+    "desc": "Use this agent to turn a feature request or spec into a gated, executable plan — it owns harnessed-development Stage 0 (brainstorm) through Stage 1 (write the plan with all plan-time gates baked in). It classifies the work, fires the threat-model / architecture-invariant / feature-acceptance gates by trigger, ground-truths the plan's premises against real source, sizes review clusters, and writes a plan with per-task test-tier lines. Use it BEFORE any implementation, whenever a request is non-trivial (3+ steps or an architectural decision). <example>Context: The user wants to add a webhook-receiving endpoint and isn't sure of the shape yet.\\nuser: \"I want Folio to accept inbound webhooks from a customer's CMS and create work items from them.\"\\nassistant: \"This is a new feature touching user-controlled URLs and untrusted parsing — I'll use the planner agent to brainstorm the shape and write a gated plan with the threat model baked in before any code.\"\\n<commentary>Non-trivial feature on a security-triggering surface (inbound payloads, outbound-from-user-URL) — the planner owns Stage 0→1 and will fire the 1a threat-modeling gate, so use it before implementation.</commentary></example> <example>Context: The user hands over a plan a teammate wrote last week and wants it executed.\\nuser: \"Here's the plan doc for the saved-views feature, can we just run it?\"\\nassistant: \"Before executing I'll run the planner agent as a Class B freshness review — it'll reconcile the plan against current source, confirm review-group sizing, and re-check the gates.\"\\n<commentary>Executing someone else's plan is Class B: the planner does Stage 1 as a critical freshness review (premises drift between authoring and execution) before the implementer touches code.</commentary></example> <example>Context: The user describes a CRUD settings screen.\\nuser: \"Add an admin screen to manage instance AI keys — list, add, revoke.\"\\nassistant: \"This is a user-facing CRUD surface, so I'll use the planner agent to write the plan with an acceptance-flows matrix and the threat model for the credential surface embedded up front.\"\\n<commentary>User-facing feature touching BYOK credentials — fires both the 1g feature-acceptance gate and the 1a threat-modeling gate; the planner embeds both in the plan before task breakdown.</commentary></example>",
+    "query": "The webhook plan is written and the gates are baked in. Go execute task 3 — the payload parser — to done with the test gate satisfied.",
+    "should_trigger": false,
+    "type": "agent"
+  },
+  {
+    "name": "performance-oracle",
+    "desc": "Use this agent when you need to analyze code for performance issues, optimize algorithms, identify bottlenecks, or ensure scalability. This includes reviewing database queries, memory usage, caching strategies, and overall system performance. The agent should be invoked after implementing features or when performance concerns arise.\\n\\n<example>\\nContext: The user has just implemented a new feature that processes user data.\\nuser: \"I've implemented the user analytics feature. Can you check if it will scale?\"\\nassistant: \"I'll use the performance-oracle agent to analyze the scalability and performance characteristics of your implementation.\"\\n<commentary>\\nSince the user is concerned about scalability, use the Task tool to launch the performance-oracle agent to analyze the code for performance issues.\\n</commentary>\\n</example>\\n\\n<example>\\nContext: The user is experiencing slow API responses.\\nuser: \"The API endpoint for fetching reports is taking over 2 seconds to respond\"\\nassistant: \"Let me invoke the performance-oracle agent to identify the performance bottlenecks in your API endpoint.\"\\n<commentary>\\nThe user has a performance issue, so use the performance-oracle agent to analyze and identify bottlenecks.\\n</commentary>\\n</example>\\n\\n<example>\\nContext: After writing a data processing algorithm.\\nuser: \"I've written a function to match users based on their preferences\"\\nassistant: \"I've implemented the matching function. Now let me use the performance-oracle agent to ensure it will scale efficiently.\"\\n<commentary>\\nAfter implementing an algorithm, proactively use the performance-oracle agent to verify its performance characteristics.\\n</commentary>\\n</example>",
+    "query": "The /api/v1/documents list endpoint is taking 2+ seconds once a project has a few thousand work items. I think the keyset pagination query is doing something dumb — can you find the bottleneck and tell me how to make it scale?",
+    "should_trigger": true,
+    "type": "agent"
+  },
+  {
+    "name": "performance-oracle",
+    "desc": "Use this agent when you need to analyze code for performance issues, optimize algorithms, identify bottlenecks, or ensure scalability. This includes reviewing database queries, memory usage, caching strategies, and overall system performance. The agent should be invoked after implementing features or when performance concerns arise.\\n\\n<example>\\nContext: The user has just implemented a new feature that processes user data.\\nuser: \"I've implemented the user analytics feature. Can you check if it will scale?\"\\nassistant: \"I'll use the performance-oracle agent to analyze the scalability and performance characteristics of your implementation.\"\\n<commentary>\\nSince the user is concerned about scalability, use the Task tool to launch the performance-oracle agent to analyze the code for performance issues.\\n</commentary>\\n</example>\\n\\n<example>\\nContext: The user is experiencing slow API responses.\\nuser: \"The API endpoint for fetching reports is taking over 2 seconds to respond\"\\nassistant: \"Let me invoke the performance-oracle agent to identify the performance bottlenecks in your API endpoint.\"\\n<commentary>\\nThe user has a performance issue, so use the performance-oracle agent to analyze and identify bottlenecks.\\n</commentary>\\n</example>\\n\\n<example>\\nContext: After writing a data processing algorithm.\\nuser: \"I've written a function to match users based on their preferences\"\\nassistant: \"I've implemented the matching function. Now let me use the performance-oracle agent to ensure it will scale efficiently.\"\\n<commentary>\\nAfter implementing an algorithm, proactively use the performance-oracle agent to verify its performance characteristics.\\n</commentary>\\n</example>",
+    "query": "The documents list query is fine performance-wise but I'm worried an attacker could pass a crafted cursor value to read rows from a project they shouldn't see. Audit it for that.",
+    "should_trigger": false,
+    "type": "agent"
+  },
+  {
+    "name": "security-sentinel",
+    "desc": "Use this agent when you need to perform security audits, vulnerability assessments, or security reviews of code. This includes checking for common security vulnerabilities, validating input handling, reviewing authentication/authorization implementations, scanning for hardcoded secrets, and ensuring OWASP compliance. <example>Context: The user wants to ensure their newly implemented API endpoints are secure before deployment.\\nuser: \"I've just finished implementing the user authentication endpoints. Can you check them for security issues?\"\\nassistant: \"I'll use the security-sentinel agent to perform a comprehensive security review of your authentication endpoints.\"\\n<commentary>Since the user is asking for a security review of authentication code, use the security-sentinel agent to scan for vulnerabilities and ensure secure implementation.</commentary></example> <example>Context: The user is concerned about potential SQL injection vulnerabilities in their database queries.\\nuser: \"I'm worried about SQL injection in our search functionality. Can you review it?\"\\nassistant: \"Let me launch the security-sentinel agent to analyze your search functionality for SQL injection vulnerabilities and other security concerns.\"\\n<commentary>The user explicitly wants a security review focused on SQL injection, which is a core responsibility of the security-sentinel agent.</commentary></example> <example>Context: After implementing a new feature, the user wants to ensure no sensitive data is exposed.\\nuser: \"I've added the payment processing module. Please check if any sensitive data might be exposed.\"\\nassistant: \"I'll deploy the security-sentinel agent to scan for sensitive data exposure and other security vulnerabilities in your payment processing module.\"\\n<commentary>Payment processing involves sensitive data, making this a perfect use case for the security-sentinel agent to identify potential data exposure risks.</commentary></example>",
+    "query": "I just finished the BYOK key-storage code — libsodium encrypt at rest, decrypt on use, plus the /api/v1/instance/ai-keys routes. Audit it for vulnerabilities: leaked plaintext, missing authz on the admin routes, any hardcoded secrets.",
+    "should_trigger": true,
+    "type": "agent"
+  },
+  {
+    "name": "security-sentinel",
+    "desc": "Use this agent when you need to perform security audits, vulnerability assessments, or security reviews of code. This includes checking for common security vulnerabilities, validating input handling, reviewing authentication/authorization implementations, scanning for hardcoded secrets, and ensuring OWASP compliance. <example>Context: The user wants to ensure their newly implemented API endpoints are secure before deployment.\\nuser: \"I've just finished implementing the user authentication endpoints. Can you check them for security issues?\"\\nassistant: \"I'll use the security-sentinel agent to perform a comprehensive security review of your authentication endpoints.\"\\n<commentary>Since the user is asking for a security review of authentication code, use the security-sentinel agent to scan for vulnerabilities and ensure secure implementation.</commentary></example> <example>Context: The user is concerned about potential SQL injection vulnerabilities in their database queries.\\nuser: \"I'm worried about SQL injection in our search functionality. Can you review it?\"\\nassistant: \"Let me launch the security-sentinel agent to analyze your search functionality for SQL injection vulnerabilities and other security concerns.\"\\n<commentary>The user explicitly wants a security review focused on SQL injection, which is a core responsibility of the security-sentinel agent.</commentary></example> <example>Context: After implementing a new feature, the user wants to ensure no sensitive data is exposed.\\nuser: \"I've added the payment processing module. Please check if any sensitive data might be exposed.\"\\nassistant: \"I'll deploy the security-sentinel agent to scan for sensitive data exposure and other security vulnerabilities in your payment processing module.\"\\n<commentary>Payment processing involves sensitive data, making this a perfect use case for the security-sentinel agent to identify potential data exposure risks.</commentary></example>",
+    "query": "I'm about to PLAN the BYOK key-storage feature — it touches credentials and an admin route. Build the attack model into the plan up front so the implementing tasks can be reviewed against named mitigations.",
+    "should_trigger": false,
+    "type": "agent"
+  },
+  {
+    "name": "implementer",
+    "desc": "Use this agent to execute ONE task from a gated plan to done with the testing gate satisfied — it owns harnessed-development Stage 2. It classifies the task's risk tier, writes the Tier-A RED→GREEN test before the implementation, builds UI edge states for frontend tasks, ground-truths the task's dependency surface against real source before coding, makes one atomic commit, and ends with the structured Test-evidence + STATUS blocks that ARE the gate. Dispatch it per task (often several in parallel for independent tasks), never to design a plan. <example>Context: A plan is written and Task 3 adds a slug-dedup helper with validation.\\nuser: \"Execute task 3 from the saved-views plan — the slug generator.\"\\nassistant: \"Slug generation is parsing/logic, so I'll dispatch the implementer agent; it'll classify this Tier A, write the RED test for the dedup + invalid-input paths first, then implement to green and report the evidence blocks.\"\\n<commentary>A single logic task with a denial path — Tier A. The implementer owns the RED-first cycle and closes with the structured Test-evidence + STATUS blocks; use it per task.</commentary></example> <example>Context: Three independent tasks in a phase touch different files.\\nuser: \"Tasks 5, 6, and 7 don't depend on each other — get them done.\"\\nassistant: \"I'll dispatch three implementer agents in parallel, one per task; each ground-truths its own dependency surface and returns its own Test-evidence + STATUS block.\"\\n<commentary>Independent tasks map one-to-one to implementer dispatches; the agent's per-task evidence blocks let the controller gate each close.</commentary></example> <example>Context: A code-review finding reports a double-submit collision.\\nuser: \"Fix CR-4: the form can be submitted twice and creates duplicate rows.\"\\nassistant: \"That's a behavior change, so I'll dispatch the implementer agent; it'll load systematic-debugging, write the failing test that reproduces the double-submit, then fix to green in one TDD cycle.\"\\n<commentary>A Class C bug-fix is one TDD cycle — the implementer reproduces RED first, fixes, and reports the evidence; don't bundle multiple findings into one dispatch.</commentary></example>",
+    "query": "Execute task 3 from the saved-views plan — the slug generator with dedup. Write the RED test first, implement to green, single atomic commit, give me the evidence block.",
+    "should_trigger": true,
+    "type": "agent"
+  },
+  {
+    "name": "implementer",
+    "desc": "Use this agent to execute ONE task from a gated plan to done with the testing gate satisfied — it owns harnessed-development Stage 2. It classifies the task's risk tier, writes the Tier-A RED→GREEN test before the implementation, builds UI edge states for frontend tasks, ground-truths the task's dependency surface against real source before coding, makes one atomic commit, and ends with the structured Test-evidence + STATUS blocks that ARE the gate. Dispatch it per task (often several in parallel for independent tasks), never to design a plan. <example>Context: A plan is written and Task 3 adds a slug-dedup helper with validation.\\nuser: \"Execute task 3 from the saved-views plan — the slug generator.\"\\nassistant: \"Slug generation is parsing/logic, so I'll dispatch the implementer agent; it'll classify this Tier A, write the RED test for the dedup + invalid-input paths first, then implement to green and report the evidence blocks.\"\\n<commentary>A single logic task with a denial path — Tier A. The implementer owns the RED-first cycle and closes with the structured Test-evidence + STATUS blocks; use it per task.</commentary></example> <example>Context: Three independent tasks in a phase touch different files.\\nuser: \"Tasks 5, 6, and 7 don't depend on each other — get them done.\"\\nassistant: \"I'll dispatch three implementer agents in parallel, one per task; each ground-truths its own dependency surface and returns its own Test-evidence + STATUS block.\"\\n<commentary>Independent tasks map one-to-one to implementer dispatches; the agent's per-task evidence blocks let the controller gate each close.</commentary></example> <example>Context: A code-review finding reports a double-submit collision.\\nuser: \"Fix CR-4: the form can be submitted twice and creates duplicate rows.\"\\nassistant: \"That's a behavior change, so I'll dispatch the implementer agent; it'll load systematic-debugging, write the failing test that reproduces the double-submit, then fix to green in one TDD cycle.\"\\n<commentary>A Class C bug-fix is one TDD cycle — the implementer reproduces RED first, fixes, and reports the evidence; don't bundle multiple findings into one dispatch.</commentary></example>",
+    "query": "There's no plan yet for the saved-views work — it's a 3-step feature with an architectural call to make. Classify it, fire the gates, and write the gated plan first.",
+    "should_trigger": false,
+    "type": "agent"
+  },
+  {
+    "name": "invariant-auditor",
+    "desc": "Use this agent to review a diff (or a codebase) against the project's ARCHITECTURE-INVARIANTS.md — finding code paths that BYPASS a named convergence point. This is NOT a free-form code review; it is a mechanical check of \"does this path route through the convergence point the invariant names, or does it go around it?\" Dispatched by /shakeout alongside the other reviewers, or invoked directly after a feature that touches authorization, data access, live updates, error handling, or entity modeling. <example>Context: A feature added a new write route and the project has an ARCHITECTURE-INVARIANTS.md.\\nuser: \"Review the diff against our architecture invariants before I merge.\"\\nassistant: \"I'll launch the invariant-auditor agent to check each changed path against the named convergence points.\"\\n<commentary>The user wants a contract-based review, not free-form — exactly this agent's job.</commentary></example> <example>Context: Onboarding to a codebase, checking whether the auth gate is actually universal.\\nuser: \"Does every mutation route really go through requireScope, or are there bypasses?\"\\nassistant: \"Launching the invariant-auditor to find any write path that skips the authorization convergence point named in the invariants doc.\"\\n<commentary>Bypass-hunting against a named convergence point is the core capability.</commentary></example>",
+    "query": "Does every mutation route in this diff actually go through `requireScope`, or did one of them write scopes directly and skip the authorization convergence point named in our invariants doc? Check it mechanically.",
+    "should_trigger": true,
+    "type": "agent"
+  },
+  {
+    "name": "invariant-auditor",
+    "desc": "Use this agent to review a diff (or a codebase) against the project's ARCHITECTURE-INVARIANTS.md — finding code paths that BYPASS a named convergence point. This is NOT a free-form code review; it is a mechanical check of \"does this path route through the convergence point the invariant names, or does it go around it?\" Dispatched by /shakeout alongside the other reviewers, or invoked directly after a feature that touches authorization, data access, live updates, error handling, or entity modeling. <example>Context: A feature added a new write route and the project has an ARCHITECTURE-INVARIANTS.md.\\nuser: \"Review the diff against our architecture invariants before I merge.\"\\nassistant: \"I'll launch the invariant-auditor agent to check each changed path against the named convergence points.\"\\n<commentary>The user wants a contract-based review, not free-form — exactly this agent's job.</commentary></example> <example>Context: Onboarding to a codebase, checking whether the auth gate is actually universal.\\nuser: \"Does every mutation route really go through requireScope, or are there bypasses?\"\\nassistant: \"Launching the invariant-auditor to find any write path that skips the authorization convergence point named in the invariants doc.\"\\n<commentary>Bypass-hunting against a named convergence point is the core capability.</commentary></example>",
+    "query": "We don't have an ARCHITECTURE-INVARIANTS.md yet. I'm onboarding and want to figure out and write down where authorization and data access actually converge in this codebase.",
+    "should_trigger": false,
+    "type": "agent"
+  },
+  {
+    "name": "shakeout-qa",
+    "desc": "Use this agent for the spec-complete / pre-merge SHAKE-OUT — it exercises the BUILT ARTIFACT end-to-end in a real environment (real browser, real un-mocked wire), not unit tests, then compiles a pass/fail/not-reachable/unverified bug manifest the team fixes systematically. It drives the plan's `## Acceptance flows` matrix through its faithful layer (UI flows through Chrome, backend flows through real HTTP/MCP), confirms the green suite would actually bite, and reproduces the exact failing payload when something breaks. Dispatch it at Stage 3 when all tasks are green but the feature hasn't been used for real. It is the behavioral sibling of the reviewer: the reviewer reads the DIFF, shakeout-qa runs the ARTIFACT. <example>Context: Every task in the branch is closed green and the unit suite passes; the user wants to know if it actually works before merging.\\nuser: \"All tests pass on the webhook-intake branch — does it actually work end to end?\"\\nassistant: \"Green unit tests aren't shake-out, so I'll dispatch the shakeout-qa agent to exercise the built artifact: it'll drive the acceptance flows through the real wire and emit a pass/fail/not-reachable manifest.\"\\n<commentary>Tests-pass-but-unexercised is exactly the shake-out trigger; the agent runs the real artifact rather than trusting the green suite, distinguishing it from the diff-reading reviewer.</commentary></example> <example>Context: The user reports a UI flow that \"still doesn't work\" even though a jsdom test for it is green.\\nuser: \"The inline-edit save still drops my change in the browser, but the test is passing.\"\\nassistant: \"A jsdom-green test is not a passing UI flow, so I'll dispatch the shakeout-qa agent to drive that flow through a real browser and reproduce the exact failing payload before we touch a fix.\"\\n<commentary>The agent treats the user's 'still broken' as truth and reproduces the real flow in a real browser — a green jsdom test never counts as a UI pass.</commentary></example> <example>Context: A spec is complete across several phases and the branch is ready for the pre-merge gate.\\nuser: \"Spec's done. Run the final QA before I merge.\"\\nassistant: \"I'll dispatch the shakeout-qa agent for the spec-complete gate; it loads shake-out for the sweep + bug-manifest discipline, drives the feature-acceptance matrix, and confirms the suite would bite via test-effectiveness.\"\\n<commentary>Spec-complete / pre-merge is the shake-out gate the agent owns; it loads the shake-out, feature-acceptance, and test-effectiveness skills rather than improvising a QA pass.</commentary></example>",
+    "query": "All tests pass on the webhook-intake branch and every task's closed, but nobody's actually fired a real webhook at it. Run the built thing end to end through the real wire and give me a pass/fail manifest before I merge.",
+    "should_trigger": true,
+    "type": "agent"
+  },
+  {
+    "name": "shakeout-qa",
+    "desc": "Use this agent for the spec-complete / pre-merge SHAKE-OUT — it exercises the BUILT ARTIFACT end-to-end in a real environment (real browser, real un-mocked wire), not unit tests, then compiles a pass/fail/not-reachable/unverified bug manifest the team fixes systematically. It drives the plan's `## Acceptance flows` matrix through its faithful layer (UI flows through Chrome, backend flows through real HTTP/MCP), confirms the green suite would actually bite, and reproduces the exact failing payload when something breaks. Dispatch it at Stage 3 when all tasks are green but the feature hasn't been used for real. It is the behavioral sibling of the reviewer: the reviewer reads the DIFF, shakeout-qa runs the ARTIFACT. <example>Context: Every task in the branch is closed green and the unit suite passes; the user wants to know if it actually works before merging.\\nuser: \"All tests pass on the webhook-intake branch — does it actually work end to end?\"\\nassistant: \"Green unit tests aren't shake-out, so I'll dispatch the shakeout-qa agent to exercise the built artifact: it'll drive the acceptance flows through the real wire and emit a pass/fail/not-reachable manifest.\"\\n<commentary>Tests-pass-but-unexercised is exactly the shake-out trigger; the agent runs the real artifact rather than trusting the green suite, distinguishing it from the diff-reading reviewer.</commentary></example> <example>Context: The user reports a UI flow that \"still doesn't work\" even though a jsdom test for it is green.\\nuser: \"The inline-edit save still drops my change in the browser, but the test is passing.\"\\nassistant: \"A jsdom-green test is not a passing UI flow, so I'll dispatch the shakeout-qa agent to drive that flow through a real browser and reproduce the exact failing payload before we touch a fix.\"\\n<commentary>The agent treats the user's 'still broken' as truth and reproduces the real flow in a real browser — a green jsdom test never counts as a UI pass.</commentary></example> <example>Context: A spec is complete across several phases and the branch is ready for the pre-merge gate.\\nuser: \"Spec's done. Run the final QA before I merge.\"\\nassistant: \"I'll dispatch the shakeout-qa agent for the spec-complete gate; it loads shake-out for the sweep + bug-manifest discipline, drives the feature-acceptance matrix, and confirms the suite would bite via test-effectiveness.\"\\n<commentary>Spec-complete / pre-merge is the shake-out gate the agent owns; it loads the shake-out, feature-acceptance, and test-effectiveness skills rather than improvising a QA pass.</commentary></example>",
+    "query": "The webhook-intake branch is done. Read through the entire diff and give me a holistic staff-engineer review across correctness, architecture and security before merge — I want the code judged, not the running app.",
+    "should_trigger": false,
+    "type": "agent"
+  },
+  {
+    "name": "code-simplicity-reviewer",
+    "desc": "Use this agent when you need a final review pass to ensure code changes are as simple and minimal as possible. This agent should be invoked after implementation is complete but before finalizing changes, to identify opportunities for simplification, remove unnecessary complexity, and ensure adherence to YAGNI principles. Examples: <example>Context: The user has just implemented a new feature and wants to ensure it's as simple as possible. user: \"I've finished implementing the user authentication system\" assistant: \"Great! Let me review the implementation for simplicity and minimalism using the code-simplicity-reviewer agent\" <commentary>Since implementation is complete, use the code-simplicity-reviewer agent to identify simplification opportunities.</commentary></example> <example>Context: The user has written complex business logic and wants to simplify it. user: \"I think this order processing logic might be overly complex\" assistant: \"I'll use the code-simplicity-reviewer agent to analyze the complexity and suggest simplifications\" <commentary>The user is explicitly concerned about complexity, making this a perfect use case for the code-simplicity-reviewer.</commentary></example>",
+    "query": "I just finished the operator-replay refactor. Before I finalize it, do a pass to flag anything over-engineered — unnecessary abstraction, indirection, dead code I can cut while keeping behavior identical.",
+    "should_trigger": true,
+    "type": "agent"
+  },
+  {
+    "name": "code-simplicity-reviewer",
+    "desc": "Use this agent when you need a final review pass to ensure code changes are as simple and minimal as possible. This agent should be invoked after implementation is complete but before finalizing changes, to identify opportunities for simplification, remove unnecessary complexity, and ensure adherence to YAGNI principles. Examples: <example>Context: The user has just implemented a new feature and wants to ensure it's as simple as possible. user: \"I've finished implementing the user authentication system\" assistant: \"Great! Let me review the implementation for simplicity and minimalism using the code-simplicity-reviewer agent\" <commentary>Since implementation is complete, use the code-simplicity-reviewer agent to identify simplification opportunities.</commentary></example> <example>Context: The user has written complex business logic and wants to simplify it. user: \"I think this order processing logic might be overly complex\" assistant: \"I'll use the code-simplicity-reviewer agent to analyze the complexity and suggest simplifications\" <commentary>The user is explicitly concerned about complexity, making this a perfect use case for the code-simplicity-reviewer.</commentary></example>",
+    "query": "I just finished the operator-replay refactor. Before I finalize it, do a full correctness review — I'm worried there's a real bug where consecutive same-role rows aren't coalesced and Anthropic 400s.",
+    "should_trigger": false,
+    "type": "agent"
+  },
+  {
+    "name": "evaluate",
+    "desc": "Process retrospective — audits HOW a sub-phase was executed, not WHETHER the code works. Reconstructs from git + plan + memory. Emits a markdown retro, commits plan corrections for defects discovered, appends lessons to skill + project memory. Runs at sub-phase close, after /integration passes.",
+    "query": "Sub-phase A of the agent-runner just wrapped and /integration passed. Run the retro on how we executed it — reconstruct from git and the plan, and capture the lessons and any plan corrections.",
+    "should_trigger": true,
+    "type": "command"
+  },
+  {
+    "name": "evaluate",
+    "desc": "Process retrospective — audits HOW a sub-phase was executed, not WHETHER the code works. Reconstructs from git + plan + memory. Emits a markdown retro, commits plan corrections for defects discovered, appends lessons to skill + project memory. Runs at sub-phase close, after /integration passes.",
+    "query": "Sub-phase A's code is done but I'm not sure the tests actually pass and the types check — run the phase-boundary checks (unit + integration + typecheck) before I move to the next group.",
+    "should_trigger": false,
+    "type": "command"
+  },
+  {
+    "name": "skill-audit",
+    "desc": "Audit harness skills for drift — flag skills with stale lessons, contradictions vs recent project STATE.md, or no activity in 90 days",
+    "query": "Some of these harness skills haven't been touched in months and I suspect their lessons contradict what we actually decided in recent STATE.md. Audit the skills for drift and flag the stale ones.",
+    "should_trigger": true,
+    "type": "command"
+  },
+  {
+    "name": "skill-audit",
+    "desc": "Audit harness skills for drift — flag skills with stale lessons, contradictions vs recent project STATE.md, or no activity in 90 days",
+    "query": "I think memory/STATE.md and tasks/todo.md are out of sync — there are completed items still unchecked and references to a branch we merged. Audit the memory files for staleness.",
+    "should_trigger": false,
+    "type": "command"
+  },
+  {
+    "name": "shakeout",
+    "desc": "Spec-complete gate. Run when all task groups in a spec are done — before merging the branch. Stack-agnostic. Runs the test-effectiveness audit and feature-acceptance verification first, re-runs the /integration checks, then Playwright if a config exists, then invokes the shake-out skill, then auto-dispatches four (or five for WP) reviewer agents in parallel on the full branch diff.",
+    "query": "Every task group in the saved-views spec is done and I'm ready to merge the branch. Run the full pre-merge gate — effectiveness audit, acceptance, the reviewers, all of it.",
+    "should_trigger": true,
+    "type": "command"
+  },
+  {
+    "name": "shakeout",
+    "desc": "Spec-complete gate. Run when all task groups in a spec are done — before merging the branch. Stack-agnostic. Runs the test-effectiveness audit and feature-acceptance verification first, re-runs the /integration checks, then Playwright if a config exists, then invokes the shake-out skill, then auto-dispatches four (or five for WP) reviewer agents in parallel on the full branch diff.",
+    "query": "I just finished one cluster of three related tasks in this sub-phase — more clusters to come, not spec-complete yet. Run the boundary gate before I start the next cluster.",
+    "should_trigger": false,
+    "type": "command"
+  },
+  {
+    "name": "pattern-miner",
+    "desc": "Mine ~/Sites/*/memory/STATE.md + lessons.md for recurring patterns worth promoting to a harness skill",
+    "query": "Across all my sites' memory files there are recurring gotchas I keep re-learning — mine the STATE.md and lessons.md across the fleet and tell me which patterns are worth promoting into a harness skill.",
+    "should_trigger": true,
+    "type": "command"
+  },
+  {
+    "name": "pattern-miner",
+    "desc": "Mine ~/Sites/*/memory/STATE.md + lessons.md for recurring patterns worth promoting to a harness skill",
+    "query": "One specific harness skill's lessons feel stale and might contradict recent decisions — audit the skills for drift and flag which ones are out of date.",
+    "should_trigger": false,
+    "type": "command"
+  },
+  {
+    "name": "feature-acceptance",
+    "desc": "Prove a user-facing feature actually behaves the way it's meant to be used — every intended flow with edge/error/empty/concurrent cases — by driving it through the real browser AND the API layer, not just unit/integration tests. Authors an `## Acceptance flows` matrix at plan-time; drives that matrix at shake-out, emitting a pass/fail/not-reachable manifest. Sibling to test-effectiveness (code-bite) — this is feature-behavior.\nargument-hint: [author | verify | <feature-or-flow-that-broke>]\nallowed-tools: Skill(feature-acceptance)",
+    "query": "Drive the saved-views feature through every intended flow before merge — create a view, the empty state, a denied user, two tabs renaming at once — through the real browser and the API, and give me the pass/fail/not-reachable manifest.",
+    "should_trigger": true,
+    "type": "command"
+  },
+  {
+    "name": "feature-acceptance",
+    "desc": "Prove a user-facing feature actually behaves the way it's meant to be used — every intended flow with edge/error/empty/concurrent cases — by driving it through the real browser AND the API layer, not just unit/integration tests. Authors an `## Acceptance flows` matrix at plan-time; drives that matrix at shake-out, emitting a pass/fail/not-reachable manifest. Sibling to test-effectiveness (code-bite) — this is feature-behavior.\nargument-hint: [author | verify | <feature-or-flow-that-broke>]\nallowed-tools: Skill(feature-acceptance)",
+    "query": "The saved-views suite is green but I'm not convinced the tests would actually fail if the rename mutation silently dropped the change — audit whether the suite would really bite and write the tests that close the gap.",
+    "should_trigger": false,
+    "type": "command"
+  },
+  {
+    "name": "red-test",
+    "desc": "Run a discipline skill's RED-test pressure scenarios — baseline (skill off) vs verified (skill on) — to check for regression after editing a skill",
+    "query": "I just edited the threat-modeling skill's description and trigger list. Run its RED-test pressure scenarios baseline-off versus on so I can be sure I didn't regress its triggering.",
+    "should_trigger": true,
+    "type": "command"
+  },
+  {
+    "name": "red-test",
+    "desc": "Run a discipline skill's RED-test pressure scenarios — baseline (skill off) vs verified (skill on) — to check for regression after editing a skill",
+    "query": "I'm about to write a brand-new discipline skill and want the eval harness — structured test prompts, baseline comparison, assertion grading — to drive the red-green-refactor authoring cycle.",
+    "should_trigger": false,
+    "type": "command"
+  },
+  {
+    "name": "memory-audit",
+    "desc": "Audit memory/STATE.md, memory/lessons.md, and tasks/todo.md for staleness. Report-only — never auto-edits the three files. Surfaces stale references, contradictions, completed-but-unchecked items, and untouched-since dates. Run on-demand when memory feels out of sync; no recommended cadence.",
+    "query": "memory/STATE.md feels out of sync — it still references the phase-3 branch we merged last week and todo.md has done items unchecked. Audit those three files and tell me what's stale, but don't edit them.",
+    "should_trigger": true,
+    "type": "command"
+  },
+  {
+    "name": "memory-audit",
+    "desc": "Audit memory/STATE.md, memory/lessons.md, and tasks/todo.md for staleness. Report-only — never auto-edits the three files. Surfaces stale references, contradictions, completed-but-unchecked items, and untouched-since dates. Run on-demand when memory feels out of sync; no recommended cadence.",
+    "query": "The harness skills themselves feel stale — some lessons contradict recent project state and a couple haven't been touched in 90 days. Audit the skills for drift.",
+    "should_trigger": false,
+    "type": "command"
+  },
+  {
+    "name": "architecture-invariants",
+    "desc": "Author or update a project's ARCHITECTURE-INVARIANTS.md — name the convergence points (the single places each cross-cutting property is decided) so /code-review + /shakeout can flag bypasses instead of re-auditing. Sibling to threat-modeling.\nargument-hint: [audit | plan | path-to-plan]\nallowed-tools: Skill(architecture-invariants)",
+    "query": "We've never written down our convergence points. Let's author the project's ARCHITECTURE-INVARIANTS.md — name where authorization, data access, live updates and error handling each get decided so reviews can flag bypasses.",
+    "should_trigger": true,
+    "type": "command"
+  },
+  {
+    "name": "architecture-invariants",
+    "desc": "Author or update a project's ARCHITECTURE-INVARIANTS.md — name the convergence points (the single places each cross-cutting property is decided) so /code-review + /shakeout can flag bypasses instead of re-auditing. Sibling to threat-modeling.\nargument-hint: [audit | plan | path-to-plan]\nallowed-tools: Skill(architecture-invariants)",
+    "query": "I'm planning a feature that parses untrusted webhook JSON and fetches from a customer-supplied URL — embed the attack model into the plan before I break out tasks.",
+    "should_trigger": false,
+    "type": "command"
+  },
+  {
+    "name": "test-effectiveness",
+    "desc": "Audit whether a test suite would actually catch bugs (not just pass) and author the tests that close the gap — walks the seven green-but-blind failure modes (stale fixture, test-world≠real-world, wire-mock leak, unmounted guard, missing-denial, no-coverage, concurrency). Sibling to testing-workflow at audit-time/per-phase altitude.\nargument-hint: [audit | <bug-that-shipped-green> | path-to-diff]\nallowed-tools: Skill(test-effectiveness)",
+    "query": "Phase 3 is green but a bug shipped past it once already. Audit whether this suite would actually go red on the dangerous paths — walk the wire-mock-leak and missing-denial modes — and write the tests that close the holes.",
+    "should_trigger": true,
+    "type": "command"
+  },
+  {
+    "name": "test-effectiveness",
+    "desc": "Audit whether a test suite would actually catch bugs (not just pass) and author the tests that close the gap — walks the seven green-but-blind failure modes (stale fixture, test-world≠real-world, wire-mock leak, unmounted guard, missing-denial, no-coverage, concurrency). Sibling to testing-workflow at audit-time/per-phase altitude.\nargument-hint: [audit | <bug-that-shipped-green> | path-to-diff]\nallowed-tools: Skill(test-effectiveness)",
+    "query": "I'm closing a single task that adds an auth guard. Does it need a bespoke test, and at what tier — RED-first or skip it as glue?",
+    "should_trigger": false,
+    "type": "command"
+  },
+  {
+    "name": "integration",
+    "desc": "Phase-boundary gate. Run after finishing a group of related tasks (sub-phase / task cluster) before starting the next group. Stack-agnostic — detects project type and runs unit + integration + type-check, then announces the code-review the user should run on the group's diff.",
+    "query": "Just finished the data-layer cluster of three tasks. Before I start the next group, run the phase-boundary checks — unit, integration, typecheck — and tell me what to /code-review.",
+    "should_trigger": true,
+    "type": "command"
+  },
+  {
+    "name": "integration",
+    "desc": "Phase-boundary gate. Run after finishing a group of related tasks (sub-phase / task cluster) before starting the next group. Stack-agnostic — detects project type and runs unit + integration + type-check, then announces the code-review the user should run on the group's diff.",
+    "query": "Every task group in the whole spec is done and I'm at the pre-merge point. Run the full spec-complete gate with the effectiveness audit, acceptance and the reviewer fan-out.",
+    "should_trigger": false,
+    "type": "command"
+  },
+  {
+    "name": "deploy",
+    "desc": "Deploy current project via site.yml's deploy.method (9 methods supported). Never deploys to prod without explicit confirmation.",
+    "query": "Branch is merged and green. Deploy this project to staging using whatever method site.yml says — I'll confirm before anything touches prod.",
+    "should_trigger": true,
+    "type": "command"
+  },
+  {
+    "name": "deploy",
+    "desc": "Deploy current project via site.yml's deploy.method (9 methods supported). Never deploys to prod without explicit confirmation.",
+    "query": "The staging deploy succeeded but the site is throwing 500s — pull the recent server logs and the site logs so I can see what's failing.",
+    "should_trigger": false,
+    "type": "command"
+  }
+]

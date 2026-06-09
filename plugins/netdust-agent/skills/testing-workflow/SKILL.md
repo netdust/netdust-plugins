@@ -1,6 +1,6 @@
 ---
 name: testing-workflow
-description: "Use when verifying a task before marking it done, or a phase before sign-off, in the superpowers workflow — risk-tiers what each task needs (RED-first test for logic/auth/parsing/migrations; no bespoke test for glue/wrappers/UI), and adds the seam test that catches wiring/wire-mock/concurrency bugs per-task unit tests miss. This is write-time / per-task. For AUDITING whether an already-green suite would actually go RED if a dangerous path broke — that is test-effectiveness (audit-time / per-phase), not this. Covers PHP (WordPress/Codeception/PHPUnit) and TypeScript (Vitest/Playwright)."
+description: "Use when verifying a task before marking it done, or a phase before sign-off, in the superpowers workflow — the per-task-close test-tier decision. Fires on 'I just finished a task — does it need a test, and at what tier?', 'should I write a test for this before marking it done', 'is this Tier A or B', 'I just added a lookup plus a thin React badge — does that need a test', 'do I write a RED test for this'. Risk-tiers what each task needs (RED-first test for logic/auth/parsing/migrations; no bespoke test for glue/wrappers/UI), and adds the seam test that catches wiring/wire-mock/concurrency bugs per-task unit tests miss. This is write-time / per-task. For AUDITING whether an already-green suite would actually go RED if a dangerous path broke — that is test-effectiveness (audit-time / per-phase), not this. Covers PHP (WordPress/Codeception/PHPUnit) and TypeScript (Vitest/Playwright)."
 ---
 
 # Testing Workflow

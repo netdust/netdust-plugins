@@ -1,0 +1,14 @@
+[
+ {
+  "skill": "feature-acceptance",
+  "skill_path": "skills/feature-acceptance/SKILL.md",
+  "query": "I built a multi-step invite-a-teammate wizard and all the unit tests pass. List exactly what I should do to be confident it actually works before I ship it.",
+  "signature": "enumerates intended-use flows AND a per-flow edge set (empty state, denied actor, double-submit, mid-flow failure) and insists on DRIVING them through the real browser/wire — versus a generic 'add more tests / manual click-through' answer"
+ },
+ {
+  "skill": "sourcing-from-docs",
+  "skill_path": "skills/sourcing-from-docs/SKILL.md",
+  "query": "Quick one — in Bun, does `Bun.serve()` support HTTP/2 server push, and what's the exact option name? I need to wire it into our static server today.",
+  "signature": "refuses to assert the API shape from memory and instead insists on verifying against official Bun docs (cite the source / fetch current docs) before relying on it — versus confidently stating an option name that may be hallucinated"
+ }
+]

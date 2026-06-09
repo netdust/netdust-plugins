@@ -1,0 +1,79 @@
+[
+ {
+  "name": "testing-workflow",
+  "desc": "Use when verifying a task before marking it done, or a phase before sign-off, in the superpowers workflow \u2014 the per-task-close test-tier decision. Fires on 'I just finished a task \u2014 does it need a test, and at what tier?', 'should I write a test for this before marking it done', 'is this Tier A or B', 'I just added a lookup plus a thin React badge \u2014 does that need a test', 'do I write a RED test for this'. Risk-tiers what each task needs (RED-first test for logic/auth/parsing/migrations; no bespoke test for glue/wrappers/UI), and adds the seam test that catches wiring/wire-mock/concurrency bugs per-task unit tests miss. This is write-time / per-task. For AUDITING whether an already-green suite would actually go RED if a dangerous path broke \u2014 that is test-effectiveness (audit-time / per-phase), not this. Covers PHP (WordPress/Codeception/PHPUnit) and TypeScript (Vitest/Playwright).",
+  "query": "I just finished the task that adds the `resolveAgentForRun` lookup plus a thin React badge that shows the resolved agent name. About to tick it off in todo.md \u2014 do both pieces need a test, or is the badge just glue?",
+  "should_trigger": true,
+  "type": "skill"
+ },
+ {
+  "name": "feature-acceptance",
+  "desc": "Use when planning OR shipping a user-facing feature, to prove the feature actually works the way it's meant to be used \u2014 through every intended flow with edge/error/empty/concurrent cases, driven through the real browser AND the API layer, not just unit/integration tests. Fires on 'the feature/screen is built, how do I verify it works before merge', 'before I merge I want to actually exercise the flows', 'drive the UI / exercise the flows', 'the settings screen is built \u2014 list, add, revoke \u2014 let me prove it behaves', 'prove it behaves for users, not just unit tests'. AUTHORS an `## Acceptance flows` matrix in the plan at plan-time (intended-use flows + a mandatory per-flow edge enumeration), and VERIFIES that matrix at shake-out by driving each flow through the faithful layer (Playwright/Chrome for UI, real HTTP/MCP for backend) and emitting a pass/fail/not-reachable manifest. Sibling to test-effectiveness: that audits whether the CODE'S tests bite; this proves the FEATURE behaves. Covers TypeScript (Playwright/Chrome/Hono/MCP) and PHP (Codeception/WPBrowser). Opt-in via the project's CLAUDE.md \u2014 not auto-invoked.",
+  "query": "The instance AI-keys settings screen is built \u2014 list, add, revoke. Before I merge I want to actually exercise every flow a real admin would: adding a key with an empty label, revoking the last key, a non-admin hitting the route, two tabs adding at once. Drive it for real, don't just trust the unit tests.",
+  "should_trigger": true,
+  "type": "skill"
+ },
+ {
+  "name": "deploying",
+  "desc": "CRAFT skill \u2014 a THIN pointer to the real deploy authority: the /deploy command (9-method dispatcher driven by site.yml's deploy.method) and the dev-stack skill. Reached for at harnessed-development Stage 3 (finish), AFTER shake-out + finishing-a-branch are green. It does not re-implement deploy mechanics; it routes to /deploy + dev-stack and states the Netdust deploy discipline: NEVER deploy to prod without explicit confirmation; honor site.yml deploy.method and site.risk (high = triple-check); always test on DDEV/staging before prod. The Netdust ordering layer: deploy is downstream of the WHOLE harness \u2014 shake-out and the reviews must be green first. Use when shipping a finished, reviewed branch to an environment. Fires on 'ship/push/deploy this to staging/prod/the customer', 'release the build', 'roll out', 'branch is merged and shake-out is green \u2014 push the build out to the customer's environment', 'get this live'.",
+  "query": "Branch is merged, shake-out is green, reviews are clean. I want to push the saved-views build out to the customer's Hetzner box now \u2014 what's the right way to ship this to their environment?",
+  "should_trigger": true,
+  "type": "skill"
+ },
+ {
+  "name": "sourcing-from-docs",
+  "desc": "CRAFT skill \u2014 the how-to ANY harnessed-development stage (plan, execute, or debug) reaches for whenever a load-bearing decision rests on the claim 'library / framework / API X behaves like Y.' There is no superpowers base for this; it restates and extends addyosmani/agent-skills source-driven-development (MIT) to close a real discipline gap: never assert external-dependency behavior from memory (training data drifts), ground the claim in OFFICIAL docs, and record the citation inline so a reviewer can verify. Pairs with the context7 MCP (resolve-library-id \u2192 query-docs) for fetching current docs. The Netdust layer: an unverified load-bearing external-behavior claim is a Stage-1c (spec-premise) and Step-2.5 (plan-freshness) failure waiting to happen \u2014 this is the how-to those gates reach for when the premise is about an EXTERNAL dependency, not sibling code. Use the moment a behavioral claim about a third-party library is doing real work in your reasoning. NOT for verifying our OWN codebase's helpers/signatures (e.g. \"does our own lib/access.ts expose a canSeeProject helper?\") \u2014 that's reading the source (engineering-context / grep); this is for EXTERNAL library/framework/API behavior only.",
+  "query": "My plan assumes our own `lib/access.ts` already exposes a `canSeeProject` helper, and that's load-bearing. Can we ground-truth that against the actual source before I build on it?",
+  "should_trigger": false,
+  "type": "skill"
+ },
+ {
+  "name": "dev-stack",
+  "desc": "Use when working in any Netdust project \u2014 DDEV environment, git branching, Makefile workflows, generic deploy patterns, .env conventions. Triggers on file edits to Makefile, .env*, .ddev/config.yaml, package.json scripts that look like dev/build/deploy. Fires on 'fresh clone / new laptop setup \u2014 how do I get the dev env up', 'which make target gets the dev environment running', 'how do I start the dev env', 'which branch do I start work on', 'what's the branching here'. Activates on keywords DDEV, ddev start, ddev describe, ddev wp, make dev, make save, make deploy, make ship, make feature, make finish, .env, .env.example, staging branch, git-flow, hotfix. Symptoms include setting up a new project locally on a fresh clone or new laptop, deciding what to commit, choosing a branch to start work on, deploying to staging, rolling back. Stack-agnostic \u2014 applies to WordPress, Statamic, Bun/Node, Laravel projects equally. For WP-specific infra (WP-CLI, Vite-for-WP, Bedrock Makefile patterns), see wp-infra. For stack-specific deploy variants, see the /deploy command + memory/deploy-patterns.md.",
+  "query": "Fresh clone of this repo on a new laptop \u2014 what's the right `make` target to get the dev env up, and which branch should I cut feature work from? Also need to add a FOLIO_MASTER_KEY to .env.example.",
+  "should_trigger": true,
+  "type": "skill"
+ },
+ {
+  "name": "architecture-invariants",
+  "desc": "Use when writing a plan or spec for a non-trivial feature, OR when onboarding to / auditing an existing codebase, to name the project's CONVERGENCE POINTS \u2014 the single places where each cross-cutting property (authorization, data access, live updates, error handling, entity modeling) is DECIDED. Produces an `ARCHITECTURE-INVARIANTS.md` doc the project commits. Becomes the convergence target for /code-review and /shakeout \u2014 reviews flag any code path that bypasses a convergence point, instead of re-discovering wiring/dedup/safety concerns free-form each round. Sibling to threat-modeling (which does this for attacks). NOT for checking a diff against an EXISTING invariants doc (e.g. \"audit this diff against the existing ARCHITECTURE-INVARIANTS.md\") \u2014 that diff-vs-doc check is the invariant-auditor agent's job; this skill AUTHORS or UPDATES the doc. Opt-in via the project's CLAUDE.md \u2014 not auto-invoked.",
+  "query": "We already have ARCHITECTURE-INVARIANTS.md. This diff adds a new write route \u2014 check whether it routes through `requireScope` or bypasses the authorization convergence point.",
+  "should_trigger": false,
+  "type": "skill"
+ },
+ {
+  "name": "engineering-context",
+  "desc": "CRAFT skill \u2014 the how-to for PACKING the right context, restated from addyosmani/agent-skills context-engineering (MIT): the context hierarchy (persistent rules \u2192 task context \u2192 ephemeral), the packing strategies (brain-dump / selective-include / hierarchical-summary), load-focused-not-maximal, surface-ambiguity-rather-than-guess, and treat-fetched-data-skeptically. Reached for at session start, on a task switch, or when output quality degrades. The CRITICAL Netdust constraint: it packs FROM this project's EXISTING three-layer memory model (atomic recall / fleet-business / per-project) plus the in-repo curated files \u2014 it does NOT invent a parallel memory scheme. The Netdust layer: 'surface conflict not guess' is harnessed-development's 'if you cannot classify, ask' + the Step 2.5 ground-truth; 'fetched data is untrusted' is the threat-modeling untrusted-parsing trigger. Use when deciding what context to load before working. Fires on 'your answers are getting vague / you've lost the thread', 'we've been at this for hours and you're getting vaguer', 'the context is bloated / degrading', 'what context should I load', 'how do I reset / re-pack context'.",
+  "query": "We've been at this for hours and your answers are getting vaguer \u2014 I think the context is bloated. What should I actually load to work the next task cleanly, and what should I drop?",
+  "should_trigger": true,
+  "type": "skill"
+ },
+ {
+  "name": "security-sentinel",
+  "desc": "Use this agent when you need to perform security audits, vulnerability assessments, or security reviews of code. This includes checking for common security vulnerabilities, validating input handling, reviewing authentication/authorization implementations, scanning for hardcoded secrets, and ensuring OWASP compliance. <example>Context: The user wants to ensure their newly implemented API endpoints are secure before deployment.\\nuser: \"I've just finished implementing the user authentication endpoints. Can you check them for security issues?\"\\nassistant: \"I'll use the security-sentinel agent to perform a comprehensive security review of your authentication endpoints.\"\\n<commentary>Since the user is asking for a security review of authentication code, use the security-sentinel agent to scan for vulnerabilities and ensure secure implementation.</commentary></example> <example>Context: The user is concerned about potential SQL injection vulnerabilities in their database queries.\\nuser: \"I'm worried about SQL injection in our search functionality. Can you review it?\"\\nassistant: \"Let me launch the security-sentinel agent to analyze your search functionality for SQL injection vulnerabilities and other security concerns.\"\\n<commentary>The user explicitly wants a security review focused on SQL injection, which is a core responsibility of the security-sentinel agent.</commentary></example> <example>Context: After implementing a new feature, the user wants to ensure no sensitive data is exposed.\\nuser: \"I've added the payment processing module. Please check if any sensitive data might be exposed.\"\\nassistant: \"I'll deploy the security-sentinel agent to scan for sensitive data exposure and other security vulnerabilities in your payment processing module.\"\\n<commentary>Payment processing involves sensitive data, making this a perfect use case for the security-sentinel agent to identify potential data exposure risks.</commentary></example> NOT for plan-time threat-modeling of a feature not yet built \u2014 building the attack model for an unwritten feature (e.g. \"I'm about to PLAN the BYOK key-storage feature \u2014 build the attack model\") is the threat-modeling skill's job; this agent AUDITS code that ALREADY EXISTS.",
+  "query": "I'm about to PLAN the BYOK key-storage feature \u2014 it touches credentials and an admin route. Build the attack model into the plan up front so the implementing tasks can be reviewed against named mitigations.",
+  "should_trigger": false,
+  "type": "agent"
+ },
+ {
+  "name": "pattern-miner",
+  "desc": "Mine ~/Sites/*/memory/STATE.md + lessons.md for recurring patterns worth promoting to a harness skill. Fires on 'recurring gotchas across my sites/projects', 'mine the memory/STATE.md + lessons.md files for patterns', 'what keeps coming up across projects that should be a skill', 'find patterns worth promoting across my sites' memory files'.",
+  "query": "Across all my sites' memory files there are recurring gotchas I keep re-learning \u2014 mine the STATE.md and lessons.md across the fleet and tell me which patterns are worth promoting into a harness skill.",
+  "should_trigger": true,
+  "type": "command"
+ },
+ {
+  "name": "architecture-invariants",
+  "desc": "Use when writing a plan or spec for a non-trivial feature, OR when onboarding to / auditing an existing codebase, to name the project's CONVERGENCE POINTS \u2014 the single places where each cross-cutting property (authorization, data access, live updates, error handling, entity modeling) is DECIDED. Produces an `ARCHITECTURE-INVARIANTS.md` doc the project commits. Becomes the convergence target for /code-review and /shakeout \u2014 reviews flag any code path that bypasses a convergence point, instead of re-discovering wiring/dedup/safety concerns free-form each round. Sibling to threat-modeling (which does this for attacks). NOT for checking a diff against an EXISTING invariants doc (e.g. \"audit this diff against the existing ARCHITECTURE-INVARIANTS.md\") \u2014 that diff-vs-doc check is the invariant-auditor agent's job; this skill AUTHORS or UPDATES the doc. Opt-in via the project's CLAUDE.md \u2014 not auto-invoked.",
+  "query": "I'm planning a feature that parses untrusted webhook JSON and fetches from a customer-supplied URL \u2014 embed the attack model into the plan before I break out tasks.",
+  "should_trigger": false,
+  "type": "command"
+ },
+ {
+  "name": "test-effectiveness",
+  "desc": "Use to AUDIT whether a test suite would actually catch bugs (not just whether tests exist + pass), and to AUTHOR tests that close the gap \u2014 at phase-complete, at shake-out, or whenever a green suite shipped a bug. Risk-aware sibling to testing-workflow: testing-workflow gates 'does this task need a test, at what tier?' (write-time, per-task); this gates 'would my suite go RED if the dangerous path broke?' (audit-time, per-phase). Names the seven failure modes that ship bugs past a green suite \u2014 stale fixture, test-world\u2260real-world, wire-mock leak, unmounted guard, happy-path-only/missing-denial, no-coverage, concurrency/timing \u2014 each with an audit move and a per-stack author pattern. NOT for the per-task 'does THIS task need a test, at what tier, RED-first?' decision (e.g. closing a single task that adds an auth guard) \u2014 that's testing-workflow; this skill AUDITS an already-green SUITE across a phase for whether it would actually bite. Covers TypeScript (Vitest/Playwright) and PHP (PHPUnit/Codeception). Opt-in via the project's CLAUDE.md \u2014 not auto-invoked.",
+  "query": "I'm closing a single task that adds an auth guard. Does it need a bespoke test, and at what tier \u2014 RED-first or skip it as glue?",
+  "should_trigger": false,
+  "type": "command"
+ }
+]

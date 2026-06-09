@@ -1,0 +1,56 @@
+[
+ {
+  "skill": "writing-tests",
+  "skill_path": "skills/writing-tests/SKILL.md",
+  "query": "I'm adding a function requireScope(token, needed) that returns the request if the token has the scope and throws 403 otherwise. Write the test for it.",
+  "signature": "writes a RED-first test that asserts the DENIAL path (the actor who is refused), not just the happy path, and notes it should fail before implementation exists"
+ },
+ {
+  "skill": "testing-workflow",
+  "skill_path": "skills/testing-workflow/SKILL.md",
+  "query": "I just added a one-line helper: cn = (...args) => twMerge(clsx(args)). Should I write a unit test for it before I mark the task done?",
+  "signature": "classifies the task as Tier B (a pure pass-through over a typed library) and says NOT to write a bespoke unit test, recording a no-unit-test reason instead of manufacturing a tautological test"
+ },
+ {
+  "skill": "threat-modeling",
+  "skill_path": "skills/threat-modeling/SKILL.md",
+  "query": "I'm planning a feature where users configure their own AI provider by pasting a baseUrl and API key, and the server makes requests to that baseUrl. How should I approach it?",
+  "signature": "produces a structured threat model (named assets -> attacks -> mitigations) flagging SSRF on the user-controlled baseUrl and credential handling, BEFORE any implementation"
+ },
+ {
+  "skill": "test-effectiveness",
+  "skill_path": "skills/test-effectiveness/SKILL.md",
+  "query": "My test suite is fully green but I have a nagging feeling it wouldn't actually catch a real auth bug. The auth guard has tests. How do I check if the suite would really bite?",
+  "signature": "audits whether the suite would go RED if a dangerous path broke (the missing-denial / unmounted-guard failure modes), rather than just adding more passing tests"
+ },
+ {
+  "skill": "feature-acceptance",
+  "skill_path": "skills/feature-acceptance/SKILL.md",
+  "query": "I built a multi-step invite-a-teammate wizard and the unit tests pass. How do I know it actually works for users before I ship?",
+  "signature": "enumerates intended-use flows plus edge classes (empty state, denied actor, double-submit, mid-flow failure) and insists on driving them through the real browser/wire, not just unit tests"
+ },
+ {
+  "skill": "simplifying-code",
+  "skill_path": "skills/simplifying-code/SKILL.md",
+  "query": "This works but feels over-engineered: a FactoryProvider that builds a Strategy that wraps a single if/else on user.role. Clean it up.",
+  "signature": "reduces the abstraction while explicitly relying on the test suite staying green to prove behavior is preserved (behavior-preserving simplification), not just rewriting"
+ },
+ {
+  "skill": "doubting-decisions",
+  "skill_path": "skills/doubting-decisions/SKILL.md",
+  "query": "I've decided to store all our per-tenant config as a single big JSON blob in one row because it's simpler. Pressure-test that decision before I build on it.",
+  "signature": "adversarially attacks the decision from a fresh-context skeptic stance (surfacing failure modes the original reasoning glossed), rather than validating or just implementing it"
+ },
+ {
+  "skill": "refining-ideas",
+  "skill_path": "skills/refining-ideas/SKILL.md",
+  "query": "I have a rough idea: 'an inbox that shows all customer messages from every channel in one place.' It's still vague. Help me sharpen it before I plan.",
+  "signature": "runs divergent-then-convergent refinement (lenses, stress-tests against value/feasibility, surfaces assumptions, produces a Not-Doing list) rather than jumping to a feature list or a plan"
+ },
+ {
+  "skill": "sourcing-from-docs",
+  "skill_path": "skills/sourcing-from-docs/SKILL.md",
+  "query": "Does Drizzle ORM's .returning() work on SQLite for an update statement? I need to rely on it for the events table.",
+  "signature": "insists on grounding the claim in official documentation (cite the source / verify rather than assert from memory) before relying on the behavior"
+ }
+]
