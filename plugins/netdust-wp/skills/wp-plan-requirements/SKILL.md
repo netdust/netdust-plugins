@@ -1,13 +1,13 @@
 ---
 name: wp-plan-requirements
-description: Use when WRITING A PLAN OR SPEC for any non-trivial WordPress feature in a Netdust project — fired by netdust-core:harnessed-development Stage 1 on WP projects, the way threat-modeling and architecture-invariants fire. Injects mandatory plan sections so WP-security (the four pillars) and ntdst-core framework patterns (the drift categories) are REQUIREMENTS IN THE PLAN, gated per-task, not just findings a reviewer catches at the end. Triggers when designing a feature that adds AJAX/REST handlers, form processors, admin pages, shortcodes, custom queries, Services/Repositories/Handlers, CPTs, or any module under mu-plugins. Activates on keywords plan, spec, task breakdown, WordPress feature, ntdst-core module, Service, Repository, AJAX, REST endpoint. Symptoms include "write a plan for the X feature", being at the plan stage of harnessed-development on a WP project, or about to break a WP feature into tasks. Do NOT skip because "the reviewers will catch it" — the whole point is to move the requirement UPSTREAM into the plan so review converges in one round.
+description: Use when WRITING A PLAN OR SPEC for any non-trivial WordPress feature in a Netdust project — fired by netdust-agent:harnessed-development Stage 1 on WP projects, the way threat-modeling and architecture-invariants fire. Injects mandatory plan sections so WP-security (the four pillars) and ntdst-core framework patterns (the drift categories) are REQUIREMENTS IN THE PLAN, gated per-task, not just findings a reviewer catches at the end. Triggers when designing a feature that adds AJAX/REST handlers, form processors, admin pages, shortcodes, custom queries, Services/Repositories/Handlers, CPTs, or any module under mu-plugins. Activates on keywords plan, spec, task breakdown, WordPress feature, ntdst-core module, Service, Repository, AJAX, REST endpoint. Symptoms include "write a plan for the X feature", being at the plan stage of harnessed-development on a WP project, or about to break a WP feature into tasks. Do NOT skip because "the reviewers will catch it" — the whole point is to move the requirement UPSTREAM into the plan so review converges in one round.
 ---
 
 # WP Plan Requirements
 
 **The reviewer is the last line, not the first. This skill makes WP-security and ntdst-core patterns a plan-time requirement, so the code is built right — not just caught wrong.**
 
-This is the WordPress sibling of `netdust-core:threat-modeling`. Threat-modeling injects a `## Threat model` section into the plan before task breakdown; this skill injects WP-specific requirement sections into the plan before task breakdown. Same mechanism (fired from `harnessed-development` Stage 1 by the stack-override rule), same payoff: the requirement is named in the plan, so `/code-review` and `ntdst-drift-reviewer` verify against a named list instead of hunting free-form — converging in one round instead of probabilistically over many.
+This is the WordPress sibling of `netdust-agent:threat-modeling`. Threat-modeling injects a `## Threat model` section into the plan before task breakdown; this skill injects WP-specific requirement sections into the plan before task breakdown. Same mechanism (fired from `harnessed-development` Stage 1 by the stack-override rule), same payoff: the requirement is named in the plan, so `/code-review` and `ntdst-drift-reviewer` verify against a named list instead of hunting free-form — converging in one round instead of probabilistically over many.
 
 It does NOT replace the review-time checks. It **front-loads** them so the same list is enforced at both ends.
 
@@ -86,8 +86,8 @@ That sentence is what earns the one-round convergence. Without a named target, r
 
 | Skill / agent | Relationship |
 |---|---|
-| `netdust-core:harnessed-development` | Fires this at Stage 1 on WP projects via the stack-override rule (sibling to threat-modeling). |
-| `netdust-core:threat-modeling` | The general-purpose twin; this is the WP-specific plan injector. Both run at Stage 1; they compose. |
+| `netdust-agent:harnessed-development` | Fires this at Stage 1 on WP projects via the stack-override rule (sibling to threat-modeling). |
+| `netdust-agent:threat-modeling` | The general-purpose twin; this is the WP-specific plan injector. Both run at Stage 1; they compose. |
 | `netdust-wp:wp-security` | Canonical source for the four pillars + sanitize/escape/authorize functions. Block 1 references it. |
 | `netdust-wp:ntdst-architecture` / `ntdst-data` / `ntdst-patterns` | Canonical source for the layering/Data-API/Service-lifecycle rules. Block 2 references them. |
 | `ntdst-drift-reviewer` (agent) | The review-time enforcer of the same nine categories Block 2 names. Plan-requirement ↔ review-check are one list. |

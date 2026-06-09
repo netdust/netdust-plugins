@@ -1,20 +1,23 @@
-# Netdust Core Harness
+# Netdust Core — business, ops & memory
 
-You are working in a Netdust project. The stack varies — WordPress, Statamic, Bun/Node, plain HTML — but the conventions, voice, memory pattern, and operational discipline are shared. This is the always-on layer; stack-specific plugins (netdust-wp, netdust-bun-react, etc.) layer on top.
+You are working in a Netdust project. The stack varies — WordPress, Statamic, Bun/Node, plain HTML — but the conventions, voice, memory pattern, and operational discipline are shared. This is the always-on layer; stack-specific plugins (netdust-wp, netdust-statamic, etc.) layer on top.
+
+This plugin is **not** a coding/build harness. The coding/build harness (gates, craft skills, reviewer agents, TDD/threat-model/shake-out, `/integration` + `/shakeout`) lives in the **netdust-agent** plugin — load that for any non-trivial coding work.
 
 ## What this plugin provides
 
-- **Memory + observability** — per-project `memory/STATE.md` + `lessons.md`, hooks that log every fire, deterministic tag scanner.
-- **Dev-stack conventions** — DDEV, git branching (staging/feature/hotfix), Makefile verbs (dev/save/feature/finish/deploy/ship), `.env` discipline. See `dev-stack` skill.
-- **Server management** — `secure-server` (harden fresh Hetzner+Ploi VPS) + `ploi` (full lifecycle: MCP + CLI + UI). The `ploi` MCP is auto-loaded.
-- **Cross-stack workflow** — `harnessed-development` is the single entry point: it sequences the full harness (design → plan + threat-modeling + architecture-invariants → execute + per-task testing-workflow + Step 2.5 → shake-out → finish) so no gate is skippable, and defers to the loaded stack sub-plugin for stack-specific tools. Supporting skills: `code-audit`, `shake-out`, `testing-workflow`, `test-effectiveness`. (`ntdst-execute-with-tests` was the execution-only predecessor — now deleted; `harnessed-development` fully absorbed it. The name resolves to nothing; older handoff docs that say "execute the plan" route to `harnessed-development` by its own triggers.) A `SubagentStop` hook (`hooks/subagent-stop.py`) backstops the testing gate by blocking subagent stops that edited code without invoking testing-workflow.
-- **Cross-domain skills** — `research` (technical investigation), `market-research` (audiences/competitors), `brand-voice` (Stefan/Netdust voice as artifact), `marketing` (SEO + copy structure).
-- **Code review agents** — 7 specialized reviewers (architecture, security, performance, simplicity, API design, accessibility, frontend).
-- **Slash commands** — `/deploy` (9-method dispatcher), `/skill-audit`, `/pattern-miner`, `/red-test`.
+- **Memory + observability** — per-project `memory/STATE.md` + `lessons.md`, a SessionStart hook that loads project memory, and a deterministic Stop-hook tag scanner that captures `DECISION:`/`RISK:`/`LESSON:`/`TODO:` into memory. Every fire logs to `~/.claude/logs/memory-hook.log`.
+- **Destructive-command guard** — a `PreToolUse` hook (`hooks/pretooluse-guard.py`) that intercepts dangerous shell commands before they run.
+- **Content + marketing** — `brand-voice` (Stefan/Netdust voice as artifact), `marketing` (SEO + copy structure + meta/schema), `market-research` (audiences/competitors/pricing), `research` (technical + business investigation).
+- **Ops + infra** — `dev-stack` (DDEV, git branching staging/feature/hotfix, Makefile verbs, `.env` discipline), `secure-server` (harden a fresh Hetzner+Ploi VPS), `ploi` (full server/site lifecycle: MCP + CLI + UI). The `ploi` MCP is auto-loaded.
+- **Deploy + knowledge commands** — `/deploy` (9-method dispatcher), `/memory-audit` (staleness report on STATE/lessons/todo), `/pattern-miner` (mine cross-project memory for promotable patterns).
+- **MCP** — the `ploi` MCP server (server + site management via the Ploi API).
 
-## Engineering process — defer to superpowers
+## Coding work lives in netdust-agent
 
-Engineering discipline (brainstorming, planning, TDD, systematic debugging, code review, finishing branches, verification before completion) comes from `obra/superpowers`. This harness does **not** redefine those — when superpowers and netdust-core would say similar things, follow superpowers.
+For anything beyond a trivial one-file edit — features, refactors, bug fixes, security-boundary changes — load the **netdust-agent** plugin. It owns `harnessed-development` (the full design → plan → execute → shake-out → finish sequencer), the gate skills (threat-modeling, architecture-invariants, feature-acceptance, testing-workflow, test-effectiveness, shake-out, compounding, code-audit), the reviewer agents, and the harness commands (`/integration`, `/shakeout`, `/test-effectiveness`, etc.). Core no longer carries any of that.
+
+Engineering discipline itself (brainstorming, planning, TDD, systematic debugging, code review, finishing branches, verification before completion) comes from `obra/superpowers`. **For coding, use netdust-agent + superpowers** — core does not redefine those.
 
 ## Per-project memory
 
@@ -31,9 +34,9 @@ Every Netdust project has:
 
 **Read `site.yml` before any operational command.** It is the single source of truth for hosting, SSH, remote paths, deploy method, domains, project structure.
 
-The SessionStart hook injects `memory/STATE.md`, `memory/lessons.md`, `tasks/todo.md`, and the site.yml summary into the initial context. It also injects a **"Memory discipline" prompt block** (only when `memory/` exists in the project) that tells Claude exactly when to update STATE, lessons, CLAUDE, and site.yml — and what *not* to write. That prompt is the difference between "Claude reads memory" and "Claude *maintains* memory."
+The SessionStart hook (`hooks/session-start.sh`) injects `memory/STATE.md`, `memory/lessons.md`, `tasks/todo.md`, the harness-level `memory/GLOBAL.md`, and the site.yml summary into the initial context. It also injects a **"Memory discipline" prompt block** (only when `memory/` exists in the project) that tells Claude exactly when to update STATE, lessons, CLAUDE, and site.yml — and what *not* to write. That prompt is the difference between "Claude reads memory" and "Claude *maintains* memory."
 
-The Stop hook then captures memory in two tracks (logs to `~/.claude/logs/memory-hook.log` every fire):
+The Stop hook (`hooks/session-stop.py`) then captures memory (logs to `~/.claude/logs/memory-hook.log` every fire):
 
 **Track A — tagged capture (always on, deterministic, zero cost)**
 When you write any of these tags in your responses during a session, the Stop hook lifts them into memory automatically:
@@ -42,7 +45,6 @@ When you write any of these tags in your responses during a session, the Stop ho
 - `RISK: <text>` → `memory/STATE.md`
 - `LESSON: <text>` → `memory/lessons.md`
 - `TODO: <text>` → `tasks/todo.md`
-- `SKILL-EDGE: <skill-name>: <text>` → `skills/.../<skill-name>/lessons.md`
 
 Use these tags liberally when something important happens. The hook captures them deterministically — no AI guessing involved.
 
@@ -51,9 +53,9 @@ If `ANTHROPIC_API_KEY` is set in env, the hook also calls Haiku for a PM-level s
 
 ## Stack-specific plugins (layer on top)
 
-If you're working on a WordPress project, the `netdust-wp` plugin adds WP-specific skills (wp-security, wp-database, wp-frontend, wp-testing, bedrock-composer, wp-infra) + the `ntdst-*` framework skills (architecture, data, patterns, yootheme) + WP-specific commands (`/wp-new-project`, `/scaffold-plugin`, `/sync-db`, `/setup-tests`).
+If you're working on a WordPress project, the `netdust-wp` plugin adds WP-specific skills (wp-security, wp-database, wp-frontend, wp-testing, bedrock-composer, wp-infra) + the `ntdst-*` framework skills (architecture, data, patterns) + WP-specific commands (`/wp-new-project`, `/scaffold-plugin`, `/sync-db`, `/setup-tests`). The `netdust-statamic` plugin adds Statamic + Peak skills and commands.
 
-Other stack plugins (future): `netdust-bun-react` (Folio-style single-binary Bun apps), `netdust-statamic` (Statamic + Peak), etc. Each layers cleanly — core stays always-on.
+The `netdust-agent` plugin layers on the coding/build harness (see above). Each layers cleanly — core stays always-on.
 
 ## Non-negotiables
 

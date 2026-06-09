@@ -1,6 +1,6 @@
 # netdust-statamic
 
-Statamic 6 + Peak layer of the Netdust harness for Claude Code. Layers on top of [`netdust-core`](../netdust-core/README.md).
+Statamic 6 + Peak layer of the Netdust harness for Claude Code. Layers on top of [`netdust-core`](../netdust-core/README.md) (memory, hooks, dev-stack, server management, cross-domain skills) and [`netdust-agent`](../netdust-agent/README.md) (the coding harness — `harnessed-development`, `testing-workflow`, `shake-out`, and the reviewer agents).
 
 ## What this plugin adds
 
@@ -62,7 +62,7 @@ The Netdust starter (`~/Sites/ntdst-starter`) is the canonical baseline for new 
     └── statamic-mcp/                ← Statamic MCP router tools guide
 ```
 
-## Relationship to netdust-core
+## Relationship to netdust-core + netdust-agent
 
 netdust-statamic depends on netdust-core for:
 
@@ -71,10 +71,13 @@ netdust-statamic depends on netdust-core for:
 - **/deploy** command (9-method dispatcher; reads `site.yml.deploy.method`. Statamic projects typically use `git-push` to Ploi.)
 - **`dev-stack` skill** (DDEV, git, Makefile verbs, `.env` discipline — generic)
 - **`secure-server` + `ploi` skills + ploi MCP** (server management)
-- **`code-audit`, `shake-out`, `testing-workflow`** (cross-stack workflow; `shake-out-statamic` here overrides the generic `shake-out` when triggered by Statamic signals)
 - **`research`, `market-research`, `brand-voice`, `marketing`** (cross-domain)
-- **7 code reviewer agents**
 - **`/skill-audit`, `/pattern-miner`, `/red-test`**
+
+…and on netdust-agent for:
+
+- **The coding harness** — `harnessed-development`, `testing-workflow`, `shake-out`, `test-effectiveness`, `threat-modeling`, `architecture-invariants`, `feature-acceptance`, `compounding` (cross-stack workflow; `shake-out-statamic` here overrides the generic `shake-out` when triggered by Statamic signals)
+- **The 8 coding reviewer agents** — code review is done by the `reviewer` agent + the specialist reviewers
 
 The soft-dep check in install.sh warns but doesn't enforce.
 
@@ -105,7 +108,8 @@ All depend on `netdust-core`; all coexist in the shared `netdust-local` marketpl
 
 ## Not in scope
 
-- Memory, hooks, dev-stack, server, review agents — those are netdust-core.
+- Memory, hooks, dev-stack, server — those are netdust-core.
+- The coding harness + review agents — those are netdust-agent.
 - WordPress, Bun/React, etc. — those get their own plugins.
 - Engineering process — defer to `obra/superpowers`.
 - The actual ntdst-starter project content — this plugin encodes the harness knowledge about working WITH the starter, not the starter itself.

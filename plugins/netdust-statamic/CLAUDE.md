@@ -1,6 +1,6 @@
 # Netdust Statamic Plugin
 
-You are working on a Netdust **Statamic** project. This plugin layers on top of `netdust-core` (memory, hooks, dev-stack, server management, code review, cross-stack skills). Install `netdust-core` first — `/deploy` and memory hooks won't work otherwise.
+You are working on a Netdust **Statamic** project. This plugin layers on top of `netdust-core` (memory, hooks, dev-stack, server management, cross-domain skills) and `netdust-agent` (the coding harness — `harnessed-development`, `testing-workflow`, `shake-out`, and the reviewer agents). Install `netdust-core` first — `/deploy` and memory hooks won't work otherwise.
 
 ## Default assumptions (project `CLAUDE.md` can override)
 
@@ -19,16 +19,16 @@ You are working on a Netdust **Statamic** project. This plugin layers on top of 
 | **Skills** | `statamic-build` (editor-friendly feature implementation), `shake-out-statamic` (Statamic-flavored post-build QA), `peak-reference` (Peak partials + commands), `statamic-mcp` (router tools guide) |
 | **Commands** | `/new-feature`, `/new-collection`, `/new-block`, `/new-service`, `/cache-bust`, `/sync-content` |
 
-## What lives in netdust-core (not here)
+## What lives in netdust-core / netdust-agent (not here)
 
-- Memory + tag conventions (`DECISION:`, `RISK:`, `LESSON:`, `TODO:`, `SKILL-EDGE:`)
-- `dev-stack` skill (DDEV, git branching, Makefile verbs, `.env`)
-- `secure-server` + `ploi` skills + ploi MCP
-- `code-audit`, `shake-out` (generic; `shake-out-statamic` here is the Statamic-specific override), `testing-workflow`
-- `research`, `market-research`, `brand-voice`, `marketing`
-- 7 code reviewer agents
-- `/deploy`, `/skill-audit`, `/pattern-miner`, `/red-test`
-- Voice (`SOUL.md`) and universal rules (`RULES.md`)
+- Memory + tag conventions (`DECISION:`, `RISK:`, `LESSON:`, `TODO:`, `SKILL-EDGE:`) (netdust-core)
+- `dev-stack` skill (DDEV, git branching, Makefile verbs, `.env`) (netdust-core)
+- `secure-server` + `ploi` skills + ploi MCP (netdust-core)
+- The coding harness — `harnessed-development`, `testing-workflow`, `shake-out` (generic; `shake-out-statamic` here is the Statamic-specific override), `test-effectiveness`, `threat-modeling`, `architecture-invariants`, `feature-acceptance`, `compounding` (netdust-agent)
+- `research`, `market-research`, `brand-voice`, `marketing` (netdust-core)
+- The 8 coding reviewer agents (netdust-agent) — code review is done by netdust-agent's `reviewer` agent + the specialist reviewers
+- `/deploy`, `/skill-audit`, `/pattern-miner`, `/red-test` (netdust-core)
+- Voice (`SOUL.md`) and universal rules (`RULES.md`) (netdust-core)
 
 ## The Editor Iron Rules (Statamic-specific)
 
@@ -58,7 +58,7 @@ Per-project: `ddev composer require netdust/<addon>` then `php please install ne
 
 ## How this plugin plugs into `harnessed-development`
 
-`netdust-core:harnessed-development` is the stack-agnostic entry skill that sequences the full harness (design → plan + threat-modeling + architecture-invariants → execute + per-task testing-workflow + Step 2.5 → shake-out → finish). **For any non-trivial Statamic work, that is the entry point** — invoking it engages every gate. The Statamic overrides it defers to:
+`netdust-agent:harnessed-development` is the stack-agnostic entry skill that sequences the full harness (design → plan + threat-modeling + architecture-invariants → execute + per-task testing-workflow + Step 2.5 → shake-out → finish). **For any non-trivial Statamic work, that is the entry point** — invoking it engages every gate. The Statamic overrides it defers to:
 
 - **Design (Stage 0)** — `superpowers:brainstorming` (Statamic has no rigid framework-design skill).
 - **Execute (Stage 2)** — `statamic-build` is the executor (PRE-WRITE → WRITE → VERIFY), under the harness's testing-workflow gate.

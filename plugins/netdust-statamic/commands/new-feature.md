@@ -5,11 +5,11 @@ argument-hint: <one-line feature description>
 
 Build a new Statamic feature: **$1**
 
-This command runs the **one canonical harness** (`netdust-core:harnessed-development`) so no gate gets skipped — threat-modeling, architecture-invariants, per-task testing-workflow, and the Step-2.5 plan-freshness check all apply on Statamic exactly as they do on every other stack. It does NOT reimplement the pipeline; it invokes it and supplies the Statamic-specific tools for each stage.
+This command runs the **one canonical harness** (`netdust-agent:harnessed-development`) so no gate gets skipped — threat-modeling, architecture-invariants, per-task testing-workflow, and the Step-2.5 plan-freshness check all apply on Statamic exactly as they do on every other stack. It does NOT reimplement the pipeline; it invokes it and supplies the Statamic-specific tools for each stage.
 
 ## Step 1 — Invoke the harness
 
-Invoke `Skill("netdust-core:harnessed-development")`. Classify the work (it's almost always **Class A — new feature**). Follow its stages. Apply the Statamic overrides below at the stages they name.
+Invoke `Skill("netdust-agent:harnessed-development")`. Classify the work (it's almost always **Class A — new feature**). Follow its stages. Apply the Statamic overrides below at the stages they name.
 
 ## Step 2 — Statamic overrides per stage
 

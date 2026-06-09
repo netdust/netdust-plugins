@@ -67,5 +67,5 @@ If you can't answer those, keep researching. Don't write code yet.
 ## See also
 
 - `market-research` — for non-technical research (audiences, competitors)
-- `code-audit` — for systematic review of existing code
+- `netdust-agent:reviewer` (agent) — for systematic review of existing code (the coding harness owns code review now)
 - `superpowers:systematic-debugging` — when research is debugging something already broken

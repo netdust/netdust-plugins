@@ -1,7 +1,7 @@
 {
   "name": "netdust-core",
   "version": "0.1.0",
-  "description": "Netdust harness core: per-project memory + observability (deterministic tag scanner + optional Haiku), session hooks (SubagentStop testing-gate, Stop, SessionStart), cross-stack skills (harnessed-development [the single full-harness entry point], research, marketing, brand-voice, code-audit, shake-out, testing-workflow, test-effectiveness, threat-modeling, architecture-invariants, secure-server, ploi, dev-stack), 7 code-reviewer agents, the 9-method /deploy dispatcher, /integration + /shakeout phase/spec gates, and the ploi MCP. Stack-agnostic. Layered on by netdust-wp, netdust-bun-react, etc.",
+  "description": "Netdust business + ops + content core: per-project memory (SessionStart load + Stop-hook DECISION:/RISK:/LESSON:/TODO: tag capture), the destructive-command PreToolUse guard, content/marketing skills (brand-voice, marketing, market-research), the research skill, ops/infra skills (ploi, secure-server, dev-stack — DDEV/branch-flow/.env), the 9-method /deploy dispatcher, /memory-audit + /pattern-miner knowledge commands, and the ploi MCP. NOT a coding harness — the build harness (gates, craft skills, reviewer agents, TDD/threat-model/shake-out, /integration + /shakeout) lives in netdust-agent. Stack-agnostic. Layered on by netdust-wp, netdust-statamic.",
   "author": {
     "name": "Stefan Vermeulen",
     "email": "stefan@netdust.be",

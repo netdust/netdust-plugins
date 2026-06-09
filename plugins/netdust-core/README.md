@@ -1,16 +1,18 @@
 # netdust-core
 
-The always-on layer of the Netdust harness for Claude Code. Stack-agnostic — applies to WordPress, Statamic, Bun/Node, plain HTML alike. Stack-specific plugins (`netdust-wp`, future `netdust-bun-react`, `netdust-statamic`) layer on top.
+The always-on **business + ops + content + memory** layer for Claude Code. Stack-agnostic — applies to WordPress, Statamic, Bun/Node, plain HTML alike. Stack-specific plugins (`netdust-wp`, `netdust-statamic`) layer on top, and the coding/build harness lives in the separate **netdust-agent** plugin.
+
+This is **not** a coding harness. For any non-trivial coding work (gates, craft skills, reviewer agents, TDD/threat-model/shake-out, `/integration` + `/shakeout`), load the **netdust-agent** plugin.
 
 ## What this plugin provides
 
 | Layer | Contents |
 |---|---|
 | **Identity** | `CLAUDE.md` (default agent context), `SOUL.md` (voice), `RULES.md` (universal non-negotiables) |
-| **Memory + hooks** | `session-start.sh` + `session-stop.py` + `hooks.json`. Per-project `memory/STATE.md` + `lessons.md` + `tasks/todo.md`. Deterministic tag scanner (`DECISION:`/`RISK:`/`LESSON:`/`TODO:`/`SKILL-EDGE:`). Optional Haiku summary if `ANTHROPIC_API_KEY` set. |
-| **Cross-stack skills** | `research`, `market-research`, `brand-voice`, `marketing`, `code-audit`, `shake-out`, `testing-workflow`, `dev-stack`, `secure-server`, `ploi` |
-| **Code review agents** | architecture-strategist, security-sentinel, performance-oracle, code-simplicity-reviewer, api-design-reviewer, accessibility-reviewer, frontend-architect |
-| **Slash commands** | `/deploy` (9-method dispatcher), `/skill-audit`, `/pattern-miner`, `/red-test` |
+| **Memory + hooks** | `session-start.sh` (loads project memory) + `session-stop.py` (tag capture) + `pretooluse-guard.py` (destructive-command guard), wired in `hooks.json`. Per-project `memory/STATE.md` + `lessons.md` + `tasks/todo.md`. Deterministic tag scanner (`DECISION:`/`RISK:`/`LESSON:`/`TODO:`). Optional Haiku summary if `ANTHROPIC_API_KEY` set. |
+| **Content + marketing skills** | `brand-voice`, `marketing`, `market-research`, `research` |
+| **Ops + infra skills** | `dev-stack` (DDEV, git branching, Makefile verbs, `.env`), `secure-server` (VPS hardening), `ploi` (server/site lifecycle) |
+| **Slash commands** | `/deploy` (9-method dispatcher), `/memory-audit`, `/pattern-miner` |
 | **MCP** | `ploi` MCP server (server + site management via Ploi API) |
 | **Templates** | `project-CLAUDE.md.tmpl`, `site.yml.tmpl` (stack-neutral scaffolds) |
 | **Memory (harness-level)** | `memory/GLOBAL.md` (cross-project facts, Redis exclusions, etc.), `memory/deploy-patterns.md` (the 9 deploy methods + per-site mapping) |
@@ -30,11 +32,11 @@ Skills, commands, agents, hooks, and the MCP load **directly from this plugin di
 
 | Plugin | When to install |
 |---|---|
+| **netdust-agent** | For any non-trivial coding work. Carries the build harness — `harnessed-development` sequencer, the gate skills (threat-modeling, architecture-invariants, feature-acceptance, testing-workflow, test-effectiveness, shake-out, compounding, code-audit), the reviewer agents, and the harness commands (`/integration`, `/shakeout`, etc.). |
 | **netdust-wp** | When you work on WordPress projects (Bedrock or custom-app). Adds wp-security, wp-database, ntdst-architecture, etc. + WP-specific commands. |
-| **netdust-bun-react** (future) | For Folio-style Bun/React single-binary apps. |
-| **netdust-statamic** (future) | For Statamic + Peak marketing sites (stridelms, atelier296). |
+| **netdust-statamic** | For Statamic + Peak marketing sites. |
 
-All depend on `netdust-core`. Install order: core first, then any stack plugins.
+All depend on `netdust-core`. Install order: core first, then any stack/agent plugins.
 
 ## Per-project usage
 
@@ -64,39 +66,26 @@ In any existing project, you can manually add to its `CLAUDE.md`:
 ~/.claude/plugins/netdust-core/
 ├── .claude-plugin/plugin.json
 ├── CLAUDE.md, SOUL.md, RULES.md, README.md
-├── install.sh
 │
 ├── hooks/
-│   ├── hooks.json                  ← plugin loader fires SessionStart + Stop
-│   ├── session-start.sh
-│   └── session-stop.py
+│   ├── hooks.json                  ← plugin loader fires SessionStart + Stop + PreToolUse
+│   ├── session-start.sh            ← loads project memory (STATE/lessons/CLAUDE/GLOBAL)
+│   ├── session-stop.py             ← captures DECISION:/RISK:/LESSON:/TODO: tags
+│   └── pretooluse-guard.py         ← destructive-command guard (Bash)
 │
 ├── commands/
 │   ├── deploy.md                   /deploy — 9-method dispatcher
-│   ├── pattern-miner.md            /pattern-miner — cross-project pattern mining
-│   ├── red-test.md                 /red-test <skill> — discipline regression check
-│   └── skill-audit.md              /skill-audit — drift detector
+│   ├── memory-audit.md             /memory-audit — STATE/lessons/todo staleness report
+│   └── pattern-miner.md            /pattern-miner — cross-project pattern mining
 │
-├── skills/                         ← 10 stack-agnostic skills, flat layout
-│   ├── brand-voice/
-│   ├── code-audit/
+├── skills/                         ← 7 stack-agnostic skills, flat layout
+│   ├── brand-voice/                ← Stefan/Netdust voice as artifact
+│   ├── marketing/                  ← SEO + copy structure + meta/schema
+│   ├── market-research/            ← audiences, competitors, pricing
+│   ├── research/                   ← technical + business investigation
 │   ├── dev-stack/                  ← DDEV, git, Makefile verbs, .env
-│   ├── market-research/
-│   ├── marketing/
-│   ├── ploi/                       ← Ploi + Hetzner lifecycle
-│   ├── research/
-│   ├── secure-server/              ← 9-step VPS hardening
-│   ├── shake-out/
-│   └── testing-workflow/
-│
-├── agents/                         ← 7 generic code reviewers
-│   ├── accessibility-reviewer.md
-│   ├── api-design-reviewer.md
-│   ├── architecture-strategist.md
-│   ├── code-simplicity-reviewer.md
-│   ├── frontend-architect.md
-│   ├── performance-oracle.md
-│   └── security-sentinel.md
+│   ├── secure-server/              ← VPS hardening
+│   └── ploi/                       ← Ploi + Hetzner lifecycle
 │
 ├── memory/
 │   ├── GLOBAL.md                   ← cross-project facts (stack, Redis exclusions)
@@ -106,10 +95,12 @@ In any existing project, you can manually add to its `CLAUDE.md`:
 │   ├── project-CLAUDE.md.tmpl
 │   └── site.yml.tmpl
 │
-└── docs/superpowers/               ← specs + plans for this harness's evolution
+└── docs/                           ← specs + plans for this plugin's evolution
 ```
 
-The plugin also registers the **`ploi` MCP server** (from `~/mcp/ploi-mcp-server/`) via `plugin.json`'s `mcpServers`. Auto-loaded when this plugin is enabled. Tools: `list_servers`, `restart_service`, `trigger_deployment`, `restore_database_backup`, and ~20 more.
+The coding/build harness — reviewer agents, gate skills, `harnessed-development`, `/integration` + `/shakeout` — is **not** here; it lives in the **netdust-agent** plugin.
+
+The plugin also registers the **`ploi` MCP server** (from `~/mcp/ploi-mcp-server/`) via `plugin.json`'s `mcpServers`. Auto-loaded when this plugin is enabled. Tools: `ploi_list_servers`, `ploi_restart_service`, `ploi_deploy_site`, `ploi_restore_database_backup`, and ~30 more.
 
 ## Per-project memory pattern
 
@@ -188,10 +179,9 @@ touch ~/.claude/plugins/netdust-core/skills/<skill-name>/lessons.md
 
 No install step. Plugin loader picks it up on next session.
 
-For discipline skills (agent skips under pressure), add `red-tests.md` with 3+ pressure scenarios. Run `/red-test <skill-name>` to validate.
-
 ## Not in scope
 
-- Stack-specific knowledge — that's the role of `netdust-wp`, `netdust-bun-react`, etc.
+- Stack-specific knowledge — that's the role of `netdust-wp`, `netdust-statamic`, etc.
+- The coding/build harness — gates, reviewer agents, TDD/threat-model/shake-out — lives in `netdust-agent`.
 - Engineering process — defer to `obra/superpowers`.
 - Cross-harness portability (Cursor / OpenCode / Codex) — Claude Code only.

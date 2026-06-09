@@ -88,7 +88,7 @@ class DashboardCest {
 }
 ```
 
-## Test discipline (from `testing-workflow`)
+## Test discipline (from `netdust-agent:testing-workflow`)
 
 - **Unit tests after every task.** Don't move on with broken unit tests.
 - **Integration + acceptance after every phase.** Don't move on with broken integration.
@@ -128,8 +128,8 @@ Stride uses Playwright for the Stridence theme's interactive parts; Codeception 
 
 ## See also
 
-- `testing-workflow` — the broader discipline (when to run which level)
-- `shake-out` — post-build QA when tests alone aren't enough
-- `code-audit` — review existing code against framework patterns
+- `netdust-agent:testing-workflow` — the broader discipline (when to run which level)
+- `netdust-agent:shake-out` — post-build QA when tests alone aren't enough
+- netdust-agent's reviewer agents — review existing code against framework patterns (the `reviewer` agent + specialist reviewers; on WP also `netdust-wp:ntdst-drift-reviewer`)
 - `~/Sites/stride/codeception.yml` + `~/Sites/stride/tests/` — the canonical implementation
 - wp-browser docs: https://wpbrowser.wptestkit.dev

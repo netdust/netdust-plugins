@@ -1,6 +1,6 @@
 # netdust-wp
 
-WordPress layer of the Netdust harness for Claude Code. Layers on top of [`netdust-core`](../netdust-core/README.md) (which provides memory, hooks, dev-stack, server management, code review, and cross-stack skills).
+WordPress layer of the Netdust harness for Claude Code. Layers on top of [`netdust-core`](../netdust-core/README.md) (memory, hooks, dev-stack, server management, cross-domain skills) and [`netdust-agent`](../netdust-agent/README.md) (the coding harness — `harnessed-development`, `testing-workflow`, `shake-out`, and the reviewer agents).
 
 ## What this plugin adds
 
@@ -79,7 +79,7 @@ Both imports — core for memory/hooks/cross-stack, wp for WP-specific defaults.
     └── Makefile.tmpl                (Bedrock variants: makefile, git-push, git-bundle-makefile)
 ```
 
-## Relationship to netdust-core
+## Relationship to netdust-core + netdust-agent
 
 netdust-wp depends on netdust-core for:
 
@@ -88,12 +88,15 @@ netdust-wp depends on netdust-core for:
 - **/deploy** command (9-method dispatcher; reads `site.yml.deploy.method`)
 - **`dev-stack` skill** (DDEV, git, Makefile verbs, `.env` discipline — generic)
 - **`secure-server` + `ploi` skills + ploi MCP** (server management)
-- **`code-audit`, `shake-out`, `testing-workflow`** (cross-stack workflow)
 - **`research`, `market-research`, `brand-voice`, `marketing`** (cross-domain)
-- **7 code reviewer agents**
 - **`/skill-audit`, `/pattern-miner`, `/red-test`**
 
-You can technically use netdust-wp without netdust-core, but you'll miss memory, observability, deploy, server management, and review agents. The soft-dep check in install.sh warns but doesn't enforce.
+…and on netdust-agent for:
+
+- **The coding harness** — `harnessed-development`, `testing-workflow`, `shake-out`, `test-effectiveness`, `threat-modeling`, `architecture-invariants`, `feature-acceptance`, `compounding` (cross-stack workflow)
+- **The 8 coding reviewer agents** — code review is done by the `reviewer` agent + the specialist reviewers
+
+You can technically use netdust-wp without these, but you'll miss memory, observability, deploy, server management, the coding harness, and review agents. The soft-dep check in install.sh warns but doesn't enforce.
 
 ## Adding a WP skill
 
@@ -116,6 +119,7 @@ For discipline skills, add `red-tests.md` and run `/red-test <skill>` from core.
 
 ## Not in scope
 
-- Memory, hooks, dev-stack, server, review agents — those are netdust-core.
+- Memory, hooks, dev-stack, server — those are netdust-core.
+- The coding harness + review agents — those are netdust-agent.
 - Non-WP work — Statamic, Bun/React, etc. — those get their own plugins (`netdust-statamic`, `netdust-bun-react`).
 - Engineering process — defer to `obra/superpowers`.
