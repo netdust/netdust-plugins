@@ -9,7 +9,7 @@ This is **not** a coding harness. For any non-trivial coding work (gates, craft 
 | Layer | Contents |
 |---|---|
 | **Identity** | `CLAUDE.md` (default agent context), `SOUL.md` (voice), `RULES.md` (universal non-negotiables) |
-| **Memory + hooks** | `session-start.sh` (loads project memory) + `session-stop.py` (tag capture) + `pretooluse-guard.py` (destructive-command guard), wired in `hooks.json`. Per-project `memory/STATE.md` + `lessons.md` + `tasks/todo.md`. Deterministic tag scanner (`DECISION:`/`RISK:`/`LESSON:`/`TODO:`). Optional Haiku summary if `ANTHROPIC_API_KEY` set. |
+| **Memory + hooks** | `session-start.sh` (loads project memory) + `session-stop.py` (tag capture) + `pretooluse-guard.py` (destructive-command guard). Per-project `memory/STATE.md` + `lessons.md` + `tasks/todo.md`. Deterministic tag scanner (`DECISION:`/`RISK:`/`LESSON:`/`TODO:`). Optional Haiku summary if `ANTHROPIC_API_KEY` set. **Registration lives in `netdust-agent`'s `hooks.json`** (core's is empty) so the hooks fire once when both plugins are installed; core keeps byte-identical script copies in sync. |
 | **Content + marketing skills** | `brand-voice`, `marketing`, `market-research`, `research` |
 | **Ops + infra skills** | `dev-stack` (DDEV, git branching, Makefile verbs, `.env`), `secure-server` (VPS hardening), `ploi` (server/site lifecycle) |
 | **Slash commands** | `/deploy` (9-method dispatcher), `/memory-audit`, `/pattern-miner` |
@@ -68,10 +68,11 @@ In any existing project, you can manually add to its `CLAUDE.md`:
 ├── CLAUDE.md, SOUL.md, RULES.md, README.md
 │
 ├── hooks/
-│   ├── hooks.json                  ← plugin loader fires SessionStart + Stop + PreToolUse
-│   ├── session-start.sh            ← loads project memory (STATE/lessons/CLAUDE/GLOBAL)
-│   ├── session-stop.py             ← captures DECISION:/RISK:/LESSON:/TODO: tags
-│   └── pretooluse-guard.py         ← destructive-command guard (Bash)
+│   ├── hooks.json                  ← EMPTY: registration moved to netdust-agent to avoid
+│   │                                  double-firing when both plugins are installed (2026-06-09)
+│   ├── session-start.sh            ← loads project memory (STATE/lessons/CLAUDE/GLOBAL) — kept in sync
+│   ├── session-stop.py             ← captures DECISION:/RISK:/LESSON:/TODO: tags — kept in sync
+│   └── pretooluse-guard.py         ← destructive-command guard (Bash) — kept in sync
 │
 ├── commands/
 │   ├── deploy.md                   /deploy — 9-method dispatcher
