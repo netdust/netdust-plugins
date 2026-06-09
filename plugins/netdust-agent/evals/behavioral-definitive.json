@@ -1,0 +1,32 @@
+[
+ {
+  "skill": "writing-tests",
+  "skill_path": "/home/ntdst/Projects/netdust-plugins/plugins/netdust-agent/skills/writing-tests/SKILL.md",
+  "query": "In prose only (do NOT create files or run commands): I'm adding requireScope(token, needed) that returns the request if the token has the scope and throws 403 otherwise. Describe exactly what test(s) you'd write and in what order.",
+  "signature": "specifies a RED-first test asserting the DENIAL path (the refused actor), written before implementation \u2014 not just a happy-path assertion"
+ },
+ {
+  "skill": "feature-acceptance",
+  "skill_path": "/home/ntdst/Projects/netdust-plugins/plugins/netdust-agent/skills/feature-acceptance/SKILL.md",
+  "query": "In prose only (do NOT create files): I built a multi-step invite-a-teammate wizard and unit tests pass. List exactly what to do to be confident it works before shipping.",
+  "signature": "enumerates intended-use flows + edge classes (empty, denied actor, double-submit, mid-flow failure) and insists on DRIVING them through the real browser/wire, plus a pass/fail/not-reachable manifest \u2014 not 'add more tests / click through it'"
+ },
+ {
+  "skill": "building-frontend",
+  "skill_path": "/home/ntdst/Projects/netdust-plugins/plugins/netdust-agent/skills/building-frontend/SKILL.md",
+  "query": "In prose only (do NOT create files): before I write a React user-list table fetching /api/users showing name/email/role, list the concerns I must handle to be production-quality not happy-path.",
+  "signature": "names non-happy states (loading/empty/error), a11y/semantic-table/keyboard, and where state lives \u2014 beyond rendering the happy-path rows"
+ },
+ {
+  "skill": "engineering-context",
+  "skill_path": "/home/ntdst/Projects/netdust-plugins/plugins/netdust-agent/skills/engineering-context/SKILL.md",
+  "query": "In prose only: resuming a Netdust project cold after weeks \u2014 name the EXACT files to load before coding so I don't contradict earlier decisions.",
+  "signature": "names the layered-memory files specifically (CLAUDE.md, MEMORY.md index, STATE.md, DECISIONS.md as the anti-contradiction record, lessons.md, todo.md) and packs focused-not-maximal \u2014 not a generic 'read the README'"
+ },
+ {
+  "skill": "sourcing-from-docs",
+  "skill_path": "/home/ntdst/Projects/netdust-plugins/plugins/netdust-agent/skills/sourcing-from-docs/SKILL.md",
+  "query": "In prose only: in Bun, does Bun.serve() support HTTP/2 server push and what's the exact option name? I need it today.",
+  "signature": "refuses to assert the API shape from memory and insists on verifying against official Bun docs (cite/fetch current docs) before relying on it \u2014 versus confidently naming an option that may be hallucinated"
+ }
+]
