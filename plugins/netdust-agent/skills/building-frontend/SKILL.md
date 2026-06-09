@@ -33,6 +33,8 @@ Reach for the *lowest* rung that works; climb only when forced. Prop-drilling pa
 
 <accessibility>
 **WCAG 2.1 AA is the floor, not a nice-to-have.** Every interactive element is keyboard-reachable and operable (tab order, Enter/Escape/arrows where expected). Use semantic elements first; add ARIA only to fill gaps, never to paper over a `div` that should have been a `button`. **Manage focus in modals/slideovers** — trap focus inside, restore it to the trigger on close. Never signal state by **color alone** — pair it with an icon, text, or shape. Provide meaningful **empty and error states**, not a blank region.
+
+The concrete, verifiable WCAG 2.1 AA line-item version of these principles — keyboard, focus management, semantic/ARIA, contrast ratios, forms, reduced-motion, and how to verify each — lives in `references/accessibility-checklist.md`. An `accessibility-reviewer` pass (or `driving-the-browser`'s a11y-tree inspection) can load it as its rubric.
 </accessibility>
 
 <responsive_and_states>
@@ -41,6 +43,8 @@ Reach for the *lowest* rung that works; climb only when forced. Prop-drilling pa
 
 <red_flags>
 Stop and refactor when you see: a component **over ~200 lines** (it is doing too much — split it); **inline magic pixels** scattered in JSX instead of tokens/scale; a **missing state** (no loading, empty, or error branch); a **color-only** status indicator; **prop-drilling past 3 levels** (climb the ladder); a presentational component that fetches its own data (split the container out).
+
+For the **engineering-perf** layer — Core Web Vitals targets (LCP/INP/CLS), bundle budgets + code-splitting, image/CLS controls, render/virtualization, N+1/caching/debounce, and a measure-first discipline tied to `driving-the-browser` — the concrete checklist lives in `references/performance-checklist.md`. The `performance-oracle` agent loads it for its analysis.
 </red_flags>
 
 <the_netdust_layer>
@@ -67,5 +71,10 @@ A UI surface built under this skill:
 - **`feature-acceptance` (gate 1g/Stage 3)** — the empty/error/loading states you build here are its edge classes; building them is what makes its flows pass. It drives the flow through a real browser to earn the `pass`.
 - **`testing-workflow`** — UI render/classname assertions are Tier B; the gate will usually not ask for a bespoke unit test here. The verification altitude is the browser, not jsdom.
 - **`driving-the-browser`** — the how-to for the real-Chrome drive that feature-acceptance uses to verify these flows.
+- **`references/accessibility-checklist.md`** — the WCAG 2.1 AA verification checklist this skill's `<accessibility>` section points at (load on demand for a keyboard/focus/contrast/forms/motion sweep).
 - **Provenance** — visual craft from the `frontend-design` plugin; the engineering layer (component architecture, state ladder, a11y, responsive, red flags) folded from `addyosmani/agent-skills:frontend-ui-engineering` (MIT); the feature-acceptance / Tier-B / real-browser wiring is the Netdust spine this file adds.
 </integration>
+
+<references>
+- `references/performance-checklist.md` — the code-checkable engineering-perf checklist (Core Web Vitals LCP/INP/CLS, measure-first via `driving-the-browser`, bundle/code-splitting budgets, image/CLS controls, render/virtualization, data/N+1/caching/debounce, red flags). The `performance-oracle` agent loads it for its analysis. (Visual/aesthetic craft stays with the `frontend-design` plugin — this is the engineering layer only.)
+</references>

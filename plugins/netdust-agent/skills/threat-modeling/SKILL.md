@@ -200,6 +200,8 @@ List acknowledged-but-not-mitigated items. One sentence each explaining why defe
 - Downstream sub-phases: cross-reference, don't re-litigate. Extend if the surface grows.
 ```
 
+**Verifying mitigations against concrete controls.** The mitigations named in Step 4 are checked against a fixed control list — the deep, code-checkable catalog (STRIDE, the SSRF + IPv4-mapped-IPv6 class, BYOK/libsodium, the untrusted-parsing trigger list, an OWASP Top 10 table, pre-commit sweeps) lives in `references/security-checklist.md`. Point `/code-review` and the `security-sentinel` agent at it: each model mitigation should land a matching `[x]` control there.
+
 **Deciding "is this finding real / already deferred?"** This section's "out of scope" list IS the project-specific application of the shared exclusion rules in `_shared/finding-verification.md`. When a `/code-review` round raises something, verify it with that reference (adversarial skeptic → vote → cite the exclusion-rule number) rather than re-arguing each round — and promote any recurring accepted-non-issue into the deferrals list above so it inherits forward.
 
 </output_template>
@@ -266,3 +268,7 @@ If `/code-review` keeps surfacing NEW critical-class findings the threat model d
 See `~/Projects/folio/memory/lessons.md` entry "2026-05-28 — Plans for features touching user-controlled URLs require a Threat model section before task breakdown" for the lesson in feedback-memory form.
 
 </integration>
+
+<references>
+- `references/security-checklist.md` — the code-checkable control list to verify named mitigations against (STRIDE, input-validation/untrusted-parsing, auth/session/token, SSRF + IPv4-mapped-IPv6, secrets/BYOK, error handling, OWASP Top 10 table, pre-commit sweep). The `security-sentinel` agent loads it for its audit.
+</references>
