@@ -4,6 +4,14 @@
 # Logs every fire to ~/.claude/logs/memory-hook.log so you can see it working.
 
 set -u  # don't set -e — we never want a sourced file to abort the session
+
+# Claude Code injects CLAUDE_PLUGIN_ROOT when it fires the hook. Under bare
+# invocation (tests, manual runs) it's unbound, which `set -u` turns into a
+# fatal abort at first use. Self-resolve from the script's own location —
+# this file lives at <plugin_root>/hooks/session-start.sh — so the hook works
+# the same whether or not the env var was provided.
+: "${CLAUDE_PLUGIN_ROOT:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+
 CWD=$(pwd)
 LOG="$HOME/.claude/logs/memory-hook.log"
 TS=$(date '+%Y-%m-%d %H:%M:%S')
@@ -91,6 +99,29 @@ note todo "$TODO"
 if [[ -f "$TODO" ]]; then
   OUTPUT+="## Open Tasks (carried forward)\n"
   OUTPUT+="$(tail -50 "$TODO")\n\n"
+fi
+
+# ── Auto-memory index (Claude Code's atomic per-project memory) ─────────────
+# Claude Code keeps an atomic, frontmatter-per-fact memory at
+#   ~/.claude/projects/<cwd-with-slashes-as-dashes>/memory/
+# with a one-line-per-atom MEMORY.md index. Claude Code loads MEMORY.md itself,
+# so this hook does NOT re-dump it (that would double the tokens). What it adds
+# is what the built-in load lacks: (1) a recall affordance — the atom files are
+# readable on demand, the index is only a table of contents — and (2) a size
+# guard. The index loads with a hard ~24 KB ceiling; past it, entries silently
+# drop (observed this session). Surface that BEFORE atoms vanish unnoticed.
+AUTOMEM_DIR="$HOME/.claude/projects/$(printf '%s' "$CWD" | sed 's#/#-#g')/memory"
+AUTOMEM_INDEX="$AUTOMEM_DIR/MEMORY.md"
+note automem "$AUTOMEM_INDEX"
+if [[ -f "$AUTOMEM_INDEX" ]]; then
+  AUTOMEM_BYTES=$(wc -c <"$AUTOMEM_INDEX" 2>/dev/null || echo 0)
+  AUTOMEM_COUNT=$(find "$AUTOMEM_DIR" -maxdepth 1 -name '*.md' ! -name 'MEMORY.md' 2>/dev/null | wc -l | tr -d ' ')
+  OUTPUT+="## Auto-memory (atomic recall)\n"
+  OUTPUT+="$AUTOMEM_COUNT atomic memory files live in \`$AUTOMEM_DIR/\`. The \`MEMORY.md\` index (already in your context) is a table of contents — when an entry looks relevant to the task, **read the linked atom file for the full fact** instead of acting on the one-line summary.\n\n"
+  # ~24 KB is the index load ceiling; warn at 90% so it's actionable before drop.
+  if (( AUTOMEM_BYTES > 22000 )); then
+    OUTPUT+="> ⚠️ MEMORY.md is $((AUTOMEM_BYTES/1024)) KB — near/over the ~24 KB index ceiling, so some entries may not have loaded. Tighten index lines (move detail into the atom files, keep each index line < ~200 chars) so recall stays complete.\n\n"
+  fi
 fi
 
 # ── Memory discipline prompt (only if this project has memory scaffolding) ──
