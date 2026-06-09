@@ -1,5 +1,7 @@
 # Golden Path — YOOtheme integration (custom Dynamic Content source)
 
+> **Verified against source: 2026-06-09** — Rossi `ntdstheme/services/yootheme/ArtistSourcesService.php` + `YOOthemeDynamicContentService.php` (NOT Stride — see origin flag below). Re-verify against the `yootheme.md` anti-pattern table when the source moves or drifts; `/skill-audit` flags this after 90 days.
+
 **Read this before planning a YOOtheme Builder source/element.** Build to it; name any deviation in the plan.
 
 > **Origin flag — NOT extracted from Stride.** Stride uses a Tailwind+Alpine+Vite/FSE theme (`stridence`) and has **zero** YOOtheme integration. This golden path is extracted from **Rossi** (`/home/ntdst/Sites/rossi/`, the NTDST-core gallery reference), verified drift-clean against the live `ntdstheme` theme. When a project actually adopts YOOtheme, this is the proven shape; when it doesn't, this doc doesn't apply. Genericised `ntdstheme` → `{theme}`, `artist_profile` → `{type}`.

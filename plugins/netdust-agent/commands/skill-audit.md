@@ -1,5 +1,5 @@
 ---
-description: Audit harness skills for drift — flag skills with stale lessons, contradictions vs recent project STATE.md, or no activity in 90 days
+description: Audit harness skills for drift — flag skills with stale lessons, contradictions vs recent project STATE.md, no activity in 90 days, or golden-path docs not re-verified against source in 90 days
 allowed_tools: ["Bash", "Read"]
 ---
 
@@ -13,6 +13,7 @@ For each skill in `~/.claude/plugins/netdust-*/skills/*/`:
 2. **Body vs lessons consistency**: read SKILL.md and lessons.md. If any lesson entry contradicts a rule in the body (e.g. body says "always X", lesson says "X failed when Y, do Z"), flag with the specific contradiction.
 3. **Body vs reality**: grep recent `~/Sites/*/memory/STATE.md` for the skill's name. If the skill is mentioned often but its body hasn't been edited in 90 days, flag as "high-usage skill, stale body."
 4. **Description quality**: read the SKILL.md frontmatter `description:`. If it summarizes workflow instead of listing triggers/symptoms/keywords (per Obra's writing-skills convention), flag as "description summarizes workflow — should be trigger-shaped."
+5. **Golden-path source freshness**: for any `golden-paths/*.md` doc (currently under `ntdst-patterns/`), read its `Verified against source: YYYY-MM-DD` header. If that date is > 90 days old (or the header is missing), flag as "golden path not re-verified against live source in 90 days — re-run the drift-reviewer grep set against the cited spines." The docs cite live source down to file:line, so a stale slice silently teaches outdated structure.
 
 ## Output format
 

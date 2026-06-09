@@ -1,5 +1,7 @@
 # Golden Path — Content-type feature (CPT → Repository → Service → Router → frontend)
 
+> **Verified against source: 2026-06-09** — Stride `Modules/Edition/` (CPT/Repo/Service/Router). Re-verify with the drift-reviewer grep set (check #11) when the source moves or drifts; `/skill-audit` flags this after 90 days.
+
 **Read this before planning a CPT-backed domain object.** Build to this slice, not to the nearest sibling file (siblings drift — see `lessons.md`). Deviations are allowed but must be *named* in the plan.
 
 **Extracted from** Stride's `Edition` module (`Stride\Modules\Edition\*`), verified drift-clean against the live source on the CPT/Repo/Service/Router spine. The two parts that drift in Stride are called out explicitly below — **do not copy those parts.**

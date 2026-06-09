@@ -51,6 +51,14 @@ Ask: *what did this spec teach about the TOOLS?* Reuse existing machinery — th
 3. Split by blast radius: `lessons.md` appends are low-risk proposals; SKILL.md **body** changes are always report-only flags, never proposed as edits.
 4. **Output: proposed `lessons.md` appends + body-staleness flags. NOT applied.**
 
+**Pass C — Golden-path source freshness (only if this project is a golden-path SOURCE)**
+
+The golden-path docs (`netdust-wp:ntdst-patterns` → `golden-paths/*.md`) cite live source down to file:line. Check whether any `golden-paths/*.md` cites THIS project (grep the docs' "Verified against source" headers for the project name — e.g. Stride, Rossi). If so:
+
+1. Re-run the drift-reviewer grep set (the `ntdst-drift-reviewer` check #11 archetype greps) against the spines the doc extracted — don't restate the greps; use that check's set.
+2. If a spine file moved, changed pattern, or now drifts: propose updating the golden path (or re-blessing from a better exemplar), bump its `Verified against source:` date, and note it in `ntdst-patterns/lessons.md` → *Golden-path freshness journal*.
+3. **Output: proposed golden-path delta + freshness-date bump. NOT applied.**
+
 </process>
 
 <output_template>

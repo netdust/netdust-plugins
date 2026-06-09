@@ -1,5 +1,7 @@
 # Golden Path — Admin settings page (register → render → save → store)
 
+> **Verified against source: 2026-06-09** — Stride `Admin/StrideSettingsService.php` + `templates/admin/settings.php`. Re-verify with the drift-reviewer grep set (check #11) when the source moves or drifts; `/skill-audit` flags this after 90 days.
+
 **Read this before planning any admin settings/options page.** Build to it; name any deviation in the plan.
 
 **Extracted from** Stride's `StrideSettingsService` (`Stride\Admin\StrideSettingsService`). Verified drift-clean. Genericised `Stride` → `{Project}`.

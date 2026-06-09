@@ -1,5 +1,7 @@
 # Golden Path — Form / data-flow feature (AJAX with all four security pillars)
 
+> **Verified against source: 2026-06-09** — Stride `Handlers/ProfileHandler.php` + `ntdst-core/api/Endpoints.php`. Re-verify with the drift-reviewer grep set (check #11) when the source moves or drifts; `/skill-audit` flags this after 90 days.
+
 **Read this before planning any form, AJAX, or write-flow.** It shows where each of the four security pillars fires in the NTDST AJAX path. Build to it; name any deviation in the plan.
 
 **Extracted from** Stride's `ProfileHandler` (`Stride\Handlers\ProfileHandler`) + the framework edge `ntdst-core/api/Endpoints.php`. Verified drift-clean. Genericised `Stride` → `{Project}`.
