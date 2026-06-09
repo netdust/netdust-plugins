@@ -17,6 +17,15 @@ Everything in between — brainstorming, plan structure, TDD red→green, dispat
 This skill is **stack-agnostic by design** — it names only generic, cross-stack skills. See `<stack_overrides>` for how stack-specific skills replace the generics.
 </objective>
 
+<how_each_gate_is_actually_enforced>
+Be honest about enforcement strength — the gates are NOT equally hard, and assuming they are is itself a failure mode:
+
+- **The per-task testing gate is HOOK-ENFORCED.** `subagent-stop.py` (a real SubagentStop hook) blocks a subagent that edited code from stopping without the testing-workflow evidence. This is the one gate backed by code, not just prose — it is why it reliably fires. (Even so, the *auditable* evidence is the structured Test-evidence + STATUS blocks in the report/commit, not the hook — the hook is the backstop.)
+- **The plan-time gates (threat-modeling 1a, architecture-invariants 1b, feature-acceptance 1g) are SEQUENCER-ENFORCED, not hook-enforced.** There is no hook that blocks a plan lacking its `## Threat model`. They fire because THIS skill sequences them and the BLOCKING prose demands them before the first dispatch, and they are caught-if-missed at `/code-review` + `/shakeout` (the threat model / acceptance matrix are the review convergence targets). That is layered defense — sequencer fires it, review verifies it — but it is honor-system at the point of authoring. Do not assume a hook will stop you; the discipline is yours to apply, and a skipped plan-time gate only surfaces one stage later (more expensive). This is a known gap, deliberately not over-built (a plan has no single mechanical "close" moment to hook).
+
+The practical upshot: treat the plan-time gates with the same seriousness as the hook-backed testing gate, precisely BECAUSE nothing will hard-stop you if you skip them.
+</how_each_gate_is_actually_enforced>
+
 <stack_overrides>
 **Standing rule — this skill names only generic skills; a loaded stack sub-plugin replaces them.**
 
