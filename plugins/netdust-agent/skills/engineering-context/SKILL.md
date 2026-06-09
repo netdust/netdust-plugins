@@ -29,7 +29,7 @@ Pick the strategy to the situation:
 
 - **Layer A — atomic recall:** `~/.claude/projects/<slug>/memory/` (the `MEMORY.md` index + atomic topic files, CC-native, injected at session start). Read the index first; it points at the atomic files worth opening. You do not hand-maintain this — CC does.
 - **Layer B — fleet / business:** `~/Sites/netdust-wp-manager/memory/` (manual, cross-site: active priorities, deals, cross-project ops rules, `projects/<site>/STATE.md`, `GLOBAL.md`). Pack from here only when the work is fleet-level.
-- **Layer C — per-project (automated):** `<project>/memory/STATE.md` · `lessons.md` · `tasks/todo.md`, written by the netdust-core Stop hook from `DECISION:` / `RISK:` / `LESSON:` / `TODO:` tags. This is the project's own decisions, lessons, and open tasks.
+- **Layer C — per-project (automated):** `<project>/memory/STATE.md` · `lessons.md` · `tasks/todo.md`, written by the session Stop hook from `DECISION:` / `RISK:` / `LESSON:` / `TODO:` tags. This is the project's own decisions, lessons, and open tasks.
 - **In-repo curated files** (where the project keeps them, e.g. Folio): `memory/STATE.md` (living snapshot — read at session start), `memory/DECISIONS.md` (locked decisions — do not re-litigate), `memory/lessons.md` (self-improvement log), `tasks/todo.md` (active list).
 
 **Session-start pack:** Layer A index → in-repo `STATE.md` → open `tasks/todo.md` for the next item → pull `DECISIONS.md`/`lessons.md` slices the task touches. **Task-switch:** re-pack task context for the new task; drop the old ephemeral slice. **When quality degrades:** you have probably drifted from a locked decision or lost the thread — re-read `STATE.md` + the relevant `DECISIONS.md` entry before continuing.

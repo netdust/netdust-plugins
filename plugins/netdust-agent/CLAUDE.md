@@ -66,10 +66,10 @@ Superpowers is the base; addyosmani fills genuine gaps; Netdust discipline is th
 
 ## Provenance
 
-- Harness discipline + risk-tiering + the gate sequence: Netdust (ported from netdust-core).
+- Harness discipline + risk-tiering + the gate sequence: Netdust harness discipline.
 - Base process skills: `superpowers:*`.
 - Craft fills: concepts learned from `addyosmani/agent-skills` (MIT) — folded into Netdust-voiced skills, not copied verbatim.
 
-## Relationship to netdust-core
+## Standalone harness
 
-Standalone. Intended to eventually replace the *harness pieces* of `netdust-core`. `netdust-core` keeps the non-harness infra it owns: per-project memory, session hooks, the reviewer agents, the ploi MCP, and `/deploy`. Until core's harness skills are retired, the copies here are the canonical ones for this plugin — do not let them drift silently.
+This plugin is fully self-contained. It holds the complete two-layer harness — the `harnessed-development` sequencer, every gate it fires (testing-workflow, threat-modeling, architecture-invariants, feature-acceptance, test-effectiveness, shake-out, compounding), the craft skills the gates reach for, the reviewer/specialist agents, the session + guard hooks, and its own commands (`/deploy`, `/shakeout`, `/evaluate`, …). Nothing here depends on or defers to another Netdust plugin: every skill, gate, command, and agent it references resolves WITHIN this plugin (or to an external `superpowers:*` / `superpowers-chrome` base). It supersedes the older Netdust core harness — this plugin is now the sole home for that discipline.

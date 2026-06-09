@@ -1,10 +1,10 @@
 ---
 name: deploying
-description: "CRAFT skill — a THIN pointer to the real deploy authority: the netdust-core /deploy command (9-method dispatcher driven by site.yml's deploy.method) and the stack's dev-stack skill. Reached for at harnessed-development Stage 3 (finish), AFTER shake-out + finishing-a-branch are green. It does not re-implement deploy mechanics; it routes to /deploy + dev-stack and states the Netdust deploy discipline: NEVER deploy to prod without explicit confirmation; honor site.yml deploy.method and site.risk (high = triple-check); always test on DDEV/staging before prod. The Netdust ordering layer: deploy is downstream of the WHOLE harness — shake-out and the reviews must be green first. Use when shipping a finished, reviewed branch to an environment."
+description: "CRAFT skill — a THIN pointer to the real deploy authority: the /deploy command (9-method dispatcher driven by site.yml's deploy.method) and the dev-stack skill. Reached for at harnessed-development Stage 3 (finish), AFTER shake-out + finishing-a-branch are green. It does not re-implement deploy mechanics; it routes to /deploy + dev-stack and states the Netdust deploy discipline: NEVER deploy to prod without explicit confirmation; honor site.yml deploy.method and site.risk (high = triple-check); always test on DDEV/staging before prod. The Netdust ordering layer: deploy is downstream of the WHOLE harness — shake-out and the reviews must be green first. Use when shipping a finished, reviewed branch to an environment."
 ---
 
 <objective>
-This skill is a **thin pointer**, not a deploy engine. The deploy mechanics already exist: the `netdust-core:deploy` command is a 9-method dispatcher driven by `site.yml`'s `deploy.method`, and the stack's `dev-stack` skill owns the environment + branch + Makefile flow. This skill's job is to **route you to them at the right moment, with the right guardrails** — nothing more.
+This skill is a **thin pointer**, not a deploy engine. The deploy mechanics already exist: the `/deploy` command is a 9-method dispatcher driven by `site.yml`'s `deploy.method`, and the `dev-stack` skill owns the environment + branch + Makefile flow. This skill's job is to **route you to them at the right moment, with the right guardrails** — nothing more.
 </objective>
 
 <route_to_the_authority>
@@ -33,7 +33,7 @@ A deploy done under this skill:
 </success_criteria>
 
 <integration>
-- **`netdust-core:deploy` (`/deploy`)** — the AUTHORITY: the 9-method dispatcher driven by `site.yml`. This skill routes to it; it does the deploy.
+- **`/deploy`** — the AUTHORITY: the 9-method dispatcher driven by `site.yml`. This skill routes to it; it does the deploy.
 - **`dev-stack`** — owns the environment / branch / Makefile / `.env` flow this skill defers to.
 - **`harnessed-development` Stage 3 (finish)** — the step that reaches for this skill, after shake-out + finishing-a-branch.
 - **`shake-out` + `finishing-a-branch`** — the gates that MUST be green before this skill runs; deploy is strictly downstream of them.

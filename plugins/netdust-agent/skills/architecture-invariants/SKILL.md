@@ -131,12 +131,12 @@ If a later `/code-review` flags a real bypass ("PATCH /x writes scopes without `
 
 | Skill / gate | Relationship |
 |---|---|
-| `netdust-core:threat-modeling` | **SIBLING.** Same pattern (name the convergence target so reviews verify instead of re-discover), applied to a different axis. threat-modeling = attacks/mitigations; this = structural convergence points. A security-rich feature runs BOTH; the threat model's mitigations often BECOME auth invariants. |
+| `threat-modeling` | **SIBLING.** Same pattern (name the convergence target so reviews verify instead of re-discover), applied to a different axis. threat-modeling = attacks/mitigations; this = structural convergence points. A security-rich feature runs BOTH; the threat model's mitigations often BECOME auth invariants. |
 | `superpowers:writing-plans` | **COMPANION (situation A).** Runs alongside; the plan gets a short `## Architecture invariants touched` note citing the relevant invariants. |
 | `/code-review` | **CONSUMER.** Reviews verify the diff against `ARCHITECTURE-INVARIANTS.md` and flag (don't block) any path that bypasses a convergence point. |
 | `/shakeout` | **CONSUMER.** Auto-dispatches the `invariant-auditor` agent alongside the other reviewers. |
-| `netdust-core:invariant-auditor` (agent) | **EXECUTOR.** The narrow reviewer that, for each invariant, finds the paths bypassing the convergence point. The agent version of an architecture audit pointed at a contract. |
-| `code-audit` / `architecture-strategist` | **UPSTREAM/ADJACENT.** Those review code quality broadly; this gives them a named contract to review against. |
+| `invariant-auditor` (agent) | **EXECUTOR.** The narrow reviewer that, for each invariant, finds the paths bypassing the convergence point. The agent version of an architecture audit pointed at a contract. |
+| `reviewer` (agent) | **UPSTREAM/ADJACENT.** The generalist five-pillar whole-diff pass reviews code quality (including architecture) broadly; this gives it a named contract to review the architecture dimension against. |
 
 **Calibration data behind this skill:** Folio, 2026-06-01. A whole-app auth audit was fast and returned "tight" precisely because authorization converged on `executeTool` + `intersectAgentProjects`. The one CRITICAL finding (member can mint a token above their role) was the single write path that bypassed the `roleToScopes` convergence point — latent for months, found only because building an in-app agent prompted the audit. The lesson: confidence comes from convergence points, and a bug is a path that skips one. This skill makes those points explicit so the next bypass is a mechanical review finding, not a lucky catch.
 

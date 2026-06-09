@@ -1,10 +1,10 @@
 ---
 name: simplifying-code
-description: "CRAFT skill — the how-to that the netdust-core code-simplicity-reviewer agent and the /simplify command embody: reduce complexity while PRESERVING behavior. Restated from addyosmani/agent-skills code-simplification (MIT): YAGNI, remove unnecessary abstraction/indirection, delete dead code, prefer the simpler construct. Reached for at harnessed-development Stage 3 (review), or any time a fix feels hacky ('knowing what I know now, the elegant version'). The Netdust layer: simplification must NOT change behavior, so the testing-workflow suite is the safety net — green before AND after the change is the proof it stayed behavior-preserving; this skill is quality-only and never hunts for bugs (that is /code-review). Aligns with the Netdust core principle 'Simplicity First / impact minimal code.' Use when reducing complexity of working code."
+description: "CRAFT skill — the how-to that the code-simplicity-reviewer agent and the /simplify command embody: reduce complexity while PRESERVING behavior. Restated from addyosmani/agent-skills code-simplification (MIT): YAGNI, remove unnecessary abstraction/indirection, delete dead code, prefer the simpler construct. Reached for at harnessed-development Stage 3 (review), or any time a fix feels hacky ('knowing what I know now, the elegant version'). The Netdust layer: simplification must NOT change behavior, so the testing-workflow suite is the safety net — green before AND after the change is the proof it stayed behavior-preserving; this skill is quality-only and never hunts for bugs (that is /code-review). Aligns with the Netdust core principle 'Simplicity First / impact minimal code.' Use when reducing complexity of working code."
 ---
 
 <objective>
-This skill is the how-to for **making working code simpler without changing what it does**. The `netdust-core:code-simplicity-reviewer` agent and the `/simplify` command are the *doers*; this skill is the discipline they embody. It restates `addyosmani/agent-skills:code-simplification` (MIT) as the base, then binds it to the one Netdust guarantee: the test suite is the safety net that proves behavior was preserved. You are at Stage 3 (review) of `harnessed-development`, or you just wrote a fix that feels hacky and want the elegant version instead.
+This skill is the how-to for **making working code simpler without changing what it does**. The `code-simplicity-reviewer` agent and the `/simplify` command are the *doers*; this skill is the discipline they embody. It restates `addyosmani/agent-skills:code-simplification` (MIT) as the base, then binds it to the one Netdust guarantee: the test suite is the safety net that proves behavior was preserved. You are at Stage 3 (review) of `harnessed-development`, or you just wrote a fix that feels hacky and want the elegant version instead.
 </objective>
 
 <preserve_behavior>
@@ -43,7 +43,7 @@ A simplification done under this skill:
 </success_criteria>
 
 <integration>
-- **`netdust-core:code-simplicity-reviewer` agent + `/simplify` command** — the DOERS that embody this skill. This skill is the how-to; those are the tools that run it. Pair them.
+- **`code-simplicity-reviewer` agent + `/simplify` command** — the DOERS that embody this skill. This skill is the how-to; those are the tools that run it. Pair them.
 - **`addyosmani/agent-skills:code-simplification`** (MIT) — the base craft (YAGNI, remove abstraction, delete dead code, simpler construct) restated here in Netdust voice.
 - **`harnessed-development` Stage 3 (review)** — the step that reaches for this skill; also the elegance trigger when any fix feels hacky.
 - **`testing-workflow` / `writing-tests`** — the safety net. Green before AND after, tests unchanged, is the proof behavior was preserved; characterize untested behavior here before simplifying.

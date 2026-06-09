@@ -6,7 +6,7 @@
 
 > **Harness = the skeleton** (steps, gates, ordering, "don't skip"). **Craft = the how-to** the harness reaches for at each step.
 
-`netdust-agent` is a **standalone** plugin that holds the *full two-layer harness*. It is intended to eventually **replace the harness pieces** of `netdust-core`. `netdust-core` keeps the non-harness infra it owns today: per-project memory, session hooks, the reviewer agents, the ploi MCP, and `/deploy`. We build `netdust-agent` clean; retiring the old harness skills from core is a later, separate call.
+`netdust-agent` is a **standalone** plugin that holds the *full two-layer harness*. It owns everything the harness needs: the sequencer, every gate, the craft skills, the reviewer agents, the session + guard hooks, and its own commands (including `/deploy`). It supersedes the older Netdust core harness — this plugin is now the sole home for that discipline, and nothing here depends on another Netdust plugin.
 
 ---
 
@@ -86,7 +86,7 @@ Gerund-named. These are what the harness *loads* at each step. Superpowers = bas
 
 ```
 plugins/netdust-agent/
-  .claude-plugin/plugin.json        # manifest (mirror netdust-core's shape)
+  .claude-plugin/plugin.json        # manifest
   CLAUDE.md                          # the two-layer model, the naming + authority rules
   README.md
   skills/
@@ -110,7 +110,7 @@ plugins/netdust-agent/
 
 ## Decisions (resolved 2026-06-09) — built
 
-- **A. RESOLVED → copied in.** Gate skills (`testing-workflow`, `threat-modeling`, `architecture-invariants`, `feature-acceptance`, `test-effectiveness`, `shake-out`, + the `harnessed-development` sequencer and `_shared/`) are copied into `netdust-agent` — true standalone. Caveat: until netdust-core's harness copies are retired, do not let the two drift silently. `compounding` was NOT copied; the sequencer still references `netdust-core:compounding` for the spec-close step.
+- **A. RESOLVED → all local.** Gate skills (`testing-workflow`, `threat-modeling`, `architecture-invariants`, `feature-acceptance`, `test-effectiveness`, `shake-out`, `compounding`, + the `harnessed-development` sequencer and `_shared/`) all live in `netdust-agent` — true standalone. Every gate the sequencer fires, including the `compounding` spec-close step, resolves locally.
 - **B. RESOLVED → slice first, then batched.** `writing-tests` ↔ `testing-workflow` was proven first (thin-delegate to `superpowers:test-driven-development`, wired both ways), then the remaining 10 craft skills were batched via parallel subagents to that pattern.
 - **C. RESOLVED → both included.** `sourcing-from-docs` and `doubting-decisions` are built (Stefan: all of addy is fair game).
 
@@ -125,6 +125,5 @@ The `harnessed-development` sequencer carries a `<craft_routing>` table mapping 
 
 ## Still open
 
-- Retire netdust-core's harness skill copies once `netdust-agent` is adopted (the standalone-replacement endgame).
-- `writing-plans` and `finishing-a-branch` were NOT copied as local harness skills — the sequencer references `superpowers:*` for those directly (they are pure superpowers bases with no Netdust gate wrapper needed). Revisit if a Netdust wrapper becomes warranted.
-- Eval/red-test the new craft skills' descriptions for trigger accuracy (`/skill-audit`, `netdust-core:red-test`).
+- `writing-plans` and `finishing-a-branch` are NOT local harness skills — the sequencer references `superpowers:*` for those directly (they are pure superpowers bases with no Netdust gate wrapper needed). Revisit if a Netdust wrapper becomes warranted.
+- Eval/red-test the craft skills' descriptions for trigger accuracy (`/skill-audit`, `/red-test`).

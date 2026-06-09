@@ -55,7 +55,7 @@ Four personas, one per important moment of the harness. **Personas load skills**
 | `reviewer` | Stage 3: whole-diff, five-dimension pre-merge review | verifies the diff against the plan's threat model, `ARCHITECTURE-INVARIANTS.md`, and the test-effectiveness manifest; uses simplifying-code |
 | `shakeout-qa` | Stage 3: exercise the built artifact end-to-end | shake-out, feature-acceptance, driving-the-browser, test-effectiveness; emits a pass/fail/not-reachable manifest |
 
-`reviewer` reads the **diff**; `shakeout-qa` runs the **artifact**. The generalist `reviewer` runs alongside netdust-core's specialist reviewer agents (security-sentinel, performance-oracle, invariant-auditor, …), not instead of them.
+`reviewer` reads the **diff**; `shakeout-qa` runs the **artifact**. The generalist `reviewer` runs alongside this plugin's specialist reviewer agents (security-sentinel, performance-oracle, invariant-auditor, …), not instead of them.
 
 ---
 
@@ -97,7 +97,7 @@ netdust-agent/
 
 Superpowers gives an agent generic engineering craft. It doesn't know *your* harness — your gates, your conventions, your flow. netdust-agent puts that on top: the gates enforce the discipline, the craft skills layer the harness contract onto the generic mechanics, and the agent personas orchestrate both at the right moment. The result is that "do this properly" engages the *whole* pipeline, every time, instead of relying on a session to remember each step.
 
-Standalone by design. Intended to eventually replace the harness pieces of `netdust-core` (which keeps memory, hooks, the specialist reviewer agents, the ploi MCP, and `/deploy`).
+Standalone by design. The full harness — sequencer, gates, craft skills, specialist reviewer agents, hooks, and commands (including `/deploy`) — lives here; nothing depends on another Netdust plugin. It supersedes the older Netdust core harness.
 
 ## License
 

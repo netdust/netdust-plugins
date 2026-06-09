@@ -1,6 +1,6 @@
 # Shared reference — Finding verification (adversarial, voted, rule-bounded)
 
-One convergence primitive, used by every netdust-core gate that produces or consumes a list of "findings" (threat-modeling mitigations, test-effectiveness blind spots, shake-out bugs, /code-review hits). Instead of each skill reinventing "is this finding real?", they all point here. Adapted from the adversarial-triage pattern in Anthropic's `defending-code-reference-harness` (the `/triage` skill), trimmed to a single-binary, single-team harness — no sandbox, no pipeline.
+One convergence primitive, used by every harness gate that produces or consumes a list of "findings" (threat-modeling mitigations, test-effectiveness blind spots, shake-out bugs, /code-review hits). Instead of each skill reinventing "is this finding real?", they all point here. Adapted from the adversarial-triage pattern in Anthropic's `defending-code-reference-harness` (the `/triage` skill), trimmed to a single-binary, single-team harness — no sandbox, no pipeline.
 
 Use it whenever a gate has produced candidate findings and you must decide which are REAL before acting (fixing, reporting, blocking a merge). It collapses a noisy candidate list into a short, confirmed, owned one — and stops the harness re-flagging the same accepted non-issues every round.
 

@@ -95,7 +95,7 @@ Every task is one of two tiers. **Name the tier in your task-close report** and 
 
 ### What the per-task gate cannot catch — and who owns it
 
-A per-task unit test proves one unit correct **in isolation**. It is structurally blind to the classes of bug that only manifest across a seam (wiring/mounting, wire-mocking, concurrency/timing, adversarial-input-on-a-boundary, masking-payload). **Do not pile on more per-task unit tests trying to cover these.** Those classes are owned, catalogued, and audited by `netdust-core:test-effectiveness` (the seven green-but-blind failure modes) at phase-close — and by the phase-complete integration gate, `/code-review`, the invariant-auditor, and `/shakeout`. The one piece this skill keeps at the per-task altitude is the cheap **seam test at the wiring task** below; everything else about seam/wire/concurrency coverage is `test-effectiveness`'s job, not a thing to re-test here.
+A per-task unit test proves one unit correct **in isolation**. It is structurally blind to the classes of bug that only manifest across a seam (wiring/mounting, wire-mocking, concurrency/timing, adversarial-input-on-a-boundary, masking-payload). **Do not pile on more per-task unit tests trying to cover these.** Those classes are owned, catalogued, and audited by `test-effectiveness` (the seven green-but-blind failure modes) at phase-close — and by the phase-complete integration gate, `/code-review`, the invariant-auditor, and `/shakeout`. The one piece this skill keeps at the per-task altitude is the cheap **seam test at the wiring task** below; everything else about seam/wire/concurrency coverage is `test-effectiveness`'s job, not a thing to re-test here.
 
 ### Seam test at the wiring task (the one per-task seam obligation)
 
