@@ -21,6 +21,88 @@ OUTPUT=""
 FOUND=()
 MISSING=()
 
+# load_with_budget <file> <budget_bytes> <label>
+#   Loads <file> into OUTPUT, but never more than <budget_bytes>. When the
+#   file exceeds the budget, loads whole sections (## / ### headers) from the
+#   top until the next section would cross the budget — never cutting a section
+#   mid-body — then appends a visible truncation notice naming the file size
+#   and the ## headers that were NOT loaded. Updates INJECTED_BYTES.
+load_with_budget() {
+  local file="$1" budget="$2" label="$3"
+  local total_bytes
+  total_bytes=$(wc -c <"$file" 2>/dev/null || echo 0)
+
+  if (( total_bytes <= budget )); then
+    OUTPUT+="$(cat "$file")\n\n"
+    return
+  fi
+
+  # Over budget — walk sections, accumulating whole sections until the next
+  # one would exceed the budget. A "section" starts at a line matching ^#{2,3}\s
+  # (## or ###). Content before the first header is the preamble (always kept,
+  # even if it alone exceeds budget — better a clipped preamble than nothing).
+  awk -v budget="$budget" -v label="$label" -v total="$total_bytes" '
+    function flush_section(  i, n, line) {
+      # Decide whether the buffered section fits.
+      if (sec_header == "" ) {
+        # Preamble (text before the first ## header). Emit whole if it fits;
+        # otherwise clip at a LINE boundary up to the budget — bloat that lives
+        # in the preamble (Folio: a 100KB blob before any header) must still be
+        # capped, or truncation does nothing.
+        if (running + sec_len <= budget) {
+          printf "%s", sec_buf
+          running += sec_len
+        } else {
+          n = split(sec_buf, plines, "\n")
+          for (i = 1; i <= n; i++) {
+            line = plines[i]
+            if (i < n) line = line "\n"   # split drops the trailing \n
+            if (running + length(line) > budget) { truncating = 1; preamble_clipped = 1; break }
+            printf "%s", line
+            running += length(line)
+          }
+        }
+        return
+      }
+      if (!truncating && running + sec_len <= budget) {
+        printf "%s", sec_buf
+        running += sec_len
+      } else {
+        truncating = 1
+        skipped[++nskip] = sec_header
+      }
+    }
+    BEGIN { running = 0; truncating = 0; nskip = 0; sec_buf = ""; sec_len = 0; sec_header = "" }
+    /^#{2,3}[[:space:]]/ {
+      flush_section()
+      sec_buf = ""; sec_len = 0
+      # capture the header text (strip leading hashes + space)
+      h = $0; sub(/^#{2,3}[[:space:]]+/, "", h)
+      sec_header = h
+    }
+    {
+      sec_buf = sec_buf $0 "\n"
+      sec_len += length($0) + 1
+    }
+    END {
+      flush_section()
+      if (truncating) {
+        printf "\n> ⚠️ %s truncated at %d KB (file is %d KB) — run /memory-audit to archive.",
+               label, budget/1024, int(total/1024 + 0.5)
+        if (preamble_clipped) printf " The opening section alone exceeded the budget and was clipped."
+        if (nskip > 0) {
+          printf " Sections not loaded:"
+          for (i = 1; i <= nskip; i++) printf " %s%s", skipped[i], (i < nskip ? ";" : "")
+        }
+        printf "\n"
+      }
+    }
+  ' "$file" > /tmp/.netdust-budget-$$.txt
+
+  OUTPUT+="$(cat /tmp/.netdust-budget-$$.txt)\n\n"
+  rm -f /tmp/.netdust-budget-$$.txt
+}
+
 note() {
   local key="$1" path="$2"
   if [[ -f "$path" ]]; then
@@ -40,7 +122,7 @@ note() {
 # on every session start so updates flip automatically. Idempotent.
 PLUGIN_CACHE="$HOME/.claude/plugins/cache/netdust-plugins"
 if [[ -d "$PLUGIN_CACHE" ]]; then
-  for plugin in netdust-core netdust-wp netdust-statamic; do
+  for plugin in netdust-agent netdust-core netdust-wp netdust-statamic; do
     plugin_dir="$PLUGIN_CACHE/$plugin"
     [[ -d "$plugin_dir" ]] || continue
     # Pick most recently modified version dir as "active".
@@ -74,15 +156,12 @@ STATE="$CWD/memory/STATE.md"
 note state "$STATE"
 if [[ -f "$STATE" ]]; then
   OUTPUT+="## Project State\n"
-  # Size-guard: STATE.md is a SNAPSHOT, not an archive. It loads into every
-  # session, so bloat costs context tokens on every turn. Nudge (don't block)
-  # when it crosses ~40 KB — move historical sections to memory/ARCHIVE.md
-  # (which this hook does NOT load).
-  STATE_BYTES=$(wc -c <"$STATE" 2>/dev/null || echo 0)
-  if (( STATE_BYTES > 40960 )); then
-    OUTPUT+="> ⚠️ STATE.md is $((STATE_BYTES/1024)) KB ($(wc -l <"$STATE") lines) — consider archiving historical sections to \`memory/ARCHIVE.md\` (not loaded by this hook) to keep this snapshot lean.\n\n"
-  fi
-  OUTPUT+="$(cat "$STATE")\n\n"
+  # Hard budget: STATE.md is a SNAPSHOT, not an archive. It loads into EVERY
+  # session, so bloat costs context tokens on every turn. Enforce a real 32 KB
+  # ceiling — load whole sections from the top until the budget is hit, never
+  # mid-section, and name what was skipped. (Was: warn-then-load-everything,
+  # which let Folio's 175 KB STATE.md inject ~40K tokens per session start.)
+  load_with_budget "$STATE" 32768 "STATE.md"
 fi
 
 # ── Project lessons ─────────────────────────────────────────────────────────
@@ -90,7 +169,8 @@ LESSONS="$CWD/memory/lessons.md"
 note lessons "$LESSONS"
 if [[ -f "$LESSONS" ]]; then
   OUTPUT+="## Project Lessons\n"
-  OUTPUT+="$(cat "$LESSONS")\n\n"
+  # Hard budget: 16 KB. Same section-boundary truncation as STATE.md.
+  load_with_budget "$LESSONS" 16384 "lessons.md"
 fi
 
 # ── Open tasks carried forward ──────────────────────────────────────────────
@@ -118,9 +198,13 @@ if [[ -f "$AUTOMEM_INDEX" ]]; then
   AUTOMEM_COUNT=$(find "$AUTOMEM_DIR" -maxdepth 1 -name '*.md' ! -name 'MEMORY.md' 2>/dev/null | wc -l | tr -d ' ')
   OUTPUT+="## Auto-memory (atomic recall)\n"
   OUTPUT+="$AUTOMEM_COUNT atomic memory files live in \`$AUTOMEM_DIR/\`. The \`MEMORY.md\` index (already in your context) is a table of contents — when an entry looks relevant to the task, **read the linked atom file for the full fact** instead of acting on the one-line summary.\n\n"
-  # ~24 KB is the index load ceiling; warn at 90% so it's actionable before drop.
-  if (( AUTOMEM_BYTES > 22000 )); then
-    OUTPUT+="> ⚠️ MEMORY.md is $((AUTOMEM_BYTES/1024)) KB — near/over the ~24 KB index ceiling, so some entries may not have loaded. Tighten index lines (move detail into the atom files, keep each index line < ~200 chars) so recall stays complete.\n\n"
+  # 24 KB is the index load ceiling (Claude Code loads MEMORY.md itself, so the
+  # hook can't truncate it — but it CAN surface when the ceiling is breached so
+  # silently-dropped entries don't go unnoticed). Warn at 90% so it's actionable
+  # before drop; name the budget explicitly.
+  AUTOMEM_BUDGET=24576
+  if (( AUTOMEM_BYTES > AUTOMEM_BUDGET * 9 / 10 )); then
+    OUTPUT+="> ⚠️ MEMORY.md is $((AUTOMEM_BYTES/1024)) KB vs the 24 KB index ceiling — entries past 24 KB are silently dropped by the loader. Tighten index lines (move detail into atom files, keep each line < ~200 chars) or archive old atoms so recall stays complete.\n\n"
   fi
 fi
 
@@ -155,6 +239,16 @@ fi
   printf '[%s] session-start cwd=%s found=[%s] missing=[%s]\n' \
     "$TS" "$CWD" "$(IFS=,; echo "${FOUND[*]:-}")" "$(IFS=,; echo "${MISSING[*]:-}")"
 } >> "$LOG"
+
+# ── Total-injection report ──────────────────────────────────────────────────
+# Make per-session bloat visible: one line with the byte size of everything
+# this hook injects. Measured on the EXPANDED output (printf %b resolves the
+# \n escapes), so it reflects real injected size, not the escaped source.
+if [[ -n "$OUTPUT" ]]; then
+  EXPANDED=$(printf -- '%b' "$OUTPUT")
+  INJECTED_BYTES=$(printf '%s' "$EXPANDED" | wc -c | tr -d ' ')
+  OUTPUT+="---\n_Total injected by session-start: ${INJECTED_BYTES} bytes (~$((INJECTED_BYTES/1024)) KB)._\n"
+fi
 
 # ── Output context if we have something ─────────────────────────────────────
 if [[ -n "$OUTPUT" ]]; then
