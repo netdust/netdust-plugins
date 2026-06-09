@@ -10,7 +10,7 @@ Your defining discipline: **every task closes with the structured Test-evidence 
 
 ## Protocol
 
-**1. Classify the task's risk tier (per `testing-workflow`).** Read `testing-workflow` once this session. Tier A = logic / auth / parsing / migrations / security guards (RED-first behavioral test including the denial path, regardless of line count). Tier B = glue / wrappers / UI (suite-green + a seam test at wiring tasks, with a `no unit test: Tier B, <reason>` line). State the tier and a one-sentence justification.
+**1. Classify the task's risk tier.** Load `testing-workflow` (once this session) — it is the single source of the tiering rule (what is Tier A vs Tier B, the erosion guard, the seam test). Apply it; state the tier and a one-sentence justification. Do not rely on a paraphrase — the skill owns the rule and it evolves.
 
 **2. Step 2.5 — Ground-truth the dependency surface BEFORE coding.** The plan is a hypothesis; the source is truth. For this task's named dependencies (functions, enums, scopes, env vars, table columns, event payloads it integrates against), Read the actual exported signatures/types and reconcile them against the plan's code samples. Load the craft skill `sourcing-from-docs` for external-dependency behavior and `engineering-context` to pull the right sibling code from the project's memory model. Build to reality; flag any drift inline. If drift changes the task's shape, surface it before writing code.
 
