@@ -46,7 +46,7 @@ What the harness *loads* at each step. Each craft skill **layers on top of its s
 
 ## Agent personas
 
-Four personas, one per important moment of the harness. **Personas load skills** — an agent is the *who* (role + judgment + dispatch context) that loads the relevant gates and craft skills to do its job. Skills stay the single source of *how*; agents don't duplicate them.
+Eight agents: **four stage personas** (one per important moment of the harness) plus **four specialist reviewers** the review stage fans out to. **Personas load skills** — an agent is the *who* (role + judgment + dispatch context) that loads the relevant gates and craft skills to do its job. Skills stay the single source of *how*; agents don't duplicate them. The table below covers the four stage personas; the specialists (`security-sentinel`, `performance-oracle`, `invariant-auditor`, `code-simplicity-reviewer`) are deep single-dimension reviewers dispatched alongside the generalist `reviewer` at Stage 3.
 
 | Agent | Owns | Loads |
 |---|---|---|
@@ -76,19 +76,32 @@ netdust-agent/
 ├── .claude-plugin/plugin.json   # manifest
 ├── CLAUDE.md                    # the two-layer model + naming/authority/layering rules
 ├── README.md                    # this file
+├── .gitignore
 ├── docs/BLUEPRINT.md            # the layer map + design decisions
 ├── skills/
 │   ├── harnessed-development/   # the entry sequencer (+ <craft_routing>)
 │   ├── <harness gates>/         # threat-modeling, architecture-invariants,
 │   │                            #   feature-acceptance, testing-workflow,
-│   │                            #   test-effectiveness, shake-out
+│   │                            #   test-effectiveness, shake-out, compounding
 │   ├── <craft how-to>/          # writing-tests, designing-apis, building-frontend,
 │   │                            #   engineering-context, versioning-with-git,
 │   │                            #   driving-the-browser, refining-ideas,
 │   │                            #   sourcing-from-docs, doubting-decisions,
-│   │                            #   simplifying-code, deploying
+│   │                            #   simplifying-code, deploying, dev-stack
+│   ├── */references/            # on-demand checklists (security, accessibility,
+│   │                            #   performance, sweep-*, failure-modes, …)
 │   └── _shared/                 # shared reference (finding-verification)
-└── agents/                      # planner, implementer, reviewer, shakeout-qa
+├── agents/                      # stage personas: planner, implementer,
+│   │                            #   reviewer, shakeout-qa
+│   │                            # specialists: security-sentinel,
+│   │                            #   performance-oracle, invariant-auditor,
+│   │                            #   code-simplicity-reviewer
+├── commands/                    # /integration, /shakeout, /deploy, /evaluate,
+│   │                            #   /skill-audit, /red-test, /feature-acceptance,
+│   │                            #   /test-effectiveness, /architecture-invariants,
+│   │                            #   /memory-audit, /pattern-miner
+└── hooks/                       # SessionStart/Stop, SubagentStop testing-gate,
+                                 #   PreToolUse guard (hooks.json)
 ```
 
 ---
