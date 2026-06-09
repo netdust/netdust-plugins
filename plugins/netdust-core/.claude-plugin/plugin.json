@@ -1,7 +1,7 @@
 {
   "name": "netdust-core",
-  "version": "0.1.0",
-  "description": "Netdust business + ops + content core: per-project memory (SessionStart load + Stop-hook DECISION:/RISK:/LESSON:/TODO: tag capture), the destructive-command PreToolUse guard, content/marketing skills (brand-voice, marketing, market-research), the research skill, ops/infra skills (ploi, secure-server, dev-stack — DDEV/branch-flow/.env), the 9-method /deploy dispatcher, /memory-audit + /pattern-miner knowledge commands, and the ploi MCP. NOT a coding harness — the build harness (gates, craft skills, reviewer agents, TDD/threat-model/shake-out, /integration + /shakeout) lives in netdust-agent. Stack-agnostic. Layered on by netdust-wp, netdust-statamic.",
+  "version": "0.2.0",
+  "description": "Netdust business + ops + content core: per-project memory (SessionStart load + Stop-hook DECISION:/RISK:/LESSON:/TODO: tag capture), the destructive-command PreToolUse guard, content/marketing skills (brand-voice, marketing, market-research), the research skill, ops/infra skills (ploi, secure-server, dev-stack \u2014 DDEV/branch-flow/.env), the 9-method /deploy dispatcher, /memory-audit + /pattern-miner knowledge commands, and the ploi MCP. NOT a coding harness \u2014 the build harness (gates, craft skills, reviewer agents, TDD/threat-model/shake-out, /integration + /shakeout) lives in netdust-agent. Stack-agnostic. Layered on by netdust-wp, netdust-statamic.",
   "author": {
     "name": "Stefan Vermeulen",
     "email": "stefan@netdust.be",
@@ -11,7 +11,9 @@
   "mcpServers": {
     "ploi": {
       "command": "node",
-      "args": ["${HOME}/mcp/ploi-mcp-server/ploi-mcp-server/dist/index.js"],
+      "args": [
+        "${HOME}/mcp/ploi-mcp-server/ploi-mcp-server/dist/index.js"
+      ],
       "env": {
         "PLOI_API_TOKEN": "${PLOI_API_TOKEN}"
       }
