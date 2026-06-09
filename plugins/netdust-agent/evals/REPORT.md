@@ -50,17 +50,32 @@ file load order). Final verdicts for the 5 re-run skills rest on DIRECT READING 
 captured with-skill outputs, not the auto-scorer. Lesson recorded: an LLM judge is a
 triage signal, not a system of record — read the transcripts (which skill-eval itself says).
 
-## Tiered verdict — all 39 artifacts
+## Tiered verdict — all 39 artifacts (Round 3 closed the B2/B3 proof gap)
 
-- **B1 — discipline skills (14):** behaviorally proven above. All enhance coding.
+- **B1 — discipline skills (14):** behaviorally proven (direct-read). All enhance coding.
+- **B3 — craft skills (5: designing-apis, driving-the-browser, deploying, versioning-with-git,
+  dev-stack):** NOW behaviorally proven by capture+direct-read (Round 3). Each produced its
+  exact discipline beyond baseline — designing-apis' input/output type split, deploying's
+  shake-out-first + site.risk triple-check, versioning-with-git's atomic-commit + secret-scan,
+  dev-stack's `staging` branch + `make feature`, driving-the-browser's CDP fetch-instrumentation
+  + defer-to-feature-acceptance. (driving-the-browser needed a hard prose-only prompt — it kept
+  trying to drive a real browser.)
 - **B2 — orchestration (5: harnessed-development, planner, implementer, reviewer, shakeout-qa):**
-  trigger-correct + reachability proven by the earlier wiring audit (every stage persona
-  + the sequencer is wired into a stage/dispatch; no orphans).
-- **B3 — pointers / verbatim-proven copies (20):** trigger-correct. These either route to an
-  authority (`deploying`→/deploy+dev-stack, `driving-the-browser`→superpowers-chrome,
-  `versioning-with-git`→commit-craft+dev-stack, `dev-stack`, `designing-apis`→checklist),
-  or are the 4 specialist reviewer agents + 11 commands copied verbatim from netdust-core
-  where their content was already proven in production use.
+  trigger-correct + reachability (wiring audit) + a behavioral spot-check of the sequencer:
+  given an untrusted-webhook feature, with-skill it classified the work, applied the stack
+  override, and sequenced Stage 0→3 firing threat-modeling/wp-plan-requirements/invariants
+  with concrete mitigations — baseline dove straight in. The personas ARE the sequencer's
+  stages (planner=Stage1, implementer=Stage2, reviewer+shakeout-qa=Stage3), exercised by that run.
+- **Commands (11):** 6 INVOKE an already-behaviorally-proven skill (verified by grep) and inherit
+  the proof as the invocation surface (/integration, /shakeout, /evaluate, /feature-acceptance,
+  /test-effectiveness, /architecture-invariants). /skill-audit + /memory-audit PROVEN by running
+  their audit logic over real files (0 description flags — cross-validates the trigger fixes;
+  actionable staleness report). /red-test's behavior IS the baseline-vs-skill method this whole
+  eval used (proven-by-use). /deploy + /pattern-miner are env-gated (server / ~/Sites) — verbatim
+  core copies, structural+provenance proof.
+- **Specialist reviewer agents (4: security-sentinel, performance-oracle, invariant-auditor,
+  code-simplicity-reviewer):** trigger-correct (security-sentinel's plan-vs-audit boundary fixed
+  this round) + verbatim copies of netdust-core agents proven in production review use.
 
 ## Honest caveats (what this proof is and isn't)
 1. The LLM-as-judge was too noisy to be the system of record (see Methodology note).

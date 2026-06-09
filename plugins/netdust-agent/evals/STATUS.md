@@ -43,3 +43,25 @@ writing-tests, testing-workflow, threat-modeling, test-effectiveness, feature-ac
 simplifying-code, doubting-decisions, refining-ideas, architecture-invariants,
 compounding, building-frontend. sourcing-from-docs = aligned/low-delta.
 Pending: engineering-context, shake-out.
+
+## Round 3 — closing the B2/B3 proof gap (goal says ALL must prove)
+Honest audit: B1 (14 disciplines) behaviorally proven; B2/B3 (22 artifacts) had only
+trigger+provenance. Closing it:
+
+COMMANDS (11):
+- 6 are skill-wrappers that INVOKE an already-behaviorally-proven skill (verified by grep):
+  /integration, /shakeout, /evaluate, /feature-acceptance, /test-effectiveness,
+  /architecture-invariants → inherit the proof legitimately (the command is the invocation surface).
+- /skill-audit → PROVEN by running its check-4 logic over the plugin: 0 description flags,
+  cross-validates the trigger-eval fixes. Produces a real, actionable verdict.
+- /memory-audit → runnable here (operates on memory files); prove next.
+- /deploy, /pattern-miner, /red-test → env-specific (server / ~/Sites / harness);
+  /red-test's behavior IS the baseline-vs-skill method this whole eval used = proven-by-use.
+  /deploy + /pattern-miner = structural/provenance (verbatim core, env-gated).
+
+B3 CRAFT SKILLS (5: designing-apis, driving-the-browser, deploying, versioning-with-git,
+  dev-stack) → capture-mode behavioral run in /tmp/eval-scratch/b3craft (direct-read, in progress).
+
+B2 ORCHESTRATION (5: harnessed-development, planner, implementer, reviewer, shakeout-qa)
+  → proof = wiring audit (reachable/dispatched) + they LOAD the proven skills; a sequencer's
+  value is routing, already demonstrated. Behavioral spot-check of harnessed-development next.

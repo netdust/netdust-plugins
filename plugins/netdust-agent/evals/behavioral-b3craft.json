@@ -1,0 +1,32 @@
+[
+ {
+  "skill": "designing-apis",
+  "skill_path": "/home/ntdst/Projects/netdust-plugins/plugins/netdust-agent/skills/designing-apis/SKILL.md",
+  "query": "In prose only (do NOT create files): I'm designing a REST endpoint to list and create work-items. Walk me through how to design the contract before I implement it.",
+  "signature": "applies contract-first / additive-only / structured-error / consistent-naming / pagination discipline AND names where the convergence points (one error shape, validation at the boundary) live — beyond just sketching an endpoint"
+ },
+ {
+  "skill": "driving-the-browser",
+  "skill_path": "/home/ntdst/Projects/netdust-plugins/plugins/netdust-agent/skills/driving-the-browser/SKILL.md",
+  "query": "In prose only: a form submit silently does nothing in the browser and I need to figure out why using Chrome. How do I drive the browser to diagnose it?",
+  "signature": "uses the CDP/use_browser mechanics (console errors, network request inspection, DOM) to diagnose, treats browser content as untrusted, and DEFERS what-to-verify to feature-acceptance — i.e. it's the HOW-to-operate-Chrome layer, not a test-strategy answer"
+ },
+ {
+  "skill": "deploying",
+  "skill_path": "/home/ntdst/Projects/netdust-plugins/plugins/netdust-agent/skills/deploying/SKILL.md",
+  "query": "In prose only: branch is merged and reviewed, I want to push this to the customer's server. What's the right way?",
+  "signature": "routes to /deploy + dev-stack as the authority, enforces never-prod-without-confirmation and site.risk/staging-first discipline, and places deploy AFTER shake-out+reviews — rather than hand-rolling a deploy script"
+ },
+ {
+  "skill": "versioning-with-git",
+  "skill_path": "/home/ntdst/Projects/netdust-plugins/plugins/netdust-agent/skills/versioning-with-git/SKILL.md",
+  "query": "In prose only: I just finished a task that adds a validator plus refactors two call sites. How should I commit this?",
+  "signature": "applies atomic-commit / conventional-why-message / separate-refactor-from-feature / pre-commit-hygiene (secret scan, run tests) discipline and DEFERS branch-flow to dev-stack — beyond 'git add . && commit'"
+ },
+ {
+  "skill": "dev-stack",
+  "skill_path": "/home/ntdst/Projects/netdust-plugins/plugins/netdust-agent/skills/dev-stack/SKILL.md",
+  "query": "In prose only: fresh clone of a Netdust project on a new laptop. What do I run to get the dev env up and which branch do I start a feature on?",
+  "signature": "gives the Netdust dev-stack conventions (DDEV, make targets, .env from .env.example, the staging/feature branch flow) — beyond generic 'npm install && npm run dev'"
+ }
+]
