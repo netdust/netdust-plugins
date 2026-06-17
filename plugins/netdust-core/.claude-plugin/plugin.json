@@ -1,7 +1,7 @@
 {
   "name": "netdust-core",
   "version": "0.1.0",
-  "description": "Netdust harness core: per-project memory + observability (deterministic tag scanner + optional Haiku), session hooks (SubagentStop testing-gate, Stop, SessionStart), cross-stack skills (harnessed-development [the single full-harness entry point], research, marketing, brand-voice, code-audit, shake-out, testing-workflow, test-effectiveness, threat-modeling, architecture-invariants, constitution-bridge, secure-server, ploi, dev-stack), the spec-kit graft (gate-bearing plan/spec/tasks override templates + per-project installer in spec-kit/), 7 code-reviewer agents, the 9-method /deploy dispatcher, /integration + /shakeout phase/spec gates, and the ploi MCP. Stack-agnostic. Layered on by netdust-wp, netdust-bun-react, etc.",
+  "description": "Netdust harness core: per-project memory + observability (deterministic tag scanner + optional Haiku), session hooks (SubagentStop testing-gate, Stop, SessionStart), cross-stack skills (harnessed-development [the single full-harness entry point], research, marketing, brand-voice, code-audit, shake-out, testing-workflow, test-effectiveness, threat-modeling, architecture-invariants, constitution-bridge, spec-authoring, spec-analysis, secure-server, ploi, dev-stack), the spec-kit graft (gate-bearing plan/spec/tasks override templates + the deterministic gate-check.py + per-project installer in spec-kit/), 7 code-reviewer agents, the 9-method /deploy dispatcher, /integration + /shakeout phase/spec gates, and the ploi MCP. Stack-agnostic. Layered on by netdust-wp, netdust-bun-react, etc.",
   "author": {
     "name": "Stefan Vermeulen",
     "email": "stefan@netdust.be",
