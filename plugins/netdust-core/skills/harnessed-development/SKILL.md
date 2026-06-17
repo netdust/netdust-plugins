@@ -43,8 +43,8 @@ Before any other action, classify the work in one sentence in your transcript. T
 
 | Work class | Stages that fire |
 |---|---|
-| **A — New feature / multi-task change** (most common) | Stage 0 (brainstorm if intent unclear) → Stage 1 (plan + gates) → Stage 2 (execute) → Stage 3 (shake-out + finish) |
-| **B — Executing an existing written plan** | Stage 1 freshness review → Stage 2 (execute) → Stage 3 |
+| **A — New feature / multi-task change** (most common) | Stage 0 (brainstorm if intent unclear) → **Stage 0.5 (spec-authoring → `spec.md` + clarify HALT, if the spec-kit graft is installed)** → Stage 1 (plan + gates) → **Stage 1.5 (spec-analysis gate)** → Stage 2 (execute) → Stage 3 (shake-out + finish) |
+| **B — Executing an existing written plan** | Stage 1 freshness review → **Stage 1.5 (spec-analysis gate, if spec-kit artifacts exist)** → Stage 2 (execute) → Stage 3 |
 | **C — Bug-fix bundle from /code-review or /security-review** | Each finding is one TDD cycle in Stage 2; Stage 3 verifies. Threat-model the diff (Stage 1 security gate) if any finding touches a security boundary |
 | **D — Ad-hoc edit to a named security-boundary file** (auth/session/token, URL-allow-list, crypto) — even a one-liner, even with no plan | Stage 1 **security gate only** (threat-modeling on the diff) → implement with TDD → verify. This closes the 2026-06-03 gap. |
 
@@ -57,9 +57,15 @@ State your class and one-sentence reason before proceeding. If you cannot classi
 
 If the feature's intent, scope, or shape is not already pinned down, invoke `superpowers:brainstorming` **before** any plan exists (if a stack sub-plugin offers a brainstorming skill for this stack, prefer it — see `<stack_overrides>`). Skip only when the work is a well-specified change with no open design questions.
 
+## Stage 0.5 — Author the spec (Class A, when the spec-kit graft is installed)
+
+If the project has the spec-kit graft (`/spec-kit-setup` was run — `specs/` + `.specify/templates/overrides/` exist), invoke `netdust-core:spec-authoring` **before** writing the plan. It wraps `/speckit.specify` + `/speckit.clarify` to produce `specs/<feature>/spec.md` (what/why, user stories, acceptance criteria — no tech stack) and HALTS on any unresolved `[NEEDS CLARIFICATION]` (enforced mechanically by `spec-kit/gate-check.py`). The plan in Stage 1 is then written against a clarified spec, and the spec's Security-relevant-surfaces flags pre-arm the 1a threat-model gate.
+
+Skip this stage only when the graft is not installed (fall back to brainstorm → plan directly) or for Class B/C/D.
+
 ## Stage 1 — Write the plan, with the plan-time gates baked in
 
-Invoke `superpowers:writing-plans`. Follow its checklist. Then layer these netdust gates **before task breakdown is finalized** — they are not optional add-ons, they change what tasks the plan contains:
+Invoke `superpowers:writing-plans`. Follow its checklist. **If the spec-kit graft is installed, the plan is written from the override `plan-template.md` (the 1a/1b/1c/1f gate sections are pre-structured as `[GATE]` headings) against the Stage-0.5 `spec.md`** — `writing-plans` fills it in. Then layer these netdust gates **before task breakdown is finalized** — they are not optional add-ons, they change what tasks the plan contains:
 
 **1a. Threat-modeling gate.** Invoke `netdust-core:threat-modeling` and embed its `## Threat model` section inline in the plan IF the feature touches any of: user-controlled URLs (webhooks, BYOK provider URLs, OAuth redirects, embed/CMS endpoints), auth/session/token surfaces, untrusted parsing (frontmatter from external sources, AI tool-call args, webhook payloads, file uploads), BYOK credentials, multi-tenancy / workspace boundaries, or any path where the server makes outbound requests to user-supplied addresses. Named assets → named attacks → named mitigations → explicit deferrals, BEFORE task breakdown. The threat model then becomes the `/code-review` convergence target (reviews verify against named mitigations instead of free-form hunting — converges in one round instead of probabilistically over many).
 
@@ -83,7 +89,18 @@ Invoke `superpowers:writing-plans`. Follow its checklist. Then layer these netdu
 
 If you are executing a plan someone else wrote (Class B), do Stage 1 as a **critical freshness review**: read the plan, run 1a–1c against it, **confirm its review-group sizing (1f) — if a phase is >~4 tasks or contains an irreversible/security step with no sub-group review marker, add the markers before starting** — and raise concerns with your human partner before starting. A plan is a snapshot of conventions at authoring time; the codebase has moved since.
 
+## Stage 1.5 — Spec-analysis gate (pre-execution barrier)
+
+Before dispatching ANY task, invoke `netdust-core:spec-analysis`. Two parts:
+
+1. **Semantic consistency** — `/speckit.analyze` cross-checks spec ↔ plan ↔ tasks (every requirement covered, no orphan tasks, no contradiction). (Skip part 1 if the spec-kit graft is not installed.)
+2. **Mechanical gate-presence — BLOCKING.** Run `spec-kit/gate-check.py specs/<feature>`. It FAILS (and you do NOT proceed) on: a missing `[GATE]` heading; **a security surface flagged in `spec.md` but the plan's `## Threat model` left N/A** (the proactive 1a gate unsatisfied); a task with no `[Tier A|B]` marker; a review cluster >4 tasks or an irreversible step that isn't a solo non-`[P]` task.
+
+This is the step that turns the previously skill-honored gates (1a/1b/1d/1f) into a machine-checked barrier — it cannot be talked out of a finding. On FAIL, route each finding to its remediation (`threat-modeling` / `architecture-invariants` / `testing-workflow` / re-split clusters), fix the artifacts, re-run until green. **A green gate-check is the Stage-2 entry condition.** Even without the graft, apply 1a–1f as a manual checklist before proceeding.
+
 ## Stage 2 — Execute
+
+**Handoff seam (spec-kit graft).** When the plan came through spec-kit, execution starts from `tasks.md` — it feeds THIS stage. **NEVER run `/speckit.implement`:** it executes tasks flat with none of the Stage-2 gates below (no threat-model verify, no per-task tiers, no review-cluster HALT, no `subagent-stop.py` backstop). spec-kit owns spec→plan→tasks; the netdust spine owns execute→verify→finish. The handoff is `tasks.md`, and nothing downstream of it runs under spec-kit.
 
 **Step 2.0 — Pick and invoke the execution upstream skill.** State your choice and one-sentence reason first.
 
@@ -105,6 +122,8 @@ Invoke it via the Skill tool. Its content is your primary instruction set for ex
   Those blocks — visible in the report and the commit body — ARE the gate. Do **not** require the subagent to literally re-invoke `Skill("netdust-core:testing-workflow")` once per task: the gate skill itself now states (`testing-workflow` "What the discipline actually is") that *"Re-invoking the Skill tool once per task is **not** the discipline."* The discipline is classify-at-tier → verify-at-tier → full-suite + static-analysis → record the tier/deferral lines. (The subagent reads testing-workflow **once per session** to internalize it; re-invoking it per task is the ghost ritual Sub-phase A proved was bypassable — 0/7 subagents re-invoked it and the work was still correct *because the structured blocks, not the invocation, were the real evidence*.)
 
 If any required block or line is missing, treat the task as DONE_WITH_CONCERNS or NEEDS_CONTEXT per the upstream skill's status handling. Do not mark complete without them. The `subagent-stop.py` hook is a backstop, not the primary mechanism — the structured blocks are.
+
+**Step 2.6b — Standards gate at every code-task close.** Alongside the testing gate, invoke `netdust-core:standards-gate`: run the project's configured linter/formatter (eslint/prettier/biome, or phpcs/php-cs-fixer) on the touched files and record a `Standards: clean | <N fixed> | n/a — no linter` line in the Test-evidence block. This closes goal #2 — coding standards become enforced, not advisory. The same `subagent-stop.py` hook backstops it: it blocks a code-editing subagent's close when a linter is configured for the project but was never run. If no linter is configured, the gate (and the backstop) no-op — do not impose a style of your own.
 
 **Step 2.7 — Bug-fix bundles (Class C) get one TDD cycle per finding.** Each `/code-review` or `/security-review` finding is a behavior change → the Iron Law applies. Invoke `superpowers:systematic-debugging` once per bug via the Skill tool, fix one bug per cycle, re-sweep between. "I already see the fix, the phases are obvious here" is the exact rationalization the debugging skill's red-flags table names. (2026-05-30, Sub-phase F: bundling I2+I3 into one cycle drifted the process even though outcomes were sound.)
 
@@ -147,6 +166,12 @@ Before reporting STATUS, you MUST:
 3. Run static analysis on touched files. For TypeScript:
    `bun x tsc --noEmit` from the affected app's directory.
 
+3b. Run the project's linter/formatter on the touched files if one is
+   configured — `netdust-core:standards-gate` (eslint + `prettier --check`
+   for TS/JS, `phpcs` for PHP/WP, biome, etc.). Fix violations or justify
+   them narrowly inline. If no linter is configured, this is n/a. The
+   subagent-stop hook blocks your close if a linter exists and you skip it.
+
 4. End your final message with these two blocks, verbatim and complete:
 
    ## Test evidence
@@ -159,6 +184,7 @@ Before reporting STATUS, you MUST:
      <1 un-mocked-chain assertion + 1 negative/adversarial case, or "n/a — not a wiring task">
    - Suite delta: <app> was <N>, now <M>, <K> fails
    - Typecheck: <command> → <clean | errors>
+   - Standards: <clean | N fixed | n/a — no linter> (cmd: <what you ran>)
    - Deferral: Risk this does NOT cover: <concurrency | adversarial-input |
      cross-actor | multi-component | un-mocked-seam | none> → <integration-gate | /code-review | invariant-auditor | /shakeout>
 
@@ -199,6 +225,9 @@ These thoughts mean you are about to skip a gate. Stop.
 | "Two-stage review is ceremony for a simple task" | The review loop catches what TDD doesn't. Do not skip it. |
 | "I'll just finish the rest of the phase's tasks, then review the whole thing at the end" | That's the un-bisectable mega-diff (1f / Step 2.8). HALT at the review-gate marker. A reviewer must hold one cluster (~3–4 tasks), not a 7-task phase. Irreversible-migration clusters review alone. |
 | "I'll classify the tier and record the deferral line after the commit, not before reporting" | Order is: verify-at-tier → run full suite + static analysis → report with the tier + RED-first/Tier-B + deferral blocks. The blocks must be in the report; a commit with no tier/deferral evidence bypasses the gate. (Re-invoking the testing-workflow Skill tool per task is NOT required — the structured blocks are the evidence.) |
+| "I'll just run `/speckit.implement` to execute the tasks" | That bypasses every Stage-2 gate — threat-model verify, per-task tiers, review-cluster HALT, the `subagent-stop` backstop. The handoff is `tasks.md`; Stage 2 executes it under the netdust spine. NEVER `/speckit.implement`. |
+| "`/speckit.analyze` passed, I'll start dispatching" | analyze is only half of Stage 1.5. Run `gate-check.py` (the mechanical part) — it is what catches a skipped threat model, an un-tiered task, or an oversized cluster. A green checker is the Stage-2 entry condition. |
+| "Tests are green, the task is done" | Tests are half the close. Run `standards-gate` too (Step 2.6b) and record the `Standards:` line — or the `subagent-stop` hook blocks your close when a linter is configured. |
 
 </red_flags>
 
@@ -214,6 +243,8 @@ This skill has succeeded when:
 6. Every implementer dispatch contained the verbatim addendum; every implementer report ended with the structured Test-evidence + STATUS blocks carrying the tier classification, the Tier-A RED-first proof (or the `no unit test: Tier B` line), and the deferral line. (The auditable evidence is those blocks + the commit body — NOT a per-task `Skill("netdust-core:testing-workflow")` re-invocation, which the gate skill itself has retired.)
 7. Step 2.5 ground-truthing was performed per-task for every task integrating against other code.
 8. Phase close handed off to `netdust-core:shake-out` and then `superpowers:finishing-a-development-branch`.
+9. When the spec-kit graft is installed: a clarified `spec.md` existed before the plan (Stage 0.5), and `spec-analysis`'s `gate-check.py` was GREEN before any task dispatch (Stage 1.5). `/speckit.implement` was never run.
+10. Every code-task close recorded a `Standards:` line (`clean | N fixed | n/a — no linter`); the `subagent-stop` standards backstop did not have to fire.
 
 If any gate that *should* have fired (per the class + trigger lists) did not, the skill failed at its specific job — even if the code shipped correctly. This skill exists for *gate-coverage durability*; the upstream skills handle code correctness.
 
@@ -225,7 +256,12 @@ If any gate that *should* have fired (per the class + trigger lists) did not, th
 |---|---|
 | `superpowers:brainstorming` | **STAGE 0.** Front-loaded when intent is unclear. A stack sub-plugin's brainstorming skill replaces it when loaded (see `<stack_overrides>`). |
 | stack sub-plugins (`netdust-wp`, `netdust-statamic`, future `netdust-<stack>`) | **OVERRIDE LAYER.** When loaded for the project, their stage-specific skills / reviewers / test runners replace the generics named above. This skill never hardcodes their names — see `<stack_overrides>`. |
-| `superpowers:writing-plans` | **STAGE 1.** The plan this skill wraps the gates around. |
+| `superpowers:writing-plans` | **STAGE 1.** The plan this skill wraps the gates around. With the spec-kit graft, written from the override `plan-template.md` so the gates are pre-structured. |
+| `netdust-core:spec-authoring` | **STAGE 0.5.** Wraps `/speckit.specify` + `/speckit.clarify`; HALTs on unresolved `[NEEDS CLARIFICATION]`. Produces the `spec.md` Stage 1 plans against. |
+| `netdust-core:spec-analysis` | **STAGE 1.5.** Wraps `/speckit.analyze` + the mechanical `spec-kit/gate-check.py` — the pre-execution barrier that makes the 1a/1b/1d/1f gates machine-checked, not skill-honored. |
+| `netdust-core:standards-gate` | **STAGE 2 GATE (Step 2.6b).** Runs the project linter on touched files at each code-task close; records the `Standards:` line; backstopped by `subagent-stop.py`. Closes goal #2 (enforced coding standards). |
+| `netdust-core:constitution-bridge` | **SETUP.** Generates the spec-kit constitution as a view over RULES/SOUL/invariants; declares the standard `standards-gate` enforces. No governance fork. |
+| spec-kit graft (`spec-kit/` + `/spec-kit-setup`) | **GRAFT MECHANISM.** Override templates bake the gates into spec-kit's spec/plan/tasks; `gate-check.py` verifies them. Keystone invariant: handoff is `tasks.md`, `/speckit.implement` is never run. |
 | `netdust-core:threat-modeling` | **STAGE 1 GATE (1a).** Fired by trigger list, at plan-time OR on an ad-hoc security diff (Class D). Becomes the /code-review convergence target. |
 | `netdust-core:architecture-invariants` | **STAGE 1 GATE (1b).** Fired when a convergence point is touched. |
 | `superpowers:subagent-driven-development` | **STAGE 2 — primary branch.** Parallel-independent tasks. |
