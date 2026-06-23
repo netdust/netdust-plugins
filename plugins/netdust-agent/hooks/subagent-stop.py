@@ -40,6 +40,14 @@ CODE_EDITING_TOOLS = {"Edit", "Write", "NotebookEdit", "MultiEdit"}
 # tests actually ran (see ran_tests_via_bash).
 COACHING_SKILL = "testing-workflow"
 
+# Standards backstop (goal #2): when a project has a linter/formatter configured,
+# a code-editing task should also have RUN it. Enforced ONLY where standards are
+# actually defined (project_has_linter) — projects without a linter are never
+# falsely blocked. The authoritative enforcement is the standards-gate skill's
+# close-out evidence line; this hook is the deterministic backstop, mirroring the
+# testing gate.
+STANDARDS_SKILL = "standards-gate"
+
 # File suffixes that are NOT code — a Write/Edit touching only these has
 # nothing to test. Research, spec, and map subagents write large .md reports;
 # gating them blocks the stop and swallows their findings (the report gets
@@ -174,8 +182,19 @@ def scan_subagent_activity(messages: list[dict]) -> dict:
     edited = False
     invoked_testing = False
     ran_tests_bash = False
+    ran_lint_bash = False
     lines_added = 0
     lines_removed = 0
+
+    lint_cmd_pattern = re.compile(
+        r"\b("
+        r"(npx |bunx )?(eslint|prettier|biome)\b|"
+        r"vendor/bin/(phpcs|phpcbf|php-cs-fixer)\b|"
+        r"(ddev exec )?(phpcs|phpcbf|php-cs-fixer)\b|"
+        r"(npm run|pnpm run|pnpm|yarn|bun run) (lint|format|cs|cs-fix|lint:fix)\b|"
+        r"composer (run-script )?(lint|phpcs|cs|cs-fix|format)\b"
+        r")"
+    )
 
     test_cmd_pattern = re.compile(
         r"\b("
@@ -228,6 +247,8 @@ def scan_subagent_activity(messages: list[dict]) -> dict:
                 cmd = tool_input.get("command", "") or ""
                 if test_cmd_pattern.search(cmd):
                     ran_tests_bash = True
+                if lint_cmd_pattern.search(cmd):
+                    ran_lint_bash = True
 
     return {
         "edited_code": edited,
@@ -236,42 +257,109 @@ def scan_subagent_activity(messages: list[dict]) -> dict:
         "net_additions": lines_added - lines_removed,
         "invoked_testing": invoked_testing,
         "ran_tests_via_bash": ran_tests_bash,
+        "ran_lint_via_bash": ran_lint_bash,
     }
 
 
-def build_block_message(activity: dict) -> str:
-    """The message Claude (the subagent) sees when we block its stop."""
-    coaching = ""
-    if not activity["invoked_testing"]:
-        coaching = (
-            "\n\nNote: You also did not invoke Skill(\"testing-workflow\"). The "
-            "skill is not gating — but it loads the task-complete checklist "
-            "(test exists, test was red first, full suite green, static "
-            "analysis clean). If you skipped it, you may have skipped the "
-            "discipline too. Invoke it before re-running the suite."
+def project_has_linter(cwd: str) -> bool:
+    """True if the project at cwd has a linter/formatter configured. The standards
+    backstop fires only when this is True — enforce standards only where they are
+    defined, so a project with no linter is never falsely blocked."""
+    if not cwd:
+        return False
+    root = Path(cwd)
+    config_names = [
+        # JS/TS
+        ".eslintrc", ".eslintrc.js", ".eslintrc.cjs", ".eslintrc.json",
+        ".eslintrc.yml", ".eslintrc.yaml",
+        "eslint.config.js", "eslint.config.mjs", "eslint.config.cjs", "eslint.config.ts",
+        ".prettierrc", ".prettierrc.json", ".prettierrc.js", ".prettierrc.cjs",
+        ".prettierrc.yml", ".prettierrc.yaml", "prettier.config.js",
+        "biome.json", "biome.jsonc",
+        # PHP/WP
+        "phpcs.xml", "phpcs.xml.dist", ".phpcs.xml", ".phpcs.xml.dist",
+        ".php-cs-fixer.php", ".php-cs-fixer.dist.php",
+    ]
+    for name in config_names:
+        if (root / name).exists():
+            return True
+    pkg = root / "package.json"
+    if pkg.exists():
+        try:
+            data = json.loads(pkg.read_text())
+            scripts = data.get("scripts", {}) or {}
+            if "lint" in scripts or "format" in scripts:
+                return True
+            if any(tok in str(v) for v in scripts.values()
+                   for tok in ("eslint", "prettier", "biome")):
+                return True
+            deps = {**(data.get("devDependencies") or {}), **(data.get("dependencies") or {})}
+            if any(d in deps for d in ("eslint", "prettier", "@biomejs/biome")):
+                return True
+        except Exception:
+            pass
+    comp = root / "composer.json"
+    if comp.exists():
+        try:
+            data = json.loads(comp.read_text())
+            deps = {**(data.get("require") or {}), **(data.get("require-dev") or {})}
+            if any(tok in d for d in deps
+                   for tok in ("phpcs", "php_codesniffer", "php-cs-fixer", "wpcs", "coding-standard")):
+                return True
+            scripts = data.get("scripts", {}) or {}
+            if any("phpcs" in str(k) or "phpcs" in str(v) for k, v in scripts.items()):
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def build_block_message(activity: dict, missing: list[str]) -> str:
+    """The message Claude (the subagent) sees when we block its stop. `missing` is
+    a subset of {"tests", "standards"} — the close-out gates not yet satisfied."""
+    parts = [
+        "netdust-agent/SubagentStop: close-out gate not satisfied.\n\n",
+        f"You added {activity['lines_added']} lines of code in this task. Per "
+        "harnessed-development, a task that ships new behavior is not complete "
+        "until its close-out gates have actually executed — not just been "
+        "intended, executed.\n",
+    ]
+
+    if "tests" in missing:
+        parts.append(
+            "\nMISSING — TESTS did not run. Run the suite via Bash:\n"
+            "      bun test            (Bun/TS projects)\n"
+            "      npx vitest run      (Node/Vitest)\n"
+            "      vendor/bin/phpunit               (PHP/PHPUnit)\n"
+            "      vendor/bin/codecept run unit     (Codeception)\n"
+            "      ddev exec phpunit                (WP under DDEV)\n"
         )
 
-    return (
-        "netdust-agent/SubagentStop: testing gate not satisfied.\n\n"
-        f"You added {activity['lines_added']} lines of code in this task and "
-        "did not run the test suite. Per the harnessed-development skill "
-        "(testing-workflow gate), "
-        "a task that ships new behavior is not complete until tests for it "
-        "have actually executed — not just been written, executed.\n\n"
-        "Required:\n"
-        "  - Run the test suite via Bash. Examples:\n"
-        "      bun test          (Bun/TS projects)\n"
-        "      npx vitest run    (Node/Vitest)\n"
-        "      vendor/bin/phpunit               (PHP/PHPUnit)\n"
-        "      vendor/bin/codecept run unit     (Codeception)\n"
-        "      ddev exec phpunit                (WP under DDEV)\n\n"
-        "Confirm the suite is green, then stop again. This hook fires once "
-        "per stop cycle, so a second stop attempt passes through."
-        f"{coaching}\n\n"
-        "If this gate fires in error (genuinely test-free task — doc edits, "
-        "dead-code refactor, formatting), say so out loud in your final "
-        "response and stop again; the bypass is automatic."
+    if "standards" in missing:
+        parts.append(
+            "\nMISSING — STANDARDS gate. This project has a linter/formatter "
+            "configured but you did not run it. Run it on the touched files:\n"
+            "      npx eslint <files> && npx prettier --check <files>   (TS/JS)\n"
+            "      vendor/bin/phpcs <files>                             (PHP/WP)\n"
+            "Then record a `Standards: clean | <violations>` line in your "
+            "Test-evidence block. (See the standards-gate skill.)\n"
+        )
+
+    if "tests" in missing and not activity["invoked_testing"]:
+        parts.append(
+            "\nNote: you also did not invoke Skill(\"testing-workflow\"). It is "
+            "not gating, but it loads the task-complete checklist (tier, "
+            "RED-first, suite green, static analysis).\n"
+        )
+
+    parts.append(
+        "\nFix the missing item(s), confirm green, then stop again. This hook "
+        "fires once per stop cycle, so a second stop attempt passes through.\n"
+        "If a gate fires in error (genuinely test-free task — doc edits, "
+        "dead-code refactor), say so in your final response and stop again; the "
+        "bypass is automatic."
     )
+    return "".join(parts)
 
 
 def main() -> None:
@@ -312,7 +400,8 @@ def main() -> None:
         f"removed={activity['lines_removed']} "
         f"net={activity['net_additions']} "
         f"invoked_testing={activity['invoked_testing']} "
-        f"ran_tests_bash={activity['ran_tests_via_bash']}"
+        f"ran_tests_bash={activity['ran_tests_via_bash']} "
+        f"ran_lint_bash={activity['ran_lint_via_bash']}"
     )
 
     # Decision rules (2026-05-27, revised):
@@ -347,15 +436,28 @@ def main() -> None:
         )
         sys.exit(0)
 
-    if activity["ran_tests_via_bash"]:
+    # Which close-out gates are unmet?
+    #  - TESTS: always required for a non-no-op code change.
+    #  - STANDARDS: required only when the project has a linter configured
+    #    (enforce only where standards are defined — never block a project that
+    #    has no linter). Mirrors the testing gate; closes goal #2.
+    cwd = hook_input.get("cwd", "")
+    has_linter = project_has_linter(cwd)
+    missing = []
+    if not activity["ran_tests_via_bash"]:
+        missing.append("tests")
+    if has_linter and not activity["ran_lint_via_bash"]:
+        missing.append("standards")
+
+    if not missing:
         sys.exit(0)
 
     # Block the stop and feed the message back to the subagent.
     decision_payload = {
         "decision": "block",
-        "reason": build_block_message(activity),
+        "reason": build_block_message(activity, missing),
     }
-    log("blocked reason=missing-testing-workflow-invocation")
+    log(f"blocked missing={','.join(missing)} has_linter={has_linter}")
     print(json.dumps(decision_payload))
     sys.exit(0)
 

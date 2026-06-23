@@ -15,8 +15,12 @@ The harness decides *when* and *whether*. The craft is *how to actually do it*. 
 
 These skills are **sequencers and gates**. They do not teach craft; they decide what fires, in what order, and prove it fired. `harnessed-development` is the single entry point — a pure sequencer that, at each stage, loads the right craft skill and wraps a gate around it.
 
-- `harnessed-development` — entry point; sequences brainstorm → plan(+gates) → execute → shake-out → finish
+- `harnessed-development` — entry point; sequences brainstorm → (spec-authoring) → plan(+gates) → (spec-analysis) → execute → shake-out → finish
 - `writing-plans` — gate: spec → plan → tasks
+- `spec-authoring` — gate (spec-kit graft, Stage 0.5): wraps `/speckit.specify` + `/clarify`; HALTs on unresolved `[NEEDS CLARIFICATION]`
+- `spec-analysis` — gate (spec-kit graft, Stage 1.5): `/speckit.analyze` + mechanical `gate-check.py` — the pre-execution barrier that machine-checks 1a/1b/1d/1f
+- `standards-gate` — gate (Step 2.6b): runs the project linter at each code-task close; backstopped by `subagent-stop.py`
+- `constitution-bridge` — setup: generates the spec-kit constitution as a view over RULES/SOUL/invariants
 - `testing-workflow` — gate: per-task, *what tier of test does this need, prove it's RED-first*
 - `threat-modeling` — gate: inject `## Threat model` when triggers match
 - `architecture-invariants` — gate: name convergence points; flag bypasses
@@ -72,4 +76,4 @@ Superpowers is the base; addyosmani fills genuine gaps; Netdust discipline is th
 
 ## Standalone harness
 
-This plugin is fully self-contained. It holds the complete two-layer harness — the `harnessed-development` sequencer, every gate it fires (testing-workflow, threat-modeling, architecture-invariants, feature-acceptance, test-effectiveness, shake-out, compounding), the craft skills the gates reach for, the reviewer/specialist agents, the session + guard hooks, and its own commands (`/deploy`, `/shakeout`, `/evaluate`, …). Nothing here depends on or defers to another Netdust plugin: every skill, gate, command, and agent it references resolves WITHIN this plugin (or to an external `superpowers:*` / `superpowers-chrome` base). It supersedes the older Netdust core harness — this plugin is now the sole home for that discipline.
+This plugin is fully self-contained. It holds the complete two-layer harness — the `harnessed-development` sequencer, every gate it fires (testing-workflow, threat-modeling, architecture-invariants, feature-acceptance, test-effectiveness, shake-out, compounding, standards-gate), the optional spec-kit graft (`spec-kit/` + `/spec-kit-setup` → gate-bearing spec/plan/tasks override templates + `gate-check.py`; keystone: handoff is `tasks.md`, `/speckit.implement` is never run — see `docs/spec-kit-integration-adr.md`), the craft skills the gates reach for, the reviewer/specialist agents, the session + guard hooks, and its own commands (`/deploy`, `/shakeout`, `/evaluate`, `/spec-kit-setup`, …). Nothing here depends on or defers to another Netdust plugin: every skill, gate, command, and agent it references resolves WITHIN this plugin (or to an external `superpowers:*` / `superpowers-chrome` base). It supersedes the older Netdust core harness — this plugin is now the sole home for that discipline.
