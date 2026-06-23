@@ -1,10 +1,10 @@
 ---
 name: harnessed-development
-description: The single entry point for any non-trivial work in a Netdust project — sequences the FULL harness end to end so no session can skip a gate. Brainstorm → write-plan (with threat-modeling + architecture-invariants when triggered) → execute (subagent/TDD + mandatory testing-workflow at every task close) → shake-out → finish-branch. Triggers on "build a feature", "start a feature", "implement X", "work the plan", "execute the plan", "execute todo.md", "run subagents on this plan", "start building", "do this properly", "the whole harness", "ship X", "fix the code-review findings", "fix the findings from /code-review or /security-review", "address the review feedback on the branch". Also the entry point for ad-hoc security-boundary edits (auth/token/URL-allow-list/crypto) even with no plan. NOT for read-only questions, trivial one-file edits, formatting, dependency bumps, prose, or research — those need no harness. Required for any non-trivial work under this harness, on any stack (WordPress, Statamic, Bun/React, …) — it is stack-agnostic and defers to the loaded stack sub-plugin for stack-specific skills, reviewers, and test runners. Replaces the deleted `ntdst-execute-with-tests` skill (its "execute the plan" / "work the plan" triggers resolve here).
+description: The single entry point for any code-changing work in a Netdust project — it scales the ceremony to the work via a class dial at intake, it does NOT impose the full sequence on everything. A big feature gets brainstorm → write-plan (with threat-modeling + architecture-invariants when triggered) → execute (subagent/TDD + mandatory testing-workflow at every task close) → shake-out → finish-branch (Class A); a small self-contained change goes STRAIGHT to one TDD cycle — red/green only, no plan, no shake-out — while still recording the per-task test evidence (Class E); a review-finding bundle is one TDD cycle per finding (Class C); a security-boundary one-liner adds just the threat-model gate (Class D). Triggers on "build a feature", "start a feature", "implement X", "work the plan", "execute the plan", "execute todo.md", "start building", "do this properly", "the whole harness", "ship X", "fix the code-review findings", "address the review feedback" — AND on smaller asks that still change code: "tweak X", "fix this bug", "small change to X", "refactor this function", "add a helper for X", "just change X". Use it for the tweak too — it will route the tweak to the light path (Class E), not drag it through a plan. The intake class table is the first thing it does; that is the dial. NOT for read-only questions, pure formatting/whitespace, dependency bumps, prose, or research — those change no behavior and need no harness. Stack-agnostic; defers to the loaded stack sub-plugin for stack-specific skills, reviewers, and test runners. Replaces the deleted `ntdst-execute-with-tests` skill (its "execute the plan" / "work the plan" triggers resolve here).
 ---
 
 <objective>
-Make one truth hold: **if this skill was invoked, the whole disciplined pipeline was engaged.** Nothing — threat modeling, invariants, per-task tests, two-stage review, shake-out — is left to "remember to do it." Each gate fires because the skill sequences it, not because a prose instruction in CLAUDE.md was honored.
+Make one truth hold: **if this skill was invoked, every gate the work's class warrants fired — and none was left to "remember to do it."** The skill scales ceremony to the work via the intake class dial (a tweak is Class E: red/green only; a feature is Class A: the full sequence) — but within the chosen class, each warranted gate fires because the skill sequences it, not because a prose instruction in CLAUDE.md was honored. The win is not "always run everything"; it is "never silently skip a gate the class called for." Threat modeling, invariants, per-task tests, two-stage review, shake-out: each fires when its class + triggers call for it, structurally.
 
 This skill enforces two gates the upstream superpowers skills do not:
 
@@ -57,8 +57,11 @@ Before any other action, classify the work in one sentence in your transcript. T
 | **B — Executing an existing written plan** | Stage 1 freshness review → **Stage 1.5 (spec-analysis gate, if spec-kit artifacts exist)** → Stage 2 (execute) → Stage 3 |
 | **C — Bug-fix bundle from /code-review or /security-review** | Each finding is one TDD cycle in Stage 2; Stage 3 verifies. Threat-model the diff (Stage 1 security gate) if any finding touches a security boundary |
 | **D — Ad-hoc edit to a named security-boundary file** (auth/session/token, URL-allow-list, crypto) — even a one-liner, even with no plan | Stage 1 **security gate only** (threat-modeling on the diff) → implement with TDD → verify. This closes the 2026-06-03 gap. |
+| **E — Small self-contained change, no plan warranted** (a logic tweak, a small helper, a localized refactor, a single bug not from a review) — touches **one area**, no design questions, NOT a security-boundary file (that's D) | **Go straight to Stage 2 as one TDD cycle.** No brainstorm, no plan, no spec, no shake-out. The per-task testing gate STILL applies: classify the tier (logic/parsing/branching → Tier A RED-first; pure glue/rename/formatting → Tier B/no-op) and record the Test-evidence block. The `subagent-stop` hook still backstops it. Verify with the suite + `/integration` on the diff. |
 
 State your class and one-sentence reason before proceeding. If you cannot classify, the request is ambiguous — ask your human partner. Do not improvise.
+
+**The dial, in one line:** E = red/green only · C = TDD-cycle-per-finding · D = + security gate · B = + freshness review · A = the full sequence. Match the class to the *actual* work — a tweak is Class E, not a small Class A. Over-calling the class wastes ceremony; under-calling A/D (skipping a plan or a security gate that was warranted) is the dangerous direction. When the change is genuinely small and self-contained, **E is not cutting a corner — it is the correct class.** The one rule that never relaxes with class: anything touching a named security-boundary file is D (never E), and any non-trivial logic still gets its Tier-A RED test.
 </intake>
 
 <process>
@@ -171,6 +174,7 @@ This is the step that turns the previously skill-honored gates (1a/1b/1d/1f) int
 |---|---|
 | Independent tasks suitable for parallel subagents (most common) | `superpowers:subagent-driven-development` |
 | Sequential tasks needing shared context, or solo execution | `superpowers:executing-plans` |
+| **No plan — a single small change (Class E)** | None. Do the one TDD cycle directly: `superpowers:test-driven-development` (red→green), record the Test-evidence block, done. No dispatch machinery, no addendum. |
 
 Invoke it via the Skill tool. Its content is your primary instruction set for execution from here on; this skill only adds the netdust gates below.
 
@@ -310,7 +314,7 @@ These thoughts mean you are about to skip a gate. Stop.
 
 This skill has succeeded when:
 
-1. The work was classified (A/B/C/D) in the transcript before any action.
+1. The work was classified (A/B/C/D/E) in the transcript before any action — and the class was the *smallest* that fits the work (a tweak called E, not a defensive Class A).
 2. For any feature touching the 1a trigger surface, a `## Threat model` exists (in the plan, or run on the diff for Class D) BEFORE implementation.
 3. For any feature touching a named convergence point, the relevant invariants were cited.
 4. Any "reuse X for Y" premise was ground-truthed against X's source before the plan shipped.
