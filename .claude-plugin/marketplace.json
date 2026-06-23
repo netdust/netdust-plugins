@@ -19,8 +19,8 @@
     {
       "name": "netdust-agent",
       "source": "./plugins/netdust-agent",
-      "description": "Netdust two-layer agent harness — a SKELETON layer (gates/steps/ordering: harnessed-development sequencer + threat-modeling, architecture-invariants, testing-workflow, feature-acceptance, test-effectiveness, shake-out) and a CRAFT layer (gerund-named how-to the harness reaches for: writing-tests, designing-apis, building-frontend, engineering-context, versioning-with-git, driving-the-browser, refining-ideas, sourcing-from-docs, doubting-decisions, simplifying-code, deploying). Naming: gerund = craft (how), gate-noun = harness (when/whether). Craft layers ON TOP of superpowers (never replaces it); addyosmani/agent-skills (MIT) concepts folded in. Standalone, self-contained coding harness. netdust-core is now business/ops/content only.",
-      "version": "0.2.1",
+      "description": "Netdust two-layer agent harness — a SKELETON layer (gates/steps/ordering: harnessed-development sequencer + threat-modeling, architecture-invariants, testing-workflow, feature-acceptance, test-effectiveness, shake-out, standards-gate) and a CRAFT layer (gerund-named how-to the harness reaches for: writing-tests, designing-apis, building-frontend, engineering-context, versioning-with-git, driving-the-browser, refining-ideas, sourcing-from-docs, doubting-decisions, simplifying-code, deploying). Optional spec-kit graft (gate-bearing spec/plan/tasks override templates + gate-check.py + /spec-kit-setup; handoff is tasks.md, /speckit.implement never run). Naming: gerund = craft (how), gate-noun = harness (when/whether). Craft layers ON TOP of superpowers (never replaces it); addyosmani/agent-skills (MIT) concepts folded in. Standalone, self-contained coding harness. netdust-core is now business/ops/content only.",
+      "version": "0.3.0",
       "strict": false
     },
     {
