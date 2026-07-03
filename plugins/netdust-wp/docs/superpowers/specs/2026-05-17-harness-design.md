@@ -78,6 +78,8 @@ Stop hook (`~/.claude/hooks/session-stop.py`) is mechanically running but never 
 
 **Layer 2 — explicit signal in STATE.md**
 
+> SUPERSEDED 2026-07-03 (phase 4): the no-op marker was removed — no-op sessions now write nothing to STATE.md; liveness lives in ~/.claude/logs/memory-hook.log.
+
 - No-op: appends `[YYYY-MM-DD] — session ended (no significant changes captured)` to STATE.md.
 - Error: appends `[YYYY-MM-DD] — ⚠ memory hook errored: <reason>` to STATE.md.
 

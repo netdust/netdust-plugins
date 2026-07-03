@@ -277,7 +277,7 @@ if [[ -f "$STATE" ]] || [[ -f "$LESSONS" ]]; then
   OUTPUT+="- Lead with the *why*. \"Removed traject.html because\" beats \"removed traject.html\".\n"
   OUTPUT+="- Don't write trivia. A typo fix or one-line tweak doesn't earn a memory entry.\n"
   OUTPUT+="- Don't ask permission to update memory mid-session. Just do it. The user reviews the diff.\n\n"
-  OUTPUT+="**Tag shortcuts** (the Stop hook lifts these into memory deterministically — use them when you don't want to interrupt the flow to edit a file): write \`DECISION: ...\`, \`RISK: ...\`, \`LESSON: ...\`, \`TODO: ...\` in your response and they get captured. For a skill gotcha, write \`SKILL-EDGE: <skill-name>: <lesson>\` — it lands in that skill's lessons.md (skill name = the skill's directory name, lowercase/digits/hyphens).\n\n"
+  OUTPUT+="**Tag shortcuts** (the Stop hook lifts these into memory deterministically — use them when you don't want to interrupt the flow to edit a file): write \`DECISION: ...\`, \`RISK: ...\`, \`LESSON: ...\`, \`TODO: ...\` in your response and they get captured. For a skill gotcha, write \`SKILL-EDGE: <skill-name>: <lesson>\` — it lands in that skill's lessons.md (skill name = the skill's directory name, lowercase/digits/hyphens/underscores).\n\n"
 
   # ── Periodic /skill-audit nudge (decision 2026-07-03) ─────────────────────
   # /skill-audit writes this stamp on completion; nudge when it's missing or
