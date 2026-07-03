@@ -1,6 +1,6 @@
 # Global Memory — Netdust / Stefan
 
-Harness-level facts. Loaded into every WP session by `session-start.sh`.
+Harness-level facts. Shipped with the netdust-agent plugin; injected into every session by its `hooks/session-start.sh` (moved here from netdust-core 2026-07-03 — agent owns the live memory hooks).
 
 ## Stack
 

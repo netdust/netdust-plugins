@@ -21,7 +21,7 @@ These hold regardless of: time pressure, sunk cost, "admin-only" framing, client
 
 8. **Local-first.** DDEV (or stack equivalent) locally. Never edit files directly on production. No "just this one fix" via SSH.
 9. **Database changes flow forward.** local → staging → production. Never reverse-sync prod content into a feature branch.
-10. **Never flush Redis globally** — VAD Vormingen (and other LMS sites) has cache exclusions that get destroyed by `wp cache flush` / `redis-cli FLUSHALL`. Always check `object-cache.php` exclusions first. See `memory/GLOBAL.md`.
+10. **Never flush Redis globally** — VAD Vormingen (and other LMS sites) has cache exclusions that get destroyed by `wp cache flush` / `redis-cli FLUSHALL`. Always check `object-cache.php` exclusions first. See netdust-agent's `memory/GLOBAL.md`.
 
 ## Memory + skill discipline
 

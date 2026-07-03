@@ -34,7 +34,7 @@ Every Netdust project has:
 
 **Read `site.yml` before any operational command.** It is the single source of truth for hosting, SSH, remote paths, deploy method, domains, project structure.
 
-The SessionStart hook (`hooks/session-start.sh`) injects `memory/STATE.md`, `memory/lessons.md`, `tasks/todo.md`, the harness-level `memory/GLOBAL.md`, and the site.yml summary into the initial context. It also injects a **"Memory discipline" prompt block** (only when `memory/` exists in the project) that tells Claude exactly when to update STATE, lessons, CLAUDE, and site.yml — and what *not* to write. That prompt is the difference between "Claude reads memory" and "Claude *maintains* memory."
+The SessionStart hook (`hooks/session-start.sh`) injects `memory/STATE.md`, `memory/lessons.md`, `tasks/todo.md`, the harness-level `GLOBAL.md` (which lives in netdust-agent, whose SessionStart hook is the live injector), and the site.yml summary into the initial context. It also injects a **"Memory discipline" prompt block** (only when `memory/` exists in the project) that tells Claude exactly when to update STATE, lessons, CLAUDE, and site.yml — and what *not* to write. That prompt is the difference between "Claude reads memory" and "Claude *maintains* memory."
 
 The Stop hook (`hooks/session-stop.py`) then captures memory (logs to `~/.claude/logs/memory-hook.log` every fire):
 

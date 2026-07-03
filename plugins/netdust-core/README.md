@@ -15,7 +15,7 @@ This is **not** a coding harness. For any non-trivial coding work (gates, craft 
 | **Slash commands** | `/deploy` (9-method dispatcher), `/memory-audit`, `/pattern-miner` |
 | **MCP** | `ploi` MCP server (server + site management via Ploi API) |
 | **Templates** | `project-CLAUDE.md.tmpl`, `site.yml.tmpl` (stack-neutral scaffolds) |
-| **Memory (harness-level)** | `memory/GLOBAL.md` (cross-project facts, Redis exclusions, etc.), `memory/deploy-patterns.md` (the 9 deploy methods + per-site mapping) |
+| **Memory (harness-level)** | `GLOBAL.md` now ships in **netdust-agent** (`plugins/netdust-agent/memory/GLOBAL.md`) — its `session-start.sh` is the live injector; `memory/deploy-patterns.md` (the 9 deploy methods + per-site mapping) stays here |
 
 ## Install
 
@@ -115,7 +115,7 @@ The plugin also registers the **`ploi` MCP server** (from `~/mcp/ploi-mcp-server
 └── site.yml           ← operational config (deploy method, SSH, paths)
 ```
 
-The SessionStart hook injects all of these + `memory/GLOBAL.md` (harness-level) into the initial context. The Stop hook captures via tags + (optionally) Haiku.
+The SessionStart hook injects all of these + the harness-level `GLOBAL.md`, which now ships in **netdust-agent** (`plugins/netdust-agent/memory/GLOBAL.md`) — netdust-agent's `session-start.sh` is the live injector. The Stop hook captures via tags + (optionally) Haiku.
 
 ## Operations
 
