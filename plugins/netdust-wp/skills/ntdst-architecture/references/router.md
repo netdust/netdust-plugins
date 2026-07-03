@@ -146,8 +146,8 @@ A route callback's return value drives what the router does next. The contract i
 | `null` or `true` | Callback handled output itself — the request is `exit`ed |
 | `false` | Fall through to the next matching route (or default WP behavior) |
 | String (existing file path) | Used as the resolved template |
-| `NTDST_Response` (from template hook callbacks) | Response is rendered and the request exits |
-| Anything else | Ignored — the original `$template` is returned |
+| `NTDST_Response` | Response is rendered and the request exits — **now recognized on `get()`/`post()`/`register()` pattern routes too**, not only template-hook callbacks (a Response returned from a pattern route used to silently fall through to the default template; that latent bug is fixed) |
+| Anything else | Fall through to the next matching route (unrecognized types continue scanning, matching the original loop behavior) |
 
 > A common footgun: a callback that forgets to return anything implicitly returns `null`, which **exits the request**. If you see a blank page from a route that "isn't running", check for missing `return` statements first.
 
@@ -184,7 +184,7 @@ $theme->page('contact', function($post) {
 
 ## Common Patterns
 
-### API-style JSON endpoint
+### API-style JSON endpoint (same-origin, front-end pipeline)
 
 ```php
 ntdst_router()->get('api/search/:term', function($params) {
@@ -198,6 +198,8 @@ ntdst_router()->get('api/search/:term', function($params) {
         ->json(); // Returns JSON and exits
 });
 ```
+
+> This runs on the front-end `template_include` pipeline and has **no CORS/preflight handling** — fine for a same-origin fetch, wrong for a real API. For a **cross-origin** JSON endpoint (a headless SPA, a third-party integration, anything needing preflight + an origin allow-list), do NOT bolt CORS onto a Router route — use `ntdst_router()->rest()` + `NTDST_Cors_Policy`, which registers through native WP REST dispatch with the origin gate, required-permission default, and body caps built in. See `rest-cors.md` (INV-11).
 
 ### Redirect route
 

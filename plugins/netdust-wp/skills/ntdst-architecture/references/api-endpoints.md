@@ -1,4 +1,6 @@
-# API Endpoints Reference
+# API Endpoints Reference (same-origin AJAX)
+
+> **Scope: this is the same-origin, nonce-gated `ntdst/api_data/{action}` dispatcher — in-page JS talking to its own site.** It is NOT for cross-origin callers: an anonymous WP nonce is a shared, non-origin-bound token that authenticates nothing for a cookie-less cross-origin request. For a headless/SPA/third-party client on another domain, use `ntdst_router()->rest()` + `NTDST_Cors_Policy` — see `rest-cors.md`.
 
 ## Architecture
 
@@ -12,7 +14,7 @@ Two-step nonce flow via WordPress REST API:
    → {success: true, data: {...}}
 ```
 
-Requires `ALLOW_RESTAPI_AJAX` constant in wp-config.php.
+`ntdst_endpoints()` is instantiated unconditionally by the core loader — there is no `ALLOW_RESTAPI_AJAX` gate (that requirement is obsolete; ignore any older doc that mentions it).
 
 The class is `NTDST_Endpoints` (formerly unprefixed `Endpoints`). `class_alias('NTDST_Endpoints', 'Endpoints')` is kept for back-compat — new code should reference `NTDST_Endpoints::class`. The REST namespace constant is `REST_NAMESPACE` (formerly `NAMESPACE`).
 
@@ -74,7 +76,8 @@ $theme->apiAction('delete_artwork', function($data, $params) {
 // untrusted.
 //
 // Default public actions (out of the box): get_recent_posts, search_posts,
-// search_users, send_magic_link.
+// send_magic_link. NOTE: search_users is NOT public — it is cap-gated
+// in-handler (current_user_can('list_users')); see below.
 
 // Add custom public action:
 add_filter('ntdst/api/public_actions', function($actions) {
@@ -127,6 +130,8 @@ add_filter('ntdst/api/rate_limit/cron_sync', fn() => 0);
 ```
 
 ### Custom allowed origins
+
+> This filter widens the **same-origin CSRF gate**'s `Origin`/`Referer` allow-list for the `api_data` path — it does NOT turn `Endpoints` into a cross-origin JSON API. A real cross-origin endpoint (CORS preflight, `Access-Control-*` headers, cookie-less caller) is `ntdst_router()->rest()` + `NTDST_Cors_Policy` — see `rest-cors.md`.
 
 ```php
 add_filter('ntdst/api/allowed_origins', function($origins) {

@@ -1,8 +1,10 @@
 # NTDST Response
 
-Fast template rendering with automatic path discovery.
+Fast template rendering with automatic path discovery — **and** the single owner of the API output envelope.
 
 **Location:** `app/content/mu-plugins/ntdst-core/api/Response.php`
+
+> **`NTDST_Response` is the one place the `{success,…}` envelope is built.** All three output surfaces route through it: `NTDST_Router` renders templates (`html()`/`render()`), while `NTDST_Endpoints` (AJAX) and `NTDST_Rest_Registrar` (REST) emit JSON envelopes via the static builders / `toRestResponse()`. **Two error shapes coexist deliberately** (do not "unify" them — it silently breaks one consumer set): `apiError()` → `{success:false,data:{message,code}}` for `ntdstAPI` JS callers; `jsonPayload()` (via `json()`/`toRestResponse()`) → `{success:false,error:string}` for REST consumers. See `rest-cors.md` and INV-11.
 
 ## Global Helpers
 
@@ -204,6 +206,9 @@ Variables passed with `with()` are available directly:
 | `render($path)` | `never` | Render and exit |
 | `html($path)` | `string` | Render to string |
 | `json()` | `never` | Output JSON and exit. Falls back to a structured error body if `json_encode` fails (was: silent empty response). |
+| `toRestResponse()` | `WP_REST_Response` | **Non-exiting** JSON representation for the REST-registrar dispatch path — same payload as `json()` + the stored status, but returns instead of `exit`ing. |
+| `apiSuccess(array $data)` *(static)* | `array` | `{success:true, data:$data}` — the shared success envelope builder. |
+| `apiError(string $msg, string $code='error')` *(static)* | `array` | `{success:false, data:{message,code}}` — the `Endpoints`/`ntdstAPI` JS error envelope. |
 | `error($msg, $status)` | `self` | Set error state (used by `json()` / `render()` / `redirect()`) |
 | `redirect($url)` | `never` | `wp_safe_redirect` to `$url`. Appends `?error=` if `error()` has been set. |
 | `download($content, $filename, $mime = null)` | `never` | Stream as attachment. |

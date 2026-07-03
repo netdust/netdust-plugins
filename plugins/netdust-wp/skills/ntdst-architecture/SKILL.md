@@ -32,7 +32,8 @@ description: >
 | `references/data-layer.md` | Model registration, fields, CRUD, query builder, metaboxes, caching |
 | `references/router.md` | URL routes, template hooks, rewrite rules, return values |
 | `references/response.md` | Template rendering, JSON output, email HTML, template resolution |
-| `references/api-endpoints.md` | REST API actions, nonce flow, JS client, rate limiting, security |
+| `references/api-endpoints.md` | Same-origin AJAX actions (`ntdst/api_data`), nonce flow, JS client, rate limiting, security |
+| `references/rest-cors.md` | **Cross-origin REST** — `ntdst_router()->rest()` registrar, `NTDST_Cors_Policy`, required-permission default, the 3 WP-core quirks (INV-11 convergence point) |
 | `references/logger.md` | Logging levels, channels, database persistence, custom handlers |
 | `references/mailer.md` | Email templates, queuing, attachments, event notifications |
 | `references/anti-patterns.md` | What NOT to do — data, security, performance, services, YOOtheme |
