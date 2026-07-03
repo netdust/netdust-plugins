@@ -99,7 +99,7 @@ netdust-agent/
 ├── commands/                    # /integration, /shakeout, /deploy, /evaluate,
 │   │                            #   /skill-audit, /red-test, /feature-acceptance,
 │   │                            #   /test-effectiveness, /architecture-invariants,
-│   │                            #   /memory-audit, /pattern-miner
+│   │                            #   /pattern-miner (memory-audit is netdust-core's)
 └── hooks/                       # SessionStart/Stop, SubagentStop testing-gate,
                                  #   PreToolUse guard (hooks.json)
 ```

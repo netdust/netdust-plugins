@@ -87,7 +87,7 @@ load_with_budget() {
     END {
       flush_section()
       if (truncating) {
-        printf "\n> ⚠️ %s truncated at %d KB (file is %d KB) — run /memory-audit to archive.",
+        printf "\n> ⚠️ %s truncated at %d KB (file is %d KB) — run /memory-audit (netdust-core) to archive.",
                label, budget/1024, int(total/1024 + 0.5)
         if (preamble_clipped) printf " The opening section alone exceeded the budget and was clipped."
         if (nskip > 0) {
