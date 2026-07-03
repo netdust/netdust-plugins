@@ -41,13 +41,16 @@ if [[ -f "$INSTALLED_JSON" ]]; then
 import json, sys
 try:
     data = json.load(open(sys.argv[1]))
+    lines = []
     for key, entries in data.get("plugins", {}).items():
         name = key.split("@", 1)[0]
         # registry lists one entry per key in practice; entries[0] is taken as active.
         if isinstance(entries, list) and entries:
             p = entries[0].get("installPath")
             if p:
-                print(f"{name}\t{p}")
+                lines.append(f"{name}\t{p}")
+    if lines:
+        print("\n".join(lines))
 except Exception:
     sys.exit(0)
 PY
