@@ -15,16 +15,15 @@ WordPress layer of the Netdust harness for Claude Code. Layers on top of [`netdu
 
 ## Install
 
-**Install netdust-core first.** Then:
+**Install netdust-core first.** Then, with the marketplace already added (`claude plugin marketplace add netdust/netdust-plugins`):
 
 ```bash
-git clone <repo> ~/.claude/plugins/netdust-wp
-bash ~/.claude/plugins/netdust-wp/install.sh
+claude plugin install netdust-wp@netdust-plugins
 ```
 
-`install.sh` warns if netdust-core is missing, then registers + enables this plugin in the shared `netdust-local` marketplace.
+Restart Claude Code to pick it up. To update later: `claude plugin update netdust-wp@netdust-plugins`.
 
-Skills, commands, templates load **directly from this plugin directory** via Claude Code's plugin loader (`${CLAUDE_PLUGIN_ROOT}`). No symlinks, no copies. Edit files in place — they're picked up on the next session.
+Skills, commands, templates load **directly from the installed plugin directory** via Claude Code's plugin loader (`${CLAUDE_PLUGIN_ROOT}`). This plugin ships no `install.sh` — installation and updates go through `claude plugin` commands against the `netdust-plugins` marketplace.
 
 ## Per-project usage
 
@@ -55,7 +54,6 @@ Both imports — core for memory conventions/cross-stack, wp for WP-specific def
 ~/.claude/plugins/netdust-wp/
 ├── .claude-plugin/plugin.json
 ├── CLAUDE.md, RULES.md, README.md
-├── install.sh                       (soft-dep check on netdust-core)
 │
 ├── commands/                        ← 4 WP-specific commands
 │   ├── scaffold-plugin.md
@@ -96,7 +94,7 @@ netdust-wp depends on netdust-core for:
 - **The coding harness** — `harnessed-development`, `testing-workflow`, `shake-out`, `test-effectiveness`, `threat-modeling`, `architecture-invariants`, `feature-acceptance`, `compounding` (cross-stack workflow)
 - **The 8 coding reviewer agents** — code review is done by the `reviewer` agent + the specialist reviewers
 
-You can technically use netdust-wp without these, but you'll miss memory, observability, deploy, server management, the coding harness, and review agents. The soft-dep check in install.sh warns but doesn't enforce.
+You can technically use netdust-wp without these, but you'll miss memory, observability, deploy, server management, the coding harness, and review agents. The dependency is soft — nothing enforces it at install time.
 
 ## Adding a WP skill
 

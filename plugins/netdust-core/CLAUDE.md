@@ -14,7 +14,7 @@ This plugin is **not** a coding/build harness. The coding/build harness (gates, 
 
 ## Coding work lives in netdust-agent
 
-For anything beyond a trivial one-file edit — features, refactors, bug fixes, security-boundary changes — load the **netdust-agent** plugin. It owns `harnessed-development` (the full design → plan → execute → shake-out → finish sequencer), the gate skills (threat-modeling, architecture-invariants, feature-acceptance, testing-workflow, test-effectiveness, shake-out, compounding, code-audit), the reviewer agents, and the harness commands (`/integration`, `/shakeout`, `/test-effectiveness`, etc.). Core no longer carries any of that.
+For anything beyond a trivial one-file edit — features, refactors, bug fixes, security-boundary changes — load the **netdust-agent** plugin. It owns `harnessed-development` (the full design → plan → execute → shake-out → finish sequencer), the gate skills (threat-modeling, architecture-invariants, feature-acceptance, testing-workflow, test-effectiveness, shake-out, compounding), the reviewer agents, and the harness commands (`/integration`, `/shakeout`, `/test-effectiveness`, etc.). Core no longer carries any of that.
 
 Engineering discipline itself (brainstorming, planning, TDD, systematic debugging, code review, finishing branches, verification before completion) comes from `obra/superpowers`. **For coding, use netdust-agent + superpowers** — core does not redefine those.
 

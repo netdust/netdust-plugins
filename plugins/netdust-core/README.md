@@ -34,7 +34,7 @@ Skills, commands, agents, hooks, and the MCP load **directly from the installed 
 
 | Plugin | When to install |
 |---|---|
-| **netdust-agent** | For any non-trivial coding work. Carries the build harness — `harnessed-development` sequencer, the gate skills (threat-modeling, architecture-invariants, feature-acceptance, testing-workflow, test-effectiveness, shake-out, compounding, code-audit), the reviewer agents, and the harness commands (`/integration`, `/shakeout`, etc.). |
+| **netdust-agent** | For any non-trivial coding work. Carries the build harness — `harnessed-development` sequencer, the gate skills (threat-modeling, architecture-invariants, feature-acceptance, testing-workflow, test-effectiveness, shake-out, compounding), the reviewer agents, and the harness commands (`/integration`, `/shakeout`, etc.). |
 | **netdust-wp** | When you work on WordPress projects (Bedrock or custom-app). Adds wp-security, wp-database, ntdst-architecture, etc. + WP-specific commands. |
 | **netdust-statamic** | For Statamic + Peak marketing sites. |
 
@@ -144,8 +144,8 @@ No AI guessing, no Anthropic API call needed.
 
 ```bash
 # Disable the plugin without uninstalling:
-#   /plugin disable netdust-core@netdust-local
-# OR in ~/.claude/settings.json set enabledPlugins.netdust-core@netdust-local to false.
+#   /plugin disable netdust-core@netdust-plugins
+# OR in ~/.claude/settings.json set enabledPlugins.netdust-core@netdust-plugins to false.
 ```
 
 Plugin dir stays on disk; nothing in the project memory dirs is destroyed.

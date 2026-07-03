@@ -12,16 +12,15 @@ Statamic 6 + Peak layer of the Netdust harness for Claude Code. Layers on top of
 
 ## Install
 
-**Install netdust-core first.** Then:
+**Install netdust-core first.** Then, with the marketplace already added (`claude plugin marketplace add netdust/netdust-plugins`):
 
 ```bash
-git clone <repo> ~/.claude/plugins/netdust-statamic
-bash ~/.claude/plugins/netdust-statamic/install.sh
+claude plugin install netdust-statamic@netdust-plugins
 ```
 
-`install.sh` warns if netdust-core is missing, then registers + enables this plugin in the shared `netdust-local` marketplace.
+Restart Claude Code to pick it up. To update later: `claude plugin update netdust-statamic@netdust-plugins`.
 
-Skills and commands load directly from this plugin via `${CLAUDE_PLUGIN_ROOT}`. No symlinks, no copies. Edit in place — picked up next session.
+Skills and commands load **directly from the installed plugin directory** via Claude Code's plugin loader (`${CLAUDE_PLUGIN_ROOT}`). This plugin ships no `install.sh` — installation and updates go through `claude plugin` commands against the `netdust-plugins` marketplace.
 
 ## Per-project usage
 
@@ -45,7 +44,6 @@ The Netdust starter (`~/Sites/ntdst-starter`) is the canonical baseline for new 
 ~/.claude/plugins/netdust-statamic/
 ├── .claude-plugin/plugin.json
 ├── CLAUDE.md, RULES.md, README.md
-├── install.sh                       (soft-dep check on netdust-core)
 │
 ├── commands/                        ← 6 Statamic-specific commands
 │   ├── cache-bust.md                /cache-bust — clear caches + warm stache
@@ -79,7 +77,7 @@ netdust-statamic depends on netdust-core for:
 - **The coding harness** — `harnessed-development`, `testing-workflow`, `shake-out`, `test-effectiveness`, `threat-modeling`, `architecture-invariants`, `feature-acceptance`, `compounding` (cross-stack workflow; `shake-out-statamic` here overrides the generic `shake-out` when triggered by Statamic signals)
 - **The 8 coding reviewer agents** — code review is done by the `reviewer` agent + the specialist reviewers
 
-The soft-dep check in install.sh warns but doesn't enforce.
+The dependency is soft — nothing enforces it at install time.
 
 ## Adding a Statamic skill
 
@@ -104,7 +102,7 @@ No install step. Plugin loader picks it up on next session.
 - `netdust-bun-react` (future) — Folio-style single-binary Bun/React apps
 - `netdust-laravel` (future, if scope grows) — pure Laravel apps without Statamic
 
-All depend on `netdust-core`; all coexist in the shared `netdust-local` marketplace.
+All depend on `netdust-core`; all coexist in the `netdust-plugins` marketplace.
 
 ## Not in scope
 
