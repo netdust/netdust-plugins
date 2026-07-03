@@ -14,7 +14,7 @@ Pattern: the harness has been optimized for "looks comprehensive" rather than "i
 ## Run
 
 ```bash
-bash ~/.claude/plugins/netdust-core/tests/run.sh
+bash plugins/netdust-agent/tests/run.sh
 ```
 
 Exits non-zero on any failure. Prints a summary line per test.

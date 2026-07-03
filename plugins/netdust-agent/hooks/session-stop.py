@@ -20,7 +20,7 @@ Never blocks the session — entire hook runs in < 3s.
 Observability:
   • Every fire logs to ~/.claude/logs/memory-hook.log
   • No-op writes a visible marker to STATE.md (so you SEE the hook working)
-  • Errors write a visible ⚠ marker to STATE.md
+  • Errors are log-only (log()); they never write to STATE.md
 """
 
 import json
@@ -247,10 +247,15 @@ def write_sidecar_atomic(cwd: str, state: dict) -> None:
         log(f"warn sidecar-write-failed cwd={cwd} err={type(e).__name__}:{e}")
 
 
+def _normalize(text: str) -> str:
+    """Whitespace-collapsed, lowercased form of text — the shared definition
+    of "same tag" for both dedup layers (hash ring + durable file backstop)."""
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
 def normalized_hash(text: str) -> str:
     """Stable hash of a tag's normalized text (whitespace-collapsed, lowercased)."""
-    norm = re.sub(r"\s+", " ", text).strip().lower()
-    return hashlib.sha256(norm.encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha256(_normalize(text).encode("utf-8")).hexdigest()[:16]
 
 
 def dedup_against_hashes(items: list, captured: set, key_of) -> list:
@@ -280,10 +285,10 @@ def _file_contains_normalized(path: Path, text: str) -> bool:
     if not text.strip() or not path.exists():
         return False
     try:
-        norm_file = re.sub(r"\s+", " ", path.read_text()).strip().lower()
+        norm_file = _normalize(path.read_text())
     except Exception:
         return False  # unreadable target → don't block capture
-    norm_text = re.sub(r"\s+", " ", text).strip().lower()
+    norm_text = _normalize(text)
     return norm_text in norm_file
 
 
