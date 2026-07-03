@@ -109,7 +109,7 @@ Files: `accessibility-reviewer.md`, `api-design-reviewer.md`, `architecture-stra
 **Source pattern:** awesome-harness "compaction fragility" warning.
 
 **Fix (two cheap moves, no new hook):**
-1. Upgrade `/memory-audit` to *propose* consolidation/truncation of oversized lessons/STATE files (currently warn-only at 80 lines). Keep report-only — propose, don't auto-edit.
+1. Upgrade `/memory-audit` to *propose* consolidation/truncation of oversized lessons/STATE files (currently warn-only at 80 lines). Keep report-only — propose, don't auto-edit. — **SHIPPED before 2026-07-03** (ground-truthed at phase-4 planning: /memory-audit already carries the full propose-consolidation flow, dry-run default + --apply archive, Steps A1–A4; the netdust-agent duplicate copy was removed 2026-07-03, netdust-core canonical).
 2. Document as an explicit invariant that all *critical* rules live in CLAUDE.md/RULES.md/system prompt (they do) so server-side compaction can never evict them — the list's named mitigation.
 
 **Acceptance:** `/memory-audit` on a project with an oversized lessons file emits a consolidation proposal. The compaction invariant is written down.
