@@ -19,14 +19,16 @@ This is **not** a coding harness. For any non-trivial coding work (gates, craft 
 
 ## Install
 
+Add the marketplace once, then install the plugin:
+
 ```bash
-git clone <repo> ~/.claude/plugins/netdust-core
-bash ~/.claude/plugins/netdust-core/install.sh
+claude plugin marketplace add netdust/netdust-plugins
+claude plugin install netdust-core@netdust-plugins
 ```
 
-`install.sh` is idempotent. It registers a local marketplace at `~/.claude/plugins/marketplaces/netdust-local/` and enables the plugin in `settings.json`. Restart Claude Code to pick it up.
+Restart Claude Code to pick it up. To update later: `claude plugin update netdust-core@netdust-plugins`.
 
-Skills, commands, agents, hooks, and the MCP load **directly from this plugin directory** via Claude Code's plugin loader (`${CLAUDE_PLUGIN_ROOT}`). No symlinks, no copies. Edit files in place — they're picked up on the next session.
+Skills, commands, agents, hooks, and the MCP load **directly from the installed plugin directory** via Claude Code's plugin loader (`${CLAUDE_PLUGIN_ROOT}`). This plugin ships no `install.sh` — installation and updates go through `claude plugin` commands against the `netdust-plugins` marketplace.
 
 ## Layered plugins
 
@@ -121,10 +123,10 @@ Every Claude session start + stop writes one line. The hooks that write this log
 
 ```bash
 grep netdust-agent ~/.claude/settings.json
-# Should show: "netdust-agent@netdust-local": true
+# Should show: "netdust-agent@netdust-plugins": true
 ```
 
-If missing or false, enable `netdust-agent` in the `netdust-local` marketplace (this plugin has no `install.sh`).
+If missing or false, install/enable `netdust-agent` from the `netdust-plugins` marketplace (`claude plugin install netdust-agent@netdust-plugins`; this plugin has no `install.sh`).
 
 ### Tag conventions in conversation
 
