@@ -132,18 +132,36 @@ if [[ -d "$PLUGIN_CACHE" ]]; then
 import json, sys
 try:
     data = json.load(open(sys.argv[1]))
+    for key, entries in data.get("plugins", {}).items():
+        name = key.split("@", 1)[0]
+        # registry lists one entry per key in practice; entries[0] is taken as active.
+        if name.startswith("netdust-") and isinstance(entries, list) and entries:
+            p = entries[0].get("installPath")
+            if p:
+                print(f"{name}\t{p}")
 except Exception:
     sys.exit(0)
-for key, entries in data.get("plugins", {}).items():
-    name = key.split("@", 1)[0]
-    if name.startswith("netdust-") and isinstance(entries, list) and entries:
-        p = entries[0].get("installPath")
-        if p:
-            print(f"{name}\t{p}")
 PY
 )
   fi
+  # Iterate the UNION of: plugin names present in ACTIVE_MAP's first column,
+  # plus a hardcoded baseline list — so a no-registry run still refreshes the
+  # known plugins, and a registry with a plugin NOT in the baseline (e.g. a
+  # new netdust-* plugin) still gets its symlink refreshed.
+  declare -A _seen_plugins=()
+  PLUGIN_NAMES=()
+  while IFS=$'\t' read -r _p _path; do
+    [[ -n "$_p" && -z "${_seen_plugins[$_p]:-}" ]] || continue
+    _seen_plugins[$_p]=1
+    PLUGIN_NAMES+=("$_p")
+  done <<<"$ACTIVE_MAP"
   for plugin in netdust-agent netdust-core netdust-wp netdust-statamic; do
+    [[ -z "${_seen_plugins[$plugin]:-}" ]] || continue
+    _seen_plugins[$plugin]=1
+    PLUGIN_NAMES+=("$plugin")
+  done
+
+  for plugin in "${PLUGIN_NAMES[@]}"; do
     plugin_dir="$PLUGIN_CACHE/$plugin"
     [[ -d "$plugin_dir" ]] || continue
     active=$(printf '%s\n' "$ACTIVE_MAP" | awk -F'\t' -v p="$plugin" '$1 == p { print $2; exit }')

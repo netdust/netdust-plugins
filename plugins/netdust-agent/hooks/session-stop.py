@@ -384,6 +384,7 @@ def _installed_plugin_paths() -> dict[str, Path]:
             name = key.split("@", 1)[0]
             if not isinstance(entries, list) or not entries:
                 continue
+            # registry lists one entry per key in practice; entries[0] is taken as active.
             install_path = entries[0].get("installPath")
             if install_path and Path(install_path).is_dir():
                 result[name] = Path(install_path)

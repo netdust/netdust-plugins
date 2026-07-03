@@ -186,46 +186,19 @@ def test_no_tags_writes_marker() -> tuple[bool, str]:
 
 
 def test_skill_edge_tag_routes_to_skill_lessons() -> tuple[bool, str]:
-    """SKILL-EDGE: <skill>: <text> should land in the named skill's lessons.md.
-    The audit specifically fixed this to glob all netdust-* plugins, not
-    just netdust-wp. Verify it finds skills in any of the three plugins.
-
-    Uses a real, currently-installed skill ('wp-security') so the test
-    actually exercises the cross-plugin lookup. Cleans up its single line
-    after."""
-    tmp = _with_temp_cwd()
-    skill = "wp-security"
-    target = (
-        Path.home()
-        / ".claude" / "plugins" / "netdust-wp" / "skills" / skill / "lessons.md"
-    )
-    if not target.parent.exists():
-        return True, f"skill-edge: skipped (skill {skill} not installed)"
-
-    pre_existing = target.read_text() if target.exists() else ""
-
-    try:
-        marker = f"test-edge-{os.getpid()}"
-        transcript = _make_transcript(
-            tmp, f"SKILL-EDGE: {skill}: {marker} — synthetic test, safe to delete"
-        )
-        result = _run_hook(tmp, transcript)
-        if result.returncode != 0:
-            return False, f"skill-edge: hook exited {result.returncode}"
-
-        if not target.exists():
-            return False, f"skill-edge: {target} not created"
-
-        post = target.read_text()
-        if marker not in post:
-            return False, f"skill-edge: marker '{marker}' not appended"
-
-        return True, f"SKILL-EDGE: routed to {skill}/lessons.md"
-    finally:
-        # Restore the skill's lessons.md to its pre-test state
-        if pre_existing or target.exists():
-            target.write_text(pre_existing)
-        shutil.rmtree(tmp, ignore_errors=True)
+    """NEUTRALIZED (Cluster 2 review, 2026-07-03): this test ran netdust-core's
+    DEAD hook copy (core's hooks/hooks.json is `{"hooks": {}}` — nothing here
+    is actually registered/live) and asserted against the REAL machine's
+    ~/.claude/plugins/netdust-wp symlink, which is unrelated machine state.
+    That made it a false signal: it could flip green/red based on whatever
+    happened to be installed on the box running the suite, independent of any
+    code change in this repo. Live coverage of SKILL-EDGE routing lives in
+    netdust-agent/tests/test_tag_scanner.py (and the fixture-based
+    test_plugin_version_resolution.py), which exercise the real, wired hook
+    against fabricated fixtures instead of ambient machine state. Do not
+    restore the old body — fix the coverage gap (if any) in netdust-agent's
+    suite instead."""
+    return True, "SKIPPED: netdust-core hooks are dead copies (hooks.json registers none) — live coverage lives in netdust-agent/tests/test_tag_scanner.py"
 
 
 def run() -> list[tuple[bool, str]]:

@@ -92,7 +92,7 @@ def run() -> list[tuple[bool, str]]:
 
         # Fallback: registry absent → mtime heuristic still resolves (via
         # CLAUDE_PLUGIN_ROOT climb), so the hook keeps working outside CC.
-        home2, active2, stale2 = _fake_home(tmp / "second")
+        home2, _, stale2 = _fake_home(tmp / "second")
         (home2 / ".claude" / "plugins" / "installed_plugins.json").unlink()
         cwd2 = tmp / "project2"
         cwd2.mkdir()
@@ -127,6 +127,51 @@ def run() -> list[tuple[bool, str]]:
         results.append((
             link.is_symlink() and os.readlink(link) == str(stale3),
             "FALLBACK: no registry → symlink uses newest-mtime dir",
+        ))
+
+        # ── entries[0] selection rule (Cluster 2 review finding 4) ───────────
+        # A registry key can in principle hold multiple entries. All three
+        # parse sites (session-stop.py, session-start.sh, sync.sh) take
+        # entries[0] as the active one. Lock that rule down explicitly: build
+        # a registry whose netdust-agent key has TWO entries — entries[0]
+        # valid (-> version A), entries[1] pointing elsewhere (-> version B)
+        # — and confirm resolution follows entries[0], not entries[1].
+        home4, version_a, version_b = _fake_home(tmp / "fourth")
+        registry4 = home4 / ".claude" / "plugins" / "installed_plugins.json"
+        registry4.write_text(json.dumps({
+            "version": 2,
+            "plugins": {
+                "netdust-agent@netdust-plugins": [
+                    {"scope": "user", "installPath": str(version_a), "version": "A"},
+                    {"scope": "user", "installPath": str(version_b), "version": "B"},
+                ]
+            },
+        }))
+        cwd4 = tmp / "project4"
+        cwd4.mkdir()
+        transcript4 = tmp / "t4.jsonl"
+        with open(transcript4, "w") as f:
+            f.write(json.dumps(_msg(
+                "SKILL-EDGE: probe-skill: entries[0] wins", "u4")) + "\n")
+        _run_stop_hook(cwd4, transcript4, home4)
+        a_lessons = version_a / "skills" / "probe-skill" / "lessons.md"
+        b_lessons = version_b / "skills" / "probe-skill" / "lessons.md"
+        results.append((
+            a_lessons.exists() and "entries[0] wins" in a_lessons.read_text()
+            and not b_lessons.exists(),
+            "ENTRIES[0] RULE (python): two-entry registry key resolves to entries[0]'s installPath, not entries[1]'s",
+        ))
+
+        proj4b = tmp / "project4b"
+        proj4b.mkdir()
+        env4 = {**os.environ, "HOME": str(home4),
+                "CLAUDE_PLUGIN_ROOT": str(version_a)}
+        subprocess.run(["bash", str(HOOK_START)], cwd=proj4b,
+                       capture_output=True, text=True, timeout=15, env=env4)
+        link4 = home4 / ".claude" / "plugins" / "netdust-agent"
+        results.append((
+            link4.is_symlink() and os.readlink(link4) == str(version_a),
+            "ENTRIES[0] RULE (bash): symlink follows entries[0]'s installPath, not entries[1]'s",
         ))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

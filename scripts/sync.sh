@@ -29,37 +29,48 @@ MARKETPLACE_NAME="netdust-plugins"
 CACHE_ROOT="$HOME/.claude/plugins/cache/$MARKETPLACE_NAME"
 INSTALLED_JSON="$HOME/.claude/plugins/installed_plugins.json"
 
-# resolve_installed_dir <plugin_name>
-# Echoes the plugin's ACTIVE cache dir. Truth = installed_plugins.json's
-# installPath (fix 3, 2026-07-03 — `ls -1t` picked netdust-agent 0.2.1 over
-# the installed 0.3.0 on a 4 ms mtime difference). Falls back to newest-mtime
-# when the registry misses the plugin. Echoes nothing if unresolvable.
-resolve_installed_dir() {
-  local plugin_name="$1" active=""
-  if [[ -f "$INSTALLED_JSON" ]]; then
-    active=$(python3 - "$plugin_name" "$INSTALLED_JSON" <<'PY' 2>/dev/null || true
+# Authoritative map: plugin<TAB>installPath from Claude Code's own registry
+# (fix 3, 2026-07-03 — `ls -1t` picked netdust-agent 0.2.1 over the installed
+# 0.3.0 on a 4 ms mtime difference), same ACTIVE_MAP pattern as
+# session-start.sh. Parsed ONCE here instead of spawning python3 per plugin
+# per loop (sync loop + verify loop). Empty on any error → per-plugin
+# mtime fallback in resolve_installed_dir below.
+ACTIVE_MAP=""
+if [[ -f "$INSTALLED_JSON" ]]; then
+  ACTIVE_MAP=$(python3 - "$INSTALLED_JSON" <<'PY' 2>/dev/null || true
 import json, sys
-name, path = sys.argv[1], sys.argv[2]
 try:
-    data = json.load(open(path))
+    data = json.load(open(sys.argv[1]))
+    for key, entries in data.get("plugins", {}).items():
+        name = key.split("@", 1)[0]
+        # registry lists one entry per key in practice; entries[0] is taken as active.
+        if isinstance(entries, list) and entries:
+            p = entries[0].get("installPath")
+            if p:
+                print(f"{name}\t{p}")
 except Exception:
     sys.exit(0)
-for key, entries in data.get("plugins", {}).items():
-    if key.split("@", 1)[0] == name and isinstance(entries, list) and entries:
-        p = entries[0].get("installPath")
-        if p:
-            print(p)
-        break
 PY
 )
-  fi
+fi
+
+# resolve_installed_dir <plugin_name>
+# Echoes the plugin's ACTIVE cache dir. Pure bash/awk lookup against
+# ACTIVE_MAP (parsed once above) — no more per-call python3 spawn. Falls
+# back to newest-mtime (with a -d check, parity with the registry branch)
+# when the registry misses the plugin. Echoes nothing if unresolvable.
+# Must never return non-zero — set -euo pipefail is in effect and the
+# empty/unresolved case is a normal, expected outcome for callers.
+resolve_installed_dir() {
+  local plugin_name="$1" active=""
+  active=$(printf '%s\n' "$ACTIVE_MAP" | awk -F'\t' -v p="$plugin_name" '$1 == p { print $2; exit }')
   if [[ -n "$active" && -d "$active" ]]; then
     printf '%s\n' "$active"
     return 0
   fi
   local latest
   latest="$(ls -1t "$CACHE_ROOT/$plugin_name" 2>/dev/null | head -1)"
-  if [[ -n "$latest" ]]; then
+  if [[ -n "$latest" && -d "$CACHE_ROOT/$plugin_name/$latest" ]]; then
     printf '%s\n' "$CACHE_ROOT/$plugin_name/$latest"
   fi
   return 0
