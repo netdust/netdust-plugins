@@ -105,6 +105,29 @@ def run() -> list[tuple[bool, str]]:
             (stale2 / "skills" / "probe-skill" / "lessons.md").exists(),
             "FALLBACK: no registry → mtime climb still routes (stale2 is newest)",
         ))
+
+        # ── bash side: session-start.sh symlink refresh (Task 5) ────────────
+        home3, active3, stale3 = _fake_home(tmp / "third")
+        proj3 = tmp / "project3"
+        proj3.mkdir()
+        env3 = {**os.environ, "HOME": str(home3),
+                "CLAUDE_PLUGIN_ROOT": str(active3)}
+        subprocess.run(["bash", str(HOOK_START)], cwd=proj3,
+                       capture_output=True, text=True, timeout=15, env=env3)
+        link = home3 / ".claude" / "plugins" / "netdust-agent"
+        results.append((
+            link.is_symlink() and os.readlink(link) == str(active3),
+            "symlink targets installPath, not newest-mtime dir",
+        ))
+
+        # Fallback: registry removed → mtime pick (stale3 is newest).
+        (home3 / ".claude" / "plugins" / "installed_plugins.json").unlink()
+        subprocess.run(["bash", str(HOOK_START)], cwd=proj3,
+                       capture_output=True, text=True, timeout=15, env=env3)
+        results.append((
+            link.is_symlink() and os.readlink(link) == str(stale3),
+            "FALLBACK: no registry → symlink uses newest-mtime dir",
+        ))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     return results

@@ -121,14 +121,40 @@ note() {
 # We maintain those as symlinks pointing at the active cache version, refreshed
 # on every session start so updates flip automatically. Idempotent.
 PLUGIN_CACHE="$HOME/.claude/plugins/cache/netdust-plugins"
+INSTALLED_JSON="$HOME/.claude/plugins/installed_plugins.json"
 if [[ -d "$PLUGIN_CACHE" ]]; then
+  # Authoritative map: plugin<TAB>installPath from Claude Code's own registry
+  # (fix 3, 2026-07-03 — version-dir mtimes lie; 0.2.1 was 4 ms "newer" than
+  # the installed 0.3.0). Empty on any error → per-plugin mtime fallback below.
+  ACTIVE_MAP=""
+  if [[ -f "$INSTALLED_JSON" ]]; then
+    ACTIVE_MAP=$(python3 - "$INSTALLED_JSON" <<'PY' 2>/dev/null || true
+import json, sys
+try:
+    data = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(0)
+for key, entries in data.get("plugins", {}).items():
+    name = key.split("@", 1)[0]
+    if name.startswith("netdust-") and isinstance(entries, list) and entries:
+        p = entries[0].get("installPath")
+        if p:
+            print(f"{name}\t{p}")
+PY
+)
+  fi
   for plugin in netdust-agent netdust-core netdust-wp netdust-statamic; do
     plugin_dir="$PLUGIN_CACHE/$plugin"
     [[ -d "$plugin_dir" ]] || continue
-    # Pick most recently modified version dir as "active".
-    latest_version=$(ls -1t "$plugin_dir" 2>/dev/null | head -1)
-    [[ -n "$latest_version" ]] || continue
-    ln -sfn "$plugin_dir/$latest_version" "$HOME/.claude/plugins/$plugin"
+    active=$(printf '%s\n' "$ACTIVE_MAP" | awk -F'\t' -v p="$plugin" '$1 == p { print $2; exit }')
+    if [[ -n "$active" && -d "$active" ]]; then
+      ln -sfn "$active" "$HOME/.claude/plugins/$plugin"
+    else
+      # Fallback: newest-mtime version dir (registry missing this plugin).
+      latest_version=$(ls -1t "$plugin_dir" 2>/dev/null | head -1)
+      [[ -n "$latest_version" ]] || continue
+      ln -sfn "$plugin_dir/$latest_version" "$HOME/.claude/plugins/$plugin"
+    fi
   done
 fi
 
