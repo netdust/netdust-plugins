@@ -9,7 +9,7 @@ This is **not** a coding harness. For any non-trivial coding work (gates, craft 
 | Layer | Contents |
 |---|---|
 | **Identity** | `CLAUDE.md` (default agent context), `SOUL.md` (voice), `RULES.md` (universal non-negotiables) |
-| **Memory + hooks** | `session-start.sh` (loads project memory) + `session-stop.py` (tag capture) + `pretooluse-guard.py` (destructive-command guard). Per-project `memory/STATE.md` + `lessons.md` + `tasks/todo.md`. Deterministic tag scanner (`DECISION:`/`RISK:`/`LESSON:`/`TODO:`). Optional Haiku summary if `ANTHROPIC_API_KEY` set. **Registration lives in `netdust-agent`'s `hooks.json`** (core's is empty) so the hooks fire once when both plugins are installed; core keeps byte-identical script copies in sync. |
+| **Memory + hooks** | Per-project `memory/STATE.md` + `lessons.md` + `tasks/todo.md` convention and memory discipline. The live hooks — SessionStart loader, Stop-hook `DECISION:`/`RISK:`/`LESSON:`/`TODO:` tag scanner, PreToolUse destructive-command guard — live in **netdust-agent** (registration AND scripts). Core ships no hook scripts. |
 | **Content + marketing skills** | `brand-voice`, `marketing`, `market-research`, `research` |
 | **Ops + infra skills** | `dev-stack` (DDEV, git branching, Makefile verbs, `.env`), `secure-server` (VPS hardening), `ploi` (server/site lifecycle) |
 | **Slash commands** | `/deploy` (9-method dispatcher), `/memory-audit`, `/pattern-miner` |
@@ -19,14 +19,16 @@ This is **not** a coding harness. For any non-trivial coding work (gates, craft 
 
 ## Install
 
+Add the marketplace once, then install the plugin:
+
 ```bash
-git clone <repo> ~/.claude/plugins/netdust-core
-bash ~/.claude/plugins/netdust-core/install.sh
+claude plugin marketplace add netdust/netdust-plugins
+claude plugin install netdust-core@netdust-plugins
 ```
 
-`install.sh` is idempotent. It registers a local marketplace at `~/.claude/plugins/marketplaces/netdust-local/` and enables the plugin in `settings.json`. Restart Claude Code to pick it up.
+Restart Claude Code to pick it up. To update later: `claude plugin update netdust-core@netdust-plugins`.
 
-Skills, commands, agents, hooks, and the MCP load **directly from this plugin directory** via Claude Code's plugin loader (`${CLAUDE_PLUGIN_ROOT}`). No symlinks, no copies. Edit files in place — they're picked up on the next session.
+Skills, commands, agents, hooks, and the MCP load **directly from the installed plugin directory** via Claude Code's plugin loader (`${CLAUDE_PLUGIN_ROOT}`). This plugin ships no `install.sh` — installation and updates go through `claude plugin` commands against the `netdust-plugins` marketplace.
 
 ## Layered plugins
 
@@ -67,13 +69,6 @@ In any existing project, you can manually add to its `CLAUDE.md`:
 ├── .claude-plugin/plugin.json
 ├── CLAUDE.md, SOUL.md, RULES.md, README.md
 │
-├── hooks/
-│   ├── hooks.json                  ← EMPTY: registration moved to netdust-agent to avoid
-│   │                                  double-firing when both plugins are installed (2026-06-09)
-│   ├── session-start.sh            ← loads project memory (STATE/lessons/CLAUDE/GLOBAL) — kept in sync
-│   ├── session-stop.py             ← captures DECISION:/RISK:/LESSON:/TODO: tags — kept in sync
-│   └── pretooluse-guard.py         ← destructive-command guard (Bash) — kept in sync
-│
 ├── commands/
 │   ├── deploy.md                   /deploy — 9-method dispatcher
 │   ├── memory-audit.md             /memory-audit — STATE/lessons/todo staleness report
@@ -89,8 +84,7 @@ In any existing project, you can manually add to its `CLAUDE.md`:
 │   └── ploi/                       ← Ploi + Hetzner lifecycle
 │
 ├── memory/
-│   ├── GLOBAL.md                   ← cross-project facts (stack, Redis exclusions)
-│   └── deploy-patterns.md          ← 9 deploy methods + per-site mapping
+│   └── deploy-patterns.md          ← 9 deploy methods + per-site mapping (GLOBAL.md now ships in netdust-agent)
 │
 ├── templates/
 │   ├── project-CLAUDE.md.tmpl
@@ -108,14 +102,14 @@ The plugin also registers the **`ploi` MCP server** (from `~/mcp/ploi-mcp-server
 ```
 <project>/
 ├── memory/
-│   ├── STATE.md       ← updated by Stop hook each session (deterministic + optional Haiku)
+│   ├── STATE.md       ← updated by Stop hook each session (deterministic tag capture)
 │   └── lessons.md     ← gotchas + edge cases, append-only
 ├── tasks/
 │   └── todo.md        ← carried-forward tasks
 └── site.yml           ← operational config (deploy method, SSH, paths)
 ```
 
-The SessionStart hook injects all of these + the harness-level `GLOBAL.md`, which now ships in **netdust-agent** (`plugins/netdust-agent/memory/GLOBAL.md`) — netdust-agent's `session-start.sh` is the live injector. The Stop hook captures via tags + (optionally) Haiku.
+netdust-agent's SessionStart hook injects all of these + the harness-level `GLOBAL.md`, which now ships in **netdust-agent** (`plugins/netdust-agent/memory/GLOBAL.md`). netdust-agent's Stop hook captures via tags.
 
 ## Operations
 
@@ -125,14 +119,14 @@ The SessionStart hook injects all of these + the harness-level `GLOBAL.md`, whic
 tail -f ~/.claude/logs/memory-hook.log
 ```
 
-Every Claude session start + stop writes one line. If you don't see anything appearing after starting/ending a session, the plugin isn't enabled:
+Every Claude session start + stop writes one line. The hooks that write this log (SessionStart injector, Stop-hook tag capture, PreToolUse guard) live in **netdust-agent**, not here — they fire only if `netdust-agent` is enabled. If you don't see anything appearing after starting/ending a session:
 
 ```bash
-grep netdust-core ~/.claude/settings.json
-# Should show: "netdust-core@netdust-local": true
+grep netdust-agent ~/.claude/settings.json
+# Should show: "netdust-agent@netdust-plugins": true
 ```
 
-If missing or false, re-run `bash ~/.claude/plugins/netdust-core/install.sh` (idempotent).
+If missing or false, install/enable `netdust-agent` from the `netdust-plugins` marketplace (`claude plugin install netdust-agent@netdust-plugins`; this plugin has no `install.sh`).
 
 ### Tag conventions in conversation
 
@@ -145,13 +139,6 @@ When something important happens, write any of these tags in your response — t
 - `SKILL-EDGE: <skill-name>: <text>` → `skills/<name>/lessons.md`
 
 No AI guessing, no Anthropic API call needed.
-
-### Recover from broken Haiku
-
-Haiku is opt-in via `ANTHROPIC_API_KEY`. If failing:
-- Errors logged to `~/.claude/logs/memory-hook.log` always.
-- Persistent errors (401/403/timeout) also annotate STATE.md as `⚠ memory hook (haiku) errored`.
-- To disable: `unset ANTHROPIC_API_KEY`. Tag scanner still works.
 
 ### Roll back
 

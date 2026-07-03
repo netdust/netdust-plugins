@@ -32,9 +32,17 @@ Drop a `test_*.py` file in this directory. Convention:
 
 | Test file | What it verifies |
 |---|---|
-| `test_tag_scanner.py` | Stop hook captures `DECISION:`, `RISK:`, `LESSON:`, `TODO:`, `SKILL-EDGE:` tags from a fabricated transcript and writes to the right files |
+| `test_no_auto_memory.py` | A project can opt out of ALL Stop-hook writes (memory/, tasks/, .gitignore, auto-commit) by placing a `.no-auto-memory` marker at its root — the hook must never write into or commit the Layer-B fleet dir |
+| `test_plugin_version_resolution.py` | "Active plugin version" comes from Claude Code's own registry (`installed_plugins.json`, v2 schema), not version-dir mtimes — covers both session-stop.py and session-start.sh resolvers |
+| `test_pretooluse_guard.py` | The PreToolUse destructive-action guard: denylist matches emit `ask` (never `deny` in v1), fails OPEN on malformed input/non-Bash tools/internal errors, never exits 2 |
 | `test_session_start.py` | session-start.sh emits memory blocks when memory/STATE.md, lessons.md, todo.md exist, and logs the right found/missing keys |
-| `test_skill_audit_glob.py` | `/skill-audit` and `/red-test` commands reference globs that actually match real skill dirs (the regression that broke them silently) |
+| `test_session_start_budget.py` | session-start.sh enforces a real token/size budget on injected memory content |
+| `test_spec_gate_check.py` | The spec-kit gate checker (`spec-kit/gate-check.py`) |
+| `test_standards_gate_hook.py` | The standards backstop added to `subagent-stop.py` |
+| `test_stop_hook_dedup.py` | Dedup survives sidecar loss — the target file (not just the gitignored `.stop-hook-state.json` ring) is the durable dedup record, so losing the sidecar doesn't re-append every tag on the next scan |
+| `test_stop_hook_idempotency.py` | The Stop hook's idempotency — re-running does not duplicate captured tags |
+| `test_subagent_stop.py` | The SubagentStop testing-gate hook |
+| `test_tag_scanner.py` | The Stop hook's deterministic tag scanner captures `DECISION:`, `RISK:`, `LESSON:`, `TODO:`, `SKILL-EDGE:` tags from a fabricated transcript and writes to the right files |
 
 ## Not covered (deliberate)
 
