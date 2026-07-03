@@ -1,0 +1,6 @@
+## 2026-07-03 — netdust-web drift audit fed back into the skill (core 0.2.6)
+- The skill's own `cat > /etc/ssh/sshd_config` wholesale overwrite was the likely drift vector observed on netdust-web (`PermitRootLogin without-password` + `AllowUsers root` had crept back). Rewritten drop-in based: `00-netdust-hardening.conf` — 00-prefix because sshd is first-obtained-wins and a 99- file loses to `50-cloud-init.conf`.
+- Global `AllowTcpForwarding no` fought the fleet's own architecture: loopback-bound admin UIs (NocoDB :8084, Directus :8085) are reached via `ssh -L`. Now: off globally, `Match User <admin>` exception appended at END of main config (a Match block in an early drop-in captures all later directives — `Subsystem` under Match breaks config).
+- No service-exposure step existed; audit found memcached `-l 0.0.0.0` and MySQL `bind *`, shielded only by UFW. Added 8b (localhost binds; docker must publish `127.0.0.1:` — docker iptables bypasses UFW) + 8c external port probe from another machine.
+- `dpkg-reconfigure --priority=low unattended-upgrades` opens a TUI and hangs scripted SSH runs. Dropped; the two config lines + `systemctl enable --now` are sufficient.
+- Added "Drift re-audit" read-only mode with the exact 2026-07-03 audit checklist, so future "is my server secure" asks run identical checks and compare against the skill's end-state.
