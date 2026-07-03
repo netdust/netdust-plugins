@@ -4,25 +4,18 @@ session-stop.py — netdust-agent harness
 
 Runs at every Claude Code session end (Stop hook).
 
-Two-track memory extraction:
+Deterministic tag scanner (always on, zero latency, zero cost):
+  Scans the session transcript for tagged lines Claude wrote during the
+  session and lifts them into memory files:
+    • DECISION: <text>     → memory/STATE.md
+    • RISK: <text>         → memory/STATE.md (as a risk bullet)
+    • LESSON: <text>       → memory/lessons.md
+    • TODO: <text>         → tasks/todo.md
+    • SKILL-EDGE: <skill>: <text>  → skills/.../<skill>/lessons.md
+  This means Claude (or Stefan via Claude) just writes "DECISION: ..." in
+  the conversation and the hook captures it deterministically. No AI call.
 
-  Track A — DETERMINISTIC TAG SCANNER (always on, zero latency, zero cost)
-    Scans the session transcript for tagged lines Claude wrote during the
-    session and lifts them into memory files:
-      • DECISION: <text>     → memory/STATE.md
-      • RISK: <text>         → memory/STATE.md (as a risk bullet)
-      • LESSON: <text>       → memory/lessons.md
-      • TODO: <text>         → tasks/todo.md
-      • SKILL-EDGE: <skill>: <text>  → skills/.../<skill>/lessons.md
-    This means Claude (or Stefan via Claude) just writes "DECISION: ..." in
-    the conversation and the hook captures it deterministically. No AI call.
-
-  Track B — HAIKU SUMMARIZER (opt-in, only if ANTHROPIC_API_KEY is set)
-    Calls the Anthropic API directly (not the slow `claude -p` CLI) to
-    produce a richer PM-level state summary. Falls back silently if no key.
-
-Either track may run. Both run if both are configured. Neither blocks the
-session — entire hook runs in < 3s in deterministic-only mode.
+Never blocks the session — entire hook runs in < 3s.
 
 Observability:
   • Every fire logs to ~/.claude/logs/memory-hook.log
@@ -37,19 +30,13 @@ import os
 import hashlib
 import subprocess
 import tempfile
-import urllib.request
-import urllib.error
 import traceback
 from pathlib import Path
 from datetime import datetime
 
 # ── Config ───────────────────────────────────────────────────────────────────
 
-HAIKU_MODEL = "claude-haiku-4-5-20251001"
-HAIKU_TIMEOUT_SEC = 20              # API call (not CLI) — fast
-MAX_TRANSCRIPT_LINES = 200          # lines of transcript to scan/summarize
 MAX_LESSONS_FILE = 80               # warn if lessons.md exceeds this
-MAX_EXISTING_STATE_LINES = 80       # context passed to Haiku to avoid redundancy
 MAX_CONTINUATION_LINES = 10         # lines a single tag may consume past its head
 MAX_CAPTURED_HASHES = 200           # cap on the sidecar dedup ring
 
@@ -131,42 +118,7 @@ def extract_claude_text(messages: list[dict]) -> str:
     return "\n".join(parts)
 
 
-def format_transcript_for_haiku(messages: list[dict]) -> str:
-    lines = []
-    for msg in messages:
-        role = msg.get("type", "")
-        content = msg.get("message", {}).get("content", "")
-
-        if role == "user" and isinstance(content, str) and content.strip():
-            lines.append(f"USER: {content[:300]}")
-
-        elif role == "assistant":
-            if isinstance(content, list):
-                for block in content:
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        text = block.get("text", "").strip()
-                        if text:
-                            lines.append(f"CLAUDE: {text[:300]}")
-            elif isinstance(content, str) and content.strip():
-                lines.append(f"CLAUDE: {content[:300]}")
-
-    recent = lines[-MAX_TRANSCRIPT_LINES:]
-    return "\n".join(recent)
-
-
-def read_existing_state(cwd: str) -> str:
-    """Last N lines of project STATE.md, for Haiku context."""
-    path = Path(cwd) / "memory" / "STATE.md"
-    if not path.exists():
-        return "(no existing STATE.md)"
-    try:
-        lines = path.read_text().splitlines()
-        return "\n".join(lines[-MAX_EXISTING_STATE_LINES:])
-    except Exception:
-        return "(could not read existing STATE.md)"
-
-
-# ── Track A: deterministic tag scanner ──────────────────────────────────────
+# ── Deterministic tag scanner ────────────────────────────────────────────────
 
 # Head-line matchers. A tag captures its head line PLUS any continuation
 # lines (indented, or starting with "- ") until a blank line or a new tag,
@@ -246,93 +198,6 @@ def has_tag_content(tags: dict) -> bool:
     return any(tags.values())
 
 
-# ── Track B: Haiku via Anthropic API (opt-in) ───────────────────────────────
-
-def call_haiku_api(summary: str, cwd: str, existing_state: str) -> tuple[dict | None, str]:
-    """
-    Direct Anthropic API call — fast (~2-5s), not the slow `claude -p` CLI.
-    Returns (result_dict_or_None, status_msg).
-    """
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        return None, "skip:no-api-key"
-
-    if not summary.strip():
-        return None, "skip:no-content"
-
-    prompt = f"""You are a memory extraction system for Stefan's Netdust WordPress sessions.
-
-Working directory: {cwd}
-
-EXISTING memory/STATE.md (last lines — do NOT restate these):
----
-{existing_state}
----
-
-Session transcript (recent exchanges):
-{summary}
-
-Decide what (if anything) is worth saving to project memory.
-
-SAVE CRITERIA (be conservative but not silent):
-- A decision was made that affects future sessions.
-- A fragile spot, risk, or gotcha was found.
-- A task completed that meaningfully changes project state.
-- Context that would need re-explaining next session.
-
-DO NOT save:
-- Routine edits, content updates, anything derivable from git log.
-- Anything already in the existing STATE.md above.
-- Conversational chit-chat.
-
-Output EXACTLY this JSON shape (no markdown, no prose around it):
-
-{{
-  "save": true | false,
-  "state": "PM-level state update — what changed, current status, any new risks — or null",
-  "todo": "open work to carry into next session — or null"
-}}
-
-If save=false, return null for state and todo."""
-
-    payload = json.dumps({
-        "model": HAIKU_MODEL,
-        "max_tokens": 800,
-        "messages": [{"role": "user", "content": prompt}],
-    }).encode()
-
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=payload,
-        headers={
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-    )
-
-    try:
-        with urllib.request.urlopen(req, timeout=HAIKU_TIMEOUT_SEC) as resp:
-            data = json.loads(resp.read())
-            text = data["content"][0]["text"].strip()
-            if text.startswith("```"):
-                text = "\n".join(text.split("\n")[1:])
-            if text.endswith("```"):
-                text = "\n".join(text.split("\n")[:-1])
-            if not text.startswith("{"):
-                start = text.find("{")
-                if start >= 0:
-                    text = text[start:]
-            try:
-                return json.loads(text), "ok"
-            except json.JSONDecodeError:
-                return None, "error:json"
-    except urllib.error.HTTPError as e:
-        return None, f"error:http-{e.code}"
-    except Exception as e:
-        return None, f"error:other:{type(e).__name__}"
-
-
 # ── Watermark sidecar (idempotency) ──────────────────────────────────────────
 
 def sidecar_path(cwd: str) -> Path:
@@ -401,14 +266,6 @@ def dedup_against_hashes(items: list, captured: set, key_of) -> list:
 
 
 # ── File writers ─────────────────────────────────────────────────────────────
-
-def append_state(cwd: str, body: str, date: str) -> None:
-    path = Path(cwd) / "memory" / "STATE.md"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    header = f"\n---\n### {date}\n"
-    with open(path, "a") as f:
-        f.write(header + body.strip() + "\n")
-
 
 def append_state_marker(cwd: str, line: str) -> None:
     """Single-line marker. Only annotates if memory/ already exists."""
@@ -636,7 +493,7 @@ def main() -> None:
 
     captured = set(sidecar.get("captured_hashes", []))
 
-    # ── Track A: deterministic tag scan (only the new slice) ────────────────
+    # ── Deterministic tag scan (only the new slice) ─────────────────────────
     claude_text = extract_claude_text(new_messages)
     tags = scan_tags(claude_text)
 
@@ -674,27 +531,6 @@ def main() -> None:
         else:
             log(f"warn skill-edge-no-match skill={skill}")
 
-    # ── Track B: Haiku via API (opt-in) ─────────────────────────────────────
-    haiku_status = "skip:no-api-key"
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        summary = format_transcript_for_haiku(messages)
-        existing_state = read_existing_state(cwd)
-        result, haiku_status = call_haiku_api(summary, cwd, existing_state)
-
-        if haiku_status.startswith("error"):
-            log(f"error haiku status={haiku_status} cwd={cwd}")
-            # Only annotate STATE.md on persistent/auth errors. JSON parse fails
-            # and transient errors stay in the log only — they'd otherwise pile up.
-            if haiku_status in ("error:http-401", "error:http-403", "error:timeout"):
-                append_state_marker(cwd, f"[{date}] — ⚠ memory hook (haiku) errored: {haiku_status}")
-        elif haiku_status == "ok" and result and result.get("save"):
-            if result.get("state"):
-                append_state(cwd, result["state"], date)
-                written.append("STATE.md(haiku)")
-            if result.get("todo"):
-                append_todos_from_tags(cwd, [result["todo"]], date)
-                written.append("todo.md(haiku)")
-
     # ── Visibility marker ───────────────────────────────────────────────────
     # If nothing was written, append a one-line "session ended" marker so the
     # file's timestamp updates and you can SEE the hook running — but:
@@ -717,7 +553,7 @@ def main() -> None:
         "captured_hashes": list(captured),
     })
 
-    log(f"done cwd={cwd} tags=[{','.join(k for k,v in tags.items() if v)}] haiku={haiku_status} wrote=[{','.join(written)}]")
+    log(f"done cwd={cwd} tags=[{','.join(k for k,v in tags.items() if v)}] wrote=[{','.join(written)}]")
 
     git_commit_memory(cwd)
     trigger_dashboard_sync(cwd)

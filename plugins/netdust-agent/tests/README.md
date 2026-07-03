@@ -38,7 +38,6 @@ Drop a `test_*.py` file in this directory. Convention:
 
 ## Not covered (deliberate)
 
-- The Haiku API path. It's opt-in, network-bound, and would need mocking that's worse than no test.
 - The git-commit step. It works or doesn't; failing to commit is logged and non-fatal by design.
 - The dashboard-sync step. Optional integration with an external project.
 - Skill content quality. That's what RED tests are for — see each discipline skill's `red-tests.md`.

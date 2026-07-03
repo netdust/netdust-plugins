@@ -52,7 +52,7 @@ def _run_hook(cwd: Path, transcript: Path) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
         timeout=10,
-        env={**os.environ, "ANTHROPIC_API_KEY": ""},  # tag-scanner-only path
+        env={**os.environ},
     )
 
 
