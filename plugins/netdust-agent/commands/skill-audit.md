@@ -33,6 +33,16 @@ Flagged: M
 
 If nothing is flagged, output: "All skills look healthy. No drift detected."
 
+## Record the run
+
+After printing the report, record the sweep so the session-start nudge goes quiet for 30 days:
+
+```bash
+mkdir -p ~/.claude/logs && date +%Y-%m-%d > "${NETDUST_SKILL_AUDIT_STAMP:-$HOME/.claude/logs/skill-audit-last-run}"
+```
+
+`NETDUST_SKILL_AUDIT_STAMP` is a test seam; it defaults to the real path above. This stamp is the ONLY file this command writes. It is machine state (like the memory-hook log), never committed.
+
 ## Boundaries
 
 - Do not edit any skill file.

@@ -28,14 +28,19 @@ def _read_log_tail(lines: int = 5) -> str:
     return "\n".join(LOG.read_text().splitlines()[-lines:])
 
 
-def _run_hook(cwd: Path) -> tuple[int, str, str]:
-    """Run the hook with a given cwd. Returns (rc, stdout, stderr)."""
+def _run_hook(cwd: Path, env_extra: dict | None = None) -> tuple[int, str, str]:
+    """Run the hook with a given cwd. Returns (rc, stdout, stderr).
+
+    env_extra overrides/adds environment variables for this run only — the
+    test seam for NETDUST_SKILL_AUDIT_STAMP (0.3.3).
+    """
     proc = subprocess.run(
         ["bash", str(HOOK)],
         cwd=str(cwd),
         capture_output=True,
         text=True,
         timeout=10,
+        env={**os.environ, **(env_extra or {})},
     )
     return proc.returncode, proc.stdout, proc.stderr
 
@@ -138,9 +143,49 @@ def test_log_records_missing_keys() -> tuple[bool, str]:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_skill_audit_nudge_when_stamp_missing() -> tuple[bool, str]:
+    """No stamp (or >30d old) → one-line /skill-audit nudge is injected."""
+    tmp = Path(tempfile.mkdtemp(prefix="netdust-test-nudge-"))
+    try:
+        (tmp / "memory").mkdir()
+        (tmp / "memory" / "STATE.md").write_text("Sentinel-STATE-skillaudit\n")
+        rc, stdout, _ = _run_hook(tmp, env_extra={
+            "NETDUST_SKILL_AUDIT_STAMP": str(tmp / "no-such-stamp"),
+        })
+        if rc != 0:
+            return False, f"stale stamp: hook exited {rc}"
+        ok = "Skill-audit cadence" in stdout
+        return ok, ("stale stamp: nudge injected" if ok
+                    else f"nudge missing from output: {stdout[:300]}")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_no_skill_audit_nudge_when_stamp_fresh() -> tuple[bool, str]:
+    """DENIAL: a fresh stamp (<30d) must suppress the nudge."""
+    tmp = Path(tempfile.mkdtemp(prefix="netdust-test-nudge2-"))
+    try:
+        (tmp / "memory").mkdir()
+        (tmp / "memory" / "STATE.md").write_text("Sentinel-STATE-skillaudit\n")
+        stamp = tmp / "skill-audit-last-run"
+        stamp.write_text("2026-07-03\n")  # mtime = now
+        rc, stdout, _ = _run_hook(tmp, env_extra={
+            "NETDUST_SKILL_AUDIT_STAMP": str(stamp),
+        })
+        if rc != 0:
+            return False, f"fresh stamp: hook exited {rc}"
+        ok = "Skill-audit cadence" not in stdout
+        return ok, ("fresh stamp: nudge suppressed" if ok
+                    else "nudge injected despite fresh stamp")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def run() -> list[tuple[bool, str]]:
     return [
         test_empty_cwd_emits_nothing_but_logs(),
         test_full_project_emits_all_blocks(),
         test_log_records_missing_keys(),
+        test_skill_audit_nudge_when_stamp_missing(),
+        test_no_skill_audit_nudge_when_stamp_fresh(),
     ]

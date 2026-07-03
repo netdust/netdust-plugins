@@ -20,40 +20,15 @@ and run the real session-stop.py hook against it via subprocess. No mocks.
 """
 
 import json
-import os
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 
-HOOK = Path(__file__).parent.parent / "hooks" / "session-stop.py"
-
-
-def _msg(role: str, text: str, uuid: str) -> dict:
-    """One transcript message with a top-level uuid (real CC shape)."""
-    return {
-        "type": role,
-        "uuid": uuid,
-        "message": {"content": [{"type": "text", "text": text}]},
-    }
-
-
-def _write_transcript(path: Path, messages: list[dict]) -> None:
-    with open(path, "w") as f:
-        for m in messages:
-            f.write(json.dumps(m) + "\n")
-
-
-def _run_hook(cwd: Path, transcript: Path) -> subprocess.CompletedProcess:
-    payload = json.dumps({"transcript_path": str(transcript), "cwd": str(cwd)})
-    return subprocess.run(
-        ["python3", str(HOOK)],
-        input=payload,
-        capture_output=True,
-        text=True,
-        timeout=10,
-        env={**os.environ},
-    )
+from hook_test_utils import (
+    msg as _msg,
+    write_transcript as _write_transcript,
+    run_stop_hook as _run_hook,
+)
 
 
 def _with_temp_cwd() -> Path:
@@ -72,9 +47,10 @@ def _count(haystack: str, needle: str) -> int:
 
 def test_second_fire_appends_nothing() -> tuple[bool, str]:
     """The core idempotency property: firing the hook twice on the SAME
-    transcript must capture the decision exactly once AND must not append a
-    spurious 'no significant changes' marker on the second fire (the first
-    fire DID capture something — the session wasn't empty)."""
+    transcript must capture the decision exactly once AND must not append
+    anything else to STATE.md on the second fire (the daily 'no significant
+    changes' marker was dropped in 0.3.3 — a no-op fire writes nothing at
+    all now, not even a marker)."""
     tmp = _with_temp_cwd()
     try:
         transcript = tmp / "transcript.jsonl"
@@ -207,9 +183,11 @@ def test_hash_dedup_belt_and_braces() -> tuple[bool, str]:
 
 
 def test_no_marker_when_tags_deduped_after_transcript_change() -> tuple[bool, str]:
-    """Edge: a NEW transcript path with identical content → watermark misses →
-    full re-scan → all tags hash-deduped away. `written` is empty but the
-    session did contain tags, so we must NOT append a 'no changes' marker."""
+    """DENIAL regression (0.3.3, marker dropped): a NEW transcript path with
+    identical content → watermark misses → full re-scan → all tags
+    hash-deduped away. `written` is empty and the deduped re-fire must write
+    nothing to STATE.md — there is no marker to spuriously write anymore,
+    but this pins that a deduped no-op fire stays a true no-op."""
     tmp = _with_temp_cwd()
     try:
         t1 = tmp / "transcript-1.jsonl"
@@ -261,40 +239,6 @@ def test_captured_hashes_capped_at_200() -> tuple[bool, str]:
         if n > 200:
             return False, f"cap: captured_hashes has {n} entries (expected <=200)"
         return True, f"cap: captured_hashes capped ({n} <= 200)"
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
-
-
-def test_daily_marker_written_once_per_day() -> tuple[bool, str]:
-    """The 'no significant changes' marker must appear at most once per
-    calendar day even across multiple no-tag fires."""
-    tmp = _with_temp_cwd()
-    try:
-        transcript = tmp / "transcript.jsonl"
-        _write_transcript(transcript, [
-            _msg("user", "ping", "u1"),
-            _msg("assistant", "Just an ordinary reply, no tags.", "a1"),
-        ])
-        r1 = _run_hook(tmp, transcript)
-        if r1.returncode != 0:
-            return False, f"daily-marker: first fire exited {r1.returncode}"
-
-        # second no-tag turn, same day
-        _write_transcript(transcript, [
-            _msg("user", "ping", "u1"),
-            _msg("assistant", "Just an ordinary reply, no tags.", "a1"),
-            _msg("user", "again", "u2"),
-            _msg("assistant", "Still nothing notable here.", "a2"),
-        ])
-        r2 = _run_hook(tmp, transcript)
-        if r2.returncode != 0:
-            return False, f"daily-marker: second fire exited {r2.returncode}"
-
-        state = (tmp / "memory" / "STATE.md").read_text()
-        n = _count(state, "no significant changes captured")
-        if n != 1:
-            return False, f"daily-marker: marker written {n}x today (expected 1). STATE:\n{state[:400]}"
-        return True, "daily-marker: written at most once per calendar day"
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -410,7 +354,6 @@ _TESTS = [
     test_hash_dedup_belt_and_braces,
     test_no_marker_when_tags_deduped_after_transcript_change,
     test_captured_hashes_capped_at_200,
-    test_daily_marker_written_once_per_day,
     test_decision_captures_continuation_lines,
     test_continuation_stops_at_new_tag,
     test_continuation_capped_at_10_lines,

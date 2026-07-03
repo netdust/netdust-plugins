@@ -87,7 +87,7 @@ load_with_budget() {
     END {
       flush_section()
       if (truncating) {
-        printf "\n> ⚠️ %s truncated at %d KB (file is %d KB) — run /memory-audit to archive.",
+        printf "\n> ⚠️ %s truncated at %d KB (file is %d KB) — run /memory-audit (netdust-core) to archive.",
                label, budget/1024, int(total/1024 + 0.5)
         if (preamble_clipped) printf " The opening section alone exceeded the budget and was clipped."
         if (nskip > 0) {
@@ -277,7 +277,20 @@ if [[ -f "$STATE" ]] || [[ -f "$LESSONS" ]]; then
   OUTPUT+="- Lead with the *why*. \"Removed traject.html because\" beats \"removed traject.html\".\n"
   OUTPUT+="- Don't write trivia. A typo fix or one-line tweak doesn't earn a memory entry.\n"
   OUTPUT+="- Don't ask permission to update memory mid-session. Just do it. The user reviews the diff.\n\n"
-  OUTPUT+="**Tag shortcuts** (the Stop hook lifts these into memory deterministically — use them when you don't want to interrupt the flow to edit a file): write \`DECISION: ...\`, \`RISK: ...\`, \`LESSON: ...\`, \`TODO: ...\` in your response and they get captured.\n\n"
+  OUTPUT+="**Tag shortcuts** (the Stop hook lifts these into memory deterministically — use them when you don't want to interrupt the flow to edit a file): write \`DECISION: ...\`, \`RISK: ...\`, \`LESSON: ...\`, \`TODO: ...\` in your response and they get captured. For a skill gotcha, write \`SKILL-EDGE: <skill-name>: <lesson>\` — it lands in that skill's lessons.md (skill name = the skill's directory name, lowercase/digits/hyphens/underscores).\n\n"
+
+  # ── Periodic /skill-audit nudge (decision 2026-07-03) ─────────────────────
+  # /skill-audit writes this stamp on completion; nudge when it's missing or
+  # >30 days old. Env override is the test seam.
+  SKILL_AUDIT_STAMP="${NETDUST_SKILL_AUDIT_STAMP:-$HOME/.claude/logs/skill-audit-last-run}"
+  SKILL_AUDIT_STALE=1
+  if [[ -f "$SKILL_AUDIT_STAMP" ]] && [[ -n "$(find "$SKILL_AUDIT_STAMP" -mtime -30 2>/dev/null)" ]]; then
+    SKILL_AUDIT_STALE=0
+  fi
+  if (( SKILL_AUDIT_STALE )); then
+    OUTPUT+="**Skill-audit cadence:** the last \`/skill-audit\` sweep is >30 days old or was never recorded. If this session leans on harness skills, propose running \`/skill-audit\` before it ends.\n\n"
+  fi
+
   OUTPUT+="The goal: a session in 3 months should pick up where this one left off, with no re-explaining.\n\n"
 fi
 

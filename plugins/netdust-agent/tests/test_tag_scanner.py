@@ -14,11 +14,10 @@ hook against it. They assert on actual file contents on disk.
 import json
 import os
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 
-HOOK = Path(__file__).parent.parent / "hooks" / "session-stop.py"
+from hook_test_utils import run_stop_hook as _run_hook
 
 
 def _make_transcript(tmp: Path, assistant_text: str) -> Path:
@@ -37,19 +36,6 @@ def _make_transcript(tmp: Path, assistant_text: str) -> Path:
         for m in messages:
             f.write(json.dumps(m) + "\n")
     return path
-
-
-def _run_hook(cwd: Path, transcript: Path) -> subprocess.CompletedProcess:
-    """Invoke the real Stop hook the way Claude Code does: stdin = JSON."""
-    payload = json.dumps({"transcript_path": str(transcript), "cwd": str(cwd)})
-    return subprocess.run(
-        ["python3", str(HOOK)],
-        input=payload,
-        capture_output=True,
-        text=True,
-        timeout=10,
-        env={**os.environ},
-    )
 
 
 def _with_temp_cwd():
@@ -162,25 +148,49 @@ def test_multiple_tags_in_one_session() -> tuple[bool, str]:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def test_no_tags_writes_marker() -> tuple[bool, str]:
-    """When no tags appear, the hook should still write a marker so the
-    file timestamp updates and Stefan can see it ran. Audit found this
-    was the visibility fix for the months-of-silent-failure bug."""
-    tmp = _with_temp_cwd()
+def test_no_tags_writes_nothing() -> tuple[bool, str]:
+    """DENIAL (0.3.3): a transcript with no tags must produce ZERO memory
+    writes. The daily 'session ended' marker was dropped — liveness lives in
+    ~/.claude/logs/memory-hook.log, not STATE.md."""
+    tmp = Path(tempfile.mkdtemp(prefix="netdust-nomarker-"))
     try:
-        transcript = _make_transcript(tmp, "Just an ordinary response with no tags at all.")
+        (tmp / "memory").mkdir()
+        seeded = "# STATE\n\nexisting content untouched by no-op fires\n"
+        (tmp / "memory" / "STATE.md").write_text(seeded)
+        transcript = tmp / "transcript.jsonl"
+        with open(transcript, "w") as f:
+            f.write(json.dumps({
+                "type": "assistant",
+                "message": {"content": [{"type": "text", "text": "Just chatting, nothing tagged here."}]},
+            }) + "\n")
         result = _run_hook(tmp, transcript)
         if result.returncode != 0:
-            return False, f"marker: hook exited {result.returncode}"
+            return False, f"no-writes: hook exited {result.returncode}"
+        after = (tmp / "memory" / "STATE.md").read_text()
+        if after != seeded:
+            return False, f"no-writes: STATE.md mutated on a no-tag fire.\nGot:\n{after[:300]}"
+        return True, "no-tag session: STATE.md byte-identical (marker dropped)"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
-        state_path = tmp / "memory" / "STATE.md"
-        if not state_path.exists():
-            return False, "marker: STATE.md not created"
 
-        content = state_path.read_text()
-        if "session ended" not in content:
-            return False, f"marker: expected 'session ended' marker. Got: {content[:200]}"
-        return True, "no-tag session: visibility marker written"
+def test_no_tags_creates_no_state_file() -> tuple[bool, str]:
+    """DENIAL (0.3.3): a no-tag fire must not CREATE STATE.md either."""
+    tmp = Path(tempfile.mkdtemp(prefix="netdust-nomarker2-"))
+    try:
+        (tmp / "memory").mkdir()  # scaffolding exists, file does not
+        transcript = tmp / "transcript.jsonl"
+        with open(transcript, "w") as f:
+            f.write(json.dumps({
+                "type": "assistant",
+                "message": {"content": [{"type": "text", "text": "No tags in this session."}]},
+            }) + "\n")
+        result = _run_hook(tmp, transcript)
+        if result.returncode != 0:
+            return False, f"no-create: hook exited {result.returncode}"
+        if (tmp / "memory" / "STATE.md").exists():
+            return False, "no-create: STATE.md created on a no-tag fire"
+        return True, "no-tag session: STATE.md not created"
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -262,6 +272,7 @@ def run() -> list[tuple[bool, str]]:
         test_lesson_tag_written_to_lessons(),
         test_todo_tag_written_to_tasks(),
         test_multiple_tags_in_one_session(),
-        test_no_tags_writes_marker(),
+        test_no_tags_writes_nothing(),
+        test_no_tags_creates_no_state_file(),
         test_skill_edge_tag_routes_to_skill_lessons(),
     ]
