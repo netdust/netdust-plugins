@@ -11,8 +11,12 @@ destructive commands and emits a PreToolUse permission decision:
 
 Decision policy (v1, from the parked threat model — favor `ask` over `deny`):
   - destructive pattern matched  → "ask"  (surface the literal command to a human)
-  - highest-risk prod patterns   → "deny" (refuse regardless of stated intent)
   - everything else / non-Bash   → passthrough (exit 0, no stdout = proceed)
+
+v1 deliberately never emits "deny" — a hard deny risks blocking legit work,
+and "ask" already stops the autonomous/injected case (a human sees the
+literal command). `deny` is reserved for a future, more confident tier; the
+live guard (pretooluse-guard.py) does not implement it yet.
 
 CRITICAL invariant tested here: the guard FAILS OPEN. Malformed stdin, a
 non-Bash tool, or any internal error must NOT block the call — the hook
@@ -60,8 +64,9 @@ def _run(tool_name: str, tool_input: dict, raw_stdin: str | None = None) -> tupl
 
 
 def _decision(stdout: str) -> str:
-    """Parse the hook's stdout → 'allow'|'ask'|'deny', or 'passthrough' if
-    empty (proceed). 'unparseable'/'malformed' surface structural bugs."""
+    """Parse the hook's stdout → 'allow'|'ask' (v1 never emits 'deny'), or
+    'passthrough' if empty (proceed). 'unparseable'/'malformed' surface
+    structural bugs."""
     if not stdout.strip():
         return "passthrough"
     try:

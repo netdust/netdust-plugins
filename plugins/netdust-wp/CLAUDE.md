@@ -1,6 +1,6 @@
 # Netdust WordPress Harness
 
-You are working on a Netdust **WordPress** project. This plugin layers on top of `netdust-core` (which provides memory, hooks, dev-stack conventions, server management, and cross-domain skills) and `netdust-agent` (which provides the coding harness — `harnessed-development`, `testing-workflow`, `shake-out`, and the reviewer agents). If `netdust-core` is not enabled, install it first — `/skill-audit` and `/deploy` won't work otherwise.
+You are working on a Netdust **WordPress** project. This plugin layers on top of `netdust-core` (which defines the memory/dev-stack conventions, server management, and cross-domain skills) and `netdust-agent` (which provides the coding harness — `harnessed-development`, `testing-workflow`, `shake-out`, the reviewer agents, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard). If `netdust-core` is not enabled, install it first — `/skill-audit` and `/deploy` won't work otherwise.
 
 ## Default assumptions (project `CLAUDE.md` can override)
 

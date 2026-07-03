@@ -53,4 +53,4 @@ The Agent tool (subagent dispatch) only exists inside a Claude Code session. A p
 - **No automatic subagent dispatch.** That's the orchestrator's job — see Flow above.
 - **No retries.** If a subagent fails or returns garbage, the orchestrator re-dispatches manually and re-pastes.
 - **No automatic skill-disable enforcement.** The baseline prompt includes explicit "do not load any harness skill" instructions, but the orchestrator must verify by checking the agent's behavior. We accept the risk of contamination because the alternative (a separate eval environment) is way more work.
-- **Not a test runner.** Tests live at `~/.claude/plugins/netdust-core/tests/`. This is eval infrastructure — different goal.
+- **Not a test runner.** Tests live at `plugins/netdust-agent/tests/` (`bash plugins/netdust-agent/tests/run.sh`). This is eval infrastructure — different goal.

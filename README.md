@@ -6,7 +6,7 @@ Claude Code plugin monorepo. Three plugins published as a single marketplace.
 
 | Plugin | Role |
 |--------|------|
-| `netdust-core` | Cross-stack discipline (hooks, memory, skills, agents, MCP). Stack-agnostic. |
+| `netdust-core` | Cross-stack discipline (memory conventions, skills, agents, MCP — live hooks in netdust-agent). Stack-agnostic. |
 | `netdust-wp` | WordPress framework knowledge (NTDST/Bedrock). Layers on core. |
 | `netdust-statamic` | Statamic 6 + Peak. Layers on core. |
 

@@ -1,7 +1,7 @@
 {
   "name": "netdust-statamic",
   "version": "0.1.1",
-  "description": "Netdust Statamic plugin \u2014 Statamic 6 + Peak development on Laravel 13 + DDEV + Vite + Tailwind + Alpine. Skills: statamic-build (editor-friendly feature implementation), shake-out-statamic (post-build QA), peak-reference, statamic-mcp guidelines. Commands for collection/block/service/feature scaffolding. Layers on netdust-core for memory, hooks, dev-stack, server management, deploy.",
+  "description": "Netdust Statamic plugin \u2014 Statamic 6 + Peak development on Laravel 13 + DDEV + Vite + Tailwind + Alpine. Skills: statamic-build (editor-friendly feature implementation), shake-out-statamic (post-build QA), peak-reference, statamic-mcp guidelines. Commands for collection/block/service/feature scaffolding. Layers on netdust-core for memory conventions, dev-stack, server management, deploy (live hooks in netdust-agent).",
   "author": {
     "name": "Stefan Vermeulen",
     "email": "stefan@netdust.be",

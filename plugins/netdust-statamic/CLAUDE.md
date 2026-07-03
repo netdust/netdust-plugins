@@ -1,6 +1,6 @@
 # Netdust Statamic Plugin
 
-You are working on a Netdust **Statamic** project. This plugin layers on top of `netdust-core` (memory, hooks, dev-stack, server management, cross-domain skills) and `netdust-agent` (the coding harness — `harnessed-development`, `testing-workflow`, `shake-out`, and the reviewer agents). Install `netdust-core` first — `/deploy` and memory hooks won't work otherwise.
+You are working on a Netdust **Statamic** project. This plugin layers on top of `netdust-core` (memory conventions, dev-stack, server management, cross-domain skills) and `netdust-agent` (the coding harness — `harnessed-development`, `testing-workflow`, `shake-out`, the reviewer agents, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard). Install `netdust-core` first — `/deploy` won't work otherwise; memory hooks need `netdust-agent`.
 
 ## Default assumptions (project `CLAUDE.md` can override)
 

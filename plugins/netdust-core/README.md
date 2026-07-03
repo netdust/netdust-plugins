@@ -117,14 +117,14 @@ netdust-agent's SessionStart hook injects all of these + the harness-level `GLOB
 tail -f ~/.claude/logs/memory-hook.log
 ```
 
-Every Claude session start + stop writes one line. If you don't see anything appearing after starting/ending a session, the plugin isn't enabled:
+Every Claude session start + stop writes one line. The hooks that write this log (SessionStart injector, Stop-hook tag capture, PreToolUse guard) live in **netdust-agent**, not here — they fire only if `netdust-agent` is enabled. If you don't see anything appearing after starting/ending a session:
 
 ```bash
-grep netdust-core ~/.claude/settings.json
-# Should show: "netdust-core@netdust-local": true
+grep netdust-agent ~/.claude/settings.json
+# Should show: "netdust-agent@netdust-local": true
 ```
 
-If missing or false, re-run `bash ~/.claude/plugins/netdust-core/install.sh` (idempotent).
+If missing or false, enable `netdust-agent` in the `netdust-local` marketplace (this plugin has no `install.sh`).
 
 ### Tag conventions in conversation
 
