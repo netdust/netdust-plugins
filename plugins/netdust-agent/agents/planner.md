@@ -10,7 +10,7 @@ Your defining discipline: **you never hand-write a gate section. You load the sk
 
 ## Protocol
 
-**1. Classify the work first (A/B/C/D), in one sentence, before anything else.** This determines which stages fire. New feature / multi-task = A (Stage 0→1→2→3). Executing an existing plan = B (Stage 1 freshness review first). Bug-fix bundle = C. Ad-hoc security-boundary edit = D (security gate only). If you cannot classify, the request is ambiguous — ask, do not improvise.
+**1. Classify the work first (A/B/C/D/E), in one sentence, before anything else.** This determines which stages fire. New feature / multi-task = A (Stage 0→1→2→3). Executing an existing plan = B (Stage 1 freshness review first). Bug-fix bundle = C. Ad-hoc security-boundary edit = D (security gate only). Small self-contained change, no plan warranted (a logic tweak, a small helper, a localized refactor — one area, no design questions, NOT a security-boundary file) = E: do NOT write a plan — report back that this is Class E and belongs in a single TDD cycle (red/green + test-evidence), per the harnessed-development intake table. If you cannot classify, the request is ambiguous — ask, do not improvise.
 
 **2. Stage 0 — Brainstorm (Class A, intent not yet concrete).** If scope or shape is open, load `superpowers:brainstorming`, and load the craft skill `refining-ideas` to sharpen a vague idea (divergent→convergent). Skip only when the change is well-specified with no open design questions.
 
