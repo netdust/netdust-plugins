@@ -265,6 +265,27 @@ def dedup_against_hashes(items: list, captured: set, key_of) -> list:
     return kept
 
 
+def _file_contains_normalized(path: Path, text: str) -> bool:
+    """True if the normalized tag body already appears in the target file.
+
+    Backstop for a lost sidecar (fix 4, 2026-07-03): the hash ring lives in
+    a GITIGNORED sidecar and resets when it's lost — the target file itself
+    is the durable dedup record. Whitespace-collapsed, lowercased substring
+    match, mirroring normalized_hash()'s normalization.
+
+    Known accepted limitation: a tag whose normalized body coincidentally
+    appears verbatim inside unrelated file prose is skipped. Tag bodies are
+    full sentences; acceptable for memory capture."""
+    if not text.strip() or not path.exists():
+        return False
+    try:
+        norm_file = re.sub(r"\s+", " ", path.read_text()).strip().lower()
+    except Exception:
+        return False  # unreadable target → don't block capture
+    norm_text = re.sub(r"\s+", " ", text).strip().lower()
+    return norm_text in norm_file
+
+
 # ── File writers ─────────────────────────────────────────────────────────────
 
 def append_state_marker(cwd: str, line: str) -> None:
@@ -385,6 +406,8 @@ def append_skill_edge(skill: str, edge_case: str, date: str, source_project: str
         candidate = plugin_dir / "skills" / skill / "SKILL.md"
         if candidate.exists():
             lessons_path = candidate.parent / "lessons.md"
+            if _file_contains_normalized(lessons_path, edge_case):
+                return True  # already captured in a prior fire — idempotent
             lessons_path.touch(exist_ok=True)
             entry = f"\n### {date} — {edge_case}\n- Source: {source_project}\n"
             with open(lessons_path, "a") as f:
@@ -511,6 +534,18 @@ def main() -> None:
         tags["skill_edges"], captured, lambda se: f"{se[0]}:{se[1]}"
     )
 
+    # ── Durable dedup: the target file itself (fix 4) ────────────────────────
+    # The hash ring above lives in the gitignored sidecar and resets when the
+    # sidecar is lost; the committed target files don't. Filter anything whose
+    # normalized body already exists in its destination file.
+    state_path = Path(cwd) / "memory" / "STATE.md"
+    lessons_path = Path(cwd) / "memory" / "lessons.md"
+    todo_path = Path(cwd) / "tasks" / "todo.md"
+    tags["decisions"] = [d for d in tags["decisions"] if not _file_contains_normalized(state_path, d)]
+    tags["risks"]     = [r for r in tags["risks"] if not _file_contains_normalized(state_path, r)]
+    tags["lessons"]   = [l for l in tags["lessons"] if not _file_contains_normalized(lessons_path, l)]
+    tags["todos"]     = [t for t in tags["todos"] if not _file_contains_normalized(todo_path, t)]
+
     written = []
 
     if tags["decisions"] or tags["risks"]:
@@ -546,6 +581,8 @@ def main() -> None:
         append_state_marker(cwd, marker)
 
     # ── Advance the watermark (atomic, even on partial failure above) ───────
+    # Watermark last, ON PURPOSE: appends are idempotent (file-content dedup),
+    # so a crash before this line re-scans next fire without duplicating.
     new_uuid = last_message_uuid(messages) or sidecar.get("last_processed_uuid")
     write_sidecar_atomic(cwd, {
         "transcript_path": transcript_path,
