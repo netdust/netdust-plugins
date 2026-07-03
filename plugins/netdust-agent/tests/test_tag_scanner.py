@@ -185,20 +185,47 @@ def test_no_tags_writes_marker() -> tuple[bool, str]:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def _registry_plugin_install_path(name: str) -> Path | None:
+    """Resolve a plugin's active install dir the same way session-stop.py's
+    _installed_plugin_paths() does — from installed_plugins.json, NOT the
+    ~/.claude/plugins/<name> symlink (which can lag the registry; that lag
+    IS fix 3 / 2026-07-03)."""
+    registry = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
+    if not registry.exists():
+        return None
+    try:
+        data = json.loads(registry.read_text())
+        for key, entries in data.get("plugins", {}).items():
+            if key.split("@", 1)[0] != name:
+                continue
+            if isinstance(entries, list) and entries:
+                install_path = entries[0].get("installPath")
+                if install_path and Path(install_path).is_dir():
+                    return Path(install_path)
+    except Exception:
+        return None
+    return None
+
+
 def test_skill_edge_tag_routes_to_skill_lessons() -> tuple[bool, str]:
     """SKILL-EDGE: <skill>: <text> should land in the named skill's lessons.md.
     The audit specifically fixed this to glob all netdust-* plugins, not
     just netdust-wp. Verify it finds skills in any of the three plugins.
 
     Uses a real, currently-installed skill ('wp-security') so the test
-    actually exercises the cross-plugin lookup. Cleans up its single line
-    after."""
+    actually exercises the cross-plugin lookup. Resolves the target via the
+    installed_plugins.json registry (fix 3, 2026-07-03) — NOT the
+    ~/.claude/plugins/<name> symlink, which can point at a stale version the
+    registry no longer considers active. Cleans up its single line after."""
     tmp = _with_temp_cwd()
     skill = "wp-security"
-    target = (
-        Path.home()
-        / ".claude" / "plugins" / "netdust-wp" / "skills" / skill / "lessons.md"
-    )
+    plugin_dir = _registry_plugin_install_path("netdust-wp")
+    if plugin_dir is None:
+        legacy = Path.home() / ".claude" / "plugins" / "netdust-wp"
+        if not legacy.exists():
+            return True, f"skill-edge: skipped (netdust-wp not installed)"
+        plugin_dir = legacy.resolve()
+    target = plugin_dir / "skills" / skill / "lessons.md"
     if not target.parent.exists():
         return True, f"skill-edge: skipped (skill {skill} not installed)"
 

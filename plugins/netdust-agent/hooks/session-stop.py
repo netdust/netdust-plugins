@@ -367,20 +367,46 @@ def append_todos_from_tags(cwd: str, todos: list[str], date: str) -> bool:
     return True
 
 
+INSTALLED_PLUGINS_JSON = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
+
+
+def _installed_plugin_paths() -> dict[str, Path]:
+    """plugin name -> active install dir, from Claude Code's own registry.
+
+    v2 schema: {"plugins": {"<name>@<marketplace>": [{"installPath": ...}]}}.
+    The registry is the ONLY truth for "active version" — version-dir mtimes
+    are not (fix 3, 2026-07-03: 0.2.1's mtime was 4 ms newer than the
+    installed 0.3.0). Returns {} on any error so callers can fall back."""
+    try:
+        data = json.loads(INSTALLED_PLUGINS_JSON.read_text())
+        result: dict[str, Path] = {}
+        for key, entries in data.get("plugins", {}).items():
+            name = key.split("@", 1)[0]
+            if not isinstance(entries, list) or not entries:
+                continue
+            install_path = entries[0].get("installPath")
+            if install_path and Path(install_path).is_dir():
+                result[name] = Path(install_path)
+        return result
+    except Exception:
+        return {}
+
+
 def _netdust_plugin_dirs() -> list[Path]:
+    """Locate all installed netdust-* plugin dirs, in trust order:
+
+    1. installed_plugins.json installPath (authoritative — see
+       _installed_plugin_paths).
+    2. FALLBACK (registry missing/unreadable — e.g. bare test runs): climb
+       from CLAUDE_PLUGIN_ROOT to the marketplace dir and pick each sibling's
+       newest-mtime version dir. mtime is a heuristic, NOT truth.
+    3. Legacy flat layout glob (~/.claude/plugins/netdust-*).
     """
-    Locate all installed netdust-* plugin dirs.
+    installed = _installed_plugin_paths()
+    dirs = [p for name, p in installed.items() if name.startswith("netdust-")]
+    if dirs:
+        return dirs
 
-    Marketplace install layout (Claude Code 2.1+):
-        ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/
-
-    Climbs from CLAUDE_PLUGIN_ROOT (this hook's own plugin install path) up
-    two levels to reach the marketplace dir, then enumerates siblings.
-    For each sibling, picks the latest-mtime version dir (proxy for "active").
-
-    Falls back to globbing ~/.claude/plugins/netdust-* if env var is unset
-    (legacy/dev layout). Returns absolute paths to the version dirs.
-    """
     root_env = os.environ.get("CLAUDE_PLUGIN_ROOT")
     if root_env:
         # cache/<marketplace>/<self-plugin>/<version> — climb to <marketplace>
