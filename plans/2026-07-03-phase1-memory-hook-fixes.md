@@ -1084,3 +1084,12 @@ cd /home/ntdst/Sites/netdust-wp-manager && git log --oneline -1 -- memory/ && gi
 - **Deferrals (explicitly NOT in this phase):** block-once tag nudge (user decision); GLOBAL.md "Active priorities" migration to Layer B; netdust-core dead-hook cleanup + its Track B doc drift; repo-level ARCHITECTURE-INVARIANTS.md authoring.
 - **Type/name consistency:** `_file_contains_normalized`, `NO_AUTO_MEMORY_MARKER`, `_installed_plugin_paths`, `INSTALLED_PLUGINS_JSON`, `resolve_installed_dir` — each defined once, referenced with the same name everywhere. Registry key semantics (`<name>@<marketplace>`, `entries[0].installPath`) identical across all three implementations. ✓
 - **Placeholder scan:** every code step carries the actual code; every run step carries the command + expected output. ✓
+
+---
+
+## Review section (execution record, 2026-07-03)
+
+- Cluster 1 (Tasks 1–3): closed. STANDARD review ×3 angles → 1 Important (stale API-key env in test_tag_scanner) + minors, fixed in 9d86269, re-review APPROVED.
+- Cluster 2 (Tasks 4–7): closed. STANDARD review ×3 angles → 4 Important (heredoc try-scope parity, dead-core false-signal test, hardcoded plugin-list asymmetry, entries[0] rule untested), fixed in 3c32400 + dafb93b, both re-reviews APPROVED. Parser-parity check: PASS.
+- Task 8: delivered. Fast-forward merge, bump 742d0bf (agent 0.3.1, core 0.2.2), pushed to origin/main, plugins updated. Live verification checklist: 5/5 PASS (registry versions; HOOK-LIVE diff; harness_global found + 4 symlinks on installPath; tag capture without haiku=; no-auto-memory skip in netdust-wp-manager).
+- Deferrals carried forward: netdust-core dead-hook cleanup + Track-B doc drift (core CLAUDE.md); netdust-wp marketplace 0.4.1 vs installed 0.4.0 mismatch; pattern-miner.md dangling GLOBAL.md ref; sync.sh test coverage; cross-marketplace netdust-* symlink edge; GLOBAL.md "Active priorities" content migration to Layer B; block-once tag nudge (user-deferred).
