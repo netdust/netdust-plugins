@@ -27,6 +27,43 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MARKETPLACE_NAME="netdust-plugins"
 CACHE_ROOT="$HOME/.claude/plugins/cache/$MARKETPLACE_NAME"
+INSTALLED_JSON="$HOME/.claude/plugins/installed_plugins.json"
+
+# resolve_installed_dir <plugin_name>
+# Echoes the plugin's ACTIVE cache dir. Truth = installed_plugins.json's
+# installPath (fix 3, 2026-07-03 — `ls -1t` picked netdust-agent 0.2.1 over
+# the installed 0.3.0 on a 4 ms mtime difference). Falls back to newest-mtime
+# when the registry misses the plugin. Echoes nothing if unresolvable.
+resolve_installed_dir() {
+  local plugin_name="$1" active=""
+  if [[ -f "$INSTALLED_JSON" ]]; then
+    active=$(python3 - "$plugin_name" "$INSTALLED_JSON" <<'PY' 2>/dev/null || true
+import json, sys
+name, path = sys.argv[1], sys.argv[2]
+try:
+    data = json.load(open(path))
+except Exception:
+    sys.exit(0)
+for key, entries in data.get("plugins", {}).items():
+    if key.split("@", 1)[0] == name and isinstance(entries, list) and entries:
+        p = entries[0].get("installPath")
+        if p:
+            print(p)
+        break
+PY
+)
+  fi
+  if [[ -n "$active" && -d "$active" ]]; then
+    printf '%s\n' "$active"
+    return 0
+  fi
+  local latest
+  latest="$(ls -1t "$CACHE_ROOT/$plugin_name" 2>/dev/null | head -1)"
+  if [[ -n "$latest" ]]; then
+    printf '%s\n' "$CACHE_ROOT/$plugin_name/$latest"
+  fi
+  return 0
+}
 
 if [[ ! -d "$REPO_ROOT/plugins" ]]; then
   echo "ERROR: $REPO_ROOT does not look like the netdust-plugins repo (no plugins/ dir)." >&2
@@ -46,12 +83,12 @@ for plugin_dir in "$REPO_ROOT/plugins"/*/; do
     echo "  - $plugin_name: SKIP (not installed)"
     continue
   fi
-  version="$(ls -1t "$CACHE_ROOT/$plugin_name" | head -1)"
-  if [[ -z "$version" ]]; then
-    echo "  - $plugin_name: SKIP (no version dir found)"
+  target="$(resolve_installed_dir "$plugin_name")"
+  if [[ -z "$target" ]]; then
+    echo "  - $plugin_name: SKIP (no installed version dir resolved)"
     continue
   fi
-  target="$CACHE_ROOT/$plugin_name/$version"
+  version="$(basename "$target")"
   # Mirror the working tree into the cache. Use rsync if available for cleaner deletion of removed files.
   if command -v rsync >/dev/null 2>&1; then
     rsync -a --delete --exclude='.git' "$plugin_dir" "$target/"
@@ -69,8 +106,8 @@ fail=0
 for plugin_dir in "$REPO_ROOT/plugins"/*/; do
   plugin_name="$(basename "$plugin_dir")"
   [[ -d "$CACHE_ROOT/$plugin_name" ]] || continue
-  version="$(ls -1t "$CACHE_ROOT/$plugin_name" | head -1)"
-  target="$CACHE_ROOT/$plugin_name/$version"
+  target="$(resolve_installed_dir "$plugin_name")"
+  [[ -n "$target" ]] || continue
   # Compare top-level skill SKILL.md count + command count as a smoke check.
   src_skills="$(find "$plugin_dir/skills" -maxdepth 2 -name 'SKILL.md' 2>/dev/null | wc -l)"
   dst_skills="$(find "$target/skills" -maxdepth 2 -name 'SKILL.md' 2>/dev/null | wc -l)"
