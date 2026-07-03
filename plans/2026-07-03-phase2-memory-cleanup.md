@@ -529,3 +529,13 @@ Expected: `netdust-core -> 0.2.3`, `netdust-wp -> 0.4.1`, agent 0.3.1 and statam
 - Spec coverage: items 1–10 of the brief map to Tasks 1–3 (items 1–3), 4–6 (items 4–6), 7–10 (items 7–10). Gates 1a/1c/1d/1f/1g addressed in the Gate record + per-task tier lines + review markers.
 - Placeholders: none — script code, replacement texts, and commands are complete.
 - Consistency: script path, backup dir, branch name, and commit messages are used identically across tasks.
+
+---
+
+## Review section (execution record, 2026-07-03)
+
+- Phase A: 17 files cleaned (1,211 noise lines, 10 dup blocks incl. 2 fresh folio dups via STOP procedure), backups at /tmp/claude-1000/-home-ntdst/phase2-memory-backups/20260703-140311/, 8 single-file commits. ARCHIVE.md correctly out of scope.
+- Phase B: 6 artifacts deleted, 4 bavi-jersey lessons migrated, ntdst-starter commit cbd3d25 (real pre-commit hook passed via ddev start). A+B LIGHT review: APPROVED (verified against backups).
+- Phase C: commits 0b269d1 (hook retirement + test port, 11/11 pre+post), 6c3cad7 (doc drift), 5df8200 (pattern-miner + layout tree), a9fe4f4 (review fix wave: sibling-plugin attribution, evals/README, settings.local.json, troubleshooting, guard docstring, tests README), e544567 (release 0.2.3) — merge 1df0905 pushed. STANDARD review ×3: APPROVED; tracer re-verify: APPROVED. Live verification: versions PASS (core 0.2.3, wp 0.4.1), hooks-dir-gone PASS, log-alive PASS.
+- Note for future readers: the fleet zero-noise gate was true at apply time (14:03); the still-live daily marker re-adds ≤1 noise line/day/project by design — organic re-accumulation is not a Phase-2 regression. Removing the daily marker entirely is a Phase-4 candidate.
+- Deferrals: netdust-core README "Roll back" section netdust-local refs (L147–148); netdust-wp README stale install.sh flow; agent tests helper-triad dedup (3 copies); evals/ dir undocumented in core README layout tree.
