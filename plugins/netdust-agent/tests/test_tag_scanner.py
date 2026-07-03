@@ -14,11 +14,10 @@ hook against it. They assert on actual file contents on disk.
 import json
 import os
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 
-HOOK = Path(__file__).parent.parent / "hooks" / "session-stop.py"
+from hook_test_utils import run_stop_hook as _run_hook
 
 
 def _make_transcript(tmp: Path, assistant_text: str) -> Path:
@@ -37,19 +36,6 @@ def _make_transcript(tmp: Path, assistant_text: str) -> Path:
         for m in messages:
             f.write(json.dumps(m) + "\n")
     return path
-
-
-def _run_hook(cwd: Path, transcript: Path) -> subprocess.CompletedProcess:
-    """Invoke the real Stop hook the way Claude Code does: stdin = JSON."""
-    payload = json.dumps({"transcript_path": str(transcript), "cwd": str(cwd)})
-    return subprocess.run(
-        ["python3", str(HOOK)],
-        input=payload,
-        capture_output=True,
-        text=True,
-        timeout=10,
-        env={**os.environ},
-    )
 
 
 def _with_temp_cwd():

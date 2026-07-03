@@ -20,40 +20,15 @@ and run the real session-stop.py hook against it via subprocess. No mocks.
 """
 
 import json
-import os
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 
-HOOK = Path(__file__).parent.parent / "hooks" / "session-stop.py"
-
-
-def _msg(role: str, text: str, uuid: str) -> dict:
-    """One transcript message with a top-level uuid (real CC shape)."""
-    return {
-        "type": role,
-        "uuid": uuid,
-        "message": {"content": [{"type": "text", "text": text}]},
-    }
-
-
-def _write_transcript(path: Path, messages: list[dict]) -> None:
-    with open(path, "w") as f:
-        for m in messages:
-            f.write(json.dumps(m) + "\n")
-
-
-def _run_hook(cwd: Path, transcript: Path) -> subprocess.CompletedProcess:
-    payload = json.dumps({"transcript_path": str(transcript), "cwd": str(cwd)})
-    return subprocess.run(
-        ["python3", str(HOOK)],
-        input=payload,
-        capture_output=True,
-        text=True,
-        timeout=10,
-        env={**os.environ},
-    )
+from hook_test_utils import (
+    msg as _msg,
+    write_transcript as _write_transcript,
+    run_stop_hook as _run_hook,
+)
 
 
 def _with_temp_cwd() -> Path:
