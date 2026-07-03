@@ -186,21 +186,21 @@ Expected: first grep no output. Second: a small line count (~30 changed lines to
 
 `no unit test: Tier B, verification-record only; the steps ARE the gate`
 
-- [ ] **Step 1: Re-verify the repo copy has Class E**
+- [x] **Step 1: Re-verify the repo copy has Class E**
 
 ```bash
 grep -n "^| \*\*E" /home/ntdst/Projects/netdust-plugins/plugins/netdust-agent/skills/harnessed-development/SKILL.md
 ```
 Expected: one hit at **line 60**: `| **E — Small self-contained change, no plan warranted** … | **Go straight to Stage 2 as one TDD cycle.** … |`
 
-- [ ] **Step 2: Re-verify the installed 0.3.1 cache has the same row**
+- [x] **Step 2: Re-verify the installed 0.3.1 cache has the same row**
 
 ```bash
 grep -n "^| \*\*E" /home/ntdst/.claude/plugins/cache/netdust-plugins/netdust-agent/0.3.1/skills/harnessed-development/SKILL.md
 ```
 Expected: one hit at line 60, identical text.
 
-- [ ] **Step 3: Record the verdict** — check this box to record: *SKILL.md intake table Class E finding = NO-OP; the morning auditor read a stale pre-phase-1 copy (version-skew bug fixed in phase 1). Evidence: E row present at line 60 in repo AND 0.3.1 cache, verified 2026-07-03.* Emit `DECISION: Class E SKILL.md audit finding closed as version-skew fallout — E row present in repo + 0.3.1 cache (phase 3, Task 4)` in the session transcript so the Stop hook captures it.
+- [x] **Step 3: Record the verdict** — check this box to record: *SKILL.md intake table Class E finding = NO-OP; the morning auditor read a stale pre-phase-1 copy (version-skew bug fixed in phase 1). Evidence: E row present at line 60 in repo AND 0.3.1 cache, verified 2026-07-03.* Emit `DECISION: Class E SKILL.md audit finding closed as version-skew fallout — E row present in repo + 0.3.1 cache (phase 3, Task 4)` in the session transcript so the Stop hook captures it.
 
 ### Task 5: Add Class E to planner.md classification + bump netdust-agent 0.3.2
 
@@ -216,13 +216,13 @@ Expected: one hit at line 60, identical text.
 
 Ground truth (verified 2026-07-03): planner.md:13 reads `**1. Classify the work first (A/B/C/D), in one sentence, before anything else.**` and enumerates only A–D — in the repo AND in the 0.3.1 cache. This is genuinely missing, not skew. Design note honored by the edit: Class E work should never REACH a planner (E = no plan), so the correct planner behavior is to recognize E and hand it back, not to plan it. Source text for E's definition: SKILL.md line 60 (cache and repo identical).
 
-- [ ] **Step 1: Replace planner.md line 13** with exactly:
+- [x] **Step 1: Replace planner.md line 13** with exactly:
 
 ```
 **1. Classify the work first (A/B/C/D/E), in one sentence, before anything else.** This determines which stages fire. New feature / multi-task = A (Stage 0→1→2→3). Executing an existing plan = B (Stage 1 freshness review first). Bug-fix bundle = C. Ad-hoc security-boundary edit = D (security gate only). Small self-contained change, no plan warranted (a logic tweak, a small helper, a localized refactor — one area, no design questions, NOT a security-boundary file) = E: do NOT write a plan — report back that this is Class E and belongs in a single TDD cycle (red/green + test-evidence), per the harnessed-development intake table. If you cannot classify, the request is ambiguous — ask, do not improvise.
 ```
 
-- [ ] **Step 2: Bump both version sites 0.3.1 → 0.3.2**
+- [x] **Step 2: Bump both version sites 0.3.1 → 0.3.2**
 
 In `plugins/netdust-agent/.claude-plugin/plugin.json:3`: `"version": "0.3.1"` → `"version": "0.3.2"`.
 In `.claude-plugin/marketplace.json:23`: `"version": "0.3.1"` → `"version": "0.3.2"`.
@@ -370,3 +370,13 @@ Expected: commit contains exactly 4 files.
 - Spec coverage: A1–A5 → Tasks 1–3; B → Tasks 4–5; C6–C8 → Tasks 6–8. No gaps.
 - Placeholder scan: none — every edit shows exact old/new text; the one read-before-edit (Task 8 statamic Install wording) names exact lines and the exact donor pattern.
 - Consistency: version 0.3.2 used identically in Task 5 steps and commit; grep gates match the strings the tasks remove.
+
+---
+
+## Review section (execution record, 2026-07-03)
+
+- Cluster 1 (global ~/.claude/CLAUDE.md): 34-line diff, every hunk mapped to a plan step. STANDARD review ×2 (fact-check: every claim verified true on-machine; scope-guard: zero unauthorized drift) — both APPROVED. Backup: ~/.claude/CLAUDE.md.bak-2026-07-03.
+- Cluster 2: Part B split verdict confirmed — SKILL.md Class E was version-skew fallout (no-op, evidence recorded); planner.md genuinely lacked E → fixed + 0.3.2 bump (commit 6351637 post-rebase).
+- Cluster 3: netdust-local refs, ghost code-audit mentions, wp/statamic dead install.sh flows all swept (commit e606445 post-rebase); residuals classified (4 negative-statements + HANDOFF.md exemption). LIGHT review: APPROVED.
+- Delivery: rebased over e779abe (parallel session's netdust-wp REST/CORS docs — no conflicts), pushed, netdust-agent 0.3.1→0.3.2 installed and verified (Class E in installed planner.md).
+- Deferral: netdust-wp/docs/superpowers/specs/2026-05-17-harness-design.md carries historical code-audit mentions — exemption class (dated spec archive), noted not fixed.
