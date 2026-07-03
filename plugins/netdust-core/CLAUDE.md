@@ -44,6 +44,7 @@ When you write any of these tags in your responses during a session, the Stop ho
 - `RISK: <text>` → `memory/STATE.md`
 - `LESSON: <text>` → `memory/lessons.md`
 - `TODO: <text>` → `tasks/todo.md`
+- `SKILL-EDGE: <skill-name>: <lesson>` → that skill's `lessons.md` (any installed netdust-* plugin; skill name = the skill's directory name)
 
 Use these tags liberally when something important happens. The hook captures them deterministically — no AI guessing involved.
 
