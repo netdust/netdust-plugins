@@ -7,7 +7,7 @@ Read every `~/Sites/*/memory/STATE.md` and `~/Sites/*/memory/lessons.md` that ex
 
 - A new harness skill
 - An addition to an existing skill body
-- A new entry in `~/.claude/plugins/netdust-wp/memory/GLOBAL.md`
+- A new entry in `~/Sites/netdust-wp-manager/memory/GLOBAL.md` (the manually-maintained Layer-B fleet memory)
 
 **Do not auto-edit anything.** Surface candidates; the user decides.
 

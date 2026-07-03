@@ -67,13 +67,6 @@ In any existing project, you can manually add to its `CLAUDE.md`:
 ├── .claude-plugin/plugin.json
 ├── CLAUDE.md, SOUL.md, RULES.md, README.md
 │
-├── hooks/
-│   ├── hooks.json                  ← EMPTY: registration moved to netdust-agent to avoid
-│   │                                  double-firing when both plugins are installed (2026-06-09)
-│   ├── session-start.sh            ← loads project memory (STATE/lessons/CLAUDE/GLOBAL) — kept in sync
-│   ├── session-stop.py             ← captures DECISION:/RISK:/LESSON:/TODO: tags — kept in sync
-│   └── pretooluse-guard.py         ← destructive-command guard (Bash) — kept in sync
-│
 ├── commands/
 │   ├── deploy.md                   /deploy — 9-method dispatcher
 │   ├── memory-audit.md             /memory-audit — STATE/lessons/todo staleness report
@@ -89,8 +82,7 @@ In any existing project, you can manually add to its `CLAUDE.md`:
 │   └── ploi/                       ← Ploi + Hetzner lifecycle
 │
 ├── memory/
-│   ├── GLOBAL.md                   ← cross-project facts (stack, Redis exclusions)
-│   └── deploy-patterns.md          ← 9 deploy methods + per-site mapping
+│   └── deploy-patterns.md          ← 9 deploy methods + per-site mapping (GLOBAL.md now ships in netdust-agent)
 │
 ├── templates/
 │   ├── project-CLAUDE.md.tmpl
