@@ -551,3 +551,12 @@ claude plugin update netdust-core@netdust-plugins
 3. **`ntdst-core` has no `~/Sites` dir** — its draft sources from the plugins monorepo itself; **`ntdst-starter` has no Layer-C memory** — git-history-only, low-confidence header.
 4. **The helper triad is wider than "3–4 modules" but heterogeneous:** `_msg` in 6 modules, `_run_hook` in 7 — several are divergent variants targeting other hooks. Dedup is scoped to the byte-equivalent stop-hook family (idempotency, dedup, no_auto_memory, tag_scanner); divergent locals stay local by design.
 5. **`/memory-audit`'s marker-archival rules must survive the marker drop** — fleet STATE.md files may still carry historical marker lines on projects phase 2 didn't touch; the command keeps cleaning them (sibling audit 1 pins this).
+
+---
+
+## Review section (execution record, 2026-07-03)
+
+- Cluster 1 (hook behavior): T1 fdedd62 marker drop (Tier A RED→GREEN, INV-1 intact), T2 f4aa0f6 SKILL-EDGE taught, T3 ab0afe8 stamp+nudge (Tier A both branches), T4 2603739 helper dedup. STANDARD review ×3 → 1 Important (stamp-path asymmetry) + tracer items, fixed 6f60ee4, re-review APPROVED.
+- Cluster 2 (command/doc): fef3000 memory-audit dedup (core canonical) + fac92a4 SKILL-EDGE in core CLAUDE.md (5-site audit consistent). LIGHT review → 1 Important (undocumented cross-plugin /memory-audit coupling vs agent's standalone claim), fixed e923575, re-review APPROVED.
+- Cluster 3: T7 stride merge (stride canonical; stride-lms folded, stridelms removed), T8 seven fleet STATE.md drafts (uncommitted, DRAFT-headed, confidence-labelled — Stefan's review+commit), T9 delivery 90d63be/99d2bd8 → agent 0.3.3 + core 0.2.4 pushed, installed, 6/6 live checks PASS.
+- Deferrals: pattern-miner dual-ownership drift (agent/core copies differ) — pick canonical owner in a future cluster; netdust-agent evals/ fixture staleness — next eval refresh; session-start.sh resolves cwd via $(pwd) not stdin JSON (asymmetric with session-stop.py — harmless for the real hook lifecycle, footnote for test authors).
