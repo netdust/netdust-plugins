@@ -98,8 +98,8 @@ netdust-agent/
 │   │                            #   code-simplicity-reviewer
 ├── commands/                    # /integration, /shakeout, /deploy, /evaluate,
 │   │                            #   /skill-audit, /red-test, /feature-acceptance,
-│   │                            #   /test-effectiveness, /architecture-invariants,
-│   │                            #   /pattern-miner (memory-audit is netdust-core's)
+│   │                            #   /test-effectiveness, /architecture-invariants
+│   │                            #   (memory-audit + pattern-miner are netdust-core's)
 └── hooks/                       # SessionStart/Stop, SubagentStop testing-gate,
                                  #   PreToolUse guard (hooks.json)
 ```
