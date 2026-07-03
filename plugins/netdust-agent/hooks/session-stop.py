@@ -19,7 +19,8 @@ Never blocks the session — entire hook runs in < 3s.
 
 Observability:
   • Every fire logs to ~/.claude/logs/memory-hook.log
-  • No-op writes a visible marker to STATE.md (so you SEE the hook working)
+  • A no-op fire writes NOTHING to the project — the log line above is the
+    liveness signal (daily marker dropped in 0.3.3)
   • Errors are log-only (log()); they never write to STATE.md
 """
 
@@ -195,10 +196,6 @@ def scan_tags(text: str) -> dict:
     return out
 
 
-def has_tag_content(tags: dict) -> bool:
-    return any(tags.values())
-
-
 # ── Watermark sidecar (idempotency) ──────────────────────────────────────────
 
 def sidecar_path(cwd: str) -> Path:
@@ -293,31 +290,6 @@ def _file_contains_normalized(path: Path, text: str) -> bool:
 
 
 # ── File writers ─────────────────────────────────────────────────────────────
-
-def append_state_marker(cwd: str, line: str) -> None:
-    """Single-line marker. Only annotates if memory/ already exists."""
-    path = Path(cwd) / "memory" / "STATE.md"
-    if not path.parent.exists():
-        return
-    try:
-        with open(path, "a") as f:
-            f.write(line + "\n")
-    except Exception:
-        pass
-
-
-def daily_marker_already_written(cwd: str, date: str) -> bool:
-    """True if today's 'no significant changes' marker is already in STATE.md,
-    so we write it at most once per calendar day."""
-    path = Path(cwd) / "memory" / "STATE.md"
-    if not path.exists():
-        return False
-    try:
-        content = path.read_text()
-    except Exception:
-        return False
-    return f"[{date}] — session ended (no significant changes captured)" in content
-
 
 def append_state_from_tags(cwd: str, decisions: list[str], risks: list[str], date: str) -> bool:
     """Lift DECISION:/RISK: tags into a dated STATE.md section. Returns True if wrote."""
@@ -562,11 +534,6 @@ def main() -> None:
     claude_text = extract_claude_text(new_messages)
     tags = scan_tags(claude_text)
 
-    # Did this fire SEE any tags at all (pre-dedup)? Distinguishes a genuine
-    # no-capture session (→ visibility marker) from a re-fire where tags were
-    # found but already captured (→ no marker, it's not "no changes").
-    tags_seen_pre_dedup = has_tag_content(tags)
-
     # Belt-and-braces hash dedup: drop any tag already captured in a prior fire.
     tags["decisions"] = dedup_against_hashes(tags["decisions"], captured, lambda x: x)
     tags["risks"]     = dedup_against_hashes(tags["risks"], captured, lambda x: x)
@@ -607,20 +574,6 @@ def main() -> None:
             written.append(f"skill:{skill}/lessons.md")
         else:
             log(f"warn skill-edge-no-match skill={skill}")
-
-    # ── Visibility marker ───────────────────────────────────────────────────
-    # If nothing was written, append a one-line "session ended" marker so the
-    # file's timestamp updates and you can SEE the hook running — but:
-    #   • at most ONCE per calendar day (repeated no-tag stops don't pile up), and
-    #   • NOT on a pure re-fire. A second Stop on the same transcript has an
-    #     empty new-message slice (or fully-deduped tags); that session already
-    #     captured its content, so claiming "no significant changes" would be a
-    #     lie and would mutate STATE.md on a no-op fire.
-    genuine_empty_session = bool(new_messages) and not tags_seen_pre_dedup
-    if (not written and genuine_empty_session
-            and not daily_marker_already_written(cwd, date)):
-        marker = f"[{date}] — session ended (no significant changes captured)"
-        append_state_marker(cwd, marker)
 
     # ── Advance the watermark (atomic, even on partial failure above) ───────
     # Watermark last, ON PURPOSE: appends are idempotent (file-content dedup),
