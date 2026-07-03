@@ -41,6 +41,7 @@ MAX_CONTINUATION_LINES = 10         # lines a single tag may consume past its he
 MAX_CAPTURED_HASHES = 200           # cap on the sidecar dedup ring
 
 SIDECAR_NAME = ".stop-hook-state.json"  # under memory/
+NO_AUTO_MEMORY_MARKER = ".no-auto-memory"   # at a project root: hook must not write there
 
 LOG_PATH = Path.home() / ".claude" / "logs" / "memory-hook.log"
 DASHBOARD_SYNC = Path.home() / "Sites" / "netdust-wp-manager" / "scripts" / "sync-from-site.sh"
@@ -495,6 +496,15 @@ def main() -> None:
     cwd = hook_input.get("cwd", os.getcwd())
     date = datetime.now().strftime("%Y-%m-%d")
     project = Path(cwd).name
+
+    # ── Exclusion: manual-only projects (fix 5) ──────────────────────────────
+    # A .no-auto-memory marker at the project root means this project's memory
+    # is maintained by hand (e.g. the Layer-B fleet dir ~/Sites/netdust-wp-manager).
+    # ALL write paths — memory/, tasks/, .gitignore, sidecar, git commit,
+    # dashboard sync — are downstream of this single check.
+    if (Path(cwd) / NO_AUTO_MEMORY_MARKER).exists():
+        log(f"skip no-auto-memory cwd={cwd}")
+        sys.exit(0)
 
     if not transcript_path:
         log(f"skip no-transcript-path cwd={cwd}")
