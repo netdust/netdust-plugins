@@ -9,7 +9,7 @@ This is **not** a coding harness. For any non-trivial coding work (gates, craft 
 | Layer | Contents |
 |---|---|
 | **Identity** | `CLAUDE.md` (default agent context), `SOUL.md` (voice), `RULES.md` (universal non-negotiables) |
-| **Memory + hooks** | `session-start.sh` (loads project memory) + `session-stop.py` (tag capture) + `pretooluse-guard.py` (destructive-command guard). Per-project `memory/STATE.md` + `lessons.md` + `tasks/todo.md`. Deterministic tag scanner (`DECISION:`/`RISK:`/`LESSON:`/`TODO:`). Optional Haiku summary if `ANTHROPIC_API_KEY` set. **Registration lives in `netdust-agent`'s `hooks.json`** (core's is empty) so the hooks fire once when both plugins are installed; core keeps byte-identical script copies in sync. |
+| **Memory + hooks** | Per-project `memory/STATE.md` + `lessons.md` + `tasks/todo.md` convention and memory discipline. The live hooks — SessionStart loader, Stop-hook `DECISION:`/`RISK:`/`LESSON:`/`TODO:` tag scanner, PreToolUse destructive-command guard — live in **netdust-agent** (registration AND scripts). Core ships no hook scripts. |
 | **Content + marketing skills** | `brand-voice`, `marketing`, `market-research`, `research` |
 | **Ops + infra skills** | `dev-stack` (DDEV, git branching, Makefile verbs, `.env`), `secure-server` (VPS hardening), `ploi` (server/site lifecycle) |
 | **Slash commands** | `/deploy` (9-method dispatcher), `/memory-audit`, `/pattern-miner` |
@@ -108,14 +108,14 @@ The plugin also registers the **`ploi` MCP server** (from `~/mcp/ploi-mcp-server
 ```
 <project>/
 ├── memory/
-│   ├── STATE.md       ← updated by Stop hook each session (deterministic + optional Haiku)
+│   ├── STATE.md       ← updated by Stop hook each session (deterministic tag capture)
 │   └── lessons.md     ← gotchas + edge cases, append-only
 ├── tasks/
 │   └── todo.md        ← carried-forward tasks
 └── site.yml           ← operational config (deploy method, SSH, paths)
 ```
 
-The SessionStart hook injects all of these + the harness-level `GLOBAL.md`, which now ships in **netdust-agent** (`plugins/netdust-agent/memory/GLOBAL.md`) — netdust-agent's `session-start.sh` is the live injector. The Stop hook captures via tags + (optionally) Haiku.
+netdust-agent's SessionStart hook injects all of these + the harness-level `GLOBAL.md`, which now ships in **netdust-agent** (`plugins/netdust-agent/memory/GLOBAL.md`). netdust-agent's Stop hook captures via tags.
 
 ## Operations
 
@@ -145,13 +145,6 @@ When something important happens, write any of these tags in your response — t
 - `SKILL-EDGE: <skill-name>: <text>` → `skills/<name>/lessons.md`
 
 No AI guessing, no Anthropic API call needed.
-
-### Recover from broken Haiku
-
-Haiku is opt-in via `ANTHROPIC_API_KEY`. If failing:
-- Errors logged to `~/.claude/logs/memory-hook.log` always.
-- Persistent errors (401/403/timeout) also annotate STATE.md as `⚠ memory hook (haiku) errored`.
-- To disable: `unset ANTHROPIC_API_KEY`. Tag scanner still works.
 
 ### Roll back
 

@@ -6,8 +6,7 @@ This plugin is **not** a coding/build harness. The coding/build harness (gates, 
 
 ## What this plugin provides
 
-- **Memory + observability** — per-project `memory/STATE.md` + `lessons.md`, a SessionStart hook that loads project memory, and a deterministic Stop-hook tag scanner that captures `DECISION:`/`RISK:`/`LESSON:`/`TODO:` into memory. Every fire logs to `~/.claude/logs/memory-hook.log`.
-- **Destructive-command guard** — a `PreToolUse` hook (`hooks/pretooluse-guard.py`) that intercepts dangerous shell commands before they run.
+- **Memory + observability** — the per-project `memory/STATE.md` + `lessons.md` convention and its discipline. The live hooks that load and capture memory (SessionStart injector, Stop-hook `DECISION:`/`RISK:`/`LESSON:`/`TODO:` tag scanner, PreToolUse destructive-command guard) live in **netdust-agent** — core defines the memory convention; agent runs it. Every hook fire logs to `~/.claude/logs/memory-hook.log`.
 - **Content + marketing** — `brand-voice` (Stefan/Netdust voice as artifact), `marketing` (SEO + copy structure + meta/schema), `market-research` (audiences/competitors/pricing), `research` (technical + business investigation).
 - **Ops + infra** — `dev-stack` (DDEV, git branching staging/feature/hotfix, Makefile verbs, `.env` discipline), `secure-server` (harden a fresh Hetzner+Ploi VPS), `ploi` (full server/site lifecycle: MCP + CLI + UI). The `ploi` MCP is auto-loaded.
 - **Deploy + knowledge commands** — `/deploy` (9-method dispatcher), `/memory-audit` (staleness report on STATE/lessons/todo), `/pattern-miner` (mine cross-project memory for promotable patterns).
@@ -34,11 +33,11 @@ Every Netdust project has:
 
 **Read `site.yml` before any operational command.** It is the single source of truth for hosting, SSH, remote paths, deploy method, domains, project structure.
 
-The SessionStart hook (`hooks/session-start.sh`) injects `memory/STATE.md`, `memory/lessons.md`, `tasks/todo.md`, the harness-level `GLOBAL.md` (which lives in netdust-agent, whose SessionStart hook is the live injector), and the site.yml summary into the initial context. It also injects a **"Memory discipline" prompt block** (only when `memory/` exists in the project) that tells Claude exactly when to update STATE, lessons, CLAUDE, and site.yml — and what *not* to write. That prompt is the difference between "Claude reads memory" and "Claude *maintains* memory."
+netdust-agent's SessionStart hook injects `memory/STATE.md`, `memory/lessons.md`, `tasks/todo.md`, the harness-level `GLOBAL.md`, and the site.yml summary into the initial context. It also injects a **"Memory discipline" prompt block** (only when `memory/` exists in the project) that tells Claude exactly when to update STATE, lessons, CLAUDE, and site.yml — and what *not* to write. That prompt is the difference between "Claude reads memory" and "Claude *maintains* memory."
 
-The Stop hook (`hooks/session-stop.py`) then captures memory (logs to `~/.claude/logs/memory-hook.log` every fire):
+netdust-agent's Stop hook then captures memory (logs to `~/.claude/logs/memory-hook.log` every fire):
 
-**Track A — tagged capture (always on, deterministic, zero cost)**
+**Tagged capture (always on, deterministic, zero cost)**
 When you write any of these tags in your responses during a session, the Stop hook lifts them into memory automatically:
 
 - `DECISION: <text>` → `memory/STATE.md`
@@ -47,9 +46,6 @@ When you write any of these tags in your responses during a session, the Stop ho
 - `TODO: <text>` → `tasks/todo.md`
 
 Use these tags liberally when something important happens. The hook captures them deterministically — no AI guessing involved.
-
-**Track B — Haiku summary (opt-in)**
-If `ANTHROPIC_API_KEY` is set in env, the hook also calls Haiku for a PM-level state summary at session end. Falls back silently if no key — Track A still runs.
 
 ## Stack-specific plugins (layer on top)
 
