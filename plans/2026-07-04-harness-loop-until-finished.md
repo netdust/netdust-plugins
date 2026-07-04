@@ -1,7 +1,9 @@
 # The harness as a loop that runs until finished
 
 **Date:** 2026-07-04
-**Status:** PLAN ONLY — no implementation yet
+**Status:** Phases 1–2 IMPLEMENTED 2026-07-04 (agent 0.4.0) — see execution record at
+bottom. Phase 3 (eval on a real feature) pending. Stop-hook driver chosen for v1
+(remote-first, ~zero token overhead); csd stays a documented alternative, not built.
 **Origin:** Stefan: "I want the harness to become a loop that runs until finished. Is that
 possible, what does it mean? More subagents to protect context?"
 
@@ -221,3 +223,40 @@ momentum.
 becomes a thin scheduler that can be rebuilt from disk at any moment; every heavy read or
 write happens in a disposable worker. Context is protected by *where state lives* (disk
 ledger, not scrollback), not by worker count.
+
+---
+
+## Execution record (2026-07-04, agent 0.4.0)
+
+Shipped lean — 2 new scripts, 1 command, 1 hook registration, 4 small doc/template
+touches, 2 test modules. Deliberately NOT built: csd integration, any orchestrator
+skill/agent, Mode D scheduling, manifest parsing (Stage 3 stays attended), suite-running
+inside loop-check (the per-task subagent-stop hook already forces tests to run).
+
+- `spec-kit/loop-check.py` — the ledger. Artifact-only FINISHED/CONTINUE/BLOCKED
+  (exit 0/1/2) from `tasks.md` + a `gate-check.py` subprocess; skips fenced examples;
+  emits a `progress: done=N total=M` line for dry detection. Stage 3 is out of loop
+  scope by design (human-judgment phase) — FINISHED means "Stage 2 complete, disarm,
+  run /shakeout attended."
+- `hooks/loop-gate.py` + `hooks.json` Stop registration (before session-stop.py) —
+  the driver. No marker → silent no-op. Armed: FINISHED disarms; BLOCKED yields with
+  the marker kept; CONTINUE blocks the stop with the next unit. Guardrails all in:
+  stop_hook_active bypass, max_iterations budget, 2-strike dry-loop disarm,
+  marker-delete abort, fail-open.
+- `commands/loop.md` — /loop arm (graft + Class A/B + gate-check-green preconditions,
+  budget from the plan's `Loop budget:` line, marker gitignored) · /loop off ·
+  /loop status.
+- Plan-side contract (§4): `[HUMAN]` marker rule in `tasks-template.md` (hard rule 4),
+  `Loop budget:` line in `plan-template.md`, planner.md step 7b (planner stays
+  loop-agnostic; plan becomes loop-auditable).
+- `harnessed-development` Stage 2: 8-line armed-loop note (thin scheduler,
+  rebuild-from-disk on re-entry, gates unchanged, loop ends at Stage 2).
+- Drive-by fix: `gate-check.py` now strips fenced code blocks before parsing task
+  lines — previously a fenced `- [ ] Tnn` example (which the shipped template carries)
+  counted as a real task and failed the tier check.
+- Tests: `test_loop_check.py` (8 cases) + `test_loop_gate.py` (10 cases); full suite
+  13 modules / 158 cases green.
+
+Remote note: on a disposable remote runner the PreToolUse guard's `ask` degrading is
+acceptable (repo-scoped box, no prod creds); the ask→deny escalation remains reserved
+for csd-style local workers only.

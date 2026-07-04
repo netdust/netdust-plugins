@@ -26,6 +26,7 @@
 - **Storage / data:** [DB, tables, files]
 - **Testing:** [unit runner + e2e runner — must match `testing-workflow` Project Detection]
 - **Linked artifacts:** `research.md`, `data-model.md`, `contracts/`, `quickstart.md` (as applicable)
+- **Loop budget:** ~[N] iterations — task count + cluster count + slack; read by `/loop` as `max_iterations` (omit if the feature won't run under an armed loop)
 
 ## Constitution check  [GATE]
 

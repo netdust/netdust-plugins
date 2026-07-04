@@ -168,6 +168,16 @@ This is the step that turns the previously skill-honored gates (1a/1b/1d/1f) int
 
 **Handoff seam (spec-kit graft).** When the plan came through spec-kit, execution starts from `tasks.md` — it feeds THIS stage. **NEVER run `/speckit.implement`:** it executes tasks flat with none of the Stage-2 gates below (no threat-model verify, no per-task tiers, no review-cluster HALT, no `subagent-stop.py` backstop). spec-kit owns spec→plan→tasks; the netdust spine owns execute→verify→finish. The handoff is `tasks.md`, and nothing downstream of it runs under spec-kit.
 
+**Armed loop (optional, `/loop`).** When `tasks/.harness-loop.json` exists, the
+`loop-gate.py` Stop hook drives this stage: the session cannot stop while unchecked
+non-`[HUMAN]` tasks remain — the gate blocks the stop and names the next unit
+(`spec-kit/loop-check.py` is the ledger; FINISHED is derived from `tasks.md`, never
+asserted). Two obligations while armed: (1) stay a THIN SCHEDULER — rebuild your working
+state from `tasks.md` + the plan on every re-entry, never from scrollback (compaction
+must not kill the loop); (2) the loop changes NOTHING below — review-gate HALTs, tiers,
+and the subagent-stop backstop apply exactly as written. The loop ends at Stage 2
+complete; Stage 3 runs attended.
+
 **Step 2.0 — Pick and invoke the execution upstream skill.** State your choice and one-sentence reason first.
 
 | Plan shape | Upstream skill |

@@ -29,6 +29,10 @@ These two markers live on **orthogonal axes** and compose cleanly:
    ones are sequential.
 3. An **irreversible / security-boundary task is never `[P]`** — it sits alone in its own
    cluster (1f), so it is reviewed in isolation, never bundled with a refactor.
+4. A step no agent may take alone (destructive-migration approval, credentials, a deploy
+   confirmation) is marked **`[HUMAN]`** on its task line. Under an armed `/loop`, an
+   unchecked `[HUMAN]` task is a *planned yield* — the loop stops there with the question
+   instead of grinding past it. A `[HUMAN]` task is never `[P]`.
 
 ## Per-task format
 
