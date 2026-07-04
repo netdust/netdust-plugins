@@ -32,6 +32,8 @@ If the retro file already exists, abort with: "Retro already exists at <path>. D
 
 ## Step 2 — Pull evidence from git
 
+Before doing any of the git archaeology below, check whether `specs/<feature>/run-log.jsonl` exists for the feature/sub-phase being evaluated — this is the per-feature event trace written by `run-trace.py` and emitted automatically by `loop-gate.py` when the harness runs armed. If it exists, read it first, and read `specs/<feature>/run-rubric.md` if present (if not yet generated, run `python3 plugins/netdust-agent/spec-kit/run-score.py specs/<feature>` to compile it); carry its dimension grades into Step 5's discipline-compliance summary as corroborating evidence alongside — never instead of — the git-derived analysis below, since the run-log is a first-hand execution trace where git commits are a reconstruction after the fact. If no run-log exists, proceed exactly as below with no change to this command's existing behavior.
+
 For the commit range, capture:
 
 1. **Commit list** with timestamps and messages:
