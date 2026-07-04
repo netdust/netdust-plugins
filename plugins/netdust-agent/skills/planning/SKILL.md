@@ -117,7 +117,7 @@ On FAIL, route each finding to its remediation (`threat-modeling` / `architectur
 
 ## The seam — STOP here
 
-When Stage 1.5 is green, present to your human partner, in one compact block: the plan path, `tasks.md`, the gate-check verdict line, each cluster's provisional tier, the `Loop budget`, and any `[HUMAN]` yield points. Then **stop**.
+When Stage 1.5 is green, present to your human partner, in one compact block: the plan path, `tasks.md`, the gate-check verdict line, each cluster's provisional tier, the `Loop budget`, and any `[HUMAN]` yield points. If the feature has a run-log seam artifact, emit `python3 <plugin>/spec-kit/run-trace.py append specs/<feature> gate-check-green` as you present it. Then **stop**.
 
 - **Do not dispatch a task.** Not even "task 1 while you look this over."
 - **Do not invoke `building`.** The go/no-go on an approved plan is the human's; `building` runs on their word (and re-verifies the seam itself — the artifact, not your assertion, is what admits it).

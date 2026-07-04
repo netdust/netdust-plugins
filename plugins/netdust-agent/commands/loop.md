@@ -28,7 +28,8 @@ Then:
    "last_done": <current checked count>, "dry": 0}`
 6. Ensure `.gitignore` contains `tasks/.harness-loop.json` (runtime state,
    never committed — same treatment as the stop-hook sidecar).
-7. Confirm to the user in two lines: armed, budget, and how the loop ends
+7. Emit `python3 <plugin>/spec-kit/run-trace.py append <feature-dir> loop-armed budget=<N>`.
+8. Confirm to the user in two lines: armed, budget, and how the loop ends
    (FINISHED → disarms, Stage 3 runs attended · `[HUMAN]` task → yields with
    the question · budget/dry-loop → disarms · `/loop off` anytime).
 
@@ -38,7 +39,9 @@ still apply — the loop drives *through* the gates, never around them.
 
 ## /loop off  (disarm)
 
-Delete `tasks/.harness-loop.json`. Confirm in one line.
+Emit `python3 <plugin>/spec-kit/run-trace.py append <feature-dir> loop-disarmed reason=manual`
+(feature dir from the marker), then delete `tasks/.harness-loop.json`. Confirm
+in one line.
 
 ## /loop status
 

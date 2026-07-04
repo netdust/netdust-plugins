@@ -105,6 +105,8 @@ At Stage 3 the `/shakeout` command auto-dispatches `reviewer` + the specialists 
 
 **Armed loop (optional, `/loop`).** When `tasks/.harness-loop.json` exists, the `loop-gate.py` Stop hook drives this stage: the session cannot stop while unchecked non-`[HUMAN]` tasks remain — the gate blocks the stop and names the next unit (`spec-kit/loop-check.py` is the ledger; FINISHED is derived from `tasks.md`, never asserted). Two obligations while armed: (1) stay a THIN SCHEDULER — rebuild your working state from `tasks.md` + the plan on every re-entry, never from scrollback (compaction must not kill the loop); (2) the loop changes NOTHING below — review-gate HALTs, tiers, and the subagent-stop backstop apply exactly as written. The loop ends at Stage 2 complete; Stage 3 runs attended.
 
+**Trace emission (honor-system, when the feature has a run-log seam).** If `specs/<feature>/run-log.jsonl` exists or the loop is armed for that feature, emit a trace event at two controller-level points: when Stage 2 execution begins (`python3 <plugin>/spec-kit/run-trace.py append specs/<feature> stage-enter stage=2`), and at each `── REVIEW GATE ──` HALT (Step 2.8), with the stated tier (`python3 <plugin>/spec-kit/run-trace.py append specs/<feature> review-gate cluster=<Cn> tier=<FULL|STANDARD|LIGHT>`). This is sequencer-enforced, not hook-enforced — same standing as every other prose discipline in this stage.
+
 **Step 2.0 — Pick and invoke the execution upstream skill.** State your choice and one-sentence reason first.
 
 | Plan shape | Upstream skill |
