@@ -40,6 +40,7 @@ from datetime import datetime
 
 LOG_PATH = Path.home() / ".claude" / "logs" / "memory-hook.log"
 LOOP_CHECK = Path(__file__).resolve().parent.parent / "spec-kit" / "loop-check.py"
+RUN_TRACE = Path(__file__).resolve().parent.parent / "spec-kit" / "run-trace.py"
 MARKER_REL = Path("tasks") / ".harness-loop.json"
 DEFAULT_MAX_ITERATIONS = 25
 MAX_DRY = 2
@@ -53,6 +54,19 @@ def log(msg: str) -> None:
             f.write(f"[{ts}] loop-gate: {msg}\n")
     except Exception:
         pass
+
+
+def trace(feature_dir: Path, event: str, **kv) -> None:
+    """Fail-open trace emission: append one run-trace event. Any failure —
+    nonzero exit, subprocess exception, timeout, whatever — is swallowed
+    here. Tracing must NEVER affect the gate's decision, control flow, or
+    printed stdout."""
+    try:
+        args = [sys.executable, str(RUN_TRACE), "append", str(feature_dir), event]
+        args += [f"{k}={v}" for k, v in kv.items()]
+        subprocess.run(args, capture_output=True, timeout=10, cwd=str(Path.cwd()))
+    except Exception:
+        pass  # fail-open: tracing must never affect the gate's decision
 
 
 def read_progress(stdout: str) -> int | None:
@@ -74,12 +88,14 @@ def main() -> None:
     if not marker_path.exists():
         return  # not armed — the common case, exit silently
 
-    if hook_input.get("stop_hook_active"):
-        log(f"bypass stop_hook_active cwd={cwd}")
-        return
-
     marker = json.loads(marker_path.read_text())
     feature_dir = cwd / marker.get("feature_dir", "")
+
+    if hook_input.get("stop_hook_active"):
+        log(f"bypass stop_hook_active cwd={cwd}")
+        trace(feature_dir, "loop-bypass")
+        return
+
     max_iter = int(marker.get("max_iterations", DEFAULT_MAX_ITERATIONS))
     iteration = int(marker.get("iteration", 0))
 
@@ -92,10 +108,12 @@ def main() -> None:
     if check.returncode == 0:
         marker_path.unlink(missing_ok=True)
         log(f"disarm reason=finished iter={iteration} cwd={cwd}")
+        trace(feature_dir, "loop-disarm-finished", iteration=iteration)
         return
 
     if check.returncode == 2:
         log(f"yield reason=blocked iter={iteration} detail={reason!r}")
+        trace(feature_dir, "loop-yield-blocked", iteration=iteration, reason=reason)
         return  # human's turn; marker stays armed for when work resumes
 
     # CONTINUE — apply guardrails, then block the stop.
@@ -103,6 +121,7 @@ def main() -> None:
     if iteration > max_iter:
         marker_path.unlink(missing_ok=True)
         log(f"disarm reason=budget-exhausted iter={iteration} max={max_iter}")
+        trace(feature_dir, "loop-disarm-budget", iteration=iteration, max_iterations=max_iter)
         return
 
     done = read_progress(check.stdout)
@@ -115,12 +134,14 @@ def main() -> None:
         if marker["dry"] >= MAX_DRY:
             marker_path.unlink(missing_ok=True)
             log(f"disarm reason=dry-loop iter={iteration} done={done}")
+            trace(feature_dir, "loop-disarm-dry", iteration=iteration, done=done)
             return
 
     marker["iteration"] = iteration
     marker_path.write_text(json.dumps(marker))
 
     log(f"block iter={iteration}/{max_iter} done={done} detail={reason!r}")
+    trace(feature_dir, "loop-block", iteration=iteration, done=done, total=max_iter, reason=reason)
     print(json.dumps({
         "decision": "block",
         "reason": (
