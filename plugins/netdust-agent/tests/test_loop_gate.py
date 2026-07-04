@@ -1,12 +1,14 @@
 """Tests for hooks/loop-gate.py — the Stop-hook loop driver."""
 
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 LOOP_GATE = Path(__file__).resolve().parent.parent / "hooks" / "loop-gate.py"
+RUN_TRACE = Path(__file__).resolve().parent.parent / "spec-kit" / "run-trace.py"
 
 TASKS_ONE_OPEN = (
     "- [x] T01 [Tier A] done  (files: a.py)\n"
@@ -45,6 +47,19 @@ def setup(tmp: str, tasks: str, marker: dict | None) -> Path:
 def marker_of(cwd: Path) -> dict | None:
     p = cwd / "tasks" / ".harness-loop.json"
     return json.loads(p.read_text()) if p.exists() else None
+
+
+def trace_events(cwd: Path, feature_dir: str = "specs/demo") -> list[dict]:
+    """Read run-log.jsonl directly (more robust than shelling out to `show`,
+    which only renders human-readably)."""
+    log_path = cwd / feature_dir / "run-log.jsonl"
+    if not log_path.exists():
+        return []
+    events = []
+    for line in log_path.read_text().splitlines():
+        if line.strip():
+            events.append(json.loads(line))
+    return events
 
 
 def run() -> list[tuple[bool, str]]:
@@ -108,5 +123,124 @@ def run() -> list[tuple[bool, str]]:
         rc, out = run_gate(cwd, {"cwd": str(cwd)}, Path(tmp))
         case("corrupt marker -> fail open (allow stop)",
              rc == 0 and '"decision"' not in out)
+
+    # --- T02: run-trace emission at each loop-gate decision site --------
+    # Each decision site must ALSO append a run-trace event carrying
+    # iteration/done/total/reason (as available). These are new
+    # behavioral assertions against the CURRENT hook, which emits NO
+    # trace events anywhere — expected to fail RED until the implementer
+    # wires run-trace.py append calls into hooks/loop-gate.py.
+
+    with tempfile.TemporaryDirectory() as tmp:
+        cwd = setup(tmp, TASKS_ONE_OPEN, marker={})
+        rc, out = run_gate(cwd, {"cwd": str(cwd)}, Path(tmp))
+        events = trace_events(cwd)
+        block_events = [e for e in events if e.get("event") == "loop-block"]
+        case("block decision -> run log gains a loop-block event",
+             rc == 0 and len(block_events) == 1)
+        if block_events:
+            data = block_events[0].get("data", {})
+            case("loop-block event carries iteration/reason",
+                 data.get("iteration") == "1" and "reason" in data)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        cwd = setup(tmp, TASKS_ONE_OPEN, marker={})
+        rc, out = run_gate(cwd, {"cwd": str(cwd), "stop_hook_active": True}, Path(tmp))
+        events = trace_events(cwd)
+        bypass_events = [e for e in events if e.get("event") == "loop-bypass"]
+        case("stop_hook_active bypass -> run log gains a loop-bypass event",
+             rc == 0 and len(bypass_events) == 1)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        cwd = setup(tmp, TASKS_ALL_DONE, marker={"iteration": 3, "last_done": 1})
+        rc, out = run_gate(cwd, {"cwd": str(cwd)}, Path(tmp))
+        events = trace_events(cwd)
+        finished_events = [e for e in events if e.get("event") == "loop-disarm-finished"]
+        case("FINISHED disarm -> run log gains a loop-disarm-finished event",
+             rc == 0 and len(finished_events) == 1)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        cwd = setup(tmp, TASKS_HUMAN_NEXT, marker={})
+        rc, out = run_gate(cwd, {"cwd": str(cwd)}, Path(tmp))
+        events = trace_events(cwd)
+        yield_events = [e for e in events if e.get("event") == "loop-yield-blocked"]
+        case("[HUMAN] yield -> run log gains a loop-yield-blocked event",
+             rc == 0 and len(yield_events) == 1)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        cwd = setup(tmp, TASKS_ONE_OPEN, marker={"iteration": 25})
+        rc, out = run_gate(cwd, {"cwd": str(cwd)}, Path(tmp))
+        events = trace_events(cwd)
+        budget_events = [e for e in events if e.get("event") == "loop-disarm-budget"]
+        case("budget exhausted disarm -> run log gains a loop-disarm-budget event",
+             rc == 0 and len(budget_events) == 1)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        # done-count stuck at 1 across stops: dry 1 (block), dry 2 (disarm)
+        cwd = setup(tmp, TASKS_ONE_OPEN, marker={"last_done": 1})
+        run_gate(cwd, {"cwd": str(cwd)}, Path(tmp))
+        rc2, out2 = run_gate(cwd, {"cwd": str(cwd)}, Path(tmp))
+        events = trace_events(cwd)
+        dry_events = [e for e in events if e.get("event") == "loop-disarm-dry"]
+        case("dry-loop disarm -> run log gains a loop-disarm-dry event",
+             rc2 == 0 and len(dry_events) == 1)
+
+    # --- T02: fail-open contract (FR-2) -----------------------------------
+    # Tracing must NEVER change the gate's decision or stdout. Force
+    # run-trace's own append to hit its denial path (feature_dir does not
+    # exist) and confirm loop-gate's stdout is byte-identical to the
+    # unafflicted control run.
+
+    with tempfile.TemporaryDirectory() as tmp_control:
+        cwd = setup(tmp_control, TASKS_ONE_OPEN, marker={})
+        rc_control, out_control = run_gate(cwd, {"cwd": str(cwd)}, Path(tmp_control))
+
+    with tempfile.TemporaryDirectory() as tmp_broken:
+        cwd = setup(tmp_broken, TASKS_ONE_OPEN, marker={})
+        # Remove the feature_dir AFTER setup so tasks.md (read directly by
+        # loop-check.py, independent of feature_dir on-disk existence via
+        # cwd-relative resolution here) is gone too — but loop-check needs
+        # tasks.md to exist to reach the CONTINUE/block path, so instead we
+        # make the feature_dir unwritable to force run-trace's append (which
+        # is invoked with the same feature_dir) to hit its own denial path
+        # without altering loop-check's own read of tasks.md.
+        # Simplest reliable denial: delete tasks.md's parent AFTER loop-check
+        # would already need it — so instead we revoke write permission on
+        # specs/demo, forcing run-trace's open("a") to fail while
+        # loop-check.py (read-only) still succeeds identically.
+        feature_dir_path = cwd / "specs" / "demo"
+        feature_dir_path.chmod(0o500)  # read+execute, no write
+        try:
+            rc_broken, out_broken = run_gate(cwd, {"cwd": str(cwd)}, Path(tmp_broken))
+        finally:
+            feature_dir_path.chmod(0o700)  # restore so tempdir cleanup succeeds
+
+        case("fail-open: broken trace path -> decision unchanged (rc)",
+             rc_broken == rc_control)
+        case("fail-open: broken trace path -> stdout byte-identical",
+             out_broken == out_control)
+
+    with tempfile.TemporaryDirectory() as tmp_missing:
+        # A harder denial: feature_dir referenced by the marker doesn't
+        # exist AT ALL for tracing purposes (simulate by deleting it after
+        # setup, but loop-check.py needs tasks.md to still answer CONTINUE
+        # identically to the control -- so here we target the bypass site
+        # instead, where no loop-check subprocess runs at all and the ONLY
+        # side effect possible is the trace call).
+        cwd = setup(tmp_missing, TASKS_ONE_OPEN, marker={})
+        shutil.rmtree(cwd / "specs" / "demo")
+        rc_missing, out_missing = run_gate(
+            cwd, {"cwd": str(cwd), "stop_hook_active": True}, Path(tmp_missing))
+
+        with tempfile.TemporaryDirectory() as tmp_bypass_control:
+            cwd_c = setup(tmp_bypass_control, TASKS_ONE_OPEN, marker={})
+            rc_bypass_control, out_bypass_control = run_gate(
+                cwd_c, {"cwd": str(cwd_c), "stop_hook_active": True},
+                Path(tmp_bypass_control))
+
+        case("fail-open: nonexistent feature_dir on bypass -> rc unchanged",
+             rc_missing == rc_bypass_control)
+        case("fail-open: nonexistent feature_dir on bypass -> stdout byte-identical",
+             out_missing == out_bypass_control)
 
     return results
