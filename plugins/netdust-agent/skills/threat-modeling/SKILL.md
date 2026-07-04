@@ -17,7 +17,7 @@ Without this section, every `/code-review` round on a security-rich surface inde
 <extremely_important>
 This is NOT a security audit skill. This is a PLAN-WRITING skill. It runs once, at plan-writing time, BEFORE any tasks are dispatched. The output is a section in the plan, not a separate document.
 
-If you find yourself running this skill AFTER tasks have shipped, you're using it as remediation, not prevention. That's still valuable (see Folio Phase 3 Sub-phase B, where the threat model was written retrospectively after 2 rounds of `/code-review` surfaced 30 findings) — but recognize the cost difference: prevention costs ~15 minutes of plan-writing; remediation costs the same 15 minutes PLUS the multi-round review-fix cycle that the prevention would have collapsed into one pass.
+If you find yourself running this skill AFTER tasks have shipped, you're using it as remediation, not prevention. That's still valuable (calibration: `subphase-b-retrofit` — full story under Calibration data below) — but recognize the cost difference: prevention costs ~15 minutes of plan-writing; remediation costs the same 15 minutes PLUS the multi-round review-fix cycle that the prevention would have collapsed into one pass.
 
 Opt-in is intentional. Most plans don't need this skill. Skill triggers only when the plan touches surfaces named in `<when_to_use>`. If you're unsure whether a plan qualifies, default to running this skill — false positives cost 15 minutes, false negatives cost hours of review-fix loops.
 </extremely_important>

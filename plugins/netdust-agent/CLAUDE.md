@@ -68,6 +68,15 @@ When a Netdust skill and an upstream skill (superpowers, addyosmani/agent-skills
 
 Superpowers is the base; addyosmani fills genuine gaps; Netdust discipline is the spine. A craft skill cites the gate that reaches for it, and the gate cites the craft it loads — wired both ways.
 
+## The calibration rule (tell a war story once)
+
+Every gate traces to a real incident — that's the test for a gate's existence. But an
+incident has **ONE full home** (usually the owning skill's body, `references/`, or
+`lessons.md`); everywhere else cites its slug, e.g. `(calibration: traverse-clause)`.
+The index of all slugs + canonical homes is `skills/_shared/calibrations.md`. New skill
+prose never retells an indexed incident — it cites. This keeps the hot path (SKILL.md
+bodies loaded per stage) lean while losing no lesson.
+
 ## Provenance
 
 - Harness discipline + risk-tiering + the gate sequence: Netdust harness discipline.
