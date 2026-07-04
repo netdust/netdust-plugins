@@ -76,6 +76,26 @@ a subagent's. New hook logic (extend `session-stop.py` or add `loop-gate.py` bef
   - human abort: deleting the marker (or `.no-loop` in the project) always wins;
   - the hook stays fail-open — any internal error allows the stop.
 
+**Alternative driver — obra/claude-session-driver (`csd`).** Jesse's session-driver
+plugin (v3.0.0, 2026-05-18) lets one Claude Code session launch and supervise other
+full sessions as tmux workers (`csd launch` / `converse` / `read-events` /
+`wait-for-turn` / `handoff`). That is an *externalized* M2: a controller session loops
+"launch worker for next cluster → wait-for-turn → run `loop-check.py` → iterate until
+exit 0," with no Stop-hook needed. Trade-offs vs. the Stop-hook gate:
+
+- csd workers are full sessions — own context window, own compaction, own hooks, and
+  `handoff` gives a native answer to `[HUMAN]` yields (hand the worker's tmux session
+  to Stefan, resume after). The Stop-hook gate needs none of tmux/Node and works in a
+  single session, including remote/headless ones.
+- **Guard implication:** csd workers run with permissions bypassed, so the PreToolUse
+  guard's `ask` has no human to ask — under a csd driver, the destructive-command
+  denylist must escalate from `ask` to `deny` for worker sessions (exactly the case
+  `pretooluse-guard.py` v1 reserved `deny` for).
+- Both drivers consume the same M1 ledger. Build `loop-check.py` first and the choice
+  of driver stays open — Stop-hook for single-session/remote, csd for a local
+  controller supervising parallel workers (and it maps 1:1 onto the plan/build split:
+  controller = planner, workers = builders).
+
 ### M3 — The thin-orchestrator re-entry protocol (context protection)
 
 This is the honest answer to "more subagents to protect context?": **not more subagents —
