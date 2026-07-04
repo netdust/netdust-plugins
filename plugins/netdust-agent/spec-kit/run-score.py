@@ -174,6 +174,27 @@ def grade_cluster_discipline(clusters: list[str], events: list[dict]) -> str:
     return "C"
 
 
+def _iterations_used(loop_events: list[dict]) -> int:
+    """The max iteration count consumed across all loop-block/loop-disarm-*
+    events. `data["iteration"]` is stored as a STRING per the k=v CLI
+    convention (run-trace.py's append does `data[k] = v` with no casting),
+    so cast to int; fall back to the count of loop-block events + 1 (how
+    loop-gate.py itself increments `iteration` before each block/disarm) if
+    no iteration field parses."""
+    best = None
+    for e in loop_events:
+        raw = e.get("data", {}).get("iteration")
+        try:
+            val = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if best is None or val > best:
+            best = val
+    if best is not None:
+        return best
+    return sum(1 for e in loop_events if e.get("event") == "loop-block") + 1
+
+
 def grade_loop_efficiency(events: list[dict], budget: int | None) -> str:
     loop_events = [e for e in events if e.get("event") in LOOP_EVENTS]
     if not loop_events:
@@ -183,8 +204,23 @@ def grade_loop_efficiency(events: list[dict], budget: int | None) -> str:
     dry_count = names.count("loop-disarm-dry")
     finished = "loop-disarm-finished" in names
     budget_exhausted = "loop-disarm-budget" in names
+    has_progress = any(e.get("event") == "loop-block" for e in loop_events)
 
     if finished:
+        # Table gap: the thresholds table never defines a grade for
+        # "finished, but over budget" — a real gap in the table itself, not
+        # something to invent an answer for. The table-faithful choice: this
+        # run does NOT qualify for the A/B "finished cleanly" story, so fall
+        # through to the same in-flight C/D bucket used below (C with
+        # loop-block progress evidence, D without) rather than inventing a
+        # new bucket. The one property that must always hold: finishing
+        # over budget can never grade A or B.
+        if budget is not None and _iterations_used(loop_events) > budget:
+            return "C" if has_progress else "D"
+        # budget is None: no `Loop budget: ~N` line found in plan.md, so we
+        # cannot check it — grade purely on dry-stop count, per the table's
+        # A/B rule (also undefined by the table what to do when budget is
+        # simply unknown; this is the pre-existing, unchanged behavior).
         if dry_count == 0:
             return "A"
         if dry_count <= 1:
@@ -192,7 +228,6 @@ def grade_loop_efficiency(events: list[dict], budget: int | None) -> str:
         return "D"
 
     if budget_exhausted:
-        has_progress = any(e.get("event") == "loop-block" for e in loop_events)
         if has_progress:
             return "C"
         return "D"
@@ -203,7 +238,6 @@ def grade_loop_efficiency(events: list[dict], budget: int | None) -> str:
     # loop armed (events exist) but neither finished nor budget-exhausted nor
     # dry-disarmed — still in-flight; treat as no evidence of a completed
     # efficiency story yet, closest to budget-exhaustion-with-progress.
-    has_progress = any(e.get("event") == "loop-block" for e in loop_events)
     return "C" if has_progress else "D"
 
 

@@ -348,6 +348,28 @@ def run() -> list[tuple[bool, str]]:
              rc == 0 and text is not None
              and _dimension_grade(text, "Loop efficiency") == "D")
 
+    # ── Loop efficiency: finished but OVER budget (Finding 1, C2 review) —
+    # 15 loop-block events (iteration 1..15) then loop-disarm-finished, 0 dry
+    # stops, budget=10. Reviewers confirmed grade_loop_efficiency's `finished`
+    # branch never consulted budget at all, so this graded "A" before the
+    # fix (finished + 0 dry => A) despite blowing the budget by 5 iterations.
+    # Per the fix, finishing over budget must never grade A or B — it falls
+    # through to the same in-flight C/D bucket (C here: loop-block progress
+    # evidence exists). ───────────────────────────────────────────────────
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = make_feature(tmp, completion_tasks(5, 5), plan=PLAN_BUDGET_10)
+        events = [("loop-block", {"iteration": str(i), "done": "1",
+                                   "total": "10", "reason": "x"}) for i in range(1, 16)]
+        events.append(("loop-disarm-finished", {"iteration": "16"}))
+        write_log(feature, events)
+        rc, out, err = run_score(feature)
+        text = rubric_text(feature)
+        grade = _dimension_grade(text, "Loop efficiency") if text is not None else None
+        case("loop efficiency: finished but OVER budget must NOT grade A or B",
+             rc == 0 and grade not in ("A", "B"))
+        case("loop efficiency: finished over budget with loop-block progress grades C",
+             rc == 0 and grade == "C")
+
     # ── Loop efficiency: n/a — no loop-armed/loop-* events at all ─────────
     with tempfile.TemporaryDirectory() as tmp:
         feature = make_feature(tmp, ALL_DONE_ONE_CLUSTER, plan=PLAN_BUDGET_10)
@@ -387,6 +409,23 @@ def run() -> list[tuple[bool, str]]:
         case("yield discipline B: 1 unplanned yield",
              rc == 0 and text is not None
              and _dimension_grade(text, "Yield discipline") == "B")
+
+    # ── Yield discipline: C — exactly 2 unplanned yields (Finding 2, C2
+    # review) — no [HUMAN] tasks in tasks.md so both loop-yield-blocked
+    # events are unplanned. This is the only defined grade boundary in the
+    # whole rubric with zero fixture coverage before this fix. ────────────
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = make_feature(tmp, ALL_DONE_ONE_CLUSTER)  # no [HUMAN] tasks
+        events = [("loop-yield-blocked",
+                    {"iteration": str(i),
+                     "reason": "LOOP: BLOCKED — next task is human-only: T02 do a thing"})
+                   for i in range(1, 3)]
+        write_log(feature, events)
+        rc, out, err = run_score(feature)
+        text = rubric_text(feature)
+        case("yield discipline C: exactly 2 unplanned yields",
+             rc == 0 and text is not None
+             and _dimension_grade(text, "Yield discipline") == "C")
 
     # ── Yield discipline: D — >=3 unplanned yields ────────────────────────
     with tempfile.TemporaryDirectory() as tmp:

@@ -134,8 +134,11 @@ def main() -> None:
         if marker["dry"] >= MAX_DRY:
             marker_path.unlink(missing_ok=True)
             log(f"disarm reason=dry-loop iter={iteration} done={done}")
+            # No ternary needed here (unlike the `block` trace call below):
+            # this whole branch is inside `if done is not None:` above, so
+            # `done` is already guaranteed non-None.
             trace(feature_dir, "loop-disarm-dry", cwd=cwd,
-                  iteration=iteration, done=(done if done is not None else "unknown"))
+                  iteration=iteration, done=done)
             return
 
     marker["iteration"] = iteration
