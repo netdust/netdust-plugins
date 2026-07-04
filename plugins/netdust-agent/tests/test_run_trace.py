@@ -100,6 +100,23 @@ def run() -> list[tuple[bool, str]]:
         case("malformed k=v -> no file created",
              not log_path(feature).exists())
 
+    # --- denial: feature dir exists but is unwritable (permission denied) ---
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = Path(tmp) / "specs" / "demo"
+        feature.mkdir(parents=True)
+        feature.chmod(0o500)
+        try:
+            rc, out, err = run_trace("append", str(feature), "stage-enter", "stage=execute")
+        finally:
+            feature.chmod(0o700)  # restore so tempdir cleanup can remove it
+
+        case("append to unwritable feature dir -> nonzero exit, no crash", rc == 1)
+        case("append to unwritable feature dir -> one-line reason, no traceback",
+             len([l for l in (out + err).splitlines() if l.strip()]) >= 1
+             and "Traceback" not in (out + err))
+        case("append to unwritable feature dir -> no file created",
+             not log_path(feature).exists())
+
     # --- show: on missing log -> clean "no trace recorded", exit 0 ---
     with tempfile.TemporaryDirectory() as tmp:
         feature = Path(tmp) / "specs" / "demo"

@@ -15,9 +15,11 @@ prose, and `/shakeout` all route through this file; nothing hand-rolls JSONL.
 
     {"ts": "<iso8601>", "event": "<name>", "data": {"k": "v", ...}}
 
-Denial paths (both reject BEFORE any write — no partial file):
+Denial paths (all reject BEFORE any write completes — no partial file):
   - nonexistent `<feature-dir>` -> exit 1, one-line reason on stderr, no file.
   - a `k=v` token missing `=` -> exit 1, one-line reason on stderr, no file.
+  - an OS-level write failure (e.g. permission denied, disk full) -> exit 1,
+    one-line reason on stderr, no crash/traceback.
 
 `show` renders the log human-readably, one line per event. A missing or
 empty log is not an error — it prints "no trace recorded" and exits 0. A
@@ -69,8 +71,13 @@ def do_append(feature_dir: Path, event: str, kv_tokens: list[str]) -> int:
     }
 
     log_path = feature_dir / LOG_NAME
-    with log_path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(line) + "\n")
+    try:
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(line) + "\n")
+    except OSError as e:
+        print(f"run-trace: append rejected — cannot write {log_path}: {e}",
+              file=sys.stderr)
+        return 1
 
     return 0
 
