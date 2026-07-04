@@ -21,6 +21,7 @@ These skills are **sequencers and gates**. They do not teach craft; they decide 
 - `superpowers:writing-plans` (upstream base, not a local skill) — gate: spec → plan → tasks
 - `spec-authoring` — gate (spec-kit graft, Stage 0.5): wraps `/speckit.specify` + `/clarify`; HALTs on unresolved `[NEEDS CLARIFICATION]`
 - `spec-analysis` — gate (spec-kit graft, Stage 1.5): `/speckit.analyze` + mechanical `gate-check.py` — the pre-execution barrier that machine-checks 1a/1b/1d/1f
+- `run-trace.py` / `run-score.py` (spec-kit) — in-loop event trace + evaluator rubric: `loop-gate.py` emits decision events automatically (fail-open); `/shakeout` surfaces the graded rubric at spec-close; report-only, no new gate
 - `standards-gate` — gate (Step 2.6b): runs the project linter at each code-task close; backstopped by `subagent-stop.py`
 - `constitution-bridge` — setup: generates the spec-kit constitution as a view over RULES/SOUL/invariants
 - `testing-workflow` — gate: per-task, *what tier of test does this need, prove it's RED-first*

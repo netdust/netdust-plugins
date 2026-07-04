@@ -21,7 +21,7 @@
 | 08 | Feature lists are harness primitives | ⚠️ **Partial** | Prose plan + acceptance-flow matrix; **no machine-readable feature registry with pass-gates** |
 | 09 | Don't let the agent declare victory early | ✅ Covered | testing-workflow tiers · feature-acceptance · separate reviewer agents · SubagentStop gate |
 | 10 | Only a full pipeline run counts | ✅ Covered | feature-acceptance drives real browser + un-mocked wire; test-effectiveness audits blindness |
-| 11 | Observability belongs inside the harness | ⚠️ **Partial / weakest** | Hook log + memory tags exist; **no per-run trace, sprint-contract, or evaluator rubric** in the build loop |
+| 11 | Observability belongs inside the harness | ⚠️ **Partial — now less weak** | Hook log + memory tags exist; `run-observability` (netdust-agent 0.7.0) adds an in-loop trace + evaluator rubric; **no sprint-contract artifact** — see addendum below |
 | 12 | Every session leaves a clean state | ⚠️ **Partial** | SessionStop captures *memory*; no enforced **session-exit checklist** (build/tests green, no debug code) |
 
 **Tally:** 6 ✅ fully covered · 6 ⚠️ partial · 0 ❌ absent. The course validates the spine of netdust-core. The six partials cluster into three genuinely new ideas the harness does not yet have a named home for (see "What the course surfaces that we lack").
@@ -98,6 +98,8 @@
 - a **Sprint Contract** artifact negotiated before coding (closest analog: the threat-model + acceptance-flow sections, but those are security/behavior, not a scope+exclusions contract)
 - an **Evaluator Rubric** scoring table applied to each phase (the reviewer agents emit prose findings, not graded dimensions; `/evaluate` exists but is a discipline-assessment command run *on demand*, not woven into every build)
 **Gap (real):** observability is *post-hoc and log-shaped*, not *in-loop and trace/rubric-shaped*. This is the dimension where the course offers the most that netdust-core lacks. See fix #4. (Note: this overlaps the hardening plan's parked Item 3 "context-budget/observability" but is broader — that item was about compaction, this is about run-scoring.)
+
+**Addendum (2026-07-04, netdust-agent 0.7.0) — partially closed.** The `run-observability` feature shipped two of the three named artifacts: `spec-kit/run-trace.py` gives the missing per-run/per-task **trace** (`loop-gate.py` emits span-per-decision events at 6 sites, fail-open), and `spec-kit/run-score.py` gives the missing **Evaluator Rubric** (a deterministic 5-dimension scoring compiler, surfaced by `/shakeout` at spec-close and pointed to by `/evaluate` before it falls back to git archaeology). This is **not** a full close: the **Sprint Contract** artifact — a negotiated scope+verification+exclusions agreement struck before coding — remains unimplemented; it was explicitly deferred as out-of-scope in `specs/run-observability/spec.md`. Re-score this lecture ✅ only once a Sprint Contract analog lands; until then it stays ⚠️ Partial, just no longer the *weakest* dimension.
 
 ### L12 — Every session must leave a clean state · ⚠️ Partial
 **Course thesis:** Entropy is the default; without an enforced **Session Exit Checklist** debt compounds. Five non-negotiables at clock-out: build passes · all tests pass · feature list updated · no debug code (console.log/debugger/stray TODO) · standard startup path works. 12-week comparison: 68%→97% build-pass with the checklist.

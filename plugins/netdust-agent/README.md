@@ -44,6 +44,10 @@ What the harness *loads* at each step. Each craft skill **layers on top of its s
 
 **Naming convention:** *gerund = craft (how); phase/gate noun = harness (when/whether).* Read the skill list, know the layer.
 
+### Spec-kit graft — run observability
+
+Sibling to the spec-kit tools above (`gate-check.py`, `loop-check.py`): `spec-kit/run-trace.py` and `spec-kit/run-score.py` add an in-loop event trace and a deterministic 5-dimension evaluator rubric. `loop-gate.py` emits trace events at the decision sites automatically (fail-open — a trace-write failure never blocks the loop); `/shakeout` surfaces the graded rubric at spec-close and `/evaluate` reads the run-log before falling back to git archaeology. Report-only — it adds no new gate.
+
 ---
 
 ## Agent personas
