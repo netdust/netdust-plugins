@@ -1,10 +1,10 @@
 ---
 name: versioning-with-git
-description: "CRAFT skill — commit-craft, reached for by harnessed-development Stage 2 (execute — the atomic commit per task) and Stage 3 (finish). It is the primary source for commit hygiene (restated from addyosmani/agent-skills git-workflow-and-versioning, MIT): atomic commits, conventional messages that explain WHY, the ~100-line commit target / split anything over ~1000, the save-point pattern (test → commit on green / revert on red), and pre-commit hygiene (diff review + secret scan + run tests/lint/typecheck), plus archaeology (git bisect / blame / log --grep). It explicitly DEFERS branch-FLOW (which branch to start, staging→main git-flow, make feature/finish/ship, hotfix) to the stack's dev-stack skill, and worktree SETUP to superpowers:using-git-worktrees. Use when committing a finished task or preparing a branch to finish."
+description: "CRAFT skill — commit-craft, reached for by building Stage 2 (execute — the atomic commit per task) and Stage 3 (finish). It is the primary source for commit hygiene (restated from addyosmani/agent-skills git-workflow-and-versioning, MIT): atomic commits, conventional messages that explain WHY, the ~100-line commit target / split anything over ~1000, the save-point pattern (test → commit on green / revert on red), and pre-commit hygiene (diff review + secret scan + run tests/lint/typecheck), plus archaeology (git bisect / blame / log --grep). It explicitly DEFERS branch-FLOW (which branch to start, staging→main git-flow, make feature/finish/ship, hotfix) to the stack's dev-stack skill, and worktree SETUP to superpowers:using-git-worktrees. Use when committing a finished task or preparing a branch to finish."
 ---
 
 <objective>
-This skill is **commit-craft**: how to turn a finished task into a clean, atomic, reversible commit, and how to read history when you need to. It is reached for at `harnessed-development` Stage 2 (one atomic commit per task) and Stage 3 (finishing the branch). It does NOT decide which branch you are on, the git-flow that moves work to staging/main, or the worktree you isolate in — those are deferred (see below). There is no single superpowers base for commit hygiene, so this skill carries it, restated from `addyosmani/agent-skills:git-workflow-and-versioning` (MIT) with the Netdust spine added.
+This skill is **commit-craft**: how to turn a finished task into a clean, atomic, reversible commit, and how to read history when you need to. It is reached for at `building` Stage 2 (one atomic commit per task) and Stage 3 (finishing the branch). It does NOT decide which branch you are on, the git-flow that moves work to staging/main, or the worktree you isolate in — those are deferred (see below). There is no single superpowers base for commit hygiene, so this skill carries it, restated from `addyosmani/agent-skills:git-workflow-and-versioning` (MIT) with the Netdust spine added.
 </objective>
 
 <deferrals>
@@ -51,7 +51,7 @@ A commit made under this skill:
 </success_criteria>
 
 <integration>
-- **`harnessed-development` Stage 2 + 3** — the steps that reach for this skill: one atomic commit per executed task, then preparing the branch to finish.
+- **`building` Stage 2 + 3** — the steps that reach for this skill: one atomic commit per executed task, then preparing the branch to finish.
 - **`dev-stack` (stack sub-plugin)** — owns branch-FLOW (which branch, staging→main git-flow, `make feature/finish/ship`, hotfix). This skill explicitly defers all branch policy there; it only shapes commits.
 - **`superpowers:using-git-worktrees`** — owns worktree SETUP; this skill commits inside whatever workspace exists.
 - **`testing-workflow`** — its per-task STATUS / Test-evidence block is what this skill records in the commit body.

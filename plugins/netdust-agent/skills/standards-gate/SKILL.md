@@ -52,7 +52,7 @@ directory (same rule as testing-workflow — never repo root for a monorepo).
   a blanket file/project disable. An unexplained blanket disable is a failed gate.
 
 **Step 4 — Record the evidence line.** Append to the task's `## Test evidence` block (the one
-the harnessed-development dispatch addendum demands):
+the building dispatch addendum demands):
 
 ```
 - Standards: clean | <N violations fixed> | n/a — no linter   (cmd: <what you ran>)
@@ -92,7 +92,7 @@ primary record.
 | `netdust-agent:testing-workflow` | **SIBLING at task close.** Tests = behavior, standards = style. Both gate the same close; the `Standards:` line sits in the same Test-evidence block. |
 | `hooks/subagent-stop.py` | **DETERMINISTIC BACKSTOP.** Blocks a code-editing subagent close when a linter is configured (`project_has_linter`) but no lint command ran. |
 | `netdust-agent:constitution-bridge` | **DECLARATIVE SOURCE.** Constitution Article II names the standard this gate enforces. |
-| `netdust-agent:harnessed-development` | **SEQUENCER.** Invokes this at every Stage-2 code-task close, alongside testing-workflow. |
+| `netdust-agent:building` | **SEQUENCER.** Invokes this at every Stage-2 code-task close (Step 2.6b), alongside testing-workflow. |
 | stack sub-plugins (`netdust-wp`, …) | **OVERRIDE LAYER.** A stack may pin the exact ruleset (WPCS, PSR-12); detection picks up its config automatically. |
 
 </integration>

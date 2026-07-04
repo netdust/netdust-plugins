@@ -1,12 +1,12 @@
 ---
 name: refining-ideas
-description: "CRAFT skill — layers ON TOP of superpowers:brainstorming as its convergent SIBLING. Brainstorming GENERATES an idea (explores intent, requirements, design space); refining-ideas SHARPENS an already-generated-but-still-vague idea before it becomes a plan — a divergent→convergent refinement pass. Reached for at harnessed-development Stage 0, alongside brainstorming, when an idea exists but is fuzzy and needs stress-testing first. Use when you have a rough idea/feature/approach that is not yet crisp enough to plan: it sends you to superpowers:brainstorming for the generative base, then adds the Netdust layer — the divergent lenses, the convergent stress-tests, the explicit Not-Doing list, and how its output feeds Stage 1 (writing-plans), Stage 1's scope boundaries, and Stage 1c spec-premise ground-truth. Does NOT replace brainstorming and does NOT plan (that is writing-plans)."
+description: "CRAFT skill — layers ON TOP of superpowers:brainstorming as its convergent SIBLING. Brainstorming GENERATES an idea (explores intent, requirements, design space); refining-ideas SHARPENS an already-generated-but-still-vague idea before it becomes a plan — a divergent→convergent refinement pass. Reached for at planning Stage 0, alongside brainstorming, when an idea exists but is fuzzy and needs stress-testing first. Use when you have a rough idea/feature/approach that is not yet crisp enough to plan: it sends you to superpowers:brainstorming for the generative base, then adds the Netdust layer — the divergent lenses, the convergent stress-tests, the explicit Not-Doing list, and how its output feeds Stage 1 (writing-plans), Stage 1's scope boundaries, and Stage 1c spec-premise ground-truth. Does NOT replace brainstorming and does NOT plan (that is writing-plans)."
 ---
 
 <objective>
 `superpowers:brainstorming` is generative — it opens the space, draws intent and requirements out of a half-formed wish. This skill is its **convergent sibling**: it takes an idea that already exists but is still vague and SHARPENS it into something crisp enough to plan. Brainstorming asks "what could this be?"; refining-ideas asks "of everything it could be, what is the one sharp version worth planning — and what are we explicitly NOT doing?"
 
-Same relationship `harnessed-development` has to the superpowers process skills: the upstream owns generic craft; this skill adds the Netdust-specific layer and names the gate that reaches for it. Here, brainstorming owns idea generation; this skill owns the divergent→convergent refinement that turns a generated idea into a planning input.
+Same relationship the harness spines (`planning`/`building`) have to the superpowers process skills: the upstream owns generic craft; this skill adds the Netdust-specific layer and names the gate that reaches for it. Here, brainstorming owns idea generation; this skill owns the divergent→convergent refinement that turns a generated idea into a planning input.
 </objective>
 
 <first_load_the_base>
@@ -21,7 +21,7 @@ If brainstorming already ran this session and produced the idea you now hold, yo
 </first_load_the_base>
 
 <where_you_are>
-You are at **harnessed-development Stage 0**, alongside brainstorming — invoked when an idea EXISTS but is still fuzzy and needs stress-testing before Stage 1 can write a plan against it. Brainstorming may hand you a raw idea; this skill makes it sharp.
+You are at **planning Stage 0**, alongside brainstorming — invoked when an idea EXISTS but is still fuzzy and needs stress-testing before Stage 1 can write a plan against it. Brainstorming may hand you a raw idea; this skill makes it sharp.
 
 - If no idea exists yet — only a vague wish — that is brainstorming's job first. Come back here once there is a candidate to sharpen.
 - This skill produces a planning INPUT, not a plan. The moment the idea is crisp + the Not-Doing list is set, hand off to Stage 1 (`superpowers:writing-plans`). Do not slide into task breakdown here.
@@ -67,9 +67,9 @@ A refinement done under this skill:
 
 <integration>
 - **superpowers:brainstorming** — the BASE this skill layers on, and its generative SIBLING. Brainstorming generates the idea; this sharpens it. This skill does not restate intent-drawing or requirement-separation; it adds the convergent refinement above.
-- **harnessed-development Stage 0** — the gate that reaches for this skill, alongside brainstorming, when a fuzzy idea needs stress-testing before a plan.
+- **planning Stage 0** — the gate that reaches for this skill, alongside brainstorming, when a fuzzy idea needs stress-testing before a plan.
 - **superpowers:writing-plans (Stage 1)** — the consumer of this skill's one-pager. The Not-Doing list becomes plan scope boundaries.
-- **harnessed-development Stage 1c (spec-premise ground-truth)** — the gate that VERIFIES the assumptions this skill surfaced, reading the named source before the plan ships.
+- **planning Stage 1c (spec-premise ground-truth)** — the gate that VERIFIES the assumptions this skill surfaced, reading the named source before the plan ships.
 - **thinking-deeply** — for a single high-stakes technical fork inside a candidate, that skill goes deeper on one decision; this skill stays at idea-shape breadth.
 - **Provenance** — generative craft from `superpowers` (+ divergent/convergent refinement concepts shared with `addyosmani/agent-skills` `idea-refine`, MIT); the Netdust spine — the Not-Doing-list→scope-boundary handoff, the assumptions→Stage-1c handoff, and the differentiation/wedge axis — is what this file adds.
 </integration>

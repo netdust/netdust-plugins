@@ -1,6 +1,6 @@
 ---
 name: doubting-decisions
-description: "CRAFT skill — no superpowers base exists for this (a genuine gap), so it carries its own content, folding in the addyosmani doubt-driven-development concept. It spins up a FRESH-CONTEXT skeptic to adversarially attack a DECISION just made (a plan's key architectural/approach choice), to catch the confirmation bias of the agent that made it. Reached for post-plan (after harnessed-development Stage 1, before Stage 2 execution) OR post-build (before shake-out), when a significant decision should be attacked before more work is committed to it. Use when a plan's core approach was just chosen and you want it stress-tested by a skeptic with no stake in it. Distinct from thinking-deeply (technical first-principles analysis) and devils-advocate (business/strategy decisions) — this is specifically an adversarial review of a DECISION/PLAN to surface what the deciding agent rationalized away. Its output feeds back as a plan-correction, or fires threat-modeling (security doubt) / architecture-invariants (convergence doubt)."
+description: "CRAFT skill — no superpowers base exists for this (a genuine gap), so it carries its own content, folding in the addyosmani doubt-driven-development concept. It spins up a FRESH-CONTEXT skeptic to adversarially attack a DECISION just made (a plan's key architectural/approach choice), to catch the confirmation bias of the agent that made it. Reached for at the plan/build seam (after planning Stage 1, before building Stage 2 execution) OR post-build (before shake-out), when a significant decision should be attacked before more work is committed to it. Use when a plan's core approach was just chosen and you want it stress-tested by a skeptic with no stake in it. Distinct from thinking-deeply (technical first-principles analysis) and devils-advocate (business/strategy decisions) — this is specifically an adversarial review of a DECISION/PLAN to surface what the deciding agent rationalized away. Its output feeds back as a plan-correction, or fires threat-modeling (security doubt) / architecture-invariants (convergence doubt)."
 ---
 
 <objective>
@@ -22,7 +22,7 @@ If the decision isn't made yet → thinking-deeply. If it's a business call → 
 <where_you_are>
 Two harness moments reach for this skill:
 
-- **Post-plan** — after `harnessed-development` Stage 1 (plan + its gates), before Stage 2 execution. The plan's core approach is the freshest, most consequential decision in the session — attack it before any task is dispatched, while a correction is still cheap (a plan edit, not a re-build).
+- **Post-plan** — at the seam: after `planning` Stage 1 (plan + its gates), before `building` Stage 2 execution. The plan's core approach is the freshest, most consequential decision in the session — attack it before any task is dispatched, while a correction is still cheap (a plan edit, not a re-build).
 - **Post-build, pre-shake-out** — before Stage 3, when a significant approach decision survived into the artifact and you want it doubted before the merge gate.
 
 It is invoked deliberately, not auto-fired. The signal: a non-trivial architectural/approach decision was just made and the cost of it being wrong is high.
@@ -41,7 +41,7 @@ It is invoked deliberately, not auto-fired. The signal: a non-trivial architectu
 **3. Classify each surviving doubt — this routes it back into the harness.**
 A doubt is only useful if it changes something. For each one that survives scrutiny, route it:
 - **Plan-defect doubt** → feed back as a **plan-correction** (a plan edit + commit) before Stage 2 — the cheapest possible place to fix a wrong approach.
-- **Security doubt** (the decision exposes a URL/auth/token/untrusted-parse/BYOK/tenancy surface that wasn't threat-modeled) → **fire `harnessed-development`'s 1a gate — `threat-modeling`** on the decision's surface. A doubt that smells like an attack is a missing threat model.
+- **Security doubt** (the decision exposes a URL/auth/token/untrusted-parse/BYOK/tenancy surface that wasn't threat-modeled) → **fire `planning`'s 1a gate — `threat-modeling`** on the decision's surface. A doubt that smells like an attack is a missing threat model.
 - **Convergence doubt** (the decision bypasses or duplicates a place where authorization / data-access / live-updates / error-handling / entity-modeling is supposed to be decided once) → **fire the 1b gate — `architecture-invariants`** and check the touched invariant. A doubt that smells like "this decides the same thing in a second place" is a bypassed convergence point.
 - **No-change doubt** → if the decision survives the attack intact, RECORD that it was doubted and held. The audit value is real: a decision that withstood a fresh skeptic is one you commit to with evidence, not just momentum.
 
@@ -59,9 +59,9 @@ A doubt pass done under this skill:
 
 <integration>
 - **no superpowers base** — this is a genuine gap; the skill carries its own content. Primary concept folded in from `addyosmani/agent-skills` `doubt-driven-development` (MIT), Netdust-voiced — fresh-context adversarial review applied to a DECISION rather than to code.
-- **harnessed-development (Stage 1→2 boundary, and pre-Stage-3)** — the moments that reach for this skill. Its output feeds a plan-correction before execution, or a final doubt before the merge gate.
-- **harnessed-development 1a / `threat-modeling`** — fired when a doubt surfaces a security surface the plan didn't model. A security-shaped doubt IS a missing threat model.
-- **harnessed-development 1b / `architecture-invariants`** — fired when a doubt surfaces a bypassed/duplicated convergence point. A "decides this twice" doubt IS an invariant concern.
+- **the seam (planning→building boundary) and pre-Stage-3** — the moments that reach for this skill. Its output feeds a plan-correction before execution, or a final doubt before the merge gate.
+- **planning 1a / `threat-modeling`** — fired when a doubt surfaces a security surface the plan didn't model. A security-shaped doubt IS a missing threat model.
+- **planning 1b / `architecture-invariants`** — fired when a doubt surfaces a bypassed/duplicated convergence point. A "decides this twice" doubt IS an invariant concern.
 - **thinking-deeply** — use BEFORE the decision (makes the technical call); this is used AFTER (attacks the made call). Complementary, not overlapping.
 - **devils-advocate** — its business-decision counterpart. Same adversarial spirit, different domain. Do not use this skill on pricing/strategy.
 - **refining-ideas** — the sibling at the front of the pipeline: that one sharpens an idea pre-plan; this one doubts the decision post-plan. Together they bracket Stage 1.

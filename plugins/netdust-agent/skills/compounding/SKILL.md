@@ -1,6 +1,6 @@
 ---
 name: compounding
-description: Use at spec-close (after finishing-a-development-branch) to harvest what the work taught and write it where it compounds instead of evaporating — a proposed patch to docs/architecture/CODE-MAP.md (codebase knowledge) plus a scoped skill-audit over the skills touched this spec (tool knowledge). Report-only: emits a proposed-deltas manifest you approve; never auto-edits a CODE-MAP or a skill. The Stage 3 closer in harnessed-development, beside the memory/STATE loop that already compounds decisions. Triggers on "compound", "compound this", "spec is done", "wrap up the spec", "update the code map", "what did this teach", at /shakeout-level boundaries. NOT per sub-phase, NOT for trivial changes.
+description: Use at spec-close (after finishing-a-development-branch) to harvest what the work taught and write it where it compounds instead of evaporating — a proposed patch to docs/architecture/CODE-MAP.md (codebase knowledge) plus a scoped skill-audit over the skills touched this spec (tool knowledge). Report-only: emits a proposed-deltas manifest you approve; never auto-edits a CODE-MAP or a skill. The Stage 3 closer in building, beside the memory/STATE loop that already compounds decisions. Triggers on "compound", "compound this", "spec is done", "wrap up the spec", "update the code map", "what did this teach", at /shakeout-level boundaries. NOT per sub-phase, NOT for trivial changes.
 ---
 
 <objective>
@@ -26,7 +26,7 @@ Invoke at **spec-close** — when a whole spec/feature is done and `superpowers:
 
 **Do NOT invoke for:** a single sub-phase close, trivial one-file changes, formatting, dependency bumps, prose, or any work that didn't change a module boundary / convergence point / data flow AND didn't surface a skill edge-case.
 
-Fires as **Stage 3, step 6 of `harnessed-development`** — after finish. Can also be run standalone when you want to refresh the map or harvest skill lessons.
+Fires as **Stage 3, step 6 of `building`** — after finish. Can also be run standalone when you want to refresh the map or harvest skill lessons.
 </when_to_use>
 
 <process>
@@ -111,6 +111,6 @@ Nothing written. Approve items to apply: ____
 | `/pattern-miner` | **ADJACENT.** Cross-project pattern promotion; compound is single-spec, single-project. Patterns surfaced repeatedly by compound are pattern-miner candidates. |
 | `SKILL-EDGE:` tag | **PASS B INPUT.** Edge-cases tagged during the spec are harvested here into proposals. |
 | memory/STATE loop | **SIBLING.** Same loop, third object (decisions). This skill does NOT touch STATE/lessons — that's the hook's job. |
-| `harnessed-development` | **HOST.** Stage 3, step 6 (after finish). Spec-close cadence. |
+| `building` | **HOST.** Stage 3, step 6 (after finish). Spec-close cadence. |
 
 </integration>

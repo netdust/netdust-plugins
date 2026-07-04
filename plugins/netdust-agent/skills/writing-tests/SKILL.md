@@ -6,7 +6,7 @@ description: "CRAFT skill — layers the Netdust harness contract ON TOP of supe
 <objective>
 This skill does NOT teach you how to write a test from scratch — `superpowers:test-driven-development` already does that, and does it well. This skill **layers the Netdust harness on top of it**: the conventions, the gate position, and the contracts superpowers has no way to know about.
 
-Think of it the way `harnessed-development` relates to the superpowers process skills: superpowers owns the generic craft; the Netdust skill sequences it and adds the gate. Here, superpowers owns the RED→GREEN cycle; this skill adds the harness contract around the single test you're about to write.
+Think of it the way the harness spines (`planning`/`building`) relate to the superpowers process skills: superpowers owns the generic craft; the Netdust skill sequences it and adds the gate. Here, superpowers owns the RED→GREEN cycle; this skill adds the harness contract around the single test you're about to write.
 </objective>
 
 <first_load_the_base>

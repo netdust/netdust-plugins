@@ -1,10 +1,10 @@
 ---
 name: designing-apis
-description: "CRAFT skill — the how-to harnessed-development Stage 1 (plan) reaches for once brainstorming / refining-ideas has concluded 'we need an API, a module boundary, or a type contract.' There is no strong superpowers base for interface design, so this skill carries the content: contract-first design, Hyrum's-Law-aware exposure, additive-only evolution, structured errors, boundary validation, predictable REST + TypeScript contract patterns — restated and extended from addyosmani/agent-skills api-and-interface-design (MIT). The Netdust layer superpowers/addy cannot know: this is where the project's architecture-invariants CONVERGENCE POINTS get designed in, so the API names them for gate 1b to later check, and where boundary-validation on untrusted input fires the threat-modeling gate 1a. Use when shaping an endpoint, an exported module surface, or a shared type."
+description: "CRAFT skill — the how-to planning Stage 1 (plan) reaches for once brainstorming / refining-ideas has concluded 'we need an API, a module boundary, or a type contract.' There is no strong superpowers base for interface design, so this skill carries the content: contract-first design, Hyrum's-Law-aware exposure, additive-only evolution, structured errors, boundary validation, predictable REST + TypeScript contract patterns — restated and extended from addyosmani/agent-skills api-and-interface-design (MIT). The Netdust layer superpowers/addy cannot know: this is where the project's architecture-invariants CONVERGENCE POINTS get designed in, so the API names them for gate 1b to later check, and where boundary-validation on untrusted input fires the threat-modeling gate 1a. Use when shaping an endpoint, an exported module surface, or a shared type."
 ---
 
 <objective>
-You are at the plan stage of `harnessed-development`, and brainstorming (or `refining-ideas`) just concluded the work needs an **interface**: an HTTP endpoint, an exported module surface, or a shared type contract. This skill shapes what the plan's tasks will contain — the *shape of the contract* — before any implementation task is written. Unlike `writing-tests`, there is no strong superpowers base for interface design, so this skill is the primary source: it restates and extends `addyosmani/agent-skills:api-and-interface-design` (MIT) and frames it as the how-to Stage 1 reaches for.
+You are at Stage 1 of `planning`, and brainstorming (or `refining-ideas`) just concluded the work needs an **interface**: an HTTP endpoint, an exported module surface, or a shared type contract. This skill shapes what the plan's tasks will contain — the *shape of the contract* — before any implementation task is written. Unlike `writing-tests`, there is no strong superpowers base for interface design, so this skill is the primary source: it restates and extends `addyosmani/agent-skills:api-and-interface-design` (MIT) and frames it as the how-to Stage 1 reaches for.
 </objective>
 
 <contract_first>
@@ -60,7 +60,7 @@ A boundary designed under this skill:
 </success_criteria>
 
 <integration>
-- **`harnessed-development` Stage 1 (plan)** — the step that reaches for this skill, once brainstorming / `refining-ideas` concluded an interface is needed. The contract this skill shapes becomes the plan's first boundary task.
+- **`planning` Stage 1 (plan)** — the step that reaches for this skill, once brainstorming / `refining-ideas` concluded an interface is needed. The contract this skill shapes becomes the plan's first boundary task.
 - **`architecture-invariants` (gate 1b)** — this skill FEEDS it: the convergence points you name here (error shape, boundary validation, the one auth guard) are what the invariant doc later checks `/code-review` + `/shakeout` against.
 - **`threat-modeling` (gate 1a)** — boundary validation on untrusted input is a threat-modeling trigger; name the validated surface so the threat model cites the mitigation.
 - **`writing-tests`** — the contract you design here is exactly what the Tier-A test asserts against (acceptance-criteria contract + denial path), not the implementation.

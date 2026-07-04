@@ -27,7 +27,7 @@ esac
 
 Before anything else, audit whether the test suite would actually go RED if a dangerous path broke — a green suite that never exercises the denial branch, the second tenant, the un-mocked wire, or the unmounted guard ships bugs past every later gate. This is the cheapest place to catch a green-but-blind test, and its `covered`/`blind`/`fixed` manifest becomes the convergence target the Step 4 reviewers verify against (so they verify gaps instead of re-discovering them).
 
-> Note: if you reached `/shakeout` via `harnessed-development`, its Stage 3 already ran this audit — you may skip Step 0. Running `/shakeout` standalone, this is the only place the audit fires, so do not skip it.
+> Note: if you reached `/shakeout` via the harness (`building` Stage 3), that stage already ran this audit — you may skip Step 0. Running `/shakeout` standalone, this is the only place the audit fires, so do not skip it.
 
 Use the Skill tool, pointed at the branch diff (Situation A — phase/spec-complete audit):
 
@@ -43,7 +43,7 @@ Hand it the diff range (`$(git merge-base HEAD main)..HEAD`) as the audit target
 
 If this branch added or changed a **user-facing feature** (a view, form, wizard, interactive flow, CRUD surface, or an endpoint a client/agent drives), verify it behaves the way it's meant to be used — every intended flow, every edge — driven through the real surface. test-effectiveness (Step 0) proved the tests *bite*; this proves the *feature behaves*. These two gates are siblings: one audits code coverage, the other drives behavior.
 
-> Note: if you reached `/shakeout` via `harnessed-development`, Stage 1g authored an `## Acceptance flows` matrix in the plan and Stage 3 may have already driven it — point this step at that matrix rather than re-deriving. Running `/shakeout` standalone with no matrix, derive the intended-use flows from the spec/diff now.
+> Note: if you reached `/shakeout` via the harness, `planning`'s 1g gate authored an `## Acceptance flows` matrix in the plan and `building` Stage 3 may have already driven it — point this step at that matrix rather than re-deriving. Running `/shakeout` standalone with no matrix, derive the intended-use flows from the spec/diff now.
 
 Use the Skill tool (Situation B — verify the matrix):
 
@@ -116,7 +116,7 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD)
 SPEC=$(ls docs/superpowers/specs/*.md 2>/dev/null | tail -1)  # most recent spec, if any
 ```
 
-**First, decide the branch diff's review tier (harnessed-development 1h).** The panel composition is read from the tier — do not always dispatch the full five. Tier uses the **same surface triggers as the threat-modeling gate (1a)**:
+**First, decide the branch diff's review tier (the 1h facet of `planning`'s task-shaping gate; restated per `building` Step 2.8).** The panel composition is read from the tier — do not always dispatch the full five. Tier uses the **same surface triggers as the threat-modeling gate (1a)**:
 
 - **FULL** — the diff `<RANGE>` touches any 1a trigger surface (auth/session/token, URL allow-lists, crypto, untrusted parsing, tenancy/workspace boundaries, outbound requests to user-supplied addresses), OR a named architecture invariant, OR the data layer / migrations. Quick check:
   ```bash

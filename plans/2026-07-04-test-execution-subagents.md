@@ -56,23 +56,32 @@ authors the RED before dispatching the implementer.
 
 ## Files changed
 
-- **NEW** `agents/test-author.md` — the independent RED-authoring persona.
+Originally authored against the pre-split sequencer (`harnessed-development` as
+the god-skill, v0.3.4 → 0.4.0). Main's plan/build refactor (0.5.0) landed in
+parallel and moved Stage 2/3 into the `building` spine, so at merge the split
+was PORTED into the new structure and shipped as **0.6.0**:
+
+- **NEW** `agents/test-author.md` — the independent RED-authoring persona
+  (owns the FRONT half of `building` Stage 2).
 - `agents/implementer.md` — receives an immutable RED test; greens without
   weakening; evidence block cites the independent author + a `Weakened?` line.
-- `skills/harnessed-development/SKILL.md` — new `<test_dev_split>` section;
-  enforcement-honesty note; objective #2; intake Class E; craft-routing;
-  stage-personas; Stage 2 dispatch order (2.1, 2.1b, 2.6, 2.7); split dispatch
-  addenda (test-author + implementer); red-flags; success-criteria #6;
-  integration table + calibration.
+- `skills/building/SKILL.md` — the split's home: `<test_dev_split>` section
+  (slug `self-grading-split`); enforcement-honesty bullet; objective #2;
+  precondition Class E row; craft-routing; stage-personas; pair dispatch order
+  (Steps 2.1, 2.1b, 2.6, 2.7); split dispatch addenda (test-author +
+  implementer); red-flags; success-criteria #3; integration + calibration.
+- `skills/harnessed-development/SKILL.md` — unchanged from main's intake
+  router; the split lives downstream in `building`.
 - `skills/testing-workflow/SKILL.md` — flow diagram; "Who authors vs who
   greens" section; two anti-pattern rows; split sign-off checklist; integration
   bullets.
 - `skills/writing-tests/SKILL.md` — reframed as loaded by the test-author;
   behavioral-RED-via-signature-shell for new symbols; success criteria +
   integration.
+- `skills/_shared/calibrations.md` — new `self-grading-split` slug entry.
 - `hooks/subagent-stop.py` — docstring only (logic unchanged; hook tests stay
   green) reflecting the two-agent backstop + the authorship-independence limit.
 - `README.md` — agent-personas table (nine agents, five stage personas) + the
   split explainer; project-structure comment.
 - `.claude-plugin/plugin.json` + root `.claude-plugin/marketplace.json` —
-  version 0.3.4 → 0.4.0 + description clause.
+  version 0.5.0 → 0.6.0 + description clause.

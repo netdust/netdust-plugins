@@ -45,7 +45,12 @@ SIDECAR_NAME = ".stop-hook-state.json"  # under memory/
 NO_AUTO_MEMORY_MARKER = ".no-auto-memory"   # at a project root: hook must not write there
 
 LOG_PATH = Path.home() / ".claude" / "logs" / "memory-hook.log"
-DASHBOARD_SYNC = Path.home() / "Sites" / "netdust-wp-manager" / "scripts" / "sync-from-site.sh"
+# Overridable per machine: the default only exists on the workstation that runs
+# the wp-manager dashboard; everywhere else the sync is a silent no-op.
+DASHBOARD_SYNC = Path(os.environ.get(
+    "NETDUST_DASHBOARD_SYNC",
+    str(Path.home() / "Sites" / "netdust-wp-manager" / "scripts" / "sync-from-site.sh"),
+))
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 

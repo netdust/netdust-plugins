@@ -5,12 +5,12 @@ subagent-stop.py — netdust-agent harness
 SubagentStop hook. Fires when a subagent considers stopping.
 
 Purpose:
-  Backstop for harnessed-development's testing gate. If a subagent wrote code (Edit/Write)
-  but never ran a test command via Bash, this hook blocks the stop and tells
-  the subagent to run the suite now.
+  Backstop for the building spine's testing gate (Step 2.6/2.6b). If a subagent
+  wrote code (Edit/Write) but never ran a test command via Bash, this hook
+  blocks the stop and tells the subagent to run the suite now.
 
   This backstops BOTH halves of the Stage-2 test/dev split
-  (harnessed-development <test_dev_split>):
+  (building <test_dev_split>):
     • the test-author, which edits test files and must have RUN its RED test
       (the hook checks a test command executed, not that it PASSED — a RED
       test run satisfies it, which is correct: the author's test is meant to
@@ -25,7 +25,7 @@ Purpose:
   subagent's transcript, not the pair, so it cannot compare authors. The
   test/dev split's independence is enforced by the controller's dispatch order
   (test-author first, then implementer) and the two separate commits — not here.
-  See harnessed-development <how_each_gate_is_actually_enforced>.
+  See building <how_each_gate_is_actually_enforced>.
 
 Design:
   • Deterministic: regex over the subagent's transcript. No LLM call.
@@ -334,7 +334,7 @@ def build_block_message(activity: dict, missing: list[str]) -> str:
     parts = [
         "netdust-agent/SubagentStop: close-out gate not satisfied.\n\n",
         f"You added {activity['lines_added']} lines of code in this task. Per "
-        "harnessed-development, a task that ships new behavior is not complete "
+        "the building spine, a task that ships new behavior is not complete "
         "until its close-out gates have actually executed — not just been "
         "intended, executed.\n",
     ]
@@ -356,7 +356,7 @@ def build_block_message(activity: dict, missing: list[str]) -> str:
             "      npx eslint <files> && npx prettier --check <files>   (TS/JS)\n"
             "      vendor/bin/phpcs <files>                             (PHP/WP)\n"
             "Then record a `Standards: clean | <violations>` line in your "
-            "Test-evidence block. (See the standards-gate skill.)\n"
+            f"Test-evidence block. (See the {STANDARDS_SKILL} skill.)\n"
         )
 
     if "tests" in missing and not activity["invoked_testing"]:

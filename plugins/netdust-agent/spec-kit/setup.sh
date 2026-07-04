@@ -78,4 +78,4 @@ fi
 echo "Done. Next:"
 say "1. Run the constitution-bridge skill to generate the constitution from RULES/SOUL/invariants."
 say "2. Use /speckit.specify → /speckit.clarify → /speckit.plan → /speckit.tasks."
-say "3. Hand tasks.md to harnessed-development Stage 2. NEVER run /speckit.implement."
+say "3. Hand tasks.md to building Stage 2. NEVER run /speckit.implement."

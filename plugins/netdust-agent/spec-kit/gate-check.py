@@ -168,12 +168,26 @@ TIER = re.compile(r"\[Tier\s+[AB]\]", re.IGNORECASE)
 HAS_P = re.compile(r"\[P\]")
 
 
+def strip_fenced(text: str) -> str:
+    """Drop fenced code blocks before parsing task lines — the tasks template
+    ships a fenced per-task format example, and a fenced `- [ ] Tnn` sample in
+    a real plan must not count as (or fail as) a real task."""
+    out, in_fence = [], False
+    for ln in text.splitlines():
+        if ln.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if not in_fence:
+            out.append(ln)
+    return "\n".join(out)
+
+
 def parse_clusters(tasks_text: str):
     """Yield dicts {name, tasks:[(id, has_p)], irreversible:bool}. Tasks under a
     `### Cluster` heading until the next cluster or level-2 heading."""
     clusters = []
     cur = None
-    for ln in tasks_text.splitlines():
+    for ln in strip_fenced(tasks_text).splitlines():
         cm = CLUSTER_HEADING.match(ln)
         if cm:
             if cur:
@@ -199,7 +213,7 @@ def parse_clusters(tasks_text: str):
 def check_task_tiers(tasks_text: str, f: Findings) -> None:
     missing = []
     total = 0
-    for ln in tasks_text.splitlines():
+    for ln in strip_fenced(tasks_text).splitlines():
         tm = TASK_LINE.match(ln)
         if tm:
             total += 1

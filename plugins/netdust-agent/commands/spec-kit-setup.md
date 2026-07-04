@@ -18,7 +18,7 @@ Set up the netdust × spec-kit integration for this project.
    `RULES.md` + `SOUL.md` + `ARCHITECTURE-INVARIANTS.md`.
 
 3. Report next steps: `/speckit.specify` → `/speckit.clarify` → `/speckit.plan` →
-   `/speckit.tasks`, then hand `tasks.md` to `harnessed-development` Stage 2.
+   `/speckit.tasks`, then hand `tasks.md` to `building` Stage 2.
    **Never run `/speckit.implement`** — it bypasses the Stage-2 gates.
 
 Target / args: $ARGUMENTS
