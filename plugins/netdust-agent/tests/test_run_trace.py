@@ -135,4 +135,22 @@ def run() -> list[tuple[bool, str]]:
         case("show on populated log -> event name visible in rendered output",
              "stage-enter" in out)
 
+    # --- show: a torn/malformed trailing line degrades cleanly ---
+    # Simulates a process killed mid-`append` (partial JSON on the last
+    # line). `show` must not crash — the docstring's "a missing or empty
+    # log is not an error" contract extends to a corrupt line: render what
+    # is valid and mark the bad line, but never traceback or exit nonzero.
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = Path(tmp) / "specs" / "demo"
+        feature.mkdir(parents=True)
+        run_trace("append", str(feature), "stage-enter", "stage=execute")
+        with log_path(feature).open("a", encoding="utf-8") as f:
+            f.write('{"ts": "x", "event": "trunc\n')  # torn line, no closing brace
+
+        rc, out, err = run_trace("show", str(feature))
+
+        case("show on torn trailing line -> exit 0 (not a crash)", rc == 0)
+        case("show on torn trailing line -> valid line still rendered",
+             "stage-enter" in out)
+
     return results

@@ -20,7 +20,10 @@ Denial paths (both reject BEFORE any write — no partial file):
   - a `k=v` token missing `=` -> exit 1, one-line reason on stderr, no file.
 
 `show` renders the log human-readably, one line per event. A missing or
-empty log is not an error — it prints "no trace recorded" and exits 0.
+empty log is not an error — it prints "no trace recorded" and exits 0. A
+torn/malformed line (e.g. a process killed mid-`append`) does not crash
+`show` either — it renders `<corrupt line>` in that line's place and
+continues with the rest of the log; `show` still always exits 0.
 
 Exit codes: 0 success, 1 usage/validation/denial error.
 """
@@ -85,7 +88,11 @@ def do_show(feature_dir: Path) -> int:
         return 0
 
     for raw in lines:
-        entry = json.loads(raw)
+        try:
+            entry = json.loads(raw)
+        except json.JSONDecodeError:
+            print("<corrupt line>")
+            continue
         ts = entry.get("ts", "")
         event = entry.get("event", "")
         data = entry.get("data", {})

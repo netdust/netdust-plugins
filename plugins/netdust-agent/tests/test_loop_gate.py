@@ -197,17 +197,7 @@ def run() -> list[tuple[bool, str]]:
 
     with tempfile.TemporaryDirectory() as tmp_broken:
         cwd = setup(tmp_broken, TASKS_ONE_OPEN, marker={})
-        # Remove the feature_dir AFTER setup so tasks.md (read directly by
-        # loop-check.py, independent of feature_dir on-disk existence via
-        # cwd-relative resolution here) is gone too — but loop-check needs
-        # tasks.md to exist to reach the CONTINUE/block path, so instead we
-        # make the feature_dir unwritable to force run-trace's append (which
-        # is invoked with the same feature_dir) to hit its own denial path
-        # without altering loop-check's own read of tasks.md.
-        # Simplest reliable denial: delete tasks.md's parent AFTER loop-check
-        # would already need it — so instead we revoke write permission on
-        # specs/demo, forcing run-trace's open("a") to fail while
-        # loop-check.py (read-only) still succeeds identically.
+        # revoke write perms so run-trace's append fails while loop-check.py's read still succeeds
         feature_dir_path = cwd / "specs" / "demo"
         feature_dir_path.chmod(0o500)  # read+execute, no write
         try:
@@ -221,12 +211,7 @@ def run() -> list[tuple[bool, str]]:
              out_broken == out_control)
 
     with tempfile.TemporaryDirectory() as tmp_missing:
-        # A harder denial: feature_dir referenced by the marker doesn't
-        # exist AT ALL for tracing purposes (simulate by deleting it after
-        # setup, but loop-check.py needs tasks.md to still answer CONTINUE
-        # identically to the control -- so here we target the bypass site
-        # instead, where no loop-check subprocess runs at all and the ONLY
-        # side effect possible is the trace call).
+        # bypass site has no loop-check subprocess, so deleting feature_dir only affects the trace call
         cwd = setup(tmp_missing, TASKS_ONE_OPEN, marker={})
         shutil.rmtree(cwd / "specs" / "demo")
         rc_missing, out_missing = run_gate(
