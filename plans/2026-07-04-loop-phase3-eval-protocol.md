@@ -32,8 +32,9 @@ Environment degradations during the remote PLAN run (for the eval record):
 
 ## 2. Preconditions on Stefan's machine (in order)
 
-1. **Update plugins** — marketplace → netdust-agent **0.5.0** (the plan/build split; the
-   loop hooks were already live since 0.4.0). Restart the session so hooks re-register.
+1. **Update plugins** — marketplace → netdust-agent **0.6.0** (the plan/build split
+   0.5.0 + the test/dev split merged on top; the loop hooks were already live since
+   the Stage-2 loop shipped). Restart the session so hooks re-register.
 2. **Pull the branch** `claude/handoff-split-god-skill-ueb1kd` in the netdust-plugins repo.
 3. **The seam, properly:** read `specs/run-observability/{spec,plan,tasks}.md` and
    approve (or amend — any amendment re-runs `gate-check.py`). This doubles as the
@@ -53,7 +54,8 @@ Environment degradations during the remote PLAN run (for the eval record):
 | M3 | Planned yields (`[HUMAN]` tasks) | 0 — the plan honestly has none; the yield path goes unexercised this run (noted, not fabricated) | |
 | M4 | Unplanned yields (BLOCKED off-plan) | 0 | |
 | M5 | Budget/dry disarms | 0 | |
-| M6 | Gates fired vs warranted | warranted: 2 review-gate HALTs (C1, C2 — both STANDARD), 7/7 tasks with Test-evidence blocks (5× Tier B `no unit test` lines are correct per tier), standards `n/a — no linter`, subagent-stop backstop fires 0 times | |
+| M6 | Gates fired vs warranted | warranted: 2 review-gate HALTs (C1, C2 — both STANDARD); under the test/dev split (0.6.0) the 3 Tier-A tasks (T01/T02/T04) each close as a PAIR — test-author `## Test contract` + `RED_READY`, then implementer Test-evidence with `Weakened? NO`, two commits; the 4 Tier-B tasks close with `no unit test: Tier B` lines; standards `n/a — no linter`; subagent-stop backstop fires 0 times | |
+| M6b | Split integrity (first loop-driven test of it) | 0 tasks where the implementer authored its own contract test; every GREEN reconciles to an independent RED | |
 | M7 | Seam behavior | `building` re-runs gate-check at entry (exit 0) before any dispatch; refuses if artifacts were amended without re-check | |
 | M8 | Loop drives THROUGH gates, not around | execution HALTs at both `── REVIEW GATE ──` markers even while armed | |
 | M9 | tmux always-stopping fix | session no longer stops after every tool batch; loop-gate blocks stops only at real stop events | |
