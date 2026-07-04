@@ -46,14 +46,17 @@ What the harness *loads* at each step. Each craft skill **layers on top of its s
 
 ## Agent personas
 
-Eight agents: **four stage personas** (one per important moment of the harness) plus **four specialist reviewers** the review stage fans out to. **Personas load skills** — an agent is the *who* (role + judgment + dispatch context) that loads the relevant gates and craft skills to do its job. Skills stay the single source of *how*; agents don't duplicate them. The table below covers the four stage personas; the specialists (`security-sentinel`, `performance-oracle`, `invariant-auditor`, `code-simplicity-reviewer`) are deep single-dimension reviewers dispatched alongside the generalist `reviewer` at Stage 3.
+Nine agents: **five stage personas** (one per important moment of the harness) plus **four specialist reviewers** the review stage fans out to. **Personas load skills** — an agent is the *who* (role + judgment + dispatch context) that loads the relevant gates and craft skills to do its job. Skills stay the single source of *how*; agents don't duplicate them. The table below covers the five stage personas; the specialists (`security-sentinel`, `performance-oracle`, `invariant-auditor`, `code-simplicity-reviewer`) are deep single-dimension reviewers dispatched alongside the generalist `reviewer` at Stage 3.
 
 | Agent | Owns | Loads |
 |---|---|---|
 | `planner` | Stage 0→1: request → gated plan | brainstorming/refining-ideas, writing-plans, the plan-time gates (threat-modeling, architecture-invariants/designing-apis, feature-acceptance), sourcing-from-docs |
-| `implementer` | Stage 2: one task to done, test-gated | testing-workflow/writing-tests, building-frontend, versioning-with-git, systematic-debugging; ends with the Test-evidence + STATUS blocks |
+| `test-author` | Stage 2: author the RED test (per task, FIRST) | testing-workflow/writing-tests; owns the tier decision + the RED-first behavioral test (+ signature shell) from the contract; ends with the `## Test contract` block + `RED_READY` |
+| `implementer` | Stage 2: green that RED test (per task, SECOND) | test-driven-development, building-frontend, versioning-with-git, systematic-debugging; greens the author's test *without weakening it*; ends with the Test-evidence + STATUS blocks |
 | `reviewer` | Stage 3: whole-diff, five-dimension pre-merge review | verifies the diff against the plan's threat model, `ARCHITECTURE-INVARIANTS.md`, and the test-effectiveness manifest; uses simplifying-code |
 | `shakeout-qa` | Stage 3: exercise the built artifact end-to-end | shake-out, feature-acceptance, driving-the-browser, test-effectiveness; emits a pass/fail/not-reachable manifest |
+
+**The test/dev split.** Stage 2 runs each task as a `test-author → implementer` pair so no agent grades its own homework: an independent `test-author` writes the failing, contract-derived test *before* the implementer writes any logic, and the implementer greens it without weakening it — two agents, two commits. This closes the original flaw where the implementer authored both the code and its own test.
 
 `reviewer` reads the **diff**; `shakeout-qa` runs the **artifact**. The generalist `reviewer` runs alongside this plugin's specialist reviewer agents (security-sentinel, performance-oracle, invariant-auditor, …), not instead of them.
 
@@ -91,8 +94,8 @@ netdust-agent/
 │   ├── */references/            # on-demand checklists (security, accessibility,
 │   │                            #   performance, sweep-*, failure-modes, …)
 │   └── _shared/                 # shared reference (finding-verification)
-├── agents/                      # stage personas: planner, implementer,
-│   │                            #   reviewer, shakeout-qa
+├── agents/                      # stage personas: planner, test-author,
+│   │                            #   implementer, reviewer, shakeout-qa
 │   │                            # specialists: security-sentinel,
 │   │                            #   performance-oracle, invariant-auditor,
 │   │                            #   code-simplicity-reviewer

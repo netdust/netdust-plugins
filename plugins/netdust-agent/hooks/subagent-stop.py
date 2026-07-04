@@ -6,12 +6,26 @@ SubagentStop hook. Fires when a subagent considers stopping.
 
 Purpose:
   Backstop for harnessed-development's testing gate. If a subagent wrote code (Edit/Write)
-  but never invoked Skill("testing-workflow") to gate task completion, this
-  hook blocks the stop and tells the subagent to invoke it now.
+  but never ran a test command via Bash, this hook blocks the stop and tells
+  the subagent to run the suite now.
 
-  This catches the case where the parent dispatched a subagent without the
-  required "invoke testing-workflow before reporting done" instruction in the
-  prompt, or where the subagent ignored the instruction.
+  This backstops BOTH halves of the Stage-2 test/dev split
+  (harnessed-development <test_dev_split>):
+    • the test-author, which edits test files and must have RUN its RED test
+      (the hook checks a test command executed, not that it PASSED — a RED
+      test run satisfies it, which is correct: the author's test is meant to
+      fail), and
+    • the implementer, which edits production code and must have RUN the suite.
+
+  It catches the case where the parent dispatched a subagent without the
+  required close-out instruction, or where the subagent ignored it.
+
+  What this hook CANNOT enforce: authorship independence (that the implementer
+  didn't also write the test it ran). A single SubagentStop invocation sees one
+  subagent's transcript, not the pair, so it cannot compare authors. The
+  test/dev split's independence is enforced by the controller's dispatch order
+  (test-author first, then implementer) and the two separate commits — not here.
+  See harnessed-development <how_each_gate_is_actually_enforced>.
 
 Design:
   • Deterministic: regex over the subagent's transcript. No LLM call.

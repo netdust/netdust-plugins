@@ -18,6 +18,19 @@ But *verification* is not the same as *a new unit test on every task*. The disci
 
 See **Task risk tier** below for how to classify, and **What the per-task gate cannot catch** for what to hand downstream instead of over-testing.
 
+## Who authors vs who greens — the test/dev split (no self-grading)
+
+**The agent that writes the code must not be the agent that writes and certifies its test.** A coder who authors both grades their own homework: the test drifts to fit the code it was written against, the denial path quietly goes missing, and a risky guard gets self-classified "Tier B, just wiring" by the very agent that benefits from skipping the test. RED-first alone does not fix this — it only reorders the same author's two acts.
+
+So at Stage 2 the per-task gate is split across two agents (`harnessed-development` `<test_dev_split>`):
+
+| Owns | Agent | Does |
+|---|---|---|
+| **Tier decision + RED authorship** | `test-author` (FIRST, independent) | Classifies the tier from the acceptance criteria (not the code). Writes the Tier-A RED-first behavioral test incl. the denial path — or the seam test at a wiring task, or the `no unit test: Tier B, <reason>` line. For a brand-new symbol, creates ONLY the minimal signature shell so the RED is behavioral, not "module not found". Proves RED; commits it. |
+| **GREEN** | `implementer` (SECOND) | Makes that same test pass with real logic, WITHOUT editing, weakening, deleting, or skipping it. May ADD edge tests. If the test is wrong, escalates `NEEDS_CONTEXT` — does not rewrite it to pass. |
+
+This skill still owns the *rule* (what tier, what a Tier-A test must assert, the seam obligation, the sign-off checklist). The split only decides *who applies each half*: the test-author classifies and writes RED; the implementer greens. Both read this skill once per session to internalize it. The single narrow exception is a trivial inline Class E change, where the **controller** (not the coder) authors and RED-proves the test before dispatching the implementer — the independence still holds because the coder still isn't the grader.
+
 ## How This Connects to Superpowers
 
 ```
@@ -25,11 +38,17 @@ superpowers:writing-plans
   └─ Each task includes: "Unit test: [what to verify]"
   └─ Each phase ends with: "Integration gate: [what to verify across tasks]"
 
-superpowers:subagent-driven-development
-  └─ Subagent picks up task
-  └─ Writes code
-  └─ Classifies task risk tier → verifies (Tier A: RED→GREEN unit test; Tier B: full suite + seam reach)
-  └─ Reports done (only if verified + suite green)
+Stage 2, per task — the test/dev SPLIT (no one grades their own homework):
+  test-author (independent, FIRST):
+    └─ Classifies the risk tier from the ACCEPTANCE CRITERIA, not the code
+    └─ Tier A: writes the RED-first behavioral test (+ signature shell for a
+       new symbol) incl. the denial path; proves RED; commits it
+    └─ Tier B: records `no unit test: Tier B, <reason>` (+ seam assertion)
+    └─ Reports `## Test contract` + RED_READY
+  implementer (SECOND):
+    └─ Greens that SAME test without weakening it (may ADD edge tests)
+    └─ Runs full suite + static analysis; reports `Weakened? NO`
+    └─ Reports done (only if the author's test is green + suite green)
 
 Controller after phase tasks complete:
   └─ Invokes testing-workflow:phase-complete  ← integration + acceptance
@@ -189,17 +208,18 @@ If the honest answer is *"none — it re-asserts a library, a classname, or a ta
 
 ### Task sign-off checklist
 
-The subagent MUST confirm ALL of these before reporting done:
+The task is signed off across the split. The **test-author** owns the first three boxes (authorship + tier); the **implementer** owns the rest (green without weakening + suite + statics). The controller confirms ALL of them reconcile before the task is done:
 
-- [ ] **Tier named** (A or B) with a one-sentence justification — and security/auth/parsing/state-machine units are Tier A regardless of line count
-- [ ] **Tier A:** a behavioral test that was **RED first** (you watched it fail), asserting the contract incl. the **denial/negative path** for guards, is now green — *OR* — **Tier B:** `no unit test: Tier B, <reason>` recorded
+- [ ] **Tier named** (A or B) with a one-sentence justification — *by the test-author, from the acceptance criteria* — and security/auth/parsing/state-machine units are Tier A regardless of line count
+- [ ] **Tier A:** a behavioral test the test-author watched go **RED first**, asserting the contract incl. the **denial/negative path** for guards — *OR* — **Tier B:** `no unit test: Tier B, <reason>` recorded by the test-author
 - [ ] **If this task WIRES a piece into the real chain:** a seam test exists — ≥1 assertion through the un-mocked chain **+** ≥1 negative/adversarial case
+- [ ] **Implementer greened the author's test WITHOUT weakening it** (`Weakened? NO`); it did not re-author, relax, or skip the contract test — a dispute is an escalation, not an edit
 - [ ] **If this task touches time, ordering, concurrency, or any `Date.now()`/timestamp comparison:** the new/changed test file was run **≥3×** and was green every run (a single green run is not evidence of determinism)
 - [ ] **Deferral line recorded:** `Risk this test does NOT cover: <concurrency | adversarial-input | cross-actor | multi-component | un-mocked-seam | none> — deferred to <integration-gate | /code-review | invariant-auditor | /shakeout>`
 - [ ] Full unit suite still green (no regressions)
 - [ ] Static analysis clean on changed files
 
-If any box is unchecked → not done. Fix it.
+If any box is unchecked, or the author's RED and the implementer's GREEN don't reconcile to the same test → not done. Fix it.
 
 The deferral line must name a **specific gate AND a specific risk class** — a vague "deferred to QA" is a failed box. The controller collects every deferral line at phase-complete and confirms each named risk was actually exercised before sign-off.
 
@@ -335,6 +355,8 @@ These apply at every level. Subagents and controller must both avoid:
 |--------------|----------------|-----------------|
 | Testing implementation details | Breaks on refactor, proves nothing | Test behavior and contracts |
 | Deriving tests from your own code | You'll test your bugs | Derive from acceptance criteria |
+| **The coder authoring its own contract test** | Self-grading — the test drifts to fit the code, the denial path vanishes, a guard gets self-excused to Tier B | Split it: an independent `test-author` writes the RED test from the contract BEFORE the implementer greens it |
+| **Weakening a handed-over RED test to make it pass** | Moves the grader one seat over — the split is defeated, GREEN means nothing | Green it without editing the contract test; if the test is wrong, escalate `NEEDS_CONTEXT`, don't rewrite it |
 | **Tautological test on a zero-logic unit** | RED is only "module not found"; the test re-asserts a library/classname and proves nothing | It's Tier B — skip the unit test, record the reason, verify via the suite + seam |
 | **Mocking the already-filtered server response** | Test goes green while the server filter is untested — both sides pass, the wire leaks | For any client↔server wire contract, add one test (or shake-out `curl`) that crosses the **un-mocked** wire |
 | `sleep(5)` / `wait(5000)` | Flaky, slow | Condition-based waits |
@@ -403,8 +425,10 @@ Auditability is satisfied by the **full-suite run + the tier/deferral report in 
 ## Integration with Other Skills
 
 - **writing-plans** — Plans MUST include test expectations per task and per phase; each task line should make its tier obvious (a guard/transform line implies Tier A). A plan line that says `Unit test: …` does **not** override the tier — if the task is Tier B (pass-through/glue/presentational), obeying that prefix literally and writing a tautological test IS the anti-pattern; classify by tier, not by the plan's prefix.
-- **subagent-driven-development** — Every subagent verifies at-tier before reporting done
-- **writing-tests** (the CRAFT skill this gate reaches for) — Governs RED→GREEN *within* a task: the mechanics of writing one test that bites (Arrange-Act-Assert, state-over-interactions, Real>Fakes>Stubs>Mocks, the denial path, the un-mocked seam). This gate decides WHETHER and AT WHAT TIER; `writing-tests` is the HOW for Tier A. For **Tier A**, RED-first is mandatory (not the soft "or covers the new behavior" escape). The gate owns the sign-off checklist and deferral line; `writing-tests` hands the written test back here.
+- **subagent-driven-development** — Stage 2 runs each task as a `test-author → implementer` pair (the test/dev split); the author verifies the tier + RED, the implementer verifies GREEN-without-weakening, before the task reports done.
+- **test-author** (agent) — owns the FIRST half of the split: classifies the tier and writes the Tier-A RED test (loading `writing-tests`) from the contract, independently of the coder. Reports `## Test contract` + `RED_READY`.
+- **implementer** (agent) — owns the SECOND half: greens the author's test without weakening it; owns the deferral line + suite/static checks.
+- **writing-tests** (the CRAFT skill this gate reaches for — loaded by the `test-author`) — Governs RED→GREEN *within* a task: the mechanics of writing one test that bites (Arrange-Act-Assert, state-over-interactions, Real>Fakes>Stubs>Mocks, the denial path, the un-mocked seam, the behavioral-RED-via-shell for new symbols). This gate decides WHETHER and AT WHAT TIER; `writing-tests` is the HOW for Tier A. For **Tier A**, RED-first is mandatory (not the soft "or covers the new behavior" escape). The gate owns the sign-off checklist and deferral line; `writing-tests` hands the written test back to the test-author, which hands the RED contract to the implementer.
 - **threat-modeling** — Any unit in the threat-modeling predicate is Tier A; its named mitigations are the denial-path contracts your Tier-A tests assert
 - **test-effectiveness** — SIBLING at a different altitude. This skill is write-time + per-task ("does this task need a test, at what tier, is the RED-first/denial path written?"). `test-effectiveness` is audit-time + per-phase ("across the whole diff, would the suite go RED if any dangerous path broke?"). This skill WRITES the Tier-A denial test; test-effectiveness AUDITS that it exists across every sibling guard and crosses every un-mocked wire — and names the seven green-but-blind failure modes (stale fixture, test-world≠real-world, wire-mock leak, unmounted guard, missing-denial, no-coverage, concurrency) that a passing per-task suite still ships. Fired at harnessed-development Stage 3, before shake-out.
 - **ntdst-architecture / ntdst-data / ntdst-patterns** (WP design skills) — design must still yield per-task tier + test expectations; rigorous review adds deeper checks

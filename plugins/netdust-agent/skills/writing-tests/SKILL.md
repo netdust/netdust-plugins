@@ -23,10 +23,11 @@ If superpowers is not installed, those mechanics are the prerequisite — get th
 </first_load_the_base>
 
 <where_you_are>
-You did not arrive here freely. The **`testing-workflow` gate** sent you, having already classified this task as **Tier A** (real branching logic, a security/auth/scope guard, untrusted-input parsing, a state machine, or a migration) — or handed you a **seam test** to write at a wiring task.
+You did not arrive here freely. The **`testing-workflow` gate** sent you — and in the Stage-2 test/dev split you are almost always the **`test-author`** agent, writing this test BEFORE the implementer touches the code, so the test is derived from the contract and not shaped to fit an implementation. The gate has already classified this task as **Tier A** (real branching logic, a security/auth/scope guard, untrusted-input parsing, a state machine, or a migration) — or handed you a **seam test** to write at a wiring task.
 
+- You author the test; a DIFFERENT agent (the implementer) will green it. Write from the **acceptance criteria / threat-model mitigation**, never from implementation code — for a brand-new symbol the code does not exist yet, and for a modified one, reading it is how tests come to mirror bugs.
 - If you have NOT been through the gate, stop and load `testing-workflow`. Writing a test the gate would have called **Tier B** (a pass-through, a classname-only render, an enum→label map) is itself the anti-pattern — superpowers' generic enthusiasm for "test everything" is exactly what the gate exists to temper.
-- The gate decides *whether* and *at what tier*. This skill is the *how* for the test it asked for. **The gate owns the sign-off** — you hand the finished test back to it.
+- The gate decides *whether* and *at what tier*. This skill is the *how* for the test it asked for. **The gate owns the sign-off** — you hand the finished RED test back through the test-author's `## Test contract` block, and the implementer greens it without weakening it.
 </where_you_are>
 
 <what_superpowers_cannot_know>
@@ -34,6 +35,8 @@ These are the Netdust-specific contracts to apply on top of the generic cycle. S
 
 **1. The RED must be BEHAVIORAL, not "module not found."**
 Superpowers says "watch it fail." The Netdust gate is stricter about *why* it fails. A `cannot find module './guard'` failure is not Tier-A RED — it is the litmus that the unit might be Tier B. Tier-A RED looks like `expected 403 for a member, got 200`: the *contract* is absent, not merely the file.
+
+For a **brand-new symbol** (the target function/class doesn't exist yet, which is the common case when you author the test first), you make the RED behavioral by creating ONLY the minimal **signature shell** in the production file: the declaration exists, the body is a sentinel — `throw new Error('not implemented')` / return a placeholder. Nothing else — no branches, no logic. The test then fails with a real contract mismatch (`expected 403, got Error('not implemented')`), and the shell becomes part of the contract you hand to the implementer, who fills the body to green. Writing any real logic in the shell is crossing into the implementer's half — stop at the signature. (For a symbol that already exists and you're adding a branch/guard, no shell is needed — the RED is naturally behavioral.)
 
 **2. Assert the CONTRACT from the acceptance criteria — and for any guard, the DENIAL path.**
 Derive the assertion from what the task promised the caller (the acceptance criteria / the threat-model mitigation), never from the code you just wrote. For a security/auth/scope guard this is non-negotiable: the test must assert the **actor who is refused**, not only the actor who is allowed. A guard with only a happy-path test has no Tier-A test.
@@ -69,16 +72,16 @@ If `.ddev/` exists, prefix PHP commands with `ddev exec`. For concrete per-stack
 <success_criteria>
 A test written under this skill:
 - Started from `superpowers:test-driven-development` for the generic cycle — not reinvented here.
-- Was **RED first for a BEHAVIORAL reason** (not "module not found"), now GREEN.
-- Asserts the **acceptance-criteria contract**, including the **denial path** for any guard.
+- Was **RED first for a BEHAVIORAL reason** (not "module not found") — for a new symbol, made behavioral via the minimal signature shell, never real logic. You leave it RED for the implementer to green; you do not green it yourself.
+- Asserts the **acceptance-criteria contract**, including the **denial path** for any guard — derived from the criteria, never from implementation code.
 - Crosses any **un-mocked seam** the task is responsible for wiring.
-- Was run **≥3×** if it touches time/ordering/concurrency.
-- Is handed back to the **`testing-workflow` gate**, which owns the tier line, the deferral line, and the task sign-off. This skill does not sign off.
+- Was run **≥3×** if it touches time/ordering/concurrency (note this obligation in the handoff; the implementer re-confirms it green).
+- Is handed forward as an **immutable contract**: through the test-author's `## Test contract` block to the implementer (who greens it without weakening it) and back to the **`testing-workflow` gate**, which owns the tier line, the deferral line, and the task sign-off. This skill does not sign off, and does not green its own test.
 </success_criteria>
 
 <integration>
 - **superpowers:test-driven-development** — the BASE this skill layers on. Owns the generic RED→GREEN→REFACTOR cycle, AAA, the pyramid, doubles, DAMP. This skill does not restate it; it adds the harness contract above.
-- **`testing-workflow`** (the gate that reached for this skill) — decides WHETHER + AT WHAT TIER and owns the sign-off. Return there with the written test.
+- **`testing-workflow`** (the gate that reached for this skill) — decides WHETHER + AT WHAT TIER and owns the sign-off. Return there with the written test. In the Stage-2 test/dev split, the **`test-author`** agent loads this skill to write the RED test; the **`implementer`** agent then greens it without weakening — you are the author, not the greener.
 - **`test-effectiveness`** — phase-close audit: does every sibling guard have its denial test, is every wire crossed un-mocked. This skill writes ONE test; that audits the SET.
 - **`feature-acceptance`** — owns proving the feature behaves end-to-end. A user-facing flow's Large test belongs there.
 - **`driving-the-browser`** — the Chrome how-to if you must inspect a live failure to know what to assert.
