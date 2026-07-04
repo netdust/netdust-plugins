@@ -196,6 +196,26 @@ def run() -> list[tuple[bool, str]]:
         case("empty run-log.jsonl -> exit 0, no rubric fabricated",
              rc == 0 and not rubric_path(feature).exists())
 
+    # ── Denial path: run-log.jsonl present, NONEMPTY, but every line is
+    # malformed JSON — must be treated identically to missing/empty (never
+    # fabricate a rubric from a file with zero real signal). This locks the
+    # "no events survive parsing" route through the denial check as its own
+    # asserted contract, independent of how read_log() happens to be
+    # implemented (shake-out found this was previously true only by
+    # coincidence: a regression in read_log's corrupt-line handling could
+    # silently produce a fabricated rubric while this exact case stayed
+    # untested). ────────────────────────────────────────────────────────
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = make_feature(tmp, ALL_DONE_ONE_CLUSTER)
+        (feature / "run-log.jsonl").write_text(
+            "not json at all\n{\"broken\nstill not json\n"
+        )
+        rc, out, err = run_score(feature)
+        case("all-garbage nonempty run-log.jsonl -> exit 0, no rubric fabricated",
+             rc == 0 and not rubric_path(feature).exists())
+        case("all-garbage nonempty run-log.jsonl -> 'no trace recorded' message",
+             "no trace recorded" in (out + err).lower())
+
     # ── Seam integrity: A — gate-check-green traced before first
     # execute/loop event ─────────────────────────────────────────────────
     with tempfile.TemporaryDirectory() as tmp:
