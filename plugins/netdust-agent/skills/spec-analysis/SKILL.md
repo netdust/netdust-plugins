@@ -4,7 +4,7 @@ description: Stage 1.5 of the harness — the pre-execution gate that verifies s
 ---
 
 <objective>
-Before `harnessed-development` Stage 2 dispatches a single task, confirm two things mechanically:
+Before `building` Stage 2 dispatches a single task, confirm two things mechanically:
 
 1. **Consistency** — the spec, plan, and tasks describe the *same* feature: every functional requirement has tasks, no task invents scope the spec doesn't have, no plan section contradicts the spec. This is spec-kit's `/speckit.analyze`.
 2. **Gate-presence** — the Stage-1 gates the harness depends on are physically present in the artifacts. This is the load-bearing addition: the harness's threat-model (1a), invariants (1b), spec-premise (1c), per-task tiers (1d), and review-cluster sizing (1f) gates were previously *skill-honored* — they fired only because a skill sequenced them, and a session that under-honored the skill skipped them silently. `spec-kit/gate-check.py` makes them a **verifiable property of the files**, failing the gate if one is missing.
@@ -70,6 +70,6 @@ Gate-check is a backstop, not a substitute for authoring the gates well. A plan 
 | `spec-kit/gate-check.py` | **THE MECHANICAL GATE (part b).** Exit code is the barrier. |
 | `netdust-agent:threat-modeling` / `architecture-invariants` / `testing-workflow` | **REMEDIATION.** Where the checker fails, these author the missing gate. |
 | `superpowers:subagent-driven-development` | **DOWNSTREAM (Stage 2).** Only runs once this gate is green. |
-| `netdust-agent:harnessed-development` | **SEQUENCER.** Inserts this as Stage 1.5 (Phase C edit). |
+| `netdust-agent:planning` | **SEQUENCER.** Fires this as Stage 1.5 — the machine check the plan/build seam rests on; `building`'s precondition re-runs `gate-check.py` at entry. |
 
 </integration>

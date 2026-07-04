@@ -118,7 +118,7 @@ This skill has succeeded when:
 5. Every timer/race/refetch path the phase introduced was forced and run ≥3× (mode 7).
 6. The audit produced a short manifest (`covered`/`blind`/`fixed` per path) that `/shakeout` + `/code-review` verify against, instead of re-discovering the same gaps.
 
-If a later `/shakeout` or `/code-review` finds a green-but-blind test the audit should have caught, the audit was too shallow — extend the seven-mode sweep, and add the missed mode's audit move to `references/failure-modes.md`. If the audit is never run and shake-out keeps finding green-but-shipped bugs, the gate isn't wired — cite it in the project CLAUDE.md and `harnessed-development` Stage 3.
+If a later `/shakeout` or `/code-review` finds a green-but-blind test the audit should have caught, the audit was too shallow — extend the seven-mode sweep, and add the missed mode's audit move to `references/failure-modes.md`. If the audit is never run and shake-out keeps finding green-but-shipped bugs, the gate isn't wired — cite it in the project CLAUDE.md and `building` Stage 3.
 
 </success_criteria>
 
@@ -127,7 +127,7 @@ If a later `/shakeout` or `/code-review` finds a green-but-blind test the audit 
 | Skill / gate | Relationship |
 |---|---|
 | `testing-workflow` | **SIBLING — the seam is altitude.** testing-workflow is write-time + per-task: "does this task need a test, at what tier (A/B), is the RED-first/denial path written?" This skill is audit-time + per-phase: "across the whole phase diff, would the suite go RED if any dangerous path broke?" testing-workflow writes the denial test; this skill AUDITS that it exists across every sibling guard and crosses every un-mocked wire. They share the Tier-A negative-path contract; neither replaces the other. |
-| `harnessed-development` | **STAGE 3 GATE (new).** harnessed-development fires this skill at phase-complete — after the `testing-workflow` integration gate, before `shake-out` — as the Situation-A audit over the phase diff. Its manifest becomes the convergence target the shake-out reviewers verify against. Also fired ad-hoc in Situation B (a green suite shipped a bug). |
+| `building` | **STAGE 3 GATE.** building fires this skill at phase-complete — after the `testing-workflow` integration gate, before `shake-out` — as the Situation-A audit over the phase diff. Its manifest becomes the convergence target the shake-out reviewers verify against. Also fired ad-hoc in Situation B (a green suite shipped a bug). |
 | `shake-out` | **DOWNSTREAM CONSUMER.** Shake-out exercises the built artifact end-to-end; this skill's pre-shake-out audit narrows what shake-out must discover from scratch to what it must verify (`blind→fixed`). A shake-out bug that was a green-but-blind test is a finding this skill's audit should have caught — feed it back as a new audit move. |
 | `threat-modeling` | **UPSTREAM.** The threat model's named mitigations ARE the denial-path contracts mode 5 audits — each mitigation should have a test that asserts the attack is refused. This skill checks that the mitigations became tests, not just prose. |
 | `architecture-invariants` | **UPSTREAM.** Each invariant names a convergence point + the bypass that's a bug; mode 4 (unmounted/unwired) and mode 5 (missing denial) are how those bypasses slip past a green suite. An invariant's bypass should have a test that goes RED when a path skips the convergence point. |

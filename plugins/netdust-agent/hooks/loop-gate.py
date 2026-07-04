@@ -126,7 +126,7 @@ def main() -> None:
         "reason": (
             f"{reason} [harness loop {iteration}/{max_iter}] Rebuild state "
             "from tasks.md + the plan (never from scrollback), dispatch the "
-            "next unit per harnessed-development Stage 2, and HALT at "
+            "next unit per building Stage 2, and HALT at "
             "── REVIEW GATE ── markers as normal. To stop the loop, delete "
             f"{MARKER_REL}."
         ),

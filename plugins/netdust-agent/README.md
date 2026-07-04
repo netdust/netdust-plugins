@@ -10,11 +10,13 @@
 
 ### Harness — control flow (gates / steps / ordering)
 
-Sequencers and gates. They decide what fires and prove it fired. `harnessed-development` is the single entry point — a pure sequencer that, at each stage, loads the right craft skill and wraps a gate around it.
+Sequencers and gates. They decide what fires and prove it fired. `harnessed-development` is the single entry point — an intake router that classifies the work (Class A–E) and routes it to the two spines, `planning` and `building`, which meet at an enforced seam: an approved `tasks.md` with `gate-check.py` GREEN.
 
 | Skill | Role |
 |---|---|
-| `harnessed-development` | **Entry point.** Sequences brainstorm → plan(+gates) → execute → shake-out → finish. Carries the `<craft_routing>` table that maps each stage's gate to the craft skill it reaches for. |
+| `harnessed-development` | **Entry point.** Intake router only: the class dial (A–E) → the right spine. |
+| `planning` | **PLAN spine.** Sequences brainstorm → spec → plan(+gates, task-shaping) → spec-analysis; STOPS at the seam for human approval. Never executes. |
+| `building` | **BUILD spine.** Precondition = the seam artifact; sequences execute → test/standards gates → review clusters → shake-out → finish. Refuses to start plan-driven work without a green gate-check. Owns the armed `/loop`. |
 | `threat-modeling` | Plan-time gate: embed a `## Threat model` when a security surface is touched. |
 | `architecture-invariants` | Gate: name the convergence points; flag bypasses. |
 | `feature-acceptance` | Gate: author + drive the `## Acceptance flows` matrix. |
@@ -65,7 +67,7 @@ Eight agents: **four stage personas** (one per important moment of the harness) 
 
 **Layered, not duplicated.** Craft skills and agent personas are deliberately thin: they *load* their base (superpowers) and add only what the base can't know — the gate position, the conventions, the harness contract. The single source of any *how* lives in exactly one place, so nothing drifts.
 
-**Invoke the entry point** — `harnessed-development` — for any non-trivial work. It classifies the work (new feature / existing plan / bug-fix bundle / security edit) and fires exactly the stages that class needs.
+**Invoke the entry point** — `harnessed-development` — for any non-trivial work. It classifies the work (new feature / existing plan / bug-fix bundle / security edit / small tweak) and routes it to the spine(s) that class needs — with a human approval checkpoint at the plan/build seam for feature work.
 
 ---
 
@@ -79,7 +81,9 @@ netdust-agent/
 ├── .gitignore
 ├── docs/BLUEPRINT.md            # the layer map + design decisions
 ├── skills/
-│   ├── harnessed-development/   # the entry sequencer (+ <craft_routing>)
+│   ├── harnessed-development/   # the entry router (class dial A–E → spine)
+│   ├── planning/                # PLAN spine (stages 0–1.5, stops at the seam)
+│   ├── building/                # BUILD spine (precondition + stages 2–3, /loop)
 │   ├── <harness gates>/         # threat-modeling, architecture-invariants,
 │   │                            #   feature-acceptance, testing-workflow,
 │   │                            #   test-effectiveness, shake-out, compounding
@@ -112,7 +116,7 @@ netdust-agent/
 
 Superpowers gives an agent generic engineering craft. It doesn't know *your* harness — your gates, your conventions, your flow. netdust-agent puts that on top: the gates enforce the discipline, the craft skills layer the harness contract onto the generic mechanics, and the agent personas orchestrate both at the right moment. The result is that "do this properly" engages the *whole* pipeline, every time, instead of relying on a session to remember each step.
 
-Standalone by design. The full harness — sequencer, gates, craft skills, specialist reviewer agents, hooks, and commands (including `/deploy`) — lives here; nothing depends on another Netdust plugin. It supersedes the older Netdust core harness.
+Standalone by design. The full harness — router, the two spines, gates, craft skills, specialist reviewer agents, hooks, and commands (including `/deploy`) — lives here; nothing depends on another Netdust plugin. It supersedes the older Netdust core harness.
 
 ## License
 

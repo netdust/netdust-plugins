@@ -4,7 +4,7 @@ description: Stage 0.5 of the harness — author a feature's spec.md (what/why, 
 ---
 
 <objective>
-Produce `specs/<feature>/spec.md` — the *what and why*, with no technology stack — and drive it to **zero unresolved ambiguity** before any plan is written. The harness was spec-light: `harnessed-development` jumped from brainstorm almost straight to task breakdown. This stage fills that gap with spec-kit's `/speckit.specify` (functional spec) + `/speckit.clarify` (coverage-based questioning), then adds the netdust HALT: **a plan may not be written against a spec that still contains `[NEEDS CLARIFICATION]`.**
+Produce `specs/<feature>/spec.md` — the *what and why*, with no technology stack — and drive it to **zero unresolved ambiguity** before any plan is written. The harness was spec-light: it jumped from brainstorm almost straight to task breakdown. This stage fills that gap with spec-kit's `/speckit.specify` (functional spec) + `/speckit.clarify` (coverage-based questioning), then adds the netdust HALT: **a plan may not be written against a spec that still contains `[NEEDS CLARIFICATION]`.**
 
 The HALT is mechanical. `spec-kit/gate-check.py` parses the spec and fails on any real unresolved marker (template guidance and backticked examples are correctly ignored). The gate is the script's exit code, not a human glance — same philosophy as the testing gate's structured evidence.
 </objective>
@@ -27,7 +27,7 @@ python3 <netdust-agent>/spec-kit/gate-check.py specs/<feature>
 
 If it reports `[clarify-halt]` FAIL, ambiguity remains — loop back to Step 3 (or ask your human partner the one sharp question, per SOUL.md). **Do not proceed to Stage 1 planning until the checker passes the clarify check.** A spec with an open ambiguity is too generic to plan, and a plan built on it inherits the ambiguity as a wrong premise.
 
-**Step 5 — Hand off to Stage 1.** Once clarify passes, `harnessed-development` Stage 1 (`superpowers:writing-plans` + the override `plan-template.md`) writes `plan.md` against this clarified spec. The plan's threat-model gate (1a) will fire if any Security-relevant surface was checked here.
+**Step 5 — Hand off to Stage 1.** Once clarify passes, `planning` Stage 1 (`superpowers:writing-plans` + the override `plan-template.md`) writes `plan.md` against this clarified spec. The plan's threat-model gate (1a) will fire if any Security-relevant surface was checked here.
 
 </process>
 
@@ -58,6 +58,6 @@ If it reports `[clarify-halt]` FAIL, ambiguity remains — loop back to Step 3 (
 | `spec-kit/gate-check.py` | **THE GATE.** Mechanical `clarify-halt` check; its exit code is the HALT. |
 | `superpowers:writing-plans` + override `plan-template.md` | **DOWNSTREAM (Stage 1).** Plans against the clarified spec. |
 | `netdust-agent:spec-analysis` | **DOWNSTREAM (Stage 1.5).** Cross-checks the Security-relevant surfaces flags against the plan's threat model. |
-| `netdust-agent:harnessed-development` | **SEQUENCER.** Inserts this as Stage 0.5 (Phase C edit). |
+| `netdust-agent:planning` | **SEQUENCER.** Fires this as Stage 0.5. |
 
 </integration>

@@ -75,5 +75,7 @@ Stage 3    test-effectiveness → shake-out → finish
 ```
 
 Phase A delivers the overrides + `constitution-bridge` + this installer. Phase B adds the
-`spec-authoring` and `spec-analysis` skills. Phase C edits `harnessed-development` to
-sequence Stages 0.5/1.5 and adds `standards-gate`.
+`spec-authoring` and `spec-analysis` skills. Phase C edits the harness sequencer to
+sequence Stages 0.5/1.5 and adds `standards-gate`. (Since the 0.5.0 plan/build split,
+Stages 0–1.5 live in the `planning` skill and Stage 2–3 in `building`; the handoff
+seam below is unchanged — it is now the enforced boundary between the two.)

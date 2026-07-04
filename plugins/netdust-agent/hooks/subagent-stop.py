@@ -5,7 +5,7 @@ subagent-stop.py — netdust-agent harness
 SubagentStop hook. Fires when a subagent considers stopping.
 
 Purpose:
-  Backstop for harnessed-development's testing gate. If a subagent wrote code (Edit/Write)
+  Backstop for the building spine's testing gate (Step 2.6/2.6b). If a subagent wrote code (Edit/Write)
   but never invoked Skill("testing-workflow") to gate task completion, this
   hook blocks the stop and tells the subagent to invoke it now.
 
@@ -320,7 +320,7 @@ def build_block_message(activity: dict, missing: list[str]) -> str:
     parts = [
         "netdust-agent/SubagentStop: close-out gate not satisfied.\n\n",
         f"You added {activity['lines_added']} lines of code in this task. Per "
-        "harnessed-development, a task that ships new behavior is not complete "
+        "the building spine, a task that ships new behavior is not complete "
         "until its close-out gates have actually executed — not just been "
         "intended, executed.\n",
     ]

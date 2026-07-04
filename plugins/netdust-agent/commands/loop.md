@@ -32,7 +32,7 @@ Then:
    (FINISHED → disarms, Stage 3 runs attended · `[HUMAN]` task → yields with
    the question · budget/dry-loop → disarms · `/loop off` anytime).
 
-Then start (or continue) `harnessed-development` Stage 2 normally. Nothing
+Then start (or continue) `building` Stage 2 normally. Nothing
 else changes: review-gate HALTs, tiers, and the subagent-stop backstop all
 still apply — the loop drives *through* the gates, never around them.
 

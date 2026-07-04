@@ -1,10 +1,10 @@
 ---
 name: building-frontend
-description: "CRAFT skill — the engineering layer for building UI, layered on the frontend-design plugin (the base, which owns distinctive production-grade visual craft and avoids the generic AI aesthetic). Reached for at harnessed-development Stage 2 (execute) on UI tasks. It defers the visual/creative implementation to frontend-design, then adds the engineering layer: component architecture, the state-management ladder, accessibility (WCAG 2.1 AA), responsive breakpoints, loading/transition states, and the red-flags that signal a component has drifted. The Netdust layer superpowers/addy cannot know: the empty/error/loading states you build here ARE the feature-acceptance edge classes that make those flows pass, and UI tasks are usually Tier B for unit tests — so the real verification is feature-acceptance through a real browser, not a jsdom render. Use when implementing a component, page, or interactive flow."
+description: "CRAFT skill — the engineering layer for building UI, layered on the frontend-design plugin (the base, which owns distinctive production-grade visual craft and avoids the generic AI aesthetic). Reached for at building Stage 2 (execute) on UI tasks. It defers the visual/creative implementation to frontend-design, then adds the engineering layer: component architecture, the state-management ladder, accessibility (WCAG 2.1 AA), responsive breakpoints, loading/transition states, and the red-flags that signal a component has drifted. The Netdust layer superpowers/addy cannot know: the empty/error/loading states you build here ARE the feature-acceptance edge classes that make those flows pass, and UI tasks are usually Tier B for unit tests — so the real verification is feature-acceptance through a real browser, not a jsdom render. Use when implementing a component, page, or interactive flow."
 ---
 
 <objective>
-This skill does NOT teach you how to make UI look good — `frontend-design` owns that, and owns avoiding the generic AI aesthetic. This skill **layers the engineering discipline on top**: how the component is structured, where its state lives, whether it is reachable by keyboard, how it behaves at every breakpoint and in every non-happy state. You are at Stage 2 (execute) of `harnessed-development`, on a UI task. `frontend-design` makes it distinctive; this skill makes it sound.
+This skill does NOT teach you how to make UI look good — `frontend-design` owns that, and owns avoiding the generic AI aesthetic. This skill **layers the engineering discipline on top**: how the component is structured, where its state lives, whether it is reachable by keyboard, how it behaves at every breakpoint and in every non-happy state. You are at Stage 2 (execute) of `building`, on a UI task. `frontend-design` makes it distinctive; this skill makes it sound.
 </objective>
 
 <first_load_the_base>
@@ -67,7 +67,7 @@ A UI surface built under this skill:
 
 <integration>
 - **`frontend-design` plugin** — the BASE this skill layers on. Owns the distinctive visual/creative craft and the anti-AI-aesthetic. This skill does not restate it; it adds the engineering layer.
-- **`harnessed-development` Stage 2 (execute)** — the step that reaches for this skill on UI tasks.
+- **`building` Stage 2 (execute)** — the step that reaches for this skill on UI tasks.
 - **`feature-acceptance` (gate 1g/Stage 3)** — the empty/error/loading states you build here are its edge classes; building them is what makes its flows pass. It drives the flow through a real browser to earn the `pass`.
 - **`testing-workflow`** — UI render/classname assertions are Tier B; the gate will usually not ask for a bespoke unit test here. The verification altitude is the browser, not jsdom.
 - **`driving-the-browser`** — the how-to for the real-Chrome drive that feature-acceptance uses to verify these flows.

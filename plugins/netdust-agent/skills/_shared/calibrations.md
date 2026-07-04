@@ -13,20 +13,20 @@ All incidents: Folio, Phases 1–3 (2026-05 → 2026-06) unless noted.
 |---|---|---|---|
 | `traverse-clause` | 05-28 | CR-8..11: every route had a guard, no test asserted the denial — cross-tenant reads shipped green; ~80 findings, 7.7× review-to-implementation. Converge visibility into ONE helper; assert denials. | `skills/test-effectiveness/references/failure-modes.md` (mode 5); attack taxonomy in `skills/threat-modeling/SKILL.md` |
 | `subphase-b-retrofit` | 05-28 | 7 tasks of BYOK/provider-URL code shipped with no threat model → 2 review rounds, ~30 security findings (SSRF IPv6-mapped bypass, baseUrl exfil). Prevention = 15 min; remediation = 15 min + the rounds. | `skills/threat-modeling/SKILL.md` (calibration data) + its `lessons.md` |
-| `drop-workspace-retrofit` | 06-05 | Threat model retrofitted after review on an obviously-triggering surface: 2 rounds / 11 findings vs the proactive phases' 1 round / 3–4. The catalog wasn't the hole; applying it late was. | `skills/harnessed-development/SKILL.md` (gate 1a) |
-| `class-d-gap` | 06-03 | A one-line `validatePublicUrl` SSRF-guard edit shipped without a threat model — the trigger was keyed to plan-writing only. Ad-hoc security diffs get the gate too (Class D). | `skills/harnessed-development/SKILL.md` (gate 1a / intake D) |
-| `tableview-premise` | 05-30 | "Runs render through the existing TableView" survived spec + plan + handoff and was false; one grep would have falsified it. Ground-truth every reuse-X-for-Y premise (1c). | `skills/harnessed-development/SKILL.md` (gate 1c) |
-| `teardown-cluster` | 06-05 | A 7-task `__system`-teardown phase behind ONE gate ran flat, merged two tasks into an uncommitted blob, and nearly reviewed irreversible drops beside refactors. Clusters ≤4; irreversible = solo (1f). | `skills/harnessed-development/SKILL.md` (gate 1f) |
+| `drop-workspace-retrofit` | 06-05 | Threat model retrofitted after review on an obviously-triggering surface: 2 rounds / 11 findings vs the proactive phases' 1 round / 3–4. The catalog wasn't the hole; applying it late was. | `skills/planning/SKILL.md` (gate 1a) |
+| `class-d-gap` | 06-03 | A one-line `validatePublicUrl` SSRF-guard edit shipped without a threat model — the trigger was keyed to plan-writing only. Ad-hoc security diffs get the gate too (Class D). | `skills/planning/SKILL.md` (gate 1a) + `skills/harnessed-development/SKILL.md` (intake D) |
+| `tableview-premise` | 05-30 | "Runs render through the existing TableView" survived spec + plan + handoff and was false; one grep would have falsified it. Ground-truth every reuse-X-for-Y premise (1c). | `skills/planning/SKILL.md` (gate 1c) |
+| `teardown-cluster` | 06-05 | A 7-task `__system`-teardown phase behind ONE gate ran flat, merged two tasks into an uncommitted blob, and nearly reviewed irreversible drops beside refactors. Clusters ≤4; irreversible = solo (1f). | `skills/planning/SKILL.md` (task-shaping gate, 1f facet) |
 | `tokens-mint-bypass` | 06-01 | The one CRITICAL in a "tight" auth audit was the single write path bypassing the `roleToScopes` convergence point — latent for months. Name the convergence point; the bypass becomes a one-line finding. | `skills/architecture-invariants/SKILL.md` (calibration data) |
 
 ## Execution calibrations
 
 | Slug | Date | Lesson (one line) | Full story |
 |---|---|---|---|
-| `subphase-a-0of7` | 06-04 | 0/7 subagents re-invoked `testing-workflow` under a weak dispatch one-liner, yet the work was correct — the auditable gate is the structured Test-evidence + STATUS blocks, not a Skill re-invocation. | `skills/harnessed-development/SKILL.md` (integration, calibration data) |
-| `plan-drift-4x` | 05→06 | FOUR consecutive sub-phases (A, C.2, C.3, Phase C) hit plan-vs-source drift caught only by per-task ground-truthing (Step 2.5) — signatures, an entire nonexistent provider API, renamed fields. | `skills/harnessed-development/SKILL.md` (Step 2.5) |
-| `one-cycle-per-bug` | 05-30 | Sub-phase F: bundling review findings I2+I3 into one debug cycle drifted the process even though outcomes were sound. One systematic-debugging invocation per bug. | `skills/harnessed-development/SKILL.md` (Step 2.7) |
-| `sibling-sites` | 05-30 | Sub-phase C.1: every cross-cutting fix had 1–2 sibling sites needing the same change, missed by the primary fix. Enumerate the audit surface in the plan (1e). | `skills/harnessed-development/SKILL.md` (gate 1e) |
+| `subphase-a-0of7` | 06-04 | 0/7 subagents re-invoked `testing-workflow` under a weak dispatch one-liner, yet the work was correct — the auditable gate is the structured Test-evidence + STATUS blocks, not a Skill re-invocation. | `skills/building/SKILL.md` (integration, calibration data) |
+| `plan-drift-4x` | 05→06 | FOUR consecutive sub-phases (A, C.2, C.3, Phase C) hit plan-vs-source drift caught only by per-task ground-truthing (Step 2.5) — signatures, an entire nonexistent provider API, renamed fields. | `skills/building/SKILL.md` (Step 2.5) |
+| `one-cycle-per-bug` | 05-30 | Sub-phase F: bundling review findings I2+I3 into one debug cycle drifted the process even though outcomes were sound. One systematic-debugging invocation per bug. | `skills/building/SKILL.md` (Step 2.7) |
+| `sibling-sites` | 05-30 | Sub-phase C.1: every cross-cutting fix had 1–2 sibling sites needing the same change, missed by the primary fix. Enumerate the audit surface in the plan (1e). | `skills/planning/SKILL.md` (gate 1e) |
 
 ## Green-but-broken calibrations (the seven failure modes + edge classes)
 

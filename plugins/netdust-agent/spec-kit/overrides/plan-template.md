@@ -3,7 +3,7 @@
 > **netdust override template.** This file overrides spec-kit's core `plan-template.md`
 > (resolves from `.specify/templates/overrides/`, highest priority). It is spec-kit's
 > plan skeleton with the netdust Stage-1 gates baked in, so `/speckit.plan` emits a plan
-> that already carries them — turning `harnessed-development` Stage 1 into a freshness
+> that already carries them — turning `planning` Stage 1 into a freshness
 > review and giving `spec-analysis` (Stage 1.5) fixed targets to verify against.
 >
 > Sections marked **[GATE]** are verified by `spec-analysis`. Do not delete a [GATE]
@@ -41,7 +41,7 @@
 
 ## Threat model  [GATE]
 
-> **BLOCKING and proactive** (harnessed-development 1a). Required BEFORE task breakdown IF
+> **BLOCKING and proactive** (planning 1a). Required BEFORE task breakdown IF
 > the feature touches any 1a-trigger surface: user-controlled URLs, auth/session/token,
 > untrusted parsing, BYOK credentials, multi-tenancy boundaries, or server-side outbound
 > requests to user-supplied addresses. If none match, write `N/A — no 1a-trigger surface
@@ -66,7 +66,7 @@
 
 ## Architecture invariants touched  [GATE]
 
-> harnessed-development 1b. If the plan touches a convergence point named in the project's
+> planning 1b. If the plan touches a convergence point named in the project's
 > `ARCHITECTURE-INVARIANTS.md` (authorization, data access, live updates, error handling,
 > entity modeling), cite it. If the doc does not exist yet and the work touches a
 > multi-actor / tenancy / broadcast surface, author it now via `/architecture-invariants
@@ -77,7 +77,7 @@
 
 ## Spec-premise ground-truth  [GATE]
 
-> harnessed-development 1c. If the approach is "reuse existing infrastructure X for new
+> planning 1c. If the approach is "reuse existing infrastructure X for new
 > use Y," READ X's source and confirm X accepts Y, BEFORE the plan ships.
 
 - Reuse premise(s): [X reused for Y] — verified against: [file:line read] → [holds / corrected]
@@ -88,7 +88,7 @@
 
 ## Phases & review clusters  [GATE]
 
-> harnessed-development 1f + Step 2.8. A plan groups tasks into phases; each phase splits
+> planning 1f (task-shaping) + building Step 2.8. A plan groups tasks into phases; each phase splits
 > into **review clusters of ~3–4 tasks max**. A cluster boundary is a hard STOP
 > (`── REVIEW GATE ──`) where execution commits, runs `/integration`, and hands back for
 > `/code-review` before the next cluster begins. An **irreversible or security-boundary

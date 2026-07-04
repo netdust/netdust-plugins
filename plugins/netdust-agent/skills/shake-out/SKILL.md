@@ -6,7 +6,7 @@ description: Post-build QA phase that sweeps the built artifact end-to-end, comp
 <objective>
 Structured post-build phase that bridges "tests pass" and "it actually works." Exercises the built artifact in a real environment, compiles every failure into a manifest, then fixes them one at a time using systematic-debugging.
 
-Sits between build completion and finishing-a-development-branch. Within `harnessed-development` Stage 3, two audit gates run first — `test-effectiveness` (would the green suite bite?) and `feature-acceptance` (drive the 1g acceptance-flows matrix); their manifests are this skill's input, so the sweep verifies named gaps instead of re-discovering them:
+Sits between build completion and finishing-a-development-branch. Within `building` Stage 3, two audit gates run first — `test-effectiveness` (would the green suite bite?) and `feature-acceptance` (drive the 1g acceptance-flows matrix); their manifests are this skill's input, so the sweep verifies named gaps instead of re-discovering them:
 
 ```
 brainstorm → plan → execute → integration gate → test-effectiveness

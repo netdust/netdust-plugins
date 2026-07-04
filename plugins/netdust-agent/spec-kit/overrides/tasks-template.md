@@ -1,7 +1,7 @@
 # Tasks: [FEATURE NAME]
 
 > **netdust override template.** Overrides spec-kit's core `tasks-template.md`. It is the
-> **handoff artifact**: `harnessed-development` Stage 2 executes from this file. spec-kit's
+> **handoff artifact — THE SEAM**: `building` Stage 2 executes from this file, and refuses to start until `gate-check.py` is green and the plan is approved. spec-kit's
 > `/speckit.implement` is **never** run — it would bypass the Stage-2 gates (threat-model
 > verify, test tiers, review-cluster HALT, `subagent-stop.py`). Execution is driven by
 > `superpowers:subagent-driven-development` / `executing-plans` under the netdust spine.
@@ -78,7 +78,7 @@ These two markers live on **orthogonal axes** and compose cleanly:
 
 ## Phase-complete gate
 
-After all clusters: `testing-workflow` phase-complete (integration + acceptance) → `test-effectiveness` audit → `shake-out`. Then `superpowers:finishing-a-development-branch`. (harnessed-development Stage 3.)
+After all clusters: `testing-workflow` phase-complete (integration + acceptance) → `test-effectiveness` audit → `shake-out`. Then `superpowers:finishing-a-development-branch`. (building Stage 3.)
 
 ## Dependency notes
 

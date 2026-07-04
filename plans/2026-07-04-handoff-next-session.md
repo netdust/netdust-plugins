@@ -39,7 +39,14 @@ Full suite green: 13 modules / 158 cases (`plugins/netdust-agent/tests/run.sh`).
 
 ## Next session priorities (in order)
 
-1. **The plan/build split** — the one big open architecture decision, now *more*
+1. ~~**The plan/build split**~~ **DONE 2026-07-04 (agent 0.5.0)** — Stefan picked option 1
+   (two skills + thin router). `planning` + `building` spines, `harnessed-development`
+   reduced to the intake router, 1d/1f/1h merged into one task-shaping gate (labels kept),
+   seam enforced by `building`'s precondition re-running gate-check. ADR + execution record
+   in `plugins/netdust-agent/docs/plan-build-split-handoff.md`. Follow-up left open:
+   sibling plugins (wp/statamic/core) still cite "harnessed-development Stage N" — resolves
+   via the router's mapping table; update opportunistically on their next version bumps.
+   Original item, for the record: the one big open architecture decision, now *more*
    valuable because the building half is the natural owner of the loop protocol.
    Stefan must pick the shape: the 3 options are in
    `plugins/netdust-agent/docs/plan-build-split-handoff.md` (status OPEN). Constraints

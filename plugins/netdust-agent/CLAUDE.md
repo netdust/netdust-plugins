@@ -13,9 +13,11 @@ The harness decides *when* and *whether*. The craft is *how to actually do it*. 
 
 ### Layer 1 — Harness (control flow)
 
-These skills are **sequencers and gates**. They do not teach craft; they decide what fires, in what order, and prove it fired. `harnessed-development` is the single entry point — a pure sequencer that, at each stage, loads the right craft skill and wraps a gate around it.
+These skills are **sequencers and gates**. They do not teach craft; they decide what fires, in what order, and prove it fired. `harnessed-development` is the single entry point — an intake ROUTER that classifies the work (Class A–E) and routes it to the two spines, which meet at an enforced seam: an approved `tasks.md` with `spec-kit/gate-check.py` GREEN. `planning` stops there; `building` refuses to start without it.
 
-- `harnessed-development` — entry point; sequences brainstorm → (spec-authoring) → plan(+gates) → (spec-analysis) → execute → shake-out → finish
+- `harnessed-development` — entry point; intake router only (class dial A–E → spine)
+- `planning` — PLAN spine; sequences brainstorm → (spec-authoring) → plan(+gates 1a–1g, task-shaping 1d/1f/1h) → (spec-analysis); STOPS at the seam for human approval
+- `building` — BUILD spine; precondition = the seam artifact; sequences execute (per-task testing + standards gates, review-cluster HALTs, optional armed `/loop`) → shake-out → finish → compounding
 - `superpowers:writing-plans` (upstream base, not a local skill) — gate: spec → plan → tasks
 - `spec-authoring` — gate (spec-kit graft, Stage 0.5): wraps `/speckit.specify` + `/clarify`; HALTs on unresolved `[NEEDS CLARIFICATION]`
 - `spec-analysis` — gate (spec-kit graft, Stage 1.5): `/speckit.analyze` + mechanical `gate-check.py` — the pre-execution barrier that machine-checks 1a/1b/1d/1f
@@ -58,7 +60,7 @@ No subfolders. **The name carries the role.** Read the skill list, know the laye
 | Harness | phase / gate **noun** | a checkpoint (`testing-workflow`, `shake-out`) |
 | Craft | **gerund** (`-ing`) | a capability (`writing-tests`, `designing-apis`) |
 
-Scan rule: **gerund = how-to (craft); phase/gate noun = when/whether (harness).** Gerunds are reserved for craft so the contrast stays sharp — a few gates keep noun names that already read as checkpoints.
+Scan rule: **gerund = how-to (craft); phase/gate noun = when/whether (harness).** Gerunds are reserved for craft so the contrast stays sharp — a few gates keep noun names that already read as checkpoints. Named exceptions on the harness side: the two spines `planning` and `building` (named for the lifecycle halves they own, per the plan/build split) and the pre-existing `threat-modeling`/`compounding`.
 
 ## The authority rule (whose file, whose citation)
 
@@ -85,6 +87,6 @@ bodies loaded per stage) lean while losing no lesson.
 
 ## Standalone harness
 
-This plugin is fully self-contained. It holds the complete two-layer harness — the `harnessed-development` sequencer, every gate it fires (testing-workflow, threat-modeling, architecture-invariants, feature-acceptance, test-effectiveness, shake-out, compounding, standards-gate), the optional spec-kit graft (`spec-kit/` + `/spec-kit-setup` → gate-bearing spec/plan/tasks override templates + `gate-check.py`; keystone: handoff is `tasks.md`, `/speckit.implement` is never run — see `docs/spec-kit-integration-adr.md`), the craft skills the gates reach for, the reviewer/specialist agents, the session + guard hooks, and its own commands (`/deploy`, `/shakeout`, `/evaluate`, `/spec-kit-setup`, …). Nothing here depends on or defers to another Netdust plugin: every skill, gate, command, and agent it references resolves WITHIN this plugin (or to an external `superpowers:*` / `superpowers-chrome` base). It supersedes the older Netdust core harness — this plugin is now the sole home for that discipline.
+This plugin is fully self-contained. It holds the complete two-layer harness — the `harnessed-development` intake router, the `planning` + `building` spines it routes to, every gate they fire (testing-workflow, threat-modeling, architecture-invariants, feature-acceptance, test-effectiveness, shake-out, compounding, standards-gate), the optional spec-kit graft (`spec-kit/` + `/spec-kit-setup` → gate-bearing spec/plan/tasks override templates + `gate-check.py`; keystone: handoff is `tasks.md`, `/speckit.implement` is never run — see `docs/spec-kit-integration-adr.md`), the craft skills the gates reach for, the reviewer/specialist agents, the session + guard hooks, and its own commands (`/deploy`, `/shakeout`, `/evaluate`, `/spec-kit-setup`, …). Nothing here depends on or defers to another Netdust plugin: every skill, gate, command, and agent it references resolves WITHIN this plugin (or to an external `superpowers:*` / `superpowers-chrome` base). It supersedes the older Netdust core harness — this plugin is now the sole home for that discipline.
 
 One documented exception: netdust-core canonically owns the two memory-maintenance commands — `/memory-audit` (named by the session-start hook's truncation warning) and `/pattern-miner` (referenced by `memory/GLOBAL.md` and the `compounding` skill as the cross-project promotion path). Both are best-effort pointers, not load-bearing — everything the harness actually gates on resolves within this plugin.

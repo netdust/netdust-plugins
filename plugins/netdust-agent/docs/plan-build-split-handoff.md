@@ -1,8 +1,8 @@
 # HANDOFF — Plan/Build split refactor of `harnessed-development`
 
-**Status:** OPEN — design agreed in principle, decision pending, no refactor code written yet
+**Status:** RESOLVED — executed 2026-07-04 (agent 0.5.0), option 1, Stefan's pick. See the ADR at the bottom.
 **Created:** 2026-06-23
-**Branch:** `claude/writing-plans-thread-modeling-Se2Sx`
+**Branch:** `claude/writing-plans-thread-modeling-Se2Sx` (design) → `claude/handoff-split-god-skill-ueb1kd` (execution)
 **Source of truth:** this file. Plugin path: `plugins/netdust-agent/`.
 **Origin:** Session reviewing the harness (spec-kit graft + "The Missing Layers" PDF). Stefan's critique at the end: *"this harness is trying to do too much. There's a clear distinction between planning and building. I don't know if this is really clear in the harness."* He is right. This handoff captures the agreed direction so a fresh session can execute it.
 
@@ -115,3 +115,20 @@ This branch already contains a completed **spec-kit graft** (3 phases, all commi
 - `SOUL.md`: pushback over flattery; name trade-offs; YAGNI — no infrastructure before validated need. This refactor is the YAGNI principle applied to the harness itself.
 - This is Stefan's call on shape. Ask one sharp question if blocked, then proceed.
 - Keep the change a **reduction**. The win is two clear, smaller skills with a real review checkpoint at `tasks.md` — not a third system.
+
+---
+
+## ADR — decision + execution record (2026-07-04, agent 0.5.0)
+
+**Decision (Stefan):** Option 1 — two skills + thin router.
+
+**What shipped:**
+- `skills/planning/SKILL.md` — PLAN spine, Stages 0 → 1.5. Ends at THE SEAM (approved `tasks.md` + `gate-check.py` GREEN + human approval) and explicitly never dispatches or invokes `building` — the human bridges the seam.
+- `skills/building/SKILL.md` — BUILD spine, `<precondition>` FIRST: for Class A/B it re-runs `gate-check.py` itself at entry (an assertion in a transcript is not an exit code) and refuses on red/missing, routing back to `planning`. Then Stages 2 → 3, the verbatim dispatch addendum, and ownership of the armed `/loop` protocol (the loop is a Stage-2 driver, so it lives with the spine that runs Stage 2).
+- `skills/harnessed-development/SKILL.md` — reduced to the intake router: class dial A–E → spine, the seam statement, intake-level red flags, and a historical mapping (old "Stage N" citations: 0–1.5 → `planning`, 2–3 → `building`). All old trigger phrases still resolve here.
+- **Class dissolution, as predicted:** A = both spines with the seam between; B = `planning` freshness-review mode → seam → `building`; C/E = `building` directly; D = `planning`'s 1a on the diff → `building`. The intake table routes instead of forking one skill's behaviour.
+- **Gate merge (constraint from the 2026-07-04 session):** 1d/1f/1h presented in `planning` as ONE task-shaping gate with three facets. Labels kept for compatibility with `gate-check.py`, the override templates, and `/shakeout` — a prose merge, zero mechanical churn.
+- **Reduction check:** god-skill was ~375 lines; router (~70) + planning (~185) + building (~275, incl. the verbatim addendum block it inherited whole) ≈ 530 raw lines, BUT per-invocation context is what the rule protects: a Class-E tweak now loads ~70+~275 instead of ~375 of which most was plan-stage prose, and a planning session loads no execution machinery at all. War-story retellings were trimmed to slug cites per the 0.4.1 calibration rule; canonical homes moved with their gates (calibrations.md updated).
+- **Naming:** `planning`/`building` are gerunds on the harness side — accepted as named exceptions (alongside the pre-existing `threat-modeling`/`compounding`) and recorded in CLAUDE.md's naming rule; the handoff's own names kept.
+- **References:** updated in netdust-agent (CLAUDE.md, README, plugin.json, marketplace.json, agents planner/implementer, commands loop/shakeout/spec-kit-setup, hooks subagent-stop/loop-gate, spec-kit templates + setup.sh + README, sibling skills' integration tables, calibrations index). Sibling plugins (wp/statamic/core) deliberately NOT touched — their `harnessed-development` references still resolve via the router (the exact disruption-avoidance option 1 was chosen for); update them opportunistically on their next own version bump.
+- **Enforcement gain vs the fusion:** the durability the 2026-06-05 fusion bought by one skill sequencing everything is now structural — `planning` cannot finish without the machine-checked artifact, `building` cannot start without re-checking it. A new deterministic test (`tests/test_split_seam.py`) asserts the seam wiring.

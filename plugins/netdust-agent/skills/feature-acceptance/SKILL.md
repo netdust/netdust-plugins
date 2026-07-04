@@ -28,7 +28,7 @@ The discipline is two artifacts, one written, one executed, with the same matrix
 
 | Situation | Trigger |
 |---|---|
-| **A — Author the acceptance matrix (plan-time)** | Writing a plan/spec for any user-facing feature (a new view, a form, a wizard, a CRUD surface, an interactive flow, an API endpoint a client will drive). Fired by `harnessed-development` Stage 1g, after the threat-model/invariants gates, BEFORE task breakdown — so the behavioral contract exists before the code. |
+| **A — Author the acceptance matrix (plan-time)** | Writing a plan/spec for any user-facing feature (a new view, a form, a wizard, a CRUD surface, an interactive flow, an API endpoint a client will drive). Fired by `planning` Stage 1g, after the threat-model/invariants gates, BEFORE task breakdown — so the behavioral contract exists before the code. |
 | **B — Verify the acceptance matrix (shake-out)** | A feature's tasks are all green and you're at the spec-complete gate. Fired by `/shakeout` after the `test-effectiveness` audit, before the reviewer dispatch. Drive every flow + edge; the manifest becomes the reviewers' convergence target. |
 | **C — A feature shipped that "passed everything" but broke in use** | Any time a user / QA / the developer hit a feature defect that the unit suite, integration tests, and code review all missed. Reconstruct the flow that broke, add it (and its un-driven edges) to the matrix, drive it, fix, then sweep sibling flows. |
 
@@ -127,7 +127,7 @@ This skill has succeeded when:
 4. The manifest was handed to the reviewer dispatch, which verified flow outcomes instead of re-discovering them.
 5. No UI flow was marked `pass` without a real browser driving it; `unverified-no-browser` flows were reported to the user as residual risk.
 
-If a later QA pass or a user finds a feature defect on an intended-use path the matrix should have contained, the matrix was too shallow — add the flow + edge class and the missed edge to the next plan's enumeration. If the matrix is authored but never driven, the gate isn't wired — cite it in CLAUDE.md and `harnessed-development` Stages 1g/3.
+If a later QA pass or a user finds a feature defect on an intended-use path the matrix should have contained, the matrix was too shallow — add the flow + edge class and the missed edge to the next plan's enumeration. If the matrix is authored but never driven, the gate isn't wired — cite it in CLAUDE.md and `planning` 1g / `building` Stage 3.
 
 </success_criteria>
 
@@ -136,7 +136,7 @@ If a later QA pass or a user finds a feature defect on an intended-use path the 
 | Skill / gate | Relationship |
 |---|---|
 | `test-effectiveness` | **SIBLING — code-bite vs feature-behavior.** test-effectiveness audits whether the suite would go RED if a dangerous *code path* broke (coverage of the dangerous path). This drives whether the *feature behaves* when used (every intended flow + edge). They overlap on the denial path (its mode 5 = this skill's edge class 2) — test-effectiveness asserts the denial in a unit test; this *drives* the denial through the real surface. Neither replaces the other. |
-| `harnessed-development` | **STAGE 1g (author) + STAGE 3 (verify).** Stage 1g fires this at plan-time to author the `## Acceptance flows` matrix, after threat-model/invariants, before task breakdown. Stage 3 fires it at shake-out to drive the matrix, after test-effectiveness, before reviewer dispatch. |
+| `planning` + `building` | **STAGE 1g (author, planning) + STAGE 3 (verify, building).** `planning` 1g fires this at plan-time to author the `## Acceptance flows` matrix, after threat-model/invariants, before task breakdown. `building` Stage 3 fires it at shake-out to drive the matrix, after test-effectiveness, before reviewer dispatch. |
 | `shake-out` | **DOWNSTREAM HOST.** Shake-out's end-to-end sweep IS where Situation B runs; the matrix turns its free-form "what's broken?" into "verify this contract." A shake-out bug on an intended-use flow the matrix lacked is a finding this skill's authoring should have caught — feed it back as a new flow. |
 | `threat-modeling` | **UPSTREAM TWIN.** Same shape (a contract written in the plan before code, verified later) for a different axis: threat-modeling writes the *attack* contract verified at /code-review; this writes the *intended-use* contract verified at shake-out. The denied-actor edge (class 2) is where they meet — a named mitigation should also be a driven denial flow. |
 | `testing-workflow` | **UPSTREAM.** testing-workflow decides per-task test tier; the durable Playwright/Codeception flows this skill authors at shake-out are the e2e tier testing-workflow points at for UI/journey coverage. |
