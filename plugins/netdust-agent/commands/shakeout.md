@@ -175,11 +175,16 @@ If your lens finds nothing, say so in one line.
 
 **Important:** the dispatched `Agent` calls (however many the tier names) MUST go in a single assistant message so they run concurrently. Sequential calls defeat the point.
 
+## Step 4b — Surface the run-observability rubric (if a trace exists)
+
+Before presenting the consolidated triage, check whether this feature has a run trace: `specs/<feature>/run-log.jsonl`. If it exists, run `python3 <plugin>/spec-kit/run-score.py specs/<feature>` — it writes `specs/<feature>/run-rubric.md` (five graded dimensions) or exits cleanly printing "no trace recorded" if the log turned out empty; either way it never blocks. If a rubric was written, fold its table into the consolidated report below. If `run-log.jsonl` doesn't exist at all, add one line to the report instead: "No run trace recorded for this feature — run-observability trace was not enabled during execution." This is report-only per FR-6 — never fails the gate.
+
 After all reports return, present the consolidated triage to the user:
 
 ```
 ✅ /shakeout: unit + integration + type + e2e + shake-out all green
 ✅ Review tier: <FULL | STANDARD | LIGHT> — <N> reviewer agents reported.
+📊 Run rubric: <grades table, or "no trace recorded", or "no run trace recorded for this feature">
 
 Consolidated findings:
 
