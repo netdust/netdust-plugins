@@ -107,7 +107,50 @@ stricter roles for the ones already there, plus a rebuild-from-disk rule.**
 | **Outer** | **feature: loop clusters until ledger says FINISHED** | **M2 Stop-hook gate** | **NEW** |
 | Cross-session (Mode D, optional) | one session per firing | remote trigger / scheduled resume re-arms the session until FINISHED | LATER — only for remote/headless runs; M1–M3 must exist first |
 
-## 4. Failure modes this design must not introduce
+**v1 scope:** Class A/B features with the spec-kit graft installed, only. `loop-check.py`
+needs deterministic artifacts (`tasks.md` checkboxes, `[GATE]` sections) to derive
+FINISHED from; a non-graft plan has no machine-readable task ledger. Class C/D/E are
+single cycles — there is nothing to loop. Arming the loop on anything else is a
+`/loop-arm` refusal, not a degraded mode.
+
+## 4. Does the planner need to know it's in a loop?
+
+**No — and keeping it that way is load-bearing.** The whole seam design says the plan
+artifact is execution-mode-agnostic: spec-kit owns spec→plan→tasks, and whoever drives
+the build (interactive session or armed loop) consumes the same `tasks.md`. A "loop mode"
+in the planner would couple planning to execution shape and fork the artifact.
+
+**But the loop raises the stakes on plan quality it cannot fix at runtime.** In an
+interactive session, an ambiguous task gets resolved by asking mid-course; in a loop it
+becomes a BLOCKED yield at best and rationalized completion at worst. So the plan's
+*content* needs two additions — both useful even without the loop:
+
+- **4a. Explicit human-yield markers.** Any step that inherently needs a human — a
+  destructive-migration approval, credentials, a deploy confirmation, the shake-out
+  manifest sign-off — gets a `[HUMAN]` marker in `tasks.md` at plan time. The loop
+  treats `[HUMAN]` as a *planned* BLOCKED: it yields there with the specific question
+  instead of discovering mid-iteration that it is stuck. `── REVIEW GATE ──` markers
+  stay agent-driven (the loop runs the tiered review itself); `[HUMAN]` is only for
+  steps no agent may take alone. Lands in `tasks-template.md` + `planner.md`;
+  `loop-check.py` treats an unpassed `[HUMAN]` as exit 2.
+- **4b. Planner proposes the iteration budget.** `max_iterations` defaults are dumb;
+  the planner knows the task count, cluster count, and expected review rounds. One line
+  in the plan (`Loop budget: ~N iterations`) that `/loop-arm` reads instead of a global
+  default. Keeps the runaway guard calibrated to the actual feature size.
+
+Everything else the loop needs from a plan — machine-checkable per-task exit criteria
+(1d test expectations, `[Tier A|B]` markers), small atomic tasks, explicit dependencies
+(`[P]`), sized clusters (1f) — **the gates already demand.** The loop doesn't add new
+planning requirements; it removes the human safety net that made skipping them
+survivable. `gate-check.py` staying green at Stage 1.5 is precisely what makes a plan
+loop-safe.
+
+One runtime rule completes the picture: a mid-loop *plan defect* has two shapes. Drift
+caught at Step 2.5 → plan-correction commit, loop continues (exists today). Architecture
+wrong → shake-out's abort-and-replan path fires → the loop **disarms and yields**;
+re-planning is never driven by an unattended loop.
+
+## 5. Failure modes this design must not introduce
 
 - **Rationalized completion** — the loop pressures the agent to *look* finished. Defense:
   FINISHED is exit codes only (M1); the hook never reads prose.
@@ -118,20 +161,33 @@ stricter roles for the ones already there, plus a rebuild-from-disk rule.**
 - **Human locked out** — marker delete always disarms; BLOCKED always yields with a
   question; the PreToolUse guard still `ask`s on destructive commands mid-loop.
 
-## 5. Phasing
+## 6. Phasing
 
-1. **Phase 1 — `loop-check.py` (M1).** Deterministic, tested like `gate-check.py`.
-   Valuable standalone: `/shakeout` and `/evaluate` can call it immediately.
-2. **Phase 2 — Stop-hook loop gate + marker + `/loop-arm` (M2).** Tests mirror the
-   `subagent-stop.py` suite (block/pass/bypass/disarm/dry-spin).
-3. **Phase 3 — orchestrator protocol text (M3).** Stage-2 additions to
-   `harnessed-development` (or to the `building` half if the plan/build split lands
-   first — this loop is the natural driver for that split's build side and strengthens
-   the case for executing it).
-4. **Phase 4 — eval.** Run a real feature with the loop armed; measure iterations to
-   FINISHED, dry iterations, gates fired vs. warranted. Feeds the outcome-eval frontier.
+Each phase ships with its own tests and an execution record (same discipline as the
+2026-07-03 phase plans), and is built *through* the harness, not around it.
 
-## 6. Answers, in one breath
+1. **Phase 1 — `loop-check.py` + the plan-side contract (M1 + §4).** The ledger
+   checker, deterministic, tested like `gate-check.py` — plus the two plan-content
+   additions it must read: `[HUMAN]` markers in `tasks-template.md` + `planner.md`
+   (4a) and the `Loop budget:` line (4b). These belong together: shipping the checker
+   without the markers hard-codes "no human steps exist," and retrofitting markers
+   later re-opens plans the checker already judged. Valuable standalone: `/shakeout`
+   and `/evaluate` can call `loop-check.py` immediately, loop or no loop.
+2. **Phase 2 — Stop-hook loop gate + marker + `/loop-arm` (M2), WITH the re-entry
+   protocol text (M3).** These two are coupled and land together: a loop gate without
+   the rebuild-from-disk rule produces loops that die of compaction mid-feature — the
+   hook forces continuation into a session that no longer knows where it is. Includes:
+   the graft-only/Class-A-B arming refusal, disarm-on-abort-and-replan, `[HUMAN]` →
+   yield-with-question, and tests mirroring the `subagent-stop.py` suite
+   (block/pass/bypass/disarm/dry-spin/budget-exhausted). The protocol text goes into
+   `harnessed-development` Stage 2 — or into the `building` half if the plan/build
+   split lands first; this loop is that split's natural driver and strengthens the
+   case for executing it.
+3. **Phase 3 — eval.** Run a real feature with the loop armed; measure iterations to
+   FINISHED, dry iterations, yields at planned vs. unplanned points, gates fired vs.
+   warranted. Feeds the outcome-eval frontier.
+
+## 7. Answers, in one breath
 
 **Is it possible?** Yes — the enforcement primitive (a Stop hook that blocks and says
 "keep going") is the same one `subagent-stop.py` already uses in production, one level up.
