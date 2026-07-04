@@ -120,12 +120,40 @@ def completion_tasks(done: int, total: int) -> str:
 
 PLAN_BUDGET_10 = "# Plan\n\nLoop budget: ~10 iterations — some tasks.\n"
 
+# A plan.md carrying all 5 of gate-check.py's REQUIRED_PLAN_GATES headings
+# (Constitution check, Threat model, Architecture invariants touched,
+# Spec-premise ground-truth, Phases & review clusters), each with enough
+# body that check_plan_gates()'s section_body() finds non-empty content —
+# PLUS the `Loop budget: ~10 iterations` line the loop-efficiency dimension
+# reads. No spec.md is written alongside it in these fixtures, so
+# check_threat_model()'s spec_security_triggered() always returns []; an
+# explicit N/A threat-model body is therefore safe and never fails that check.
+PLAN_GATES_CLEAN = (
+    "# Plan\n\n"
+    "Loop budget: ~10 iterations — some tasks.\n\n"
+    "## Constitution check  [GATE]\n\n"
+    "- [x] No non-negotiable violated.\n\n"
+    "## Threat model  [GATE]\n\n"
+    "N/A — no 1a-trigger surface (fixture: same-repo harness artifacts only).\n\n"
+    "## Architecture invariants touched  [GATE]\n\n"
+    "N/A — no ARCHITECTURE-INVARIANTS.md in this fixture repo.\n\n"
+    "## Spec-premise ground-truth  [GATE]\n\n"
+    "N/A — no reuse premise for this fixture.\n\n"
+    "## Phases & review clusters  [GATE]\n\n"
+    "| Phase | Cluster | Tasks | Integration gate | Extra gate |\n"
+    "|---|---|---|---|---|\n"
+    "| P1 | C1 | T01-T02 (2) | suite green | — |\n"
+)
+
 
 def make_feature(tmp: str, tasks: str, plan: str = PLAN_BUDGET_10,
                   spec_extra: bool = True) -> Path:
-    """A feature dir with a tasks.md + plan.md that gate-check.py will pass
-    (or, when spec_extra is False, one that has NO spec/plan/tasks at all
-    beyond what's given — used to force a gate-check FAIL for the D case)."""
+    """A feature dir with a tasks.md + a minimal plan.md (NOT gate-check-clean
+    by default — the default PLAN_BUDGET_10 plan.md fails gate-check.py's
+    plan-gate-heading check on all 5 required [GATE] sections; use
+    plan=PLAN_GATES_CLEAN when a case needs a live `gate-check.py --json`
+    PASS). When spec_extra is False, the dir has NO spec/plan/tasks at all
+    beyond what's given — used to force a gate-check FAIL for the D case."""
     d = Path(tmp) / "specs" / "demo"
     d.mkdir(parents=True)
     (d / "tasks.md").write_text(tasks)
@@ -187,7 +215,7 @@ def run() -> list[tuple[bool, str]]:
     # gate-check-green event at all, but a live gate-check --json says
     # failed: false) ─────────────────────────────────────────────────────
     with tempfile.TemporaryDirectory() as tmp:
-        feature = make_feature(tmp, ALL_DONE_ONE_CLUSTER)
+        feature = make_feature(tmp, ALL_DONE_ONE_CLUSTER, plan=PLAN_GATES_CLEAN)
         write_log(feature, [
             ("stage-enter", {"stage": "execute"}),
             ("review-gate", {"cluster": "C1", "tier": "STANDARD"}),
@@ -333,15 +361,16 @@ def run() -> list[tuple[bool, str]]:
              rc == 0 and text is not None
              and _dimension_grade(text, "Loop efficiency") == "n/a")
 
-    # ── Yield discipline: A — 0 yields ────────────────────────────────────
+    # ── Yield discipline: A — 0 unplanned yields (a [HUMAN] task exists so
+    # yielding was possible, but the run log shows no yield event at all) ──
     with tempfile.TemporaryDirectory() as tmp:
-        feature = make_feature(tmp, ALL_DONE_ONE_CLUSTER)
+        feature = make_feature(tmp, ONE_HUMAN_TASK)
         write_log(feature, [
             ("stage-enter", {"stage": "execute"}),
         ])
         rc, out, err = run_score(feature)
         text = rubric_text(feature)
-        case("yield discipline A: 0 yields at all",
+        case("yield discipline A: 0 unplanned yields (a [HUMAN] task exists but no yield fired)",
              rc == 0 and text is not None
              and _dimension_grade(text, "Yield discipline") == "A")
 
