@@ -26,7 +26,7 @@ MISSING=()
 #   file exceeds the budget, loads whole sections (## / ### headers) from the
 #   top until the next section would cross the budget — never cutting a section
 #   mid-body — then appends a visible truncation notice naming the file size
-#   and the ## headers that were NOT loaded. Updates INJECTED_BYTES.
+#   and the ## headers that were NOT loaded. Appends to OUTPUT.
 load_with_budget() {
   local file="$1" budget="$2" label="$3"
   local total_bytes

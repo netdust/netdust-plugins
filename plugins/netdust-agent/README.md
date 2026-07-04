@@ -98,10 +98,12 @@ netdust-agent/
 │   │                            #   code-simplicity-reviewer
 ├── commands/                    # /integration, /shakeout, /deploy, /evaluate,
 │   │                            #   /skill-audit, /red-test, /feature-acceptance,
-│   │                            #   /test-effectiveness, /architecture-invariants
+│   │                            #   /test-effectiveness, /architecture-invariants,
+│   │                            #   /loop (arm the Stage-2 loop)
 │   │                            #   (memory-audit + pattern-miner are netdust-core's)
 └── hooks/                       # SessionStart/Stop, SubagentStop testing-gate,
-                                 #   PreToolUse guard (hooks.json)
+                                 #   PreToolUse guard, Stop loop-gate — the /loop
+                                 #   driver over spec-kit/loop-check.py (hooks.json)
 ```
 
 ---

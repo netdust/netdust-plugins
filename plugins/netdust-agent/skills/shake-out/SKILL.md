@@ -6,10 +6,11 @@ description: Post-build QA phase that sweeps the built artifact end-to-end, comp
 <objective>
 Structured post-build phase that bridges "tests pass" and "it actually works." Exercises the built artifact in a real environment, compiles every failure into a manifest, then fixes them one at a time using systematic-debugging.
 
-Sits between build completion and finishing-a-development-branch:
+Sits between build completion and finishing-a-development-branch. Within `harnessed-development` Stage 3, two audit gates run first — `test-effectiveness` (would the green suite bite?) and `feature-acceptance` (drive the 1g acceptance-flows matrix); their manifests are this skill's input, so the sweep verifies named gaps instead of re-discovering them:
 
 ```
-brainstorm → plan → execute → SHAKE-OUT → finishing-branch
+brainstorm → plan → execute → integration gate → test-effectiveness
+  → feature-acceptance → SHAKE-OUT → finishing-branch
 ```
 
 Takes a build from ~80% done to ~90%. The remaining 10% is human judgment.
@@ -126,7 +127,7 @@ Available tools:
 
 | Tool | What it checks |
 |------|----------------|
-| `chrome-devtools` MCP | Pages load, JS errors, forms work, elements render, screenshots |
+| `superpowers-chrome` `use_browser` | Pages load, JS errors, forms work, elements render, screenshots |
 | WP-CLI (`ddev wp` / SSH) | Plugin state, options, cron, transients, database |
 | `curl` / HTTP | Status codes, headers, REST API, redirects |
 | CLI execution | Scripts run, exit codes, stdout/stderr |
@@ -260,16 +261,19 @@ Then invoke `superpowers:brainstorming` with this file as context input.
 
 **Pipeline position:**
 ```
-brainstorm → plan → execute → SHAKE-OUT → finishing-branch
+brainstorm → plan → execute → integration gate → test-effectiveness
+  → feature-acceptance → SHAKE-OUT → finishing-branch
 ```
 
 | Skill | Relationship |
 |-------|-------------|
 | `executing-plans` / `subagent-driven-development` | **UPSTREAM.** Shake-out runs after these complete. |
+| `test-effectiveness` | **UPSTREAM (Stage 3 step 2).** Its `covered`/`blind`/`fixed` manifest is a sweep input — verify the named blind spots instead of re-hunting. |
+| `feature-acceptance` | **UPSTREAM (Stage 3 step 3).** Situation B drives the plan's `## Acceptance flows` matrix (1g); its `pass`/`fail` manifest feeds the bug manifest here. |
 | `superpowers:systematic-debugging` | **REQUIRED.** Invoked per bug during Phase 3. |
 | `superpowers:verification-before-completion` | **REQUIRED.** Invoked before declaring done. |
 | `superpowers:finishing-a-development-branch` | **DOWNSTREAM.** Invoked after shake-out passes. |
-| `chrome-devtools` MCP | **REQUIRED for web projects.** Browser-level verification in Phase 1. |
+| `superpowers-chrome` `use_browser` | **REQUIRED for web projects.** Browser-level verification in Phase 1 (Playwright spec preferred where one exists — see `feature-acceptance` driving layers). |
 
 **Trigger phrases:**
 - "shake it out" / "shake-out" / "shakeout"

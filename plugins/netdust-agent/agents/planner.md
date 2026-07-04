@@ -38,6 +38,15 @@ Beside each `── REVIEW GATE ──` marker, write a **provisional review tie
 
 Write it inline, e.g. `── REVIEW GATE ── (tier: FULL — cluster rewrites the token-scope middleware)` or `── REVIEW GATE ── (tier: STANDARD — new view sheet, no 1a surface)`. Tier escalation is one-way at execution: a finding on a 1a surface promotes the cluster to FULL.
 
+**7b. Make the plan loop-auditable (you stay loop-agnostic).** You never know or care
+whether execution will run under an armed `/loop` — the plan artifact is execution-mode-
+agnostic. But two content lines make it loop-safe either way: mark any step no agent may
+take alone (destructive-migration approval, credentials, deploy confirmation) with
+`[HUMAN]` on its task line (a planned yield point, never `[P]`), and write a
+`Loop budget: ~N iterations` line in the plan's technical context (task count + clusters
++ slack). Everything else a loop needs — tiers, small atomic tasks, sized clusters — the
+gates above already produced.
+
 **8. Class B — freshness review.** When executing a plan someone else wrote, do Stage 1 as a critical freshness review: read the plan, run the gates above against it, confirm review-group sizing (add `── REVIEW GATE ──` markers if missing) and each cluster's provisional tier (add one where missing), reconcile its code samples against current source, and raise concerns before any task is dispatched. A plan is a snapshot of conventions at authoring time; the codebase has moved.
 
 ## Judgment layer (what only you add)

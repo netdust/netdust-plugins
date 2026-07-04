@@ -90,8 +90,11 @@ DENYLIST: list[tuple[str, re.Pattern]] = [
     # Attack 2 — git force-push, +refspec, or direct push to main/master.
     ("git force-push or +refspec",
      re.compile(rf"(?m){_SEP}git\s+push\b.*(?:--force(?:-with-lease)?|\s-[A-Za-z]*f|\s\+\S+:)", re.IGNORECASE)),
+    # main/master must be a WHOLE ref argument (optionally a refspec destination
+    # `HEAD:main` or a fully-qualified `refs/heads/main`) — a branch name that
+    # merely contains the word (`feature/main-nav`) must not trip the guard.
     ("git push directly to main/master",
-     re.compile(rf"(?m){_SEP}git\s+push\b[^\n]*\b(?:main|master)\b", re.IGNORECASE)),
+     re.compile(rf"(?m){_SEP}git\s+push\b[^\n]*\s(?:\S*[:/])?(?:main|master)(?=\s|$)", re.IGNORECASE)),
 
     # Attack 5 — destructive SQL as an executed statement (mysql -e '...', psql -c).
     ("destructive SQL (DROP/TRUNCATE)",
