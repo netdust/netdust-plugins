@@ -342,7 +342,7 @@ def build_block_message(activity: dict, missing: list[str]) -> str:
             "      npx eslint <files> && npx prettier --check <files>   (TS/JS)\n"
             "      vendor/bin/phpcs <files>                             (PHP/WP)\n"
             "Then record a `Standards: clean | <violations>` line in your "
-            "Test-evidence block. (See the standards-gate skill.)\n"
+            f"Test-evidence block. (See the {STANDARDS_SKILL} skill.)\n"
         )
 
     if "tests" in missing and not activity["invoked_testing"]:

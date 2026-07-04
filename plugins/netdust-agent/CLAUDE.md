@@ -16,7 +16,7 @@ The harness decides *when* and *whether*. The craft is *how to actually do it*. 
 These skills are **sequencers and gates**. They do not teach craft; they decide what fires, in what order, and prove it fired. `harnessed-development` is the single entry point — a pure sequencer that, at each stage, loads the right craft skill and wraps a gate around it.
 
 - `harnessed-development` — entry point; sequences brainstorm → (spec-authoring) → plan(+gates) → (spec-analysis) → execute → shake-out → finish
-- `writing-plans` — gate: spec → plan → tasks
+- `superpowers:writing-plans` (upstream base, not a local skill) — gate: spec → plan → tasks
 - `spec-authoring` — gate (spec-kit graft, Stage 0.5): wraps `/speckit.specify` + `/clarify`; HALTs on unresolved `[NEEDS CLARIFICATION]`
 - `spec-analysis` — gate (spec-kit graft, Stage 1.5): `/speckit.analyze` + mechanical `gate-check.py` — the pre-execution barrier that machine-checks 1a/1b/1d/1f
 - `standards-gate` — gate (Step 2.6b): runs the project linter at each code-task close; backstopped by `subagent-stop.py`
@@ -27,9 +27,9 @@ These skills are **sequencers and gates**. They do not teach craft; they decide 
 - `feature-acceptance` — gate: author + drive the acceptance-flows matrix
 - `test-effectiveness` — gate: would the green suite actually go RED?
 - `shake-out` — gate: spec-complete pre-merge sweep
-- `finishing-a-branch` — gate: merge / PR / cleanup
+- `superpowers:finishing-a-development-branch` (upstream base, not a local skill) — gate: merge / PR / cleanup
 - `compounding` — gate: spec-close harvest into CODE-MAP + skills
-- `evaluating` — gate: process retro
+- `/evaluate` (a command, not a skill) — gate: process retro
 
 ### Layer 2 — Craft (the how-to the harness reaches for)
 
