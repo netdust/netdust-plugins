@@ -141,9 +141,11 @@ TASKS_IRREVERSIBLE_PARALLEL = """# Tasks: x
 # ── D1 `test-author-mode` fixtures (plan.md section D1 rules table) ──────────
 # gate-check.py: from `plugins.netdust_agent... ` — imported directly below via
 # importlib since this file already resolves CHECKER by path; check_test_author_mode
-# is called DIRECTLY (unit-level) — it is NOT yet wired into run_checks()/main(),
-# so these are NOT subprocess/CLI assertions. The seam (subprocess) tests further
-# down cover the CLI floor separately.
+# is called DIRECTLY (unit-level) here — a deliberate choice to isolate the
+# function's own branch logic from the CLI plumbing. It was authored as a RED
+# sentinel shell at commit cee7b48 and wired into run_checks() at c8d5087 (see
+# gate-check.py:376); the seam (subprocess) tests further down cover the CLI
+# floor separately, now exercising the same wired check end-to-end.
 
 import importlib.util as _ilu
 
@@ -285,10 +287,11 @@ def run():
     results.append((rc == 0 and "GATE: PASS" in out, "complete, gate-bearing set PASSES"))
 
     # ── D1 `test-author-mode` — one fixture per plan.md D1 rules-table row ────
-    # check_test_author_mode() is called DIRECTLY (unit level): it exists as a
-    # signature shell in gate-check.py but is NOT wired into run_checks() yet,
-    # so calling run_checks()/the CLI would never reach it. These assertions are
-    # the BEHAVIORAL contract the implementer must satisfy once wired.
+    # check_test_author_mode() is called DIRECTLY (unit level), independent of
+    # run_checks()/the CLI, to pin down the function's own branch logic. These
+    # assertions were the BEHAVIORAL contract authored RED at commit cee7b48;
+    # the function is now wired into run_checks() (c8d5087, gate-check.py:376)
+    # and these still hold as the unit-level half of the coverage.
 
     # 11. retro-compat: zero Test-author: lines anywhere → WARN, GATE stays PASS
     f = _gate_check.Findings()
@@ -346,12 +349,12 @@ def run():
                     "a fenced Test-author: example is stripped and never counted"))
 
     # ── Seam tests: real (un-mocked) subprocess run of gate-check.py ──────────
-    # NOTE: check_test_author_mode is intentionally NOT wired into run_checks()
-    # yet (signature-shell only) — the live CLI's behavior on real dirs must stay
-    # unchanged until the implementer wires it. #18/#19 are expected to pass NOW
-    # (they assert the unchanged floor). #20 is the true RED seam case: it proves
-    # a tasks.md that violates D1 does NOT yet fail the live gate — because the
-    # check isn't wired in. Once wired, #20 must flip to exit 1.
+    # check_test_author_mode is wired into run_checks() (c8d5087, gate-check.py:376)
+    # beside check_task_tiers, so these seam tests exercise the live CLI path.
+    # #18/#19 assert the retro-compat floor holds unchanged on real spec dirs.
+    # #20 is the true seam case: a tasks.md that violates D1 (partial presence)
+    # now exits 1 through the live, wired gate — this was the RED seam case
+    # authored at cee7b48 and flipped GREEN by the c8d5087 wiring.
 
     # 18. real script against specs/run-observability (zero Test-author: lines) → exit 0
     repo_root = Path(__file__).parent.parent.parent.parent
@@ -368,11 +371,10 @@ def run():
     results.append((proc.returncode == 0,
                     "seam: gate-check.py on specs/harness-efficiency (dogfood) exits 0"))
 
-    # 20. TRUE RED seam case: a tmp fixture dir violating D1 (partial presence)
-    # must exit 1 once test-author-mode is wired into run_checks(). Pre-wiring,
-    # this is expected to still exit 0 (the check never runs live) — that is the
-    # correct floor the implementer must flip to 1 by wiring check_test_author_mode
-    # into run_checks() beside check_task_tiers.
+    # 20. TRUE seam case: a tmp fixture dir violating D1 (partial presence)
+    # exits 1 now that test-author-mode is wired into run_checks() (c8d5087,
+    # gate-check.py:376, beside check_task_tiers). This was the RED case at
+    # cee7b48 before the wiring landed; it now asserts the wired GREEN floor.
     rc, out = _run({"tasks.md": TASKS_PARTIAL_TEST_AUTHOR})
     results.append((rc == 1 and "test-author-mode" in out,
                     "seam: a tmp fixture dir violating D1 (partial presence) exits 1 "

@@ -165,6 +165,7 @@ def check_threat_model(plan_text: str, spec_text: str | None, f: Findings) -> No
 
 
 TIER = re.compile(r"\[Tier\s+[AB]\]", re.IGNORECASE)
+TIER_A = re.compile(r"\[Tier\s+A\]", re.IGNORECASE)
 HAS_P = re.compile(r"\[P\]")
 
 
@@ -255,7 +256,7 @@ def check_test_author_mode(tasks_text: str, f: Findings) -> None:
         total += 1
         task_id = tm.group(1)
         task_rest = tm.group(2)
-        is_tier_a = bool(re.search(r"\[Tier\s+A\]", task_rest, re.IGNORECASE))
+        is_tier_a = bool(TIER_A.search(task_rest))
 
         # Scan continuation lines until the next task line / heading / end.
         j = i + 1
