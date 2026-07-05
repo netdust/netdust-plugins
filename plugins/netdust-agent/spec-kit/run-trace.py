@@ -27,6 +27,20 @@ torn/malformed line (e.g. a process killed mid-`append`) does not crash
 `show` either — it renders `<corrupt line>` in that line's place and
 continues with the rest of the log; `show` still always exits 0.
 
+`show --durations` prints, AFTER the normal rendering, a segments table:
+a `── durations ──` header, one row per consecutive pair of parseable
+(timestamped) events — `<event-a>[ <key data>] → <event-b>[ <key data>]
+  <H:MM:SS>` — where a `review-gate` row's key data includes
+`cluster=`/`tier=` and a `stage-enter` row's key data includes `stage=`,
+followed by a trailing `total (first → last parseable event)  <H:MM:SS>`
+line. Corrupt/unparseable-ts lines are skipped for segmentation purposes
+(consistent with the `<corrupt line>` degradation above) — they are never
+a segment endpoint. No aggregation beyond the total is performed; the
+segments between existing emission points ARE the per-stage/per-gate
+durations. Denial path: fewer than 2 parseable events -> exactly
+`durations: not derivable (<2 timestamped events)`, exit 0. Without the
+flag, output is unchanged.
+
 Exit codes: 0 success, 1 usage/validation/denial error.
 """
 from __future__ import annotations
@@ -94,6 +108,8 @@ def do_show(feature_dir: Path, durations: bool = False) -> int:
         print("no trace recorded")
         return 0
 
+    parseable_events: list[tuple[datetime, str, dict]] = []
+
     for raw in lines:
         try:
             entry = json.loads(raw)
@@ -105,16 +121,61 @@ def do_show(feature_dir: Path, durations: bool = False) -> int:
         data = entry.get("data", {})
         print(f"{ts} {event} {data}")
 
+        if durations:
+            parsed_ts = _parse_ts(ts)
+            if parsed_ts is not None:
+                parseable_events.append((parsed_ts, event, data))
+
     if durations:
-        # T10 shell — segmentation/duration rendering not implemented yet.
-        # Signature-only: the flag is wired so tests can assert the future
-        # contract (plan.md D5) fails behaviorally instead of via argparse
-        # rejection. The implementer replaces this branch with the real
-        # segment-table + total rendering; it must NOT change anything
-        # above this line (the no-flag path stays byte-identical).
-        raise NotImplementedError("show --durations: not implemented (T10)")
+        if len(parseable_events) < 2:
+            print("durations: not derivable (<2 timestamped events)")
+            return 0
+
+        print("── durations ──")
+        for (ts_a, event_a, data_a), (ts_b, event_b, data_b) in zip(
+            parseable_events, parseable_events[1:]
+        ):
+            label_a = _format_event_label(event_a, data_a)
+            label_b = _format_event_label(event_b, data_b)
+            delta = ts_b - ts_a
+            print(f"{label_a} → {label_b}   {delta}")
+
+        total = parseable_events[-1][0] - parseable_events[0][0]
+        print(f"total (first → last parseable event)              {total}")
 
     return 0
+
+
+def _parse_ts(ts: str) -> datetime | None:
+    """Parse an event's `ts` field defensively. Returns None (rather than
+    raising) for an empty/missing or unparseable timestamp so the caller can
+    skip it as a segmentation endpoint, consistent with `show`'s existing
+    corrupt-line degradation."""
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _format_event_label(event: str, data: dict) -> str:
+    """Render `<event>[ <key data>]` for a durations row. `review-gate`
+    carries cluster=/tier=; `stage-enter` carries stage= (plan.md D5)."""
+    key_data: dict = {}
+    if event == "review-gate":
+        for key in ("cluster", "tier"):
+            if key in data:
+                key_data[key] = data[key]
+    elif event == "stage-enter":
+        for key in ("stage",):
+            if key in data:
+                key_data[key] = data[key]
+
+    if not key_data:
+        return event
+    rendered = " ".join(f"{k}={v}" for k, v in key_data.items())
+    return f"{event} {rendered}"
 
 
 def main(argv: list[str]) -> int:
