@@ -36,8 +36,14 @@ These two markers live on **orthogonal axes** and compose cleanly:
 
 ## Per-task format
 
+> Every task carries a `Test-author:` mode line. The mode is set HERE, at plan time, by the
+> planner — the controller reads it at dispatch; no run-time agent may change it (plan
+> invariant #1).
+
 ```
 - [ ] T<NN> [P?] [Tier A|B] <imperative description>  (files: <paths>)
+      Test-author: <split | solo — reason>  (D1 rule: split iff Tier A on a security-boundary
+                  category — auth/guards, untrusted parsing, migrations, money, 1a surface)
       Unit test: <what behavioral contract to verify — RED-first incl. denial path for Tier A;
                   or `no unit test: Tier B, <reason>` for glue/wrapper/presentational>
       Seam test: <only if this task WIRES a piece into the real chain — 1 un-mocked assertion
@@ -49,16 +55,30 @@ These two markers live on **orthogonal axes** and compose cleanly:
 > (erosion guard). Glue/wiring/pass-through wrappers/presentational/config = **Tier B**.
 > A plan line's `Unit test:` prefix does NOT override the tier — classify by tier.
 
+> **`Test-author:` decision rule (D1):** two forms — `Test-author: split` (an independent
+> test-author is dispatched BEFORE the implementer — today's unchanged pair protocol) or
+> `Test-author: solo — <one-line reason>` (a single implementer authors its own RED-first
+> test; the reason is **mandatory for Tier A**). Use `split` **iff** the task is **Tier A**
+> **and** falls in a security-boundary category — auth/guards/capability checks,
+> untrusted-input parsing, migrations/schema, money/billing, or any 1a-trigger surface named
+> in the plan's threat model. Tier A outside those categories ("A-lite": pure logic/transforms/
+> thresholds) → `solo — <reason>`; Tier B → `solo — Tier B` (the reason may be the tier
+> itself). The mode is the **planner's call at plan time**, **read** by the controller at
+> dispatch, and **never re-decided by any run-time agent**.
+
 ---
 
 ## Phase 1 — [name]
 
 ### Cluster C1  (≤4 tasks)
 - [ ] T01 [P] [Tier A] [task]  (files: …)
+      Test-author: solo — [A-lite reason, e.g. pure transform/threshold logic]
       Unit test: [RED-first contract incl. denial path]
 - [ ] T02 [P] [Tier B] [task]  (files: …)
+      Test-author: solo — Tier B
       Unit test: no unit test: Tier B, [pass-through over typed lib]
 - [ ] T03 [Tier A] [task depending on T01]  (files: …)
+      Test-author: split — [security-boundary category, e.g. auth/guard, untrusted parsing]
       Unit test: [contract]
       Seam test: [1 un-mocked-chain assertion + 1 negative case]
 
@@ -68,6 +88,7 @@ These two markers live on **orthogonal axes** and compose cleanly:
 
 ### Cluster C2 — *(irreversible: [e.g. teardown migration])*  — solo
 - [ ] T04 [Tier A] [irreversible step]  (files: …)
+      Test-author: split — migration/schema is a D1 security-boundary category
       Unit test: [migration up/down contract]
 
 **Integration gate (C2):** [verify]
