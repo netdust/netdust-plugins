@@ -27,8 +27,14 @@ to the run's stage/gate segments recorded in `<feature-dir>/run-log.jsonl`
   [first event ts, last event ts] and only dispatches/assistant-lines whose
   first timestamp falls inside it are counted. Per-stage attribution further
   segments that window at the boundary events `gate-check-green`,
-  `stage-enter`, each `review-gate`, and each `loop-disarm-*` event (same
-  segmentation as `run-trace.py show --durations`).
+  `stage-enter`, each `review-gate`, each `loop-disarm-*` event, and the
+  literal manual-disarm event `loop-disarmed` — the SAME boundary-event
+  vocabulary `run-trace.py show --durations` segments over, but this tool
+  segments over boundary events ONLY, a subset of `show --durations`'s
+  all-events segmentation. On a boundary-only fixture the two tools'
+  windows coincide; on a fixture with non-boundary events between
+  boundaries, `show --durations` yields more/finer segments than this
+  tool's per-stage table.
 
   Timestamps are normalized before parsing: both the `...Z` and `...+00:00`
   suffix forms are accepted (`s.replace("Z", "+00:00")` before
@@ -76,7 +82,10 @@ USAGE_FIELDS = (
     "input_tokens",
 )
 
-# Same boundary-event segmentation as run-trace.py show --durations (D5).
+# Same boundary-event VOCABULARY as run-trace.py show --durations (D5) —
+# but this tool segments over these boundary events ONLY, a subset of
+# show --durations's all-events segmentation. On a boundary-only fixture
+# the two tools' windows coincide.
 BOUNDARY_EVENTS = {"gate-check-green", "stage-enter"}
 
 
@@ -310,8 +319,11 @@ def run_window(events: list[dict]) -> tuple[datetime | None, datetime | None]:
 
 def boundary_segments(events: list[dict]) -> list[tuple[datetime, str, datetime, str]]:
     """Consecutive boundary-event pairs (gate-check-green, stage-enter,
-    review-gate, loop-disarm-*) — same segmentation as run-trace.py show
-    --durations (D5). Each item: (start_ts, start_label, end_ts, end_label)."""
+    review-gate, loop-disarm-*, loop-disarmed) — same boundary-event
+    vocabulary as run-trace.py show --durations (D5), but segmented over
+    boundary events ONLY: a subset of show --durations's all-events
+    segmentation. On a boundary-only fixture the two tools' windows
+    coincide. Each item: (start_ts, start_label, end_ts, end_label)."""
     boundary_points: list[tuple[datetime, str]] = []
     for e in events:
         name = e.get("event", "")
