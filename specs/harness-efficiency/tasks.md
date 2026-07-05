@@ -119,7 +119,7 @@ These two markers live on **orthogonal axes** and compose cleanly:
 ── REVIEW GATE ──  *(STOP: commit C4, `/integration`, `/code-review` — tier STANDARD)*
 
 ### Cluster C5  (1 task · provisional tier: LIGHT)
-- [ ] T12 [Tier B] Describe + version — bump netdust-agent 0.7.0 → 0.8.0 (minor: behavior change in the agent dispatch protocol) in `plugin.json` + root `marketplace.json`, and CORRECT both descriptions where they state the unconditional split ("an independent test-author writes each task's RED test…" → tier-conditional per the plan's Test-author field); add the four adjustments to `README.md` + plugin `CLAUDE.md` harness-layer lines; mirror run-observability T07's shape  (files: plugins/netdust-agent/.claude-plugin/plugin.json, .claude-plugin/marketplace.json, plugins/netdust-agent/README.md, plugins/netdust-agent/CLAUDE.md)
+- [x] T12 [Tier B] Describe + version — bump netdust-agent 0.7.0 → 0.8.0 (minor: behavior change in the agent dispatch protocol) in `plugin.json` + root `marketplace.json`, and CORRECT both descriptions where they state the unconditional split ("an independent test-author writes each task's RED test…" → tier-conditional per the plan's Test-author field); add the four adjustments to `README.md` + plugin `CLAUDE.md` harness-layer lines; mirror run-observability T07's shape  (files: plugins/netdust-agent/.claude-plugin/plugin.json, .claude-plugin/marketplace.json, plugins/netdust-agent/README.md, plugins/netdust-agent/CLAUDE.md)
       Test-author: solo — Tier B
       Unit test: no unit test: Tier B, docs/manifest edits (existing `test_plugin_version_resolution.py` covers manifest shape)
 

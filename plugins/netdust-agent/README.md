@@ -10,12 +10,12 @@
 
 ### Harness — control flow (gates / steps / ordering)
 
-Sequencers and gates. They decide what fires and prove it fired. `harnessed-development` is the single entry point — an intake router that classifies the work (Class A–E) and routes it to the two spines, `planning` and `building`, which meet at an enforced seam: an approved `tasks.md` with `gate-check.py` GREEN.
+Sequencers and gates. They decide what fires and prove it fired. `harnessed-development` is the single entry point — an intake router that classifies the work (Class A–F) and routes it to the two spines, `planning` and `building`, which meet at an enforced seam: an approved `tasks.md` with `gate-check.py` GREEN.
 
 | Skill | Role |
 |---|---|
-| `harnessed-development` | **Entry point.** Intake router only: the class dial (A–E) → the right spine. |
-| `planning` | **PLAN spine.** Sequences brainstorm → spec → plan(+gates, task-shaping) → spec-analysis; STOPS at the seam for human approval. Never executes. |
+| `harnessed-development` | **Entry point.** Intake router only: the class dial (A–F) → the right spine (F = brainstorm-only, no plan/tasks artifact). |
+| `planning` | **PLAN spine.** Sequences brainstorm → spec → plan(+gates, task-shaping) → spec-analysis; STOPS at the seam for human approval. Never executes. Presence-aware: plans inline in the main conversation while the human is actively steering, dispatches the background `planner` only once the human has stepped away or the run is unattended — either way the same pre-unattended ladder (gate-check GREEN, seam approval, doubting-decisions) gates before any unattended execution. |
 | `building` | **BUILD spine.** Precondition = the seam artifact; sequences execute → test/standards gates → review clusters → shake-out → finish. Refuses to start plan-driven work without a green gate-check. Owns the armed `/loop`. |
 | `threat-modeling` | Plan-time gate: embed a `## Threat model` when a security surface is touched. |
 | `architecture-invariants` | Gate: name the convergence points; flag bypasses. |
@@ -47,6 +47,8 @@ What the harness *loads* at each step. Each craft skill **layers on top of its s
 ### Spec-kit graft — run observability
 
 Sibling to the spec-kit tools above (`gate-check.py`, `loop-check.py`): `spec-kit/run-trace.py` and `spec-kit/run-score.py` add an in-loop event trace and a deterministic 5-dimension evaluator rubric. `loop-gate.py` emits trace events at the decision sites automatically (fail-open — a trace-write failure never blocks the loop); `/shakeout` surfaces the graded rubric at spec-close and `/evaluate` reads the run-log before falling back to git archaeology. Report-only — it adds no new gate.
+
+Cost telemetry rides the same trace: `run-trace.py show --durations` prints a per-segment timing table over the existing log, and `spec-kit/run-cost.py` is a strictly read-only transcript miner — it walks the local Claude Code session/subagent `*.jsonl` files and emits per-dispatch and per-stage token tables (joined to the run-log's stage boundaries), stdout only, counts and metadata never message content.
 
 ---
 
@@ -88,7 +90,7 @@ netdust-agent/
 ├── .gitignore
 ├── docs/BLUEPRINT.md            # the layer map + design decisions
 ├── skills/
-│   ├── harnessed-development/   # the entry router (class dial A–E → spine)
+│   ├── harnessed-development/   # the entry router (class dial A–F → spine)
 │   ├── planning/                # PLAN spine (stages 0–1.5, stops at the seam)
 │   ├── building/                # BUILD spine (precondition + stages 2–3, /loop)
 │   ├── <harness gates>/         # threat-modeling, architecture-invariants,
