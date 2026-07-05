@@ -128,7 +128,7 @@ When Stage 1.5 is green, present to your human partner, in one compact block: th
 
 This stop is the reason the split exists: the plan/build boundary is a **review checkpoint**, and a checkpoint an agent can roll through is not a checkpoint.
 
-**The ladder before UNATTENDED execution is mandatory regardless of planning mode.** Whether the plan above was written inline (human present) or by a dispatched `planner` (human away), the same review ladder gates any run that will proceed without a human watching: the Stage 1.5 `gate-check.py` GREEN, human approval at the seam, and `doubting-decisions` run on the plan's key decision. Presence changes WHERE the planning happened; it never changes WHICH gates fire before the run is left to execute unattended.
+**The ladder before UNATTENDED execution is mandatory regardless of planning mode.** Whether the plan above was written inline (human present) or by a dispatched `planner` (human away), the same review ladder gates any run that will proceed without a human watching: the Stage 1.5 `gate-check.py` GREEN, human approval at the seam, and `doubting-decisions` run on the plan's key decision. Presence changes WHERE the planning happened; it never changes WHICH gates fire before the run is left to execute unattended. (This ladder is a sequencer-enforced obligation of the pre-unattended path — restated here, not newly added; no new machine gate or HALT is introduced.)
 
 </process>
 
