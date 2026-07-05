@@ -232,11 +232,20 @@ def collect_dispatches(transcript_dir: Path) -> list[Dispatch]:
 
 class ControllerRow:
     def __init__(self, session_id: str, first_ts: datetime | None,
-                 last_ts: datetime | None, totals: dict[str, int]):
+                 last_ts: datetime | None, totals: dict[str, int],
+                 lines: list[tuple[datetime | None, dict[str, int]]] | None = None):
         self.session_id = session_id
         self.first_ts = first_ts
         self.last_ts = last_ts
         self.totals = totals
+        # Individual (ts, usage) entries for this session's assistant lines.
+        # Per-stage attribution (D6: "each dispatch/controller-line
+        # attributed to the window containing its (first) timestamp") must
+        # bucket controller usage per LINE, not attribute the whole
+        # session's totals to the window containing its first timestamp —
+        # a controller session spans every stage, so block-attribution
+        # would systematically inflate the first window.
+        self.lines = lines if lines is not None else []
 
 
 def collect_controller_rows(transcript_dir: Path) -> list[ControllerRow]:
@@ -255,7 +264,7 @@ def collect_controller_rows(transcript_dir: Path) -> list[ControllerRow]:
                 totals[f] += u[f]
         rows.append(ControllerRow(
             session_id=jsonl_path.stem, first_ts=first_ts, last_ts=last_ts,
-            totals=totals,
+            totals=totals, lines=entries,
         ))
     return rows
 
@@ -354,9 +363,15 @@ def render_per_stage_table(
         for d in dispatches:
             if d.first_ts is not None and start_ts <= d.first_ts < end_ts:
                 add_usage(totals, d.totals)
+        # Controller lines are attributed INDIVIDUALLY (D6: "each
+        # dispatch/controller-line attributed to the window containing its
+        # (first) timestamp" — "(first)" governs multi-line dispatches; a
+        # controller session's own assistant lines are each attributed on
+        # their own timestamp, never the whole session as one block).
         for c in controller_rows:
-            if c.first_ts is not None and start_ts <= c.first_ts < end_ts:
-                add_usage(totals, c.totals)
+            for ts, usage_totals in c.lines:
+                if ts is not None and start_ts <= ts < end_ts:
+                    add_usage(totals, usage_totals)
         lines.append(
             f"{start_label} → {end_label} | "
             f"wall={format_wall_clock(start_ts, end_ts)} | "
@@ -396,8 +411,26 @@ def run(feature_dir: Path, transcript_dir: Path) -> int:
     if win_start is not None and win_end is not None:
         dispatches = [d for d in dispatches
                       if d.first_ts is not None and win_start <= d.first_ts <= win_end]
-        controller_rows = [c for c in controller_rows
-                            if c.first_ts is not None and win_start <= c.first_ts <= win_end]
+        # Controller rows are windowed at LINE granularity (D6: "main-
+        # session assistant lines inside it are counted") — a session
+        # whose first line predates the window must still contribute the
+        # subset of its lines that fall inside it, not be dropped whole
+        # because its first_ts precedes win_start.
+        windowed_controller_rows = []
+        for c in controller_rows:
+            in_window_lines = [(ts, u) for ts, u in c.lines
+                                if ts is not None and win_start <= ts <= win_end]
+            if not in_window_lines:
+                continue
+            totals = zero_usage()
+            for _, u in in_window_lines:
+                add_usage(totals, u)
+            timestamps = [ts for ts, _ in in_window_lines]
+            windowed_controller_rows.append(ControllerRow(
+                session_id=c.session_id, first_ts=min(timestamps),
+                last_ts=max(timestamps), totals=totals, lines=in_window_lines,
+            ))
+        controller_rows = windowed_controller_rows
 
     segments = boundary_segments(events)
     if not segments:

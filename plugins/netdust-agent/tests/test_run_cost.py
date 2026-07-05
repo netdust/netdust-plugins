@@ -223,6 +223,76 @@ def run() -> list[tuple[bool, str]]:
         case("later dispatch (999 tokens) attributed after the review-gate boundary",
              idx_999 != -1 and idx_review_gate != -1 and idx_999 > idx_review_gate)
 
+    # ── Unit contract (C4 finding fix): per-stage attribution of controller
+    # lines must be PER-LINE, not per-session-block. A controller session
+    # spans every stage; attributing its whole totals to the window
+    # containing the session's FIRST timestamp systematically inflates the
+    # first window. Fixture: boundaries at 10:00 (stage-enter), 10:05
+    # (review-gate), 10:30 (loop-disarm-finished); one main-session with an
+    # assistant line at 10:02 (output=100, inside window 1) and another at
+    # 10:10 (output=200, inside window 2). Window 1's per-stage total must
+    # be 100 (not 300); window 2's must include the 200 line. ─────────────
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = make_feature(tmp)
+        transcripts = Path(tmp) / "transcripts"
+        transcripts.mkdir()
+        session = "sess-g"
+        write_main_session(transcripts, session, [
+            assistant_line("2026-07-05T10:02:00+00:00", usage(output=100)),
+            assistant_line("2026-07-05T10:10:00+00:00", usage(output=200)),
+        ])
+        write_run_log(feature, [
+            ("2026-07-05T10:00:00+00:00", "stage-enter", {"stage": "execute"}),
+            ("2026-07-05T10:05:00+00:00", "review-gate", {"cluster": "C1", "tier": "STANDARD"}),
+            ("2026-07-05T10:30:00+00:00", "loop-disarm-finished", {"iteration": "1"}),
+        ])
+        rc, out, err = run_cost(feature, transcript_dir=transcripts)
+        case("per-line controller attribution fixture -> exit 0", rc == 0)
+        per_stage_section = out.split("── per-dispatch ──")[0]
+        window1_line = ""
+        window2_line = ""
+        for line in per_stage_section.splitlines():
+            if line.startswith("stage-enter"):
+                window1_line = line
+            elif line.startswith("review-gate"):
+                window2_line = line
+        case("per-stage window 1 (stage-enter -> review-gate) excludes the "
+             "later controller line: output_tokens=100, not 300",
+             "output=100 " in window1_line)
+        case("per-stage window 2 (review-gate -> loop-disarm-finished) "
+             "includes the later controller line: output_tokens=200",
+             "output=200 " in window2_line)
+
+    # ── Unit contract (C4 finding fix, in-window filter): D6 says "main-
+    # session assistant LINES inside [the window] are counted" — the
+    # window filter must drop out-of-window LINES, not the whole
+    # controller row because its first line predates the window. Fixture:
+    # a controller session with one line BEFORE win_start (09:50) and one
+    # line INSIDE the window (10:02, output=100). The pre-window line must
+    # be excluded; the in-window line's 100 tokens must still surface in
+    # both the per-dispatch controller row AND the per-stage table — not
+    # silently dropped because the session's first_ts precedes win_start. ──
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = make_feature(tmp)
+        transcripts = Path(tmp) / "transcripts"
+        transcripts.mkdir()
+        session = "sess-h"
+        write_main_session(transcripts, session, [
+            assistant_line("2026-07-05T09:50:00+00:00", usage(output=999999)),
+            assistant_line("2026-07-05T10:02:00+00:00", usage(output=100)),
+        ])
+        write_run_log(feature, [
+            ("2026-07-05T10:00:00+00:00", "stage-enter", {"stage": "execute"}),
+            ("2026-07-05T10:30:00+00:00", "loop-disarm-finished", {"iteration": "1"}),
+        ])
+        rc, out, err = run_cost(feature, transcript_dir=transcripts)
+        case("pre-window controller line fixture -> exit 0", rc == 0)
+        case("pre-window controller line (999999) excluded from the run entirely",
+             "999999" not in out)
+        case("in-window controller line (output=100) still counted even though "
+             "the session's FIRST line predates the run window",
+             "output=100 " in out)
+
     # ── Denial path: malformed transcript line skipped without crash ──────
     with tempfile.TemporaryDirectory() as tmp:
         feature = make_feature(tmp)
