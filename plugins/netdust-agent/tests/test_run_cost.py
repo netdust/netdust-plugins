@@ -387,4 +387,67 @@ def run() -> list[tuple[bool, str]]:
         rc, out, err = run_cost(nonexistent_feature, transcript_dir=transcripts)
         case("seam negative: nonexistent feature dir -> nonzero exit", rc != 0)
 
+    # =========================================================================
+    # C4 review-gate findings (additive; original author cases above are
+    # unchanged) — timestamp/input robustness, FAMILY 1.
+    # =========================================================================
+
+    # --- (a) non-string ts in a run-log boundary event -> treated as
+    #     unparseable (None), no crash ---
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = make_feature(tmp)
+        transcripts = Path(tmp) / "transcripts"
+        transcripts.mkdir()
+        session = "sess-nonstring-ts"
+        write_main_session(transcripts, session, [
+            assistant_line("2026-07-05T10:00:01+00:00", usage(output=5)),
+        ])
+        (feature / "run-log.jsonl").write_text(
+            json.dumps({"ts": 12345, "event": "stage-enter", "data": {"stage": "execute"}}) + "\n"
+            + json.dumps({"ts": "2026-07-05T10:05:00+00:00", "event": "loop-disarm-finished", "data": {}}) + "\n"
+        )
+        rc, out, err = run_cost(feature, transcript_dir=transcripts)
+        case("non-string run-log ts -> exit 0, no crash", rc == 0)
+        case("non-string run-log ts -> no traceback", "Traceback" not in (out + err))
+
+    # --- (c) naive timestamp (no Z/offset) in a run-log boundary event ->
+    #     rejected as unparseable (would otherwise crash on aware-comparison
+    #     in run_window/boundary_segments) ---
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = make_feature(tmp)
+        transcripts = Path(tmp) / "transcripts"
+        transcripts.mkdir()
+        session = "sess-naive-ts"
+        write_main_session(transcripts, session, [
+            assistant_line("2026-07-05T10:00:01+00:00", usage(output=5)),
+        ])
+        write_run_log(feature, [
+            ("2026-07-05T10:00:00", "stage-enter", {"stage": "execute"}),
+            ("2026-07-05T10:05:00+00:00", "loop-disarm-finished", {"iteration": "1"}),
+        ])
+        rc, out, err = run_cost(feature, transcript_dir=transcripts)
+        case("naive run-log ts -> exit 0, no crash", rc == 0)
+        case("naive run-log ts -> no traceback", "Traceback" not in (out + err))
+
+    # --- (d) out-of-order events in run-log -> run-cost already sorts
+    #     boundary_points; verify positive-only segments (regression guard
+    #     mirroring run-trace's fix, same run-log shape) ---
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = make_feature(tmp)
+        transcripts = Path(tmp) / "transcripts"
+        transcripts.mkdir()
+        session = "sess-outoforder"
+        write_main_session(transcripts, session, [
+            assistant_line("2026-07-05T10:00:01+00:00", usage(output=5)),
+        ])
+        write_run_log(feature, [
+            ("2026-07-05T10:05:00+00:00", "loop-disarm-finished", {"iteration": "1"}),
+            ("2026-07-05T10:00:00+00:00", "stage-enter", {"stage": "execute"}),
+        ])
+        rc, out, err = run_cost(feature, transcript_dir=transcripts)
+        case("out-of-order run-log -> exit 0", rc == 0)
+        case("out-of-order run-log -> per-stage segment reflects sorted order, "
+             "positive wall-clock (0:05:00), not negative",
+             "wall=0:05:00" in out)
+
     return results

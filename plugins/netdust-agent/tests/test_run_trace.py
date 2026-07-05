@@ -304,4 +304,86 @@ def run() -> list[tuple[bool, str]]:
         case("show --durations (missing log) -> no durations header emitted",
              "── durations ──" not in out)
 
+    # =====================================================================
+    # C4 review-gate findings (additive; original author cases above are
+    # unchanged) — timestamp/input robustness, FAMILY 1.
+    # =====================================================================
+
+    # --- (a) non-string ts value -> treated as unparseable (None), no crash ---
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = Path(tmp) / "specs" / "demo"
+        feature.mkdir(parents=True)
+        log_path(feature).write_text(
+            '{"ts": 12345, "event": "stage-enter", "data": {"stage": "execute"}}\n'
+            '{"ts": "2026-07-05T10:00:05+00:00", "event": "stage-enter", "data": {"stage": "review"}}\n'
+        )
+
+        rc, out, err = run_trace("show", str(feature), "--durations")
+
+        case("show --durations (non-string ts) -> exit 0, no crash", rc == 0)
+        case("show --durations (non-string ts) -> no traceback",
+             "Traceback" not in (out + err))
+        case("show --durations (non-string ts) -> not derivable "
+             "(non-string ts line excluded, only 1 parseable event remains)",
+             "durations: not derivable (<2 timestamped events)" in out)
+
+    # --- (b) "data": null between two good events -> normalized to {},
+    #     no crash in _format_event_label ---
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = Path(tmp) / "specs" / "demo"
+        feature.mkdir(parents=True)
+        log_path(feature).write_text(
+            '{"ts": "2026-07-05T10:00:00+00:00", "event": "stage-enter", "data": {"stage": "execute"}}\n'
+            '{"ts": "2026-07-05T10:00:05+00:00", "event": "review-gate", "data": null}\n'
+            '{"ts": "2026-07-05T10:02:05+00:00", "event": "stage-enter", "data": {"stage": "review"}}\n'
+        )
+
+        rc, out, err = run_trace("show", str(feature), "--durations")
+
+        case("show --durations (data: null) -> exit 0, no crash", rc == 0)
+        case("show --durations (data: null) -> no traceback",
+             "Traceback" not in (out + err))
+        case("show --durations (data: null) -> review-gate row renders with "
+             "no key data (bare event name, null normalized to {})",
+             any("review-gate" in ln and "0:00:05" in ln for ln in out.splitlines()))
+
+    # --- (c) naive timestamp (no Z/offset) -> rejected as unparseable
+    #     (would otherwise crash on aware-comparison) ---
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = Path(tmp) / "specs" / "demo"
+        feature.mkdir(parents=True)
+        log_path(feature).write_text(
+            '{"ts": "2026-07-05T10:00:00", "event": "stage-enter", "data": {"stage": "execute"}}\n'
+            '{"ts": "2026-07-05T10:00:05+00:00", "event": "stage-enter", "data": {"stage": "review"}}\n'
+        )
+
+        rc, out, err = run_trace("show", str(feature), "--durations")
+
+        case("show --durations (naive ts) -> exit 0, no crash", rc == 0)
+        case("show --durations (naive ts) -> no traceback",
+             "Traceback" not in (out + err))
+        case("show --durations (naive ts) -> naive-ts line excluded, "
+             "not derivable (<2 timestamped events)",
+             "durations: not derivable (<2 timestamped events)" in out)
+
+    # --- (d) out-of-order events in the run-log -> sorted before pairing,
+    #     never a negative duration ---
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = Path(tmp) / "specs" / "demo"
+        feature.mkdir(parents=True)
+        log_path(feature).write_text(
+            '{"ts": "2026-07-05T10:02:05+00:00", "event": "stage-enter", "data": {"stage": "review"}}\n'
+            '{"ts": "2026-07-05T10:00:00+00:00", "event": "stage-enter", "data": {"stage": "execute"}}\n'
+        )
+
+        rc, out, err = run_trace("show", str(feature), "--durations")
+
+        case("show --durations (out-of-order log) -> exit 0", rc == 0)
+        case("show --durations (out-of-order log) -> no negative duration anywhere",
+             not any("-1 day" in ln or ", -" in ln for ln in out.splitlines()))
+        case("show --durations (out-of-order log) -> segment reflects sorted "
+             "order (execute -> review), positive 0:02:05 delta",
+             any("stage=execute" in ln and "stage=review" in ln and "0:02:05" in ln
+                 for ln in out.splitlines()))
+
     return results

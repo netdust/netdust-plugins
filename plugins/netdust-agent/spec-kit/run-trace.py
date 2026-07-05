@@ -124,12 +124,22 @@ def do_show(feature_dir: Path, durations: bool = False) -> int:
         if durations:
             parsed_ts = _parse_ts(ts)
             if parsed_ts is not None:
-                parseable_events.append((parsed_ts, event, data))
+                # Normalize a non-dict `data` (e.g. `null`) to {} here, at
+                # parseable_events build time — matching the non-durations
+                # loop's existing `entry.get("data", {})` guard above, so
+                # _format_event_label never has to special-case it.
+                safe_data = data if isinstance(data, dict) else {}
+                parseable_events.append((parsed_ts, event, safe_data))
 
     if durations:
         if len(parseable_events) < 2:
             print("durations: not derivable (<2 timestamped events)")
             return 0
+
+        # Sort by timestamp before pairing — a run-log can contain
+        # out-of-order events (e.g. clock skew across dispatched agents);
+        # pairing in raw file order would emit negative durations.
+        parseable_events.sort(key=lambda e: e[0])
 
         print("── durations ──")
         for (ts_a, event_a, data_a), (ts_b, event_b, data_b) in zip(
@@ -148,15 +158,22 @@ def do_show(feature_dir: Path, durations: bool = False) -> int:
 
 def _parse_ts(ts: str) -> datetime | None:
     """Parse an event's `ts` field defensively. Returns None (rather than
-    raising) for an empty/missing or unparseable timestamp so the caller can
-    skip it as a segmentation endpoint, consistent with `show`'s existing
-    corrupt-line degradation."""
-    if not ts:
+    raising) for an empty/missing, non-string, naive (no timezone), or
+    otherwise unparseable timestamp so the caller can skip it as a
+    segmentation endpoint, consistent with `show`'s existing corrupt-line
+    degradation. A successfully-parsed NAIVE datetime is rejected (returns
+    None) rather than returned, because it cannot be compared/subtracted
+    against the aware datetimes the rest of this module produces — treating
+    it as unparseable upholds the never-crash contract."""
+    if not isinstance(ts, str) or not ts:
         return None
     try:
-        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(ts.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed
 
 
 def _format_event_label(event: str, data: dict) -> str:

@@ -93,14 +93,22 @@ def default_transcript_dir(cwd: Path | None = None) -> Path:
 
 def parse_ts(raw: str) -> datetime | None:
     """Normalize both the `...Z` and `...+00:00` suffix forms and parse.
-    Returns None (never raises) on anything unparseable — callers must
-    treat that as "skip this line/event", never a crash."""
-    if not raw:
+    Returns None (never raises) on anything unparseable — a non-string
+    value, an empty/missing timestamp, or a syntactically valid but NAIVE
+    (no timezone) timestamp — callers must treat that as "skip this
+    line/event", never a crash. A naive timestamp is rejected rather than
+    returned because it cannot be compared against the aware datetimes the
+    rest of this module produces; treating it as unparseable upholds the
+    never-crash contract."""
+    if not isinstance(raw, str) or not raw:
         return None
     try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     except (ValueError, TypeError):
         return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed
 
 
 def zero_usage() -> dict[str, int]:
