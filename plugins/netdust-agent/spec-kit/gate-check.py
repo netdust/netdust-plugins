@@ -228,6 +228,17 @@ def check_task_tiers(tasks_text: str, f: Findings) -> None:
         f.add("pass", "task-tier", f"all {total} tasks carry a test tier")
 
 
+TEST_AUTHOR_LINE = re.compile(r"^\s+Test-author:\s*(split|solo)\b\s*(?:[—-]\s*(.*))?$")
+
+
+def check_test_author_mode(tasks_text: str, f: Findings) -> None:
+    """D1 — verify every task's `Test-author:` continuation line per the
+    harness-efficiency plan's rules table. NOT YET WIRED into run_checks();
+    signature shell only — sentinel body, no logic. See specs/harness-efficiency/
+    plan.md section D1 for the rules table this must implement."""
+    f.add("fail", "test-author-mode", "not implemented")
+
+
 def check_clusters(tasks_text: str, f: Findings) -> None:
     clusters = parse_clusters(tasks_text)
     if not clusters:
