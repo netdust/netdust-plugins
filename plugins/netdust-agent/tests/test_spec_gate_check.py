@@ -230,6 +230,34 @@ TASKS_FENCED_EXAMPLE_IGNORED = """# Tasks: x
 - [ ] T02 [Tier B] wire route  (files: routes.ts)
 """
 
+# A fenced example whose task line is REAL-SHAPED (`T99`, matches TASK_LINE)
+# rather than the inert `T<NN>` placeholder above — this is what actually
+# exercises the strip_fenced call inside check_test_author_mode: with
+# fencing correctly stripped, T99 (and its fenced `Test-author: split` line)
+# must never be counted at all, and the verdict must be driven ONLY by the
+# 3 real, unfenced tasks below (all 3 carrying the field) -> PASS "all 3
+# tasks". If strip_fenced were skipped, T99 would be picked up as a 4th
+# real task whose Test-author: line sits at the wrong offset relative to
+# the *unfenced* scan (the fence delimiters themselves would shift line
+# indices), corrupting the total/verdict — see the mutation-proof below.
+TASKS_FENCED_REALSHAPED_TASK_LINE = """# Tasks: x
+
+## Per-task format
+
+```
+- [ ] T99 [Tier A] sample
+      Test-author: split
+```
+
+### Cluster C1
+- [ ] T01 [Tier A] validate URL  (files: lib/url.ts)
+      Test-author: split
+- [ ] T02 [Tier B] wire route  (files: routes.ts)
+      Test-author: solo — Tier B
+- [ ] T03 [Tier A] pure threshold logic  (files: calc.ts)
+      Test-author: solo — A-lite, pure transform, no security-boundary category
+"""
+
 
 def _run(files: dict) -> tuple[int, str]:
     with tempfile.TemporaryDirectory() as d:
@@ -347,6 +375,23 @@ def run():
     verdicts = [s for s, c, d in f.items if c == "test-author-mode"]
     results.append((verdicts == ["warn"] and not f.failed,
                     "a fenced Test-author: example is stripped and never counted"))
+
+    # 17b. a REAL-SHAPED fenced task line (T99, matches TASK_LINE, carrying its
+    # own fenced Test-author: line) alongside 3 real unfenced tasks (all 3
+    # carrying the field) -> PASS counting the 3 unfenced tasks ONLY. T99
+    # must neither count toward "present" nor be reported as "missing"/
+    # partial — it must be invisible to the check entirely, proving
+    # strip_fenced is actually exercised (the pre-existing fixture's
+    # `T<NN>` placeholder never matched TASK_LINE, so this path went
+    # unexercised even though the fixture existed).
+    f = _gate_check.Findings()
+    _gate_check.check_test_author_mode(TASKS_FENCED_REALSHAPED_TASK_LINE, f)
+    verdicts = [s for s, c, d in f.items if c == "test-author-mode"]
+    details = [d for s, c, d in f.items if c == "test-author-mode"]
+    results.append((verdicts == ["pass"]
+                     and any(re.search(r"\ball\s+3\s+tasks\b", d) for d in details),
+                    "a real-shaped fenced task line (T99) neither counts nor "
+                    "FAILs-as-partial; verdict PASSes on the 3 unfenced tasks only"))
 
     # ── Seam tests: real (un-mocked) subprocess run of gate-check.py ──────────
     # check_test_author_mode is wired into run_checks() (c8d5087, gate-check.py:376)

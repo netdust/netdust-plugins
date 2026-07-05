@@ -47,12 +47,19 @@ import tempfile
 from pathlib import Path
 
 RUN_COST = Path(__file__).resolve().parent.parent / "spec-kit" / "run-cost.py"
+RUN_TRACE = Path(__file__).resolve().parent.parent / "spec-kit" / "run-trace.py"
 
 
 def run_cost(feature_dir: Path, transcript_dir: Path | None = None) -> tuple[int, str, str]:
     argv = [sys.executable, str(RUN_COST), str(feature_dir)]
     if transcript_dir is not None:
         argv += ["--transcript-dir", str(transcript_dir)]
+    p = subprocess.run(argv, capture_output=True, text=True, timeout=60)
+    return p.returncode, p.stdout, p.stderr
+
+
+def run_trace_show_durations(feature_dir: Path) -> tuple[int, str, str]:
+    argv = [sys.executable, str(RUN_TRACE), "show", str(feature_dir), "--durations"]
     p = subprocess.run(argv, capture_output=True, text=True, timeout=60)
     return p.returncode, p.stdout, p.stderr
 
@@ -545,5 +552,147 @@ def run() -> list[tuple[bool, str]]:
         rc, out, err = run_cost(feature, transcript_dir=transcripts)
         case("no run-log.jsonl -> exact existing message unchanged",
              "per-stage attribution skipped (no run-log.jsonl)" in out)
+
+    # =========================================================================
+    # test-effectiveness blind #2 (D5/D6 relationship unasserted): the docs on
+    # both run-trace.py show --durations and run-cost.py CLAIM run-cost
+    # segments over the SAME boundary-event vocabulary as show --durations,
+    # but ONLY over boundary events — a subset of show --durations's
+    # all-events segmentation, so on a boundary-only fixture the two tools'
+    # windows must coincide, and adding a non-boundary event must grow
+    # show --durations's segment count while leaving run-cost's windows
+    # unchanged. Neither property was ever asserted cross-tool. These two
+    # cases run BOTH tools as real (un-mocked) subprocesses against ONE
+    # shared, synthetic run-log fixture in a tmp dir and assert the claim
+    # directly, closing the blind.
+    # =========================================================================
+
+    # --- cross-tool #1: boundary-only run-log -> run-trace's durations
+    # segments and run-cost's per-stage windows are the SAME consecutive
+    # boundary pairs (same labels, same order, same wall-clock durations).
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = make_feature(tmp)
+        transcripts = Path(tmp) / "transcripts"
+        transcripts.mkdir()
+        write_run_log(feature, [
+            ("2026-07-05T10:00:00+00:00", "stage-enter", {"stage": "execute"}),
+            ("2026-07-05T10:05:00+00:00", "review-gate", {"cluster": "C1", "tier": "STANDARD"}),
+            ("2026-07-05T10:30:00+00:00", "loop-disarm-finished", {"iteration": "1"}),
+        ])
+
+        trace_rc, trace_out, trace_err = run_trace_show_durations(feature)
+        cost_rc, cost_out, cost_err = run_cost(feature, transcript_dir=transcripts)
+        case("cross-tool: run-trace show --durations exits 0 on boundary-only log",
+             trace_rc == 0)
+        case("cross-tool: run-cost exits 0 on the same boundary-only log",
+             cost_rc == 0)
+
+        # run-trace's durations table: 2 segment rows (3 boundary events -> 2
+        # consecutive pairs), each ending in a wall-clock delta before "total".
+        trace_durations_block = trace_out.split("── durations ──")[1] if "── durations ──" in trace_out else ""
+        trace_segment_rows = [
+            ln for ln in trace_durations_block.splitlines()
+            if ln.strip() and not ln.startswith("total")
+        ]
+        case("cross-tool: run-trace shows exactly 2 segments on the "
+             "3-boundary-event log", len(trace_segment_rows) == 2)
+
+        # run-cost's per-stage table: exactly 2 segment rows too, over the
+        # SAME consecutive boundary pairs.
+        cost_per_stage_block = cost_out.split("── per-dispatch ──")[0]
+        cost_segment_rows = [
+            ln for ln in cost_per_stage_block.splitlines()
+            if "→" in ln and ln != "── per-stage ──"
+        ]
+        case("cross-tool: run-cost shows exactly 2 per-stage windows on the "
+             "same boundary-only log", len(cost_segment_rows) == 2)
+
+        # Same consecutive pairs: extract the "<label-a> → <label-b>" prefix
+        # from each tool's rows (strip run-trace's trailing wall-clock delta
+        # and run-cost's trailing " | wall=... | output=...") and compare.
+        def _trace_pair(line: str) -> str:
+            # "stage-enter stage=execute → review-gate cluster=C1 tier=STANDARD   0:05:00"
+            return line.rsplit("  ", 1)[0].strip()
+
+        def _cost_pair(line: str) -> str:
+            # "stage-enter → review-gate | wall=0:05:00 | output=0 ..."
+            return line.split(" | ")[0].strip()
+
+        trace_pairs = [_trace_pair(ln) for ln in trace_segment_rows]
+        cost_pairs = [_cost_pair(ln) for ln in cost_segment_rows]
+        # run-trace labels carry key=value annotations (cluster=/tier=/stage=)
+        # that run-cost's per-stage labels do not; reduce both to the bare
+        # event-name pair (first token before any space) for the coincidence
+        # check, which is what "same consecutive pairs" means at the
+        # boundary-event-vocabulary level the docs claim.
+        def _bare(pair: str) -> tuple[str, str]:
+            a, b = pair.split(" → ")
+            return a.split()[0], b.split()[0]
+
+        trace_bare = [_bare(p) for p in trace_pairs]
+        cost_bare = [_bare(p) for p in cost_pairs]
+        case("cross-tool: run-trace's and run-cost's segment boundaries "
+             "coincide (same consecutive event-pairs, same order) on a "
+             "boundary-only log",
+             trace_bare == cost_bare == [
+                 ("stage-enter", "review-gate"),
+                 ("review-gate", "loop-disarm-finished"),
+             ])
+
+    # --- cross-tool #2 (the boundary-filtered-subset property): add ONE
+    # non-boundary event to the SAME log -> run-trace GAINS a segment (3
+    # boundary events + 1 non-boundary = 4 parseable events = 3 consecutive
+    # pairs), while run-cost's per-stage windows are UNCHANGED (still 2,
+    # still the same boundaries) because it segments over boundary events
+    # only, exactly as the corrected docs (run-cost.py's D6 docstring,
+    # plan.md D6) claim.
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = make_feature(tmp)
+        transcripts = Path(tmp) / "transcripts"
+        transcripts.mkdir()
+        write_run_log(feature, [
+            ("2026-07-05T10:00:00+00:00", "stage-enter", {"stage": "execute"}),
+            ("2026-07-05T10:03:00+00:00", "custom-non-boundary-event", {}),
+            ("2026-07-05T10:05:00+00:00", "review-gate", {"cluster": "C1", "tier": "STANDARD"}),
+            ("2026-07-05T10:30:00+00:00", "loop-disarm-finished", {"iteration": "1"}),
+        ])
+
+        trace_rc, trace_out, trace_err = run_trace_show_durations(feature)
+        cost_rc, cost_out, cost_err = run_cost(feature, transcript_dir=transcripts)
+        case("cross-tool #2: run-trace show --durations exits 0 with a "
+             "non-boundary event added", trace_rc == 0)
+        case("cross-tool #2: run-cost exits 0 with a non-boundary event added",
+             cost_rc == 0)
+
+        trace_durations_block = trace_out.split("── durations ──")[1] if "── durations ──" in trace_out else ""
+        trace_segment_rows = [
+            ln for ln in trace_durations_block.splitlines()
+            if ln.strip() and not ln.startswith("total")
+        ]
+        case("cross-tool #2: run-trace GAINS a segment (now 3, was 2) once "
+             "the non-boundary event is added",
+             len(trace_segment_rows) == 3)
+        case("cross-tool #2: the non-boundary event surfaces in run-trace's "
+             "durations segmentation",
+             any("custom-non-boundary-event" in ln for ln in trace_segment_rows))
+
+        cost_per_stage_block = cost_out.split("── per-dispatch ──")[0]
+        cost_segment_rows = [
+            ln for ln in cost_per_stage_block.splitlines()
+            if "→" in ln and ln != "── per-stage ──"
+        ]
+        case("cross-tool #2: run-cost's per-stage windows stay UNCHANGED "
+             "(still 2) — it filters to boundary events only, a subset of "
+             "run-trace's all-events segmentation",
+             len(cost_segment_rows) == 2)
+        case("cross-tool #2: run-cost never surfaces the non-boundary event "
+             "as a segment label",
+             not any("custom-non-boundary-event" in ln for ln in cost_segment_rows))
+        case("cross-tool #2: run-cost's boundary pair labels are byte-identical "
+             "to cross-tool #1's (same stage-enter→review-gate, "
+             "review-gate→loop-disarm-finished windows, unaffected by the "
+             "interior non-boundary event)",
+             [ln.split(" | ")[0].strip() for ln in cost_segment_rows] ==
+             ["stage-enter → review-gate", "review-gate → loop-disarm-finished"])
 
     return results
