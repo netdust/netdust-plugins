@@ -169,7 +169,7 @@ If a gate that should have fired did not, this skill failed at its specific job 
 
 | Skill | Relationship |
 |---|---|
-| `harnessed-development` | **ROUTER / UPSTREAM.** Classifies the work (A–E) and enters this spine for Class A (full) and Class B (freshness review). Class D borrows exactly one gate from here: 1a on the diff. |
+| `harnessed-development` | **ROUTER / UPSTREAM.** Classifies the work (A–F) and enters this spine for Class A (full) and Class B (freshness review). Class D borrows exactly one gate from here: 1a on the diff. Class F never enters — brainstorm-only, no plan artifact. |
 | `building` | **DOWNSTREAM — the other spine.** Consumes the seam artifact. Its precondition re-runs `gate-check.py`; it refuses Class A/B work without the approved `tasks.md`. Never invoked by this skill — the human bridges the seam. |
 | `superpowers:brainstorming` | **STAGE 0.** Front-loaded when intent is unclear; stack sub-plugin brainstorming/domain skills replace it when loaded. |
 | `spec-authoring` | **STAGE 0.5.** Wraps `/speckit.specify` + `/speckit.clarify`; HALTs on unresolved `[NEEDS CLARIFICATION]`. |

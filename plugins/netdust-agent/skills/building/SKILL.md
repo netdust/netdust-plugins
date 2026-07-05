@@ -416,7 +416,7 @@ If any gate that *should* have fired did not, the skill failed at its specific j
 
 | Skill | Relationship |
 |---|---|
-| `harnessed-development` | **ROUTER / UPSTREAM.** Classifies the work (A–E); every class's execution lands here. |
+| `harnessed-development` | **ROUTER / UPSTREAM.** Classifies the work (A–F); every code-changing class's execution lands here (Class F never builds — it produces no artifact for this spine). |
 | `planning` | **UPSTREAM — the other spine.** Produces the seam artifact this skill's precondition demands (approved `tasks.md` + gate-check GREEN). A red/missing ticket routes work back there; so does a mid-execution discovery that the plan's shape is wrong. |
 | stack sub-plugins | **OVERRIDE LAYER.** Stack-specific execute/shake-out skills, reviewers, and test runners replace the generics — see `<stack_overrides>`. |
 | `superpowers:subagent-driven-development` | **STAGE 2 — primary branch.** Parallel-independent tasks — dispatched per-task mode: `test-author → implementer` pairs for `split` tasks, single `implementer` dispatches for `solo` tasks (`<test_dev_split>`). |
