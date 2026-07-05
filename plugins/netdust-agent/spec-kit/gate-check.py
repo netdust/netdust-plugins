@@ -229,14 +229,100 @@ def check_task_tiers(tasks_text: str, f: Findings) -> None:
 
 
 TEST_AUTHOR_LINE = re.compile(r"^\s+Test-author:\s*(split|solo)\b\s*(?:[—-]\s*(.*))?$")
+TEST_AUTHOR_ANY_VALUE = re.compile(r"^\s+Test-author:\s*(\S.*)$")
 
 
 def check_test_author_mode(tasks_text: str, f: Findings) -> None:
     """D1 — verify every task's `Test-author:` continuation line per the
-    harness-efficiency plan's rules table. NOT YET WIRED into run_checks();
-    signature shell only — sentinel body, no logic. See specs/harness-efficiency/
-    plan.md section D1 for the rules table this must implement."""
-    f.add("fail", "test-author-mode", "not implemented")
+    harness-efficiency plan's rules table (specs/harness-efficiency/plan.md
+    section D1). Scans continuation lines between a matched TASK_LINE and the
+    next task line / heading / fence; fenced blocks are stripped first via the
+    existing strip_fenced so documentation examples never count."""
+    total = 0
+    missing = []          # task ids with NO Test-author: line at all
+    invalid = []          # (task_id, raw_value) — line present but doesn't match split|solo
+    tier_a_solo_bare = [] # task ids: [Tier A] + solo with no reason after a dash
+    tier_b_split = []     # task ids: [Tier B] + split (over-ceremony)
+
+    lines = strip_fenced(tasks_text).splitlines()
+    n = len(lines)
+    i = 0
+    while i < n:
+        tm = TASK_LINE.match(lines[i])
+        if not tm:
+            i += 1
+            continue
+        total += 1
+        task_id = tm.group(1)
+        task_rest = tm.group(2)
+        is_tier_a = bool(re.search(r"\[Tier\s+A\]", task_rest, re.IGNORECASE))
+
+        # Scan continuation lines until the next task line / heading / end.
+        j = i + 1
+        found_line = None
+        while j < n:
+            nxt = lines[j]
+            if TASK_LINE.match(nxt) or heading_text(nxt):
+                break
+            m = TEST_AUTHOR_LINE.match(nxt)
+            if m:
+                found_line = (m.group(1), (m.group(2) or "").strip())
+                break
+            any_m = TEST_AUTHOR_ANY_VALUE.match(nxt)
+            if any_m:
+                found_line = ("__invalid__", any_m.group(1).strip())
+                break
+            j += 1
+
+        if found_line is None:
+            missing.append(task_id)
+            i += 1
+            continue
+
+        mode, reason = found_line
+        if mode == "__invalid__":
+            invalid.append((task_id, reason))
+        elif mode == "solo" and is_tier_a and not reason:
+            tier_a_solo_bare.append(task_id)
+        elif mode == "split" and not is_tier_a:
+            tier_b_split.append(task_id)
+
+        i += 1
+
+    present = total - len(missing)
+
+    if total == 0:
+        return  # nothing to say here — check_task_tiers already reports "no task lines"
+
+    if present == 0:
+        f.add("warn", "test-author-mode", "pre-0.8 tasks.md — no Test-author: lines")
+        return
+
+    if missing:
+        f.add("fail", "test-author-mode",
+              f"{len(missing)}/{total} task(s) missing a Test-author: line: "
+              + ", ".join(missing[:8]))
+        return
+
+    if invalid:
+        f.add("fail", "test-author-mode",
+              "invalid Test-author: value (must be split or solo…) on "
+              + ", ".join(t for t, _ in invalid[:8]))
+        return
+
+    if tier_a_solo_bare:
+        f.add("fail", "test-author-mode",
+              "Tier A solo requires a stated A-lite reason: "
+              + ", ".join(tier_a_solo_bare[:8]))
+        return
+
+    if tier_b_split:
+        f.add("warn", "test-author-mode",
+              "over-ceremony — split is for security-boundary Tier A: "
+              + ", ".join(tier_b_split[:8]))
+        return
+
+    f.add("pass", "test-author-mode", f"all {total} tasks carry a test-author mode")
 
 
 def check_clusters(tasks_text: str, f: Findings) -> None:
@@ -287,6 +373,7 @@ def run_checks(spec_dir: Path) -> Findings:
         check_threat_model(plan_text, spec_text, f)
     if tasks_text is not None:
         check_task_tiers(tasks_text, f)
+        check_test_author_mode(tasks_text, f)
         check_clusters(tasks_text, f)
     return f
 
