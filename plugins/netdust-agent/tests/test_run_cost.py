@@ -450,4 +450,100 @@ def run() -> list[tuple[bool, str]]:
              "positive wall-clock (0:05:00), not negative",
              "wall=0:05:00" in out)
 
+    # =========================================================================
+    # C4 review-gate findings (additive; original author cases above are
+    # unchanged) — boundary vocabulary + reconciliation, FAMILY 2.
+    # =========================================================================
+
+    # --- (e) manual `/loop off` emits literal event `loop-disarmed`
+    #     (commands/loop.md) — must be accepted as a boundary event so
+    #     per-stage attribution isn't silently skipped on manually-disarmed
+    #     runs. The emitter (run-score.py's loop-disarm-* prefix vocabulary)
+    #     is untouched. ---
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = make_feature(tmp)
+        transcripts = Path(tmp) / "transcripts"
+        transcripts.mkdir()
+        session = "sess-manual-disarm"
+        write_main_session(transcripts, session, [
+            assistant_line("2026-07-05T10:02:00+00:00", usage(output=50)),
+        ])
+        write_run_log(feature, [
+            ("2026-07-05T10:00:00+00:00", "stage-enter", {"stage": "execute"}),
+            ("2026-07-05T10:05:00+00:00", "loop-disarmed", {"reason": "manual"}),
+        ])
+        rc, out, err = run_cost(feature, transcript_dir=transcripts)
+        case("manual loop-disarmed -> exit 0", rc == 0)
+        case("manual loop-disarmed -> per-stage table rendered (2 boundaries "
+             "recognized: stage-enter, loop-disarmed)",
+             "── per-stage ──" in out)
+        case("manual loop-disarmed -> segment labeled with the literal "
+             "event name", "loop-disarmed" in out)
+
+    # --- (f) closed-vs-half-open reconciliation: a controller line exactly
+    #     AT win_end must appear in BOTH the per-dispatch total AND the
+    #     final per-stage segment (the last segment is inclusive of end_ts;
+    #     interior boundaries stay half-open so nothing double-counts). ---
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = make_feature(tmp)
+        transcripts = Path(tmp) / "transcripts"
+        transcripts.mkdir()
+        session = "sess-win-end"
+        write_main_session(transcripts, session, [
+            assistant_line("2026-07-05T10:02:00+00:00", usage(output=50)),
+            assistant_line("2026-07-05T10:30:00+00:00", usage(output=77)),  # exactly win_end
+        ])
+        write_run_log(feature, [
+            ("2026-07-05T10:00:00+00:00", "stage-enter", {"stage": "execute"}),
+            ("2026-07-05T10:30:00+00:00", "loop-disarm-finished", {"iteration": "1"}),
+        ])
+        rc, out, err = run_cost(feature, transcript_dir=transcripts)
+        case("win_end-boundary line fixture -> exit 0", rc == 0)
+        per_stage_section = out.split("── per-dispatch ──")[0]
+        per_dispatch_section = out.split("── per-dispatch ──")[1] if "── per-dispatch ──" in out else ""
+        case("the last segment includes the line exactly at win_end "
+             "(output=127, i.e. 50+77)",
+             "output=127 " in per_stage_section)
+        case("per-dispatch total for the win_end line's controller row is "
+             "127 too (reconciles with the per-stage total)",
+             "output=127 " in per_dispatch_section)
+
+    # --- (g) run-log EXISTS but has <2 boundary events -> the message must
+    #     say "no segment boundaries in run-log.jsonl", NOT the no-run-log
+    #     message (which stays exact for the true no-run-log case). ---
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = make_feature(tmp)
+        transcripts = Path(tmp) / "transcripts"
+        transcripts.mkdir()
+        session = "sess-no-boundaries"
+        write_main_session(transcripts, session, [
+            assistant_line("2026-07-05T10:02:00+00:00", usage(output=50)),
+        ])
+        write_run_log(feature, [
+            ("2026-07-05T10:00:00+00:00", "custom-non-boundary-event", {}),
+        ])
+        rc, out, err = run_cost(feature, transcript_dir=transcripts)
+        case("run-log exists, no boundary events -> exit 0", rc == 0)
+        case("run-log exists, no boundary events -> correct degradation "
+             "message (not the no-run-log message)",
+             "per-stage attribution skipped (no segment boundaries in "
+             "run-log.jsonl)" in out)
+        case("run-log exists, no boundary events -> does NOT print the "
+             "no-run-log message", "no run-log.jsonl" not in out)
+
+    # --- (g contract guard) the EXISTING no-run-log message stays EXACTLY
+    #     as-is after the consolidation into a shared helper. ---
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = make_feature(tmp)
+        transcripts = Path(tmp) / "transcripts"
+        transcripts.mkdir()
+        session = "sess-no-run-log"
+        write_main_session(transcripts, session, [
+            assistant_line("2026-07-05T10:02:00+00:00", usage(output=50)),
+        ])
+        # deliberately no run-log.jsonl written
+        rc, out, err = run_cost(feature, transcript_dir=transcripts)
+        case("no run-log.jsonl -> exact existing message unchanged",
+             "per-stage attribution skipped (no run-log.jsonl)" in out)
+
     return results

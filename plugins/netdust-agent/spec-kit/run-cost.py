@@ -39,7 +39,13 @@ to the run's stage/gate segments recorded in `<feature-dir>/run-log.jsonl`
                                             exit 0, no report
     - transcripts found, no run-log.jsonl -> per-dispatch table only, plus
                                             the note "per-stage attribution
-                                            skipped", exit 0
+                                            skipped (no run-log.jsonl)",
+                                            exit 0
+    - run-log.jsonl exists but has fewer than 2 boundary events -> per-
+      dispatch table only, plus the note "per-stage attribution skipped
+      (no segment boundaries in run-log.jsonl)" (distinct from the
+      no-run-log message above — the log exists, it just carries nothing
+      segmentable), exit 0
     - a malformed transcript line       -> skipped, no crash
     - a dispatch with no meta.json      -> labeled "unknown", no crash
 
@@ -79,6 +85,13 @@ def _is_boundary(event_name: str) -> bool:
     if event_name == "review-gate":
         return True
     if event_name.startswith("loop-disarm-"):
+        return True
+    # Manual `/loop off` emits the literal event `loop-disarmed` (see
+    # commands/loop.md) — distinct from the `loop-disarm-*` prefix vocabulary
+    # run-score.py's grading reads. Accepted here as an additional exact
+    # name so per-stage attribution isn't silently skipped on a
+    # manually-disarmed run; the emitter itself is unchanged.
+    if event_name == "loop-disarmed":
         return True
     return False
 
@@ -366,10 +379,23 @@ def render_per_stage_table(
     controller_rows: list[ControllerRow],
 ) -> str:
     lines = ["── per-stage ──"]
-    for start_ts, start_label, end_ts, end_label in segments:
+    last_index = len(segments) - 1
+    for i, (start_ts, start_label, end_ts, end_label) in enumerate(segments):
+        # Interior boundaries stay half-open (start <= ts < end) so a line
+        # exactly ON a boundary is never double-counted by two adjacent
+        # segments. The FINAL segment is the one exception: it is inclusive
+        # of end_ts (start <= ts <= end) so a line exactly at win_end still
+        # lands in a per-stage segment — otherwise it would appear in the
+        # per-dispatch totals but in no per-stage segment, and the two
+        # tables would fail to reconcile (C4 finding f).
+        is_last = i == last_index
         totals = zero_usage()
         for d in dispatches:
-            if d.first_ts is not None and start_ts <= d.first_ts < end_ts:
+            if d.first_ts is None:
+                continue
+            in_segment = (start_ts <= d.first_ts <= end_ts) if is_last \
+                else (start_ts <= d.first_ts < end_ts)
+            if in_segment:
                 add_usage(totals, d.totals)
         # Controller lines are attributed INDIVIDUALLY (D6: "each
         # dispatch/controller-line attributed to the window containing its
@@ -378,7 +404,11 @@ def render_per_stage_table(
         # their own timestamp, never the whole session as one block).
         for c in controller_rows:
             for ts, usage_totals in c.lines:
-                if ts is not None and start_ts <= ts < end_ts:
+                if ts is None:
+                    continue
+                in_segment = (start_ts <= ts <= end_ts) if is_last \
+                    else (start_ts <= ts < end_ts)
+                if in_segment:
                     add_usage(totals, usage_totals)
         lines.append(
             f"{start_label} → {end_label} | "
@@ -386,6 +416,21 @@ def render_per_stage_table(
             f"{format_tokens(totals)}"
         )
     return "\n".join(lines)
+
+
+def _print_dispatch_only_fallback(
+    dispatches: list[Dispatch],
+    controller_rows: list[ControllerRow],
+    reason: str,
+) -> None:
+    """The degraded report: per-dispatch table only, plus a one-line note
+    naming WHY per-stage attribution was skipped. Consolidates what were
+    three copy-pasted call sites (no run-log.jsonl, empty run-log.jsonl, no
+    segment boundaries) so each degradation path states its own reason
+    instead of all three sharing the misleading "no run-log.jsonl" text."""
+    print(render_per_dispatch_table(dispatches, controller_rows))
+    print()
+    print(f"per-stage attribution skipped ({reason})")
 
 
 def run(feature_dir: Path, transcript_dir: Path) -> int:
@@ -402,16 +447,12 @@ def run(feature_dir: Path, transcript_dir: Path) -> int:
 
     run_log_path = feature_dir / "run-log.jsonl"
     if not run_log_path.exists():
-        print(render_per_dispatch_table(dispatches, controller_rows))
-        print()
-        print("per-stage attribution skipped (no run-log.jsonl)")
+        _print_dispatch_only_fallback(dispatches, controller_rows, "no run-log.jsonl")
         return 0
 
     events = read_run_log_events(run_log_path)
     if not events:
-        print(render_per_dispatch_table(dispatches, controller_rows))
-        print()
-        print("per-stage attribution skipped (no run-log.jsonl)")
+        _print_dispatch_only_fallback(dispatches, controller_rows, "no run-log.jsonl")
         return 0
 
     win_start, win_end = run_window(events)
@@ -442,9 +483,10 @@ def run(feature_dir: Path, transcript_dir: Path) -> int:
 
     segments = boundary_segments(events)
     if not segments:
-        print(render_per_dispatch_table(dispatches, controller_rows))
-        print()
-        print("per-stage attribution skipped (no run-log.jsonl)")
+        _print_dispatch_only_fallback(
+            dispatches, controller_rows,
+            "no segment boundaries in run-log.jsonl",
+        )
         return 0
 
     # Per-stage table renders FIRST: it carries the boundary-event labels
