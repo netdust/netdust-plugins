@@ -13,15 +13,15 @@ The harness decides *when* and *whether*. The craft is *how to actually do it*. 
 
 ### Layer 1 — Harness (control flow)
 
-These skills are **sequencers and gates**. They do not teach craft; they decide what fires, in what order, and prove it fired. `harnessed-development` is the single entry point — an intake ROUTER that classifies the work (Class A–E) and routes it to the two spines, which meet at an enforced seam: an approved `tasks.md` with `spec-kit/gate-check.py` GREEN. `planning` stops there; `building` refuses to start without it.
+These skills are **sequencers and gates**. They do not teach craft; they decide what fires, in what order, and prove it fired. `harnessed-development` is the single entry point — an intake ROUTER that classifies the work (Class A–F) and routes it to the two spines, which meet at an enforced seam: an approved `tasks.md` with `spec-kit/gate-check.py` GREEN. `planning` stops there; `building` refuses to start without it.
 
-- `harnessed-development` — entry point; intake router only (class dial A–E → spine)
-- `planning` — PLAN spine; sequences brainstorm → (spec-authoring) → plan(+gates 1a–1g, task-shaping 1d/1f/1h) → (spec-analysis); STOPS at the seam for human approval
-- `building` — BUILD spine; precondition = the seam artifact; sequences execute (per-task testing + standards gates, review-cluster HALTs, optional armed `/loop`) → shake-out → finish → compounding
+- `harnessed-development` — entry point; intake router only (class dial A–F → spine; F = vision-brief, brainstorm-only, no plan/tasks artifact)
+- `planning` — PLAN spine; sequences brainstorm → (spec-authoring) → plan(+gates 1a–1g, task-shaping 1d/1f/1h) → (spec-analysis); STOPS at the seam for human approval. Presence-aware: inline in the main conversation while the human is steering, dispatched background `planner` once unattended — the pre-unattended ladder (gate-check GREEN, seam approval, doubting-decisions) gates either way.
+- `building` — BUILD spine; precondition = the seam artifact; sequences execute (per-task testing + standards gates, review-cluster HALTs, optional armed `/loop`) → shake-out → finish → compounding. Stage 2's test/dev split is tier-conditional: an independent test-author writes the RED test first for Tier-A security-boundary tasks (the plan's `Test-author: split` field, machine-checked by `gate-check.py`'s test-author-mode check); other tasks run solo RED-first TDD.
 - `superpowers:writing-plans` (upstream base, not a local skill) — gate: spec → plan → tasks
 - `spec-authoring` — gate (spec-kit graft, Stage 0.5): wraps `/speckit.specify` + `/clarify`; HALTs on unresolved `[NEEDS CLARIFICATION]`
 - `spec-analysis` — gate (spec-kit graft, Stage 1.5): `/speckit.analyze` + mechanical `gate-check.py` — the pre-execution barrier that machine-checks 1a/1b/1d/1f
-- `run-trace.py` / `run-score.py` (spec-kit) — in-loop event trace + evaluator rubric: `loop-gate.py` emits decision events automatically (fail-open); `/shakeout` surfaces the graded rubric at spec-close; report-only, no new gate
+- `run-trace.py` / `run-score.py` (spec-kit) — in-loop event trace + evaluator rubric: `loop-gate.py` emits decision events automatically (fail-open); `/shakeout` surfaces the graded rubric at spec-close; report-only, no new gate. `run-trace.py show --durations` adds per-segment timing; `run-cost.py` is a strictly read-only transcript miner emitting per-dispatch/per-stage token tables — same report-only posture, no new gate
 - `standards-gate` — gate (Step 2.6b): runs the project linter at each code-task close; backstopped by `subagent-stop.py`
 - `constitution-bridge` — setup: generates the spec-kit constitution as a view over RULES/SOUL/invariants
 - `testing-workflow` — gate: per-task, *what tier of test does this need, prove it's RED-first*

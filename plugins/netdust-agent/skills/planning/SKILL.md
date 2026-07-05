@@ -60,6 +60,8 @@ If a stack sub-plugin offers a sharper craft skill for a stage, prefer it — sa
 
 <stage_persona>
 The `planner` agent persona owns this whole spine (Stage 0 → the seam): it classifies, fires the gates by trigger, ground-truths premises, shapes the task list, and never hand-writes a gate section — it loads the skill that produces it. Dispatch `planner`, or run the stages inline yourself; the gates fire the same either way.
+
+**Presence decides WHERE, not WHETHER.** When the human is present and actively steering — an interactive session, requirements still moving — plan INLINE in the main conversation: a pivot must cost a sentence, not a background-agent round-trip. Dispatch the background `planner` (or a plan-correction agent) only when the human has stepped away, or the output feeds an unattended run (an armed `/loop`, a tmux loop, a scheduled run). The persona is not retired by this — it remains the background mode, and is exactly right for those unattended cases; presence just decides which of the two you reach for.
 </stage_persona>
 
 <process>
@@ -100,6 +102,7 @@ Invoke `superpowers:writing-plans`. Follow its checklist. **If the spec-kit graf
 **1d. Task-shaping gate (one gate, three facets — absorbs the former 1f and 1h).** The content gates above decide what the plan must contain; this gate shapes the task list those contents break into. The labels 1d/1f/1h survive in the templates and `gate-check.py`; treat them here as one gate:
 
   - **(1d) Test expectations.** Per `testing-workflow`: every task gets its tier marker — a Tier-A task carries a "Unit test: [what the RED-first test must assert]" line (including the denial path for a guard); a Tier-B task carries `no unit test: Tier B, <reason>`. Every phase gets an "Integration gate: [what to verify across tasks]" line. A plan without these is not ready to execute.
+  - **(1d) Test-author mode.** Every task also carries a `Test-author:` mode line, set HERE at plan time by the decision rule (D1): `split` **iff** the task is **Tier A** **and** falls in a security-boundary category — auth/guards/capability checks, untrusted-input parsing, migrations/schema, money/billing, or any 1a-trigger surface named in the plan's threat model. Tier A outside those categories ("A-lite": pure logic/transforms/thresholds) → `solo — <one-line reason>` (the reason is mandatory for Tier A); Tier B → `solo — Tier B` (the reason may be the tier itself). **Hard rule: a Tier-A task on a security-boundary category is ALWAYS `split`** — you may not talk a 1a-surface task down to solo to save a dispatch. The mode is decided HERE, read by the controller at dispatch, and never re-decided by any run-time agent (the no-self-downgrade invariant) — the field is machine-checked by `gate-check.py`'s `test-author-mode` check at Stage 1.5.
   - **(1f) Review-group sizing.** A single review group is **~3–4 tasks max**. When a phase exceeds that, OR contains an irreversible / security-boundary step (a schema drop, a teardown migration, an auth/token rewrite), split it into sub-group **review clusters**, each declared with an explicit `── REVIEW GATE ──` STOP marker in the plan — the executing agent HALTs there for `/integration` + `/code-review` on that cluster's diff; an irreversible-migration cluster reviews alone and also gets `/security-review`. Without this, execution runs a long phase flat and the first review is an un-bisectable mega-diff. (2026-06-05, Folio drop-workspace-tenancy Phase 4: a 7-task `__system`-teardown phase behind one end-of-phase gate ran straight through, merged two tasks into an uncommitted blob, and would have reviewed the irreversible `memberships`/`__system` drops in the same pass as refactors. Slug: `teardown-cluster`; the `traverse-clause` disaster — 7.7× review-to-implementation time — was the same shape.)
   - **(1h) Provisional review tier per cluster.** Beside each `── REVIEW GATE ──` marker, assign a provisional tier from the **same surface triggers the 1a gate already names** (never a second list): **FULL** — the diff touches any 1a trigger surface, a named architecture invariant, or the data layer/migrations; **STANDARD** — multi-file behavior changes outside those surfaces; **LIGHT** — doc/copy/config/skill-body only. `building` restates the tier at each gate (and may override with justification), and escalation there is one-way — a finding on a 1a surface promotes the unit to FULL. Tier governs finder/persona fan-out only; it never cancels the `/security-review` obligation a plan-time threat model created.
   - **Loop-auditability (stay loop-agnostic).** The plan is execution-mode-agnostic — you never know whether `building` will run it under an armed `/loop`. Two content lines make it loop-safe either way: mark any step no agent may take alone (destructive-migration approval, credentials, deploy confirmation) with `[HUMAN]` on its task line (a planned yield point, never `[P]`), and write a `Loop budget: ~N iterations` line in the plan's technical context (task count + clusters + slack).
@@ -125,6 +128,8 @@ When Stage 1.5 is green, present to your human partner, in one compact block: th
 
 This stop is the reason the split exists: the plan/build boundary is a **review checkpoint**, and a checkpoint an agent can roll through is not a checkpoint.
 
+**The ladder before UNATTENDED execution is mandatory regardless of planning mode.** Whether the plan above was written inline (human present) or by a dispatched `planner` (human away), the same review ladder gates any run that will proceed without a human watching: the Stage 1.5 `gate-check.py` GREEN, human approval at the seam, and `doubting-decisions` run on the plan's key decision. Presence changes WHERE the planning happened; it never changes WHICH gates fire before the run is left to execute unattended. (This ladder is a sequencer-enforced obligation of the pre-unattended path — restated here, not newly added; no new machine gate or HALT is introduced.)
+
 </process>
 
 <red_flags>
@@ -140,6 +145,7 @@ These thoughts mean you are about to skip a plan-time gate. Stop.
 | "The plan is done and green — I'll just get task 1 moving while the human reviews" | The seam is a hard STOP. An agent that rolls through the checkpoint has deleted the checkpoint. Present, stop, wait. |
 | "`/speckit.analyze` passed, the plan is ready" | analyze is half of Stage 1.5. Run `gate-check.py` — it is what catches a skipped threat model, an un-tiered task, or an oversized cluster. Green checker + human approval = the seam. |
 | "One 7-task phase with a review at the end keeps the plan simple" | That is the un-bisectable mega-diff (`teardown-cluster`). Clusters of ~3–4; irreversible steps review alone. |
+| "The user is mid-pivot and I'm dispatching a background planner" | A background plan finished during live steering has a shelf life of minutes — two sub-10-minute pivots each invalidated a just-finished background plan (calibration: `background-planner-pivots`). Plan inline while requirements are still moving; dispatch background only once the human has stepped away or the run is unattended. |
 
 </red_flags>
 
@@ -163,7 +169,7 @@ If a gate that should have fired did not, this skill failed at its specific job 
 
 | Skill | Relationship |
 |---|---|
-| `harnessed-development` | **ROUTER / UPSTREAM.** Classifies the work (A–E) and enters this spine for Class A (full) and Class B (freshness review). Class D borrows exactly one gate from here: 1a on the diff. |
+| `harnessed-development` | **ROUTER / UPSTREAM.** Classifies the work (A–F) and enters this spine for Class A (full) and Class B (freshness review). Class D borrows exactly one gate from here: 1a on the diff. Class F never enters — brainstorm-only, no plan artifact. |
 | `building` | **DOWNSTREAM — the other spine.** Consumes the seam artifact. Its precondition re-runs `gate-check.py`; it refuses Class A/B work without the approved `tasks.md`. Never invoked by this skill — the human bridges the seam. |
 | `superpowers:brainstorming` | **STAGE 0.** Front-loaded when intent is unclear; stack sub-plugin brainstorming/domain skills replace it when loaded. |
 | `spec-authoring` | **STAGE 0.5.** Wraps `/speckit.specify` + `/speckit.clarify`; HALTs on unresolved `[NEEDS CLARIFICATION]`. |

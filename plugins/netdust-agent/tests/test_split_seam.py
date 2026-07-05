@@ -62,8 +62,8 @@ def run():
     # ── the router stays thin ────────────────────────────────────────────────
     check("router: routes to both spines",
           "`planning`" in router and "`building`" in router)
-    check("router: keeps the class dial (A–E intake table)",
-          all(f"**{c} —" in router for c in "ABCDE"))
+    check("router: keeps the class dial (A–F intake table)",
+          all(f"**{c} —" in router for c in "ABCDEF"))
     check("router: no stage content re-fused in (no Step 2.x, no gate bodies, no addendum)",
           "Step 2.5" not in router
           and "## Stage" not in router
