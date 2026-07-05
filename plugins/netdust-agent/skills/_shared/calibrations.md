@@ -18,6 +18,7 @@ All incidents: Folio, Phases 1–3 (2026-05 → 2026-06) unless noted.
 | `tableview-premise` | 05-30 | "Runs render through the existing TableView" survived spec + plan + handoff and was false; one grep would have falsified it. Ground-truth every reuse-X-for-Y premise (1c). | `skills/planning/SKILL.md` (gate 1c) |
 | `teardown-cluster` | 06-05 | A 7-task `__system`-teardown phase behind ONE gate ran flat, merged two tasks into an uncommitted blob, and nearly reviewed irreversible drops beside refactors. Clusters ≤4; irreversible = solo (1f). | `skills/planning/SKILL.md` (task-shaping gate, 1f facet) |
 | `tokens-mint-bypass` | 06-01 | The one CRITICAL in a "tight" auth audit was the single write path bypassing the `roleToScopes` convergence point — latent for months. Name the convergence point; the bypass becomes a one-line finding. | `skills/architecture-invariants/SKILL.md` (calibration data) |
+| `background-planner-pivots` | 07-04 | Sofie session: plan approved 12:24, invalidated 12:34 ("Sofie has nothing to do with Hermes"), second pivot 13:09 (dev/prod split) — each correction cost a background-agent round-trip (~14 and ~7 min) plus check-on-agent wakeups, while the pre-unattended review ladder caught 4 real loop-breakers that same day (incl. a live-ACL-tested lockout) — the highest-ROI gate of the day. Resolution: presence-aware planning (D3) — plan inline while the human is steering; dispatch background + run the full ladder only before unattended execution. | `skills/planning/SKILL.md` (`<stage_persona>` + seam) |
 
 ## Execution calibrations
 

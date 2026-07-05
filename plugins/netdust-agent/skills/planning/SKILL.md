@@ -60,6 +60,8 @@ If a stack sub-plugin offers a sharper craft skill for a stage, prefer it — sa
 
 <stage_persona>
 The `planner` agent persona owns this whole spine (Stage 0 → the seam): it classifies, fires the gates by trigger, ground-truths premises, shapes the task list, and never hand-writes a gate section — it loads the skill that produces it. Dispatch `planner`, or run the stages inline yourself; the gates fire the same either way.
+
+**Presence decides WHERE, not WHETHER.** When the human is present and actively steering — an interactive session, requirements still moving — plan INLINE in the main conversation: a pivot must cost a sentence, not a background-agent round-trip. Dispatch the background `planner` (or a plan-correction agent) only when the human has stepped away, or the output feeds an unattended run (an armed `/loop`, a tmux loop, a scheduled run). The persona is not retired by this — it remains the background mode, and is exactly right for those unattended cases; presence just decides which of the two you reach for.
 </stage_persona>
 
 <process>
@@ -126,6 +128,8 @@ When Stage 1.5 is green, present to your human partner, in one compact block: th
 
 This stop is the reason the split exists: the plan/build boundary is a **review checkpoint**, and a checkpoint an agent can roll through is not a checkpoint.
 
+**The ladder before UNATTENDED execution is mandatory regardless of planning mode.** Whether the plan above was written inline (human present) or by a dispatched `planner` (human away), the same review ladder gates any run that will proceed without a human watching: the Stage 1.5 `gate-check.py` GREEN, human approval at the seam, and `doubting-decisions` run on the plan's key decision. Presence changes WHERE the planning happened; it never changes WHICH gates fire before the run is left to execute unattended.
+
 </process>
 
 <red_flags>
@@ -141,6 +145,7 @@ These thoughts mean you are about to skip a plan-time gate. Stop.
 | "The plan is done and green — I'll just get task 1 moving while the human reviews" | The seam is a hard STOP. An agent that rolls through the checkpoint has deleted the checkpoint. Present, stop, wait. |
 | "`/speckit.analyze` passed, the plan is ready" | analyze is half of Stage 1.5. Run `gate-check.py` — it is what catches a skipped threat model, an un-tiered task, or an oversized cluster. Green checker + human approval = the seam. |
 | "One 7-task phase with a review at the end keeps the plan simple" | That is the un-bisectable mega-diff (`teardown-cluster`). Clusters of ~3–4; irreversible steps review alone. |
+| "The user is mid-pivot and I'm dispatching a background planner" | A background plan finished during live steering has a shelf life of minutes — two sub-10-minute pivots each invalidated a just-finished background plan (calibration: `background-planner-pivots`). Plan inline while requirements are still moving; dispatch background only once the human has stepped away or the run is unattended. |
 
 </red_flags>
 
