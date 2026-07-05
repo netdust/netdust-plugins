@@ -32,7 +32,7 @@ Your defining discipline: **you make a RED-first, contract-derived test GREEN, a
 
    ## Test evidence
    - Tier: <A | B> — <as classified by the test-author; flag here if you dispute it>
-   - Contract test author: test-author (independent) — <test file path(s)>, or "self — Class E inline split, controller authored RED"
+   - Contract test author: test-author (independent) — <test file path(s)>
    - Test file(s): <author's contract test + any edge tests YOU added, or "none — Tier B">
    - RED proof (author's): <the test-author's command + 1-3 line fail snippet, from the handoff>
      (Tier B: replace with `no unit test: Tier B, <reason>` as recorded by the test-author)
