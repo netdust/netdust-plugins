@@ -65,6 +65,7 @@ import argparse
 import json
 import re
 import sys
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -135,32 +136,42 @@ def add_usage(totals: dict[str, int], usage: dict) -> None:
             totals[f] += v
 
 
-def sum_usage_line(line: str) -> tuple[datetime | None, dict[str, int] | None]:
-    """Parse one JSONL transcript line. Returns (ts, usage-totals) for an
-    assistant line with a usage payload, or (None, None) if the line is
-    malformed, not an assistant line, or has no usage — never raises."""
+def sum_usage_line(
+    line: str,
+) -> tuple[datetime | None, dict[str, int] | None, str | None]:
+    """Parse one JSONL transcript line. Returns (ts, usage-totals, model) for
+    an assistant line with a usage payload, or (None, None, None) if the
+    line is malformed, not an assistant line, or has no usage — never
+    raises. `model` is read from the same parsed entry so callers never
+    need a second read/parse pass just to find the model name (C4 finding
+    h: folds model extraction into this single read pass)."""
     try:
         entry = json.loads(line)
     except json.JSONDecodeError:
-        return None, None
+        return None, None, None
     if not isinstance(entry, dict) or entry.get("type") != "assistant":
-        return None, None
+        return None, None, None
     message = entry.get("message")
     if not isinstance(message, dict):
-        return None, None
+        return None, None, None
     usage = message.get("usage")
     if not isinstance(usage, dict):
-        return None, None
+        return None, None, None
     ts = parse_ts(entry.get("timestamp", ""))
     totals = zero_usage()
     add_usage(totals, usage)
-    return ts, totals
+    model = message.get("model") if message.get("model") else None
+    return ts, totals, model
 
 
-def read_transcript_lines(path: Path) -> list[tuple[datetime | None, dict[str, int]]]:
+def read_transcript_lines(
+    path: Path,
+) -> list[tuple[datetime | None, dict[str, int], str | None]]:
     """Every assistant/usage line in a transcript file, read-only. A
-    malformed line is skipped, never crashes the read."""
-    out: list[tuple[datetime | None, dict[str, int]]] = []
+    malformed line is skipped, never crashes the read. Each entry carries
+    the line's model name (or None) alongside (ts, totals) so a caller
+    needing the dispatch's model never has to re-read/re-parse the file."""
+    out: list[tuple[datetime | None, dict[str, int], str | None]] = []
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
@@ -168,38 +179,21 @@ def read_transcript_lines(path: Path) -> list[tuple[datetime | None, dict[str, i
     for raw in text.splitlines():
         if not raw.strip():
             continue
-        ts, totals = sum_usage_line(raw)
+        ts, totals, model = sum_usage_line(raw)
         if totals is None:
             continue
-        out.append((ts, totals))
+        out.append((ts, totals, model))
     return out
 
 
+@dataclass
 class Dispatch:
-    def __init__(self, agent_type: str, description: str, model: str | None,
-                 first_ts: datetime | None, last_ts: datetime | None,
-                 totals: dict[str, int]):
-        self.agent_type = agent_type
-        self.description = description
-        self.model = model
-        self.first_ts = first_ts
-        self.last_ts = last_ts
-        self.totals = totals
-
-
-def _model_of(path: Path, lines: list[str]) -> str | None:
-    for raw in lines:
-        if not raw.strip():
-            continue
-        try:
-            entry = json.loads(raw)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(entry, dict) and entry.get("type") == "assistant":
-            message = entry.get("message")
-            if isinstance(message, dict) and message.get("model"):
-                return message.get("model")
-    return None
+    agent_type: str
+    description: str
+    model: str | None
+    first_ts: datetime | None
+    last_ts: datetime | None
+    totals: dict[str, int]
 
 
 def collect_dispatches(transcript_dir: Path) -> list[Dispatch]:
@@ -213,16 +207,20 @@ def collect_dispatches(transcript_dir: Path) -> list[Dispatch]:
         if not subagents_dir.is_dir():
             continue
         for jsonl_path in sorted(subagents_dir.glob("agent-*.jsonl")):
+            # Single read/parse pass: read_transcript_lines already carries
+            # each assistant line's model alongside (ts, usage) — no second
+            # read of the file is needed to find the dispatch's model
+            # (C4 finding h).
             entries = read_transcript_lines(jsonl_path)
             if not entries:
                 continue
-            timestamps = [ts for ts, _ in entries if ts is not None]
+            timestamps = [ts for ts, _, _ in entries if ts is not None]
             first_ts = min(timestamps) if timestamps else None
             last_ts = max(timestamps) if timestamps else None
             totals = zero_usage()
-            for _, u in entries:
-                for f in USAGE_FIELDS:
-                    totals[f] += u[f]
+            for _, u, _ in entries:
+                add_usage(totals, u)
+            model = next((m for _, _, m in entries if m), None)
 
             # jsonl_path is agent-<id>.jsonl; the meta sibling is
             # agent-<id>.meta.json (same stem, .meta.json suffix appended).
@@ -238,12 +236,6 @@ def collect_dispatches(transcript_dir: Path) -> list[Dispatch]:
                     agent_type = meta.get("agentType") or "unknown"
                     description = meta.get("description") or "unknown"
 
-            try:
-                raw_lines = jsonl_path.read_text(encoding="utf-8").splitlines()
-            except OSError:
-                raw_lines = []
-            model = _model_of(jsonl_path, raw_lines)
-
             dispatches.append(Dispatch(
                 agent_type=agent_type, description=description, model=model,
                 first_ts=first_ts, last_ts=last_ts, totals=totals,
@@ -251,22 +243,20 @@ def collect_dispatches(transcript_dir: Path) -> list[Dispatch]:
     return dispatches
 
 
+@dataclass
 class ControllerRow:
-    def __init__(self, session_id: str, first_ts: datetime | None,
-                 last_ts: datetime | None, totals: dict[str, int],
-                 lines: list[tuple[datetime | None, dict[str, int]]] | None = None):
-        self.session_id = session_id
-        self.first_ts = first_ts
-        self.last_ts = last_ts
-        self.totals = totals
-        # Individual (ts, usage) entries for this session's assistant lines.
-        # Per-stage attribution (D6: "each dispatch/controller-line
-        # attributed to the window containing its (first) timestamp") must
-        # bucket controller usage per LINE, not attribute the whole
-        # session's totals to the window containing its first timestamp —
-        # a controller session spans every stage, so block-attribution
-        # would systematically inflate the first window.
-        self.lines = lines if lines is not None else []
+    session_id: str
+    first_ts: datetime | None
+    last_ts: datetime | None
+    totals: dict[str, int]
+    # Individual (ts, usage) entries for this session's assistant lines.
+    # Per-stage attribution (D6: "each dispatch/controller-line attributed
+    # to the window containing its (first) timestamp") must bucket
+    # controller usage per LINE, not attribute the whole session's totals
+    # to the window containing its first timestamp — a controller session
+    # spans every stage, so block-attribution would systematically inflate
+    # the first window.
+    lines: list[tuple[datetime | None, dict[str, int]]] = field(default_factory=list)
 
 
 def collect_controller_rows(transcript_dir: Path) -> list[ControllerRow]:
@@ -276,16 +266,15 @@ def collect_controller_rows(transcript_dir: Path) -> list[ControllerRow]:
         entries = read_transcript_lines(jsonl_path)
         if not entries:
             continue
-        timestamps = [ts for ts, _ in entries if ts is not None]
+        timestamps = [ts for ts, _, _ in entries if ts is not None]
         first_ts = min(timestamps) if timestamps else None
         last_ts = max(timestamps) if timestamps else None
         totals = zero_usage()
-        for _, u in entries:
-            for f in USAGE_FIELDS:
-                totals[f] += u[f]
+        for _, u, _ in entries:
+            add_usage(totals, u)
         rows.append(ControllerRow(
             session_id=jsonl_path.stem, first_ts=first_ts, last_ts=last_ts,
-            totals=totals, lines=entries,
+            totals=totals, lines=[(ts, u) for ts, u, _ in entries],
         ))
     return rows
 
