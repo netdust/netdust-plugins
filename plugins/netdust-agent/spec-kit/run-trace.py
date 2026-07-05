@@ -82,7 +82,7 @@ def do_append(feature_dir: Path, event: str, kv_tokens: list[str]) -> int:
     return 0
 
 
-def do_show(feature_dir: Path) -> int:
+def do_show(feature_dir: Path, durations: bool = False) -> int:
     log_path = feature_dir / LOG_NAME
     if not log_path.exists():
         print("no trace recorded")
@@ -105,6 +105,15 @@ def do_show(feature_dir: Path) -> int:
         data = entry.get("data", {})
         print(f"{ts} {event} {data}")
 
+    if durations:
+        # T10 shell — segmentation/duration rendering not implemented yet.
+        # Signature-only: the flag is wired so tests can assert the future
+        # contract (plan.md D5) fails behaviorally instead of via argparse
+        # rejection. The implementer replaces this branch with the real
+        # segment-table + total rendering; it must NOT change anything
+        # above this line (the no-flag path stays byte-identical).
+        raise NotImplementedError("show --durations: not implemented (T10)")
+
     return 0
 
 
@@ -121,13 +130,16 @@ def main(argv: list[str]) -> int:
 
     p_show = sub.add_parser("show", help="render the run log")
     p_show.add_argument("feature_dir", type=Path)
+    p_show.add_argument("--durations", action="store_true",
+                         help="print a segments/durations table after the "
+                              "normal rendering (T10, plan.md D5)")
 
     args = ap.parse_args(argv)
 
     if args.command == "append":
         return do_append(args.feature_dir, args.event, args.kv)
     elif args.command == "show":
-        return do_show(args.feature_dir)
+        return do_show(args.feature_dir, durations=args.durations)
 
     return 1  # unreachable — argparse enforces a valid subcommand
 

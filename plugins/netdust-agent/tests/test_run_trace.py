@@ -8,6 +8,20 @@ Contract (specs/run-observability/spec.md, specs/run-observability/tasks.md T01)
     NO file created.
   - Malformed k=v (missing `=`) -> exit nonzero.
   - `show` on empty/missing log -> clean "no trace recorded", exit 0 (not an error).
+
+T10 contract (specs/harness-efficiency/tasks.md T10, plan.md D5):
+  - `show --durations` prints, AFTER the normal rendering, a segments table:
+    header `── durations ──`, one row per consecutive pair of parseable
+    events (`<event-a>[ <key data>] -> <event-b>[ <key data>]   <H:MM:SS>`),
+    a `review-gate` row's key data includes `cluster=`/`tier=`, a
+    `stage-enter` row's key data includes `stage=`, and a trailing
+    `total (first -> last parseable event)  <H:MM:SS>` line.
+  - Corrupt/unparseable-ts lines are skipped for segmentation purposes,
+    consistent with `show`'s existing `<corrupt line>` degradation.
+  - Fewer than 2 parseable (timestamped) events -> exactly
+    `durations: not derivable (<2 timestamped events)`, exit 0.
+  - WITHOUT `--durations`, output must be byte-identical to the pre-T10
+    rendering (golden fixture captured before this task's implementation).
 """
 
 import json
@@ -169,5 +183,125 @@ def run() -> list[tuple[bool, str]]:
         case("show on torn trailing line -> exit 0 (not a crash)", rc == 0)
         case("show on torn trailing line -> valid line still rendered",
              "stage-enter" in out)
+
+    # =====================================================================
+    # T10 — `show --durations` (specs/harness-efficiency/tasks.md T10,
+    # plan.md D5). This flag does not exist in production yet: the
+    # implementer's job is to make these cases pass with real segmentation
+    # logic. Written RED-first by the test-author; DO NOT weaken.
+    # =====================================================================
+
+    # --- WITHOUT the flag: byte-identical to the pre-T10 golden fixture ---
+    # This is the load-bearing regression guard: whatever segmentation logic
+    # the implementer adds under --durations, the no-flag path must render
+    # EXACTLY what it rendered before this task touched the file. The
+    # fixture below is a literal capture of `show`'s output taken from the
+    # pre-T10 production code — not re-derived from any post-change run.
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = Path(tmp) / "specs" / "demo"
+        feature.mkdir(parents=True)
+        log_path(feature).write_text(
+            '{"ts": "2026-07-05T10:00:00+00:00", "event": "stage-enter", "data": {"stage": "execute"}}\n'
+            '{"ts": "2026-07-05T10:00:05+00:00", "event": "review-gate", "data": {"cluster": "C1", "tier": "STANDARD"}}\n'
+            '{"ts": "2026-07-05T10:02:05+00:00", "event": "stage-enter", "data": {"stage": "review"}}\n'
+        )
+        golden = (
+            "2026-07-05T10:00:00+00:00 stage-enter {'stage': 'execute'}\n"
+            "2026-07-05T10:00:05+00:00 review-gate {'cluster': 'C1', 'tier': 'STANDARD'}\n"
+            "2026-07-05T10:02:05+00:00 stage-enter {'stage': 'review'}\n"
+        )
+
+        rc, out, err = run_trace("show", str(feature))
+
+        case("show WITHOUT --durations -> exit 0", rc == 0)
+        case("show WITHOUT --durations -> byte-identical to pre-T10 golden fixture",
+             out == golden)
+
+    # --- --durations: fixture log with known timestamps -> exact segment
+    #     rows + total ---
+    # stage-enter(10:00:00) -> review-gate(10:00:05): 0:00:05
+    # review-gate(10:00:05) -> stage-enter(10:02:05): 0:02:00
+    # total first->last: 10:00:00 -> 10:02:05 = 0:02:05
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = Path(tmp) / "specs" / "demo"
+        feature.mkdir(parents=True)
+        log_path(feature).write_text(
+            '{"ts": "2026-07-05T10:00:00+00:00", "event": "stage-enter", "data": {"stage": "execute"}}\n'
+            '{"ts": "2026-07-05T10:00:05+00:00", "event": "review-gate", "data": {"cluster": "C1", "tier": "STANDARD"}}\n'
+            '{"ts": "2026-07-05T10:02:05+00:00", "event": "stage-enter", "data": {"stage": "review"}}\n'
+        )
+
+        rc, out, err = run_trace("show", str(feature), "--durations")
+
+        case("show --durations (fixture log) -> exit 0", rc == 0)
+        case("show --durations -> prints the '── durations ──' header",
+             "── durations ──" in out)
+        case("show --durations -> stage-enter row carries stage=",
+             "stage=execute" in out and "stage=review" in out)
+        case("show --durations -> review-gate row carries cluster=/tier=",
+             "cluster=C1" in out and "tier=STANDARD" in out)
+        case("show --durations -> segment 1 (stage-enter -> review-gate) delta is 0:00:05",
+             any("stage-enter" in ln and "review-gate" in ln and "0:00:05" in ln
+                 for ln in out.splitlines()))
+        case("show --durations -> segment 2 (review-gate -> stage-enter) delta is 0:02:00",
+             any("review-gate" in ln and "stage-enter" in ln and "0:02:00" in ln
+                 for ln in out.splitlines()
+                 if ln.strip() != "" and not ln.startswith("total")))
+        case("show --durations -> total line present with first->last delta 0:02:05",
+             any(ln.strip().startswith("total") and "0:02:05" in ln
+                 for ln in out.splitlines()))
+
+    # --- denial: single-event (parseable) log -> not derivable, exit 0 ---
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = Path(tmp) / "specs" / "demo"
+        feature.mkdir(parents=True)
+        run_trace("append", str(feature), "stage-enter", "stage=execute")
+
+        rc, out, err = run_trace("show", str(feature), "--durations")
+
+        case("show --durations (single event) -> exit 0", rc == 0)
+        case("show --durations (single event) -> 'not derivable' message",
+             "durations: not derivable (<2 timestamped events)" in (out + err))
+
+    # --- corrupt line skipped: does not crash, excluded from segmentation ---
+    # Two valid, parseable events plus one corrupt line in between. The
+    # corrupt line must render as `<corrupt line>` (existing show behavior)
+    # AND must not appear as, or break, a durations segment — segmentation
+    # runs over the parseable events only, consistent with `show`'s
+    # existing corrupt-line degradation.
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = Path(tmp) / "specs" / "demo"
+        feature.mkdir(parents=True)
+        log_path(feature).write_text(
+            '{"ts": "2026-07-05T10:00:00+00:00", "event": "stage-enter", "data": {"stage": "execute"}}\n'
+            'not-json-at-all\n'
+            '{"ts": "2026-07-05T10:00:30+00:00", "event": "stage-enter", "data": {"stage": "review"}}\n'
+        )
+
+        rc, out, err = run_trace("show", str(feature), "--durations")
+
+        case("show --durations (corrupt line present) -> exit 0, no crash", rc == 0)
+        case("show --durations (corrupt line present) -> '<corrupt line>' still rendered",
+             "<corrupt line>" in out)
+        case("show --durations (corrupt line present) -> segment computed across the "
+             "two parseable events (delta 0:00:30), corrupt line not a segment endpoint",
+             any("stage-enter" in ln and "0:00:30" in ln for ln in out.splitlines()))
+        case("show --durations (corrupt line present) -> total is 0:00:30",
+             any(ln.strip().startswith("total") and "0:00:30" in ln
+                 for ln in out.splitlines()))
+
+    # --- empty/missing log + --durations: existing "no trace recorded"
+    #     behavior unchanged (no durations section, no crash) ---
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = Path(tmp) / "specs" / "demo"
+        feature.mkdir(parents=True)
+
+        rc, out, err = run_trace("show", str(feature), "--durations")
+
+        case("show --durations (missing log) -> exit 0", rc == 0)
+        case("show --durations (missing log) -> 'no trace recorded', unchanged",
+             "no trace recorded" in (out + err).lower())
+        case("show --durations (missing log) -> no durations header emitted",
+             "── durations ──" not in out)
 
     return results
