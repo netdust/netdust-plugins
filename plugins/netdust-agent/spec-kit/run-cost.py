@@ -56,13 +56,364 @@ error — same discipline as run-score.py.
 from __future__ import annotations
 
 import argparse
+import json
+import re
 import sys
+from datetime import datetime
 from pathlib import Path
+
+USAGE_FIELDS = (
+    "output_tokens",
+    "cache_read_input_tokens",
+    "cache_creation_input_tokens",
+    "input_tokens",
+)
+
+# Same boundary-event segmentation as run-trace.py show --durations (D5).
+BOUNDARY_EVENTS = {"gate-check-green", "stage-enter"}
+
+
+def _is_boundary(event_name: str) -> bool:
+    if event_name in BOUNDARY_EVENTS:
+        return True
+    if event_name == "review-gate":
+        return True
+    if event_name.startswith("loop-disarm-"):
+        return True
+    return False
 
 
 def default_transcript_dir(cwd: Path | None = None) -> Path:
-    """Not implemented — signature shell only (test-author phase)."""
-    raise NotImplementedError("default_transcript_dir: not implemented")
+    """`~/.claude/projects/<slug>`, slug = absolute cwd with every `/` and
+    `.` replaced by `-` (plan.md D6's ground-truthed slug rule)."""
+    resolved = (cwd or Path.cwd()).resolve()
+    slug = re.sub(r"[/.]", "-", str(resolved))
+    return Path.home() / ".claude" / "projects" / slug
+
+
+def parse_ts(raw: str) -> datetime | None:
+    """Normalize both the `...Z` and `...+00:00` suffix forms and parse.
+    Returns None (never raises) on anything unparseable — callers must
+    treat that as "skip this line/event", never a crash."""
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+
+
+def zero_usage() -> dict[str, int]:
+    return {f: 0 for f in USAGE_FIELDS}
+
+
+def add_usage(totals: dict[str, int], usage: dict) -> None:
+    for f in USAGE_FIELDS:
+        v = usage.get(f)
+        if isinstance(v, (int, float)):
+            totals[f] += v
+
+
+def sum_usage_line(line: str) -> tuple[datetime | None, dict[str, int] | None]:
+    """Parse one JSONL transcript line. Returns (ts, usage-totals) for an
+    assistant line with a usage payload, or (None, None) if the line is
+    malformed, not an assistant line, or has no usage — never raises."""
+    try:
+        entry = json.loads(line)
+    except json.JSONDecodeError:
+        return None, None
+    if not isinstance(entry, dict) or entry.get("type") != "assistant":
+        return None, None
+    message = entry.get("message")
+    if not isinstance(message, dict):
+        return None, None
+    usage = message.get("usage")
+    if not isinstance(usage, dict):
+        return None, None
+    ts = parse_ts(entry.get("timestamp", ""))
+    totals = zero_usage()
+    add_usage(totals, usage)
+    return ts, totals
+
+
+def read_transcript_lines(path: Path) -> list[tuple[datetime | None, dict[str, int]]]:
+    """Every assistant/usage line in a transcript file, read-only. A
+    malformed line is skipped, never crashes the read."""
+    out: list[tuple[datetime | None, dict[str, int]]] = []
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return out
+    for raw in text.splitlines():
+        if not raw.strip():
+            continue
+        ts, totals = sum_usage_line(raw)
+        if totals is None:
+            continue
+        out.append((ts, totals))
+    return out
+
+
+class Dispatch:
+    def __init__(self, agent_type: str, description: str, model: str | None,
+                 first_ts: datetime | None, last_ts: datetime | None,
+                 totals: dict[str, int]):
+        self.agent_type = agent_type
+        self.description = description
+        self.model = model
+        self.first_ts = first_ts
+        self.last_ts = last_ts
+        self.totals = totals
+
+
+def _model_of(path: Path, lines: list[str]) -> str | None:
+    for raw in lines:
+        if not raw.strip():
+            continue
+        try:
+            entry = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(entry, dict) and entry.get("type") == "assistant":
+            message = entry.get("message")
+            if isinstance(message, dict) and message.get("model"):
+                return message.get("model")
+    return None
+
+
+def collect_dispatches(transcript_dir: Path) -> list[Dispatch]:
+    """Every <session>/subagents/agent-*.jsonl dispatch, read-only. A
+    dispatch with no sibling meta.json is labeled 'unknown', never crashes."""
+    dispatches: list[Dispatch] = []
+    for session_dir in sorted(transcript_dir.iterdir()):
+        if not session_dir.is_dir():
+            continue
+        subagents_dir = session_dir / "subagents"
+        if not subagents_dir.is_dir():
+            continue
+        for jsonl_path in sorted(subagents_dir.glob("agent-*.jsonl")):
+            entries = read_transcript_lines(jsonl_path)
+            if not entries:
+                continue
+            timestamps = [ts for ts, _ in entries if ts is not None]
+            first_ts = min(timestamps) if timestamps else None
+            last_ts = max(timestamps) if timestamps else None
+            totals = zero_usage()
+            for _, u in entries:
+                for f in USAGE_FIELDS:
+                    totals[f] += u[f]
+
+            # jsonl_path is agent-<id>.jsonl; the meta sibling is
+            # agent-<id>.meta.json (same stem, .meta.json suffix appended).
+            meta_path = jsonl_path.parent / (jsonl_path.stem + ".meta.json")
+            agent_type = "unknown"
+            description = "unknown"
+            if meta_path.exists():
+                try:
+                    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    meta = {}
+                if isinstance(meta, dict):
+                    agent_type = meta.get("agentType") or "unknown"
+                    description = meta.get("description") or "unknown"
+
+            try:
+                raw_lines = jsonl_path.read_text(encoding="utf-8").splitlines()
+            except OSError:
+                raw_lines = []
+            model = _model_of(jsonl_path, raw_lines)
+
+            dispatches.append(Dispatch(
+                agent_type=agent_type, description=description, model=model,
+                first_ts=first_ts, last_ts=last_ts, totals=totals,
+            ))
+    return dispatches
+
+
+class ControllerRow:
+    def __init__(self, session_id: str, first_ts: datetime | None,
+                 last_ts: datetime | None, totals: dict[str, int]):
+        self.session_id = session_id
+        self.first_ts = first_ts
+        self.last_ts = last_ts
+        self.totals = totals
+
+
+def collect_controller_rows(transcript_dir: Path) -> list[ControllerRow]:
+    """Every main-session *.jsonl directly inside transcript_dir, read-only."""
+    rows: list[ControllerRow] = []
+    for jsonl_path in sorted(transcript_dir.glob("*.jsonl")):
+        entries = read_transcript_lines(jsonl_path)
+        if not entries:
+            continue
+        timestamps = [ts for ts, _ in entries if ts is not None]
+        first_ts = min(timestamps) if timestamps else None
+        last_ts = max(timestamps) if timestamps else None
+        totals = zero_usage()
+        for _, u in entries:
+            for f in USAGE_FIELDS:
+                totals[f] += u[f]
+        rows.append(ControllerRow(
+            session_id=jsonl_path.stem, first_ts=first_ts, last_ts=last_ts,
+            totals=totals,
+        ))
+    return rows
+
+
+def read_run_log_events(run_log_path: Path) -> list[dict]:
+    """Every well-formed event in run-log.jsonl, read-only. A malformed
+    line is skipped, never crashes."""
+    events: list[dict] = []
+    try:
+        text = run_log_path.read_text(encoding="utf-8")
+    except OSError:
+        return events
+    for raw in text.splitlines():
+        if not raw.strip():
+            continue
+        try:
+            entry = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(entry, dict):
+            events.append(entry)
+    return events
+
+
+def run_window(events: list[dict]) -> tuple[datetime | None, datetime | None]:
+    """[first ts, last ts] over every parseable event timestamp."""
+    parsed = [parse_ts(e.get("ts", "")) for e in events]
+    parsed = [ts for ts in parsed if ts is not None]
+    if not parsed:
+        return None, None
+    return min(parsed), max(parsed)
+
+
+def boundary_segments(events: list[dict]) -> list[tuple[datetime, str, datetime, str]]:
+    """Consecutive boundary-event pairs (gate-check-green, stage-enter,
+    review-gate, loop-disarm-*) — same segmentation as run-trace.py show
+    --durations (D5). Each item: (start_ts, start_label, end_ts, end_label)."""
+    boundary_points: list[tuple[datetime, str]] = []
+    for e in events:
+        name = e.get("event", "")
+        if not _is_boundary(name):
+            continue
+        ts = parse_ts(e.get("ts", ""))
+        if ts is None:
+            continue
+        boundary_points.append((ts, name))
+    boundary_points.sort(key=lambda p: p[0])
+
+    segments = []
+    for a, b in zip(boundary_points, boundary_points[1:]):
+        segments.append((a[0], a[1], b[0], b[1]))
+    return segments
+
+
+def format_tokens(totals: dict[str, int]) -> str:
+    return (f"output={totals['output_tokens']} "
+            f"cache_read={totals['cache_read_input_tokens']} "
+            f"cache_creation={totals['cache_creation_input_tokens']} "
+            f"input={totals['input_tokens']}")
+
+
+def format_wall_clock(first_ts: datetime | None, last_ts: datetime | None) -> str:
+    if first_ts is None or last_ts is None:
+        return "n/a"
+    return str(last_ts - first_ts)
+
+
+def render_per_dispatch_table(dispatches: list[Dispatch],
+                               controller_rows: list[ControllerRow]) -> str:
+    lines = ["── per-dispatch ──"]
+    for d in dispatches:
+        lines.append(
+            f"{d.agent_type} | {d.description} | "
+            f"first={d.first_ts.isoformat() if d.first_ts else 'n/a'} | "
+            f"wall={format_wall_clock(d.first_ts, d.last_ts)} | "
+            f"model={d.model or 'unknown'} | {format_tokens(d.totals)}"
+        )
+    for c in controller_rows:
+        lines.append(
+            f"(controller) {c.session_id} | "
+            f"first={c.first_ts.isoformat() if c.first_ts else 'n/a'} | "
+            f"wall={format_wall_clock(c.first_ts, c.last_ts)} | "
+            f"{format_tokens(c.totals)}"
+        )
+    return "\n".join(lines)
+
+
+def render_per_stage_table(
+    segments: list[tuple[datetime, str, datetime, str]],
+    dispatches: list[Dispatch],
+    controller_rows: list[ControllerRow],
+) -> str:
+    lines = ["── per-stage ──"]
+    for start_ts, start_label, end_ts, end_label in segments:
+        totals = zero_usage()
+        for d in dispatches:
+            if d.first_ts is not None and start_ts <= d.first_ts < end_ts:
+                add_usage(totals, d.totals)
+        for c in controller_rows:
+            if c.first_ts is not None and start_ts <= c.first_ts < end_ts:
+                add_usage(totals, c.totals)
+        lines.append(
+            f"{start_label} → {end_label} | "
+            f"wall={format_wall_clock(start_ts, end_ts)} | "
+            f"{format_tokens(totals)}"
+        )
+    return "\n".join(lines)
+
+
+def run(feature_dir: Path, transcript_dir: Path) -> int:
+    if not feature_dir.is_dir():
+        print(f"run-cost: no such feature dir: {feature_dir}", file=sys.stderr)
+        return 1
+
+    if not transcript_dir.is_dir():
+        print(f"no transcript found: {transcript_dir}")
+        return 0
+
+    dispatches = collect_dispatches(transcript_dir)
+    controller_rows = collect_controller_rows(transcript_dir)
+
+    run_log_path = feature_dir / "run-log.jsonl"
+    if not run_log_path.exists():
+        print(render_per_dispatch_table(dispatches, controller_rows))
+        print()
+        print("per-stage attribution skipped (no run-log.jsonl)")
+        return 0
+
+    events = read_run_log_events(run_log_path)
+    if not events:
+        print(render_per_dispatch_table(dispatches, controller_rows))
+        print()
+        print("per-stage attribution skipped (no run-log.jsonl)")
+        return 0
+
+    win_start, win_end = run_window(events)
+
+    if win_start is not None and win_end is not None:
+        dispatches = [d for d in dispatches
+                      if d.first_ts is not None and win_start <= d.first_ts <= win_end]
+        controller_rows = [c for c in controller_rows
+                            if c.first_ts is not None and win_start <= c.first_ts <= win_end]
+
+    segments = boundary_segments(events)
+    if not segments:
+        print(render_per_dispatch_table(dispatches, controller_rows))
+        print()
+        print("per-stage attribution skipped (no run-log.jsonl)")
+        return 0
+
+    # Per-stage table renders FIRST: it carries the boundary-event labels
+    # (review-gate, stage-enter, loop-disarm-*) that give each token count
+    # its stage attribution. The per-dispatch table (raw per-subagent
+    # totals, unattributed to a stage) follows.
+    print(render_per_stage_table(segments, dispatches, controller_rows))
+    print()
+    print(render_per_dispatch_table(dispatches, controller_rows))
+    return 0
 
 
 def main(argv: list[str]) -> int:
@@ -73,12 +424,11 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--transcript-dir", type=Path, default=None)
     args = ap.parse_args(argv)
 
-    # Signature shell only: no parsing/summing logic yet. Sentinel body so
-    # the RED this task's tests produce is behavioral (wrong exit code /
-    # wrong stdout), never "module not found". The implementer replaces
-    # this body; nothing above (argparse surface, docstring contract) is
-    # implementation and should not need to change.
-    raise NotImplementedError("run-cost.py: not implemented")
+    transcript_dir = args.transcript_dir
+    if transcript_dir is None:
+        transcript_dir = default_transcript_dir()
+
+    return run(args.feature_dir, transcript_dir)
 
 
 if __name__ == "__main__":
