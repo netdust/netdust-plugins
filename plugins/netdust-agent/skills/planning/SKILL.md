@@ -70,15 +70,17 @@ The `planner` agent persona owns this whole spine (Stage 0 → the seam): it cla
 
 If the feature's intent, scope, or shape is not already pinned down, invoke `superpowers:brainstorming` **before** any plan exists (prefer the stack sub-plugin's brainstorming/domain skill when loaded — see `<stack_overrides>`). Skip only when the work is a well-specified change with no open design questions.
 
-## Stage 0.5 — Author the spec (when the spec-kit graft is installed)
+Brainstorming is what **authors the spec**, and it writes it to `specs/<feature>/spec.md` from `templates/spec-template.md` — the location preference in `memory/GLOBAL.md` overrides its `docs/superpowers/specs/` default. Content is upstream's job; Stage 0.5 only verifies. If the spec lands anywhere else, the whole spec gate silently no-ops, so check the path before moving on.
 
-If the project has the spec-kit graft (`/spec-kit-setup` was run — `specs/` + `.specify/templates/overrides/` exist), invoke `netdust-agent:spec-authoring` **before** writing the plan. It wraps `/speckit.specify` + `/speckit.clarify` to produce `specs/<feature>/spec.md` (what/why, user stories, acceptance criteria — no tech stack) and HALTS on any unresolved `[NEEDS CLARIFICATION]` (enforced mechanically by `spec-kit/gate-check.py`). The Stage-1 plan is then written against a clarified spec, and the spec's Security-relevant-surfaces flags pre-arm the 1a threat-model gate.
+## Stage 0.5 — Gate the spec (always)
 
-Skip this stage only when the graft is not installed (fall back to brainstorm → plan directly) or in Class B freshness-review mode.
+Invoke `netdust-agent:spec-authoring` **before** writing the plan. Stage 0 wrote `specs/<feature>/spec.md` from `templates/spec-template.md` (what/why, prioritized P1/P2/P3 user stories, acceptance criteria, measurable `SC-n` success criteria — no tech stack); Stage 0.5 is the gate over it. It HALTS on any unresolved `[NEEDS CLARIFICATION]` and on any success criterion carrying no number, both enforced mechanically by `spec-kit/gate-check.py`. The Stage-1 plan is then written against a clarified spec, the spec's Security-relevant-surfaces flags pre-arm the 1a threat-model gate, and its story boundaries become the review clusters in 1d.
+
+**This stage is unconditional — it does not depend on the spec-kit graft.** `gate-check.py` reads whatever of `spec.md` / `plan.md` / `tasks.md` sits in the feature dir and imports nothing from spec-kit. The one prerequisite is that the spec is at `specs/<feature>/spec.md`, which is a standing preference in `memory/GLOBAL.md` rather than a per-project choice — a spec at brainstorming's upstream default path is a spec no gate ever reads. Skip this stage only in Class B freshness-review mode (where the spec predates you).
 
 ## Stage 1 — Write the plan, with the plan-time gates baked in
 
-Invoke `superpowers:writing-plans`. Follow its checklist. **If the spec-kit graft is installed, the plan is written from the override `plan-template.md` (the gate sections are pre-structured as `[GATE]` headings) against the Stage-0.5 `spec.md`.** Then layer the netdust gates below **before task breakdown is finalized** — they are not optional add-ons, they change what tasks the plan contains.
+Invoke `superpowers:writing-plans`. Follow its checklist. **The plan is written against the Stage-0.5 `spec.md`** — and if the spec-kit graft is installed, from the override `plan-template.md`, whose gate sections are pre-structured as `[GATE]` headings. Without the graft you author those same headings yourself; `gate-check.py` requires them either way, so the template is a convenience and never the thing that makes the gate exist. Then layer the netdust gates below **before task breakdown is finalized** — they are not optional add-ons, they change what tasks the plan contains.
 
 **Stack plan-requirements (override layer).** If a stack sub-plugin provides a plan-requirements skill (see `<stack_overrides>`), invoke it HERE, alongside 1a/1b — it injects the stack's mandatory requirement sections into the plan before task breakdown, so those become per-task acceptance criteria and the `/code-review` convergence target.
 
@@ -113,10 +115,10 @@ Invoke `superpowers:writing-plans`. Follow its checklist. **If the spec-kit graf
 
 Invoke `netdust-agent:spec-analysis`. Two parts:
 
-1. **Semantic consistency** — `/speckit.analyze` cross-checks spec ↔ plan ↔ tasks (every requirement covered, no orphan tasks, no contradiction). (Skip part 1 if the spec-kit graft is not installed.)
-2. **Mechanical gate-presence — BLOCKING.** Run `spec-kit/gate-check.py specs/<feature>`. It FAILS (and you do NOT proceed) on: a missing `[GATE]` heading; a security surface flagged in `spec.md` but the plan's `## Threat model` left N/A; a task with no `[Tier A|B]` marker; a review cluster >4 tasks or an irreversible step that isn't a solo non-`[P]` task.
+1. **Semantic consistency — the one item here that is NOT mechanical.** Cross-check spec ↔ plan ↔ tasks: every `FR-n` and `SC-n` covered by a task, no orphan task tracing to nothing in the spec, no contradiction between the three. With the spec-kit graft, `/speckit.analyze` does this; without it, you read the three files against each other yourself. Be honest about the difference — **no script checks requirement coverage today**, so this part is sequencer-enforced, and it is the one place in Stage 1.5 where saying "done" is an assertion rather than an artifact property. (Open follow-up: a mechanical `FR-n`/`SC-n` → task coverage check in `gate-check.py` would close it.)
+2. **Mechanical gate-presence — BLOCKING.** Run `spec-kit/gate-check.py specs/<feature>`. It FAILS (and you do NOT proceed) on: a missing `[GATE]` heading; a security surface flagged in `spec.md` but the plan's `## Threat model` left N/A; an unresolved `[NEEDS CLARIFICATION]`; an `SC-n` line carrying no number; a task with no `[Tier A|B]` marker or no `Test-author:` mode; a review cluster >4 tasks or an irreversible step that isn't a solo non-`[P]` task.
 
-On FAIL, route each finding to its remediation (`threat-modeling` / `architecture-invariants` / `testing-workflow` / re-split clusters), fix the artifacts, re-run until green. Even without the graft, apply 1a–1g as a manual checklist and say so explicitly — `building`'s precondition will ask.
+On FAIL, route each finding to its remediation (`threat-modeling` / `architecture-invariants` / `testing-workflow` / re-split clusters), fix the artifacts, re-run until green. **There is no graft-less fallback and no manual-checklist substitute:** `gate-check.py` is the arbiter on every project, and `building`'s precondition re-runs it. A checklist an agent says it applied is precisely the self-attestation this gate replaced.
 
 ## The seam — STOP here
 
@@ -143,7 +145,9 @@ These thoughts mean you are about to skip a plan-time gate. Stop.
 | "We'll reuse the existing X for this, obviously it fits" | Read X's source NOW (1c). The TableView-for-runs premise survived three documents and was false (`tableview-premise`). |
 | "Let me grep the codebase to understand the task before invoking the upstream skill" | The upstream skill IS how you understand the task. Invoke it first. (1c ground-truthing is the one allowed post-load read.) |
 | "The plan is done and green — I'll just get task 1 moving while the human reviews" | The seam is a hard STOP. An agent that rolls through the checkpoint has deleted the checkpoint. Present, stop, wait. |
-| "`/speckit.analyze` passed, the plan is ready" | analyze is half of Stage 1.5. Run `gate-check.py` — it is what catches a skipped threat model, an un-tiered task, or an oversized cluster. Green checker + human approval = the seam. |
+| "The semantic cross-check passed, the plan is ready" | That is half of Stage 1.5, and the half no script verifies. Run `gate-check.py` — it is what catches a skipped threat model, an un-tiered task, or an oversized cluster. Green checker + human approval = the seam. |
+| "No spec-kit here, so I'll apply the gates as a checklist and note that I did" | That degradation is deleted. `gate-check.py` needs no graft — it reads `specs/<feature>/` directly. A stated checklist is the self-attestation the gate exists to replace. |
+| "Brainstorming already wrote the design doc, so Stage 0.5 has nothing to do" | Stage 0.5 never authored the spec; it verifies it. Check the path first (`specs/<feature>/spec.md`) — at the upstream default path every check silently no-ops. |
 | "One 7-task phase with a review at the end keeps the plan simple" | That is the un-bisectable mega-diff (`teardown-cluster`). Clusters of ~3–4; irreversible steps review alone. |
 | "The user is mid-pivot and I'm dispatching a background planner" | A background plan finished during live steering has a shelf life of minutes — two sub-10-minute pivots each invalidated a just-finished background plan (calibration: `background-planner-pivots`). Plan inline while requirements are still moving; dispatch background only once the human has stepped away or the run is unattended. |
 
@@ -158,7 +162,7 @@ This skill has succeeded when:
 3. Every "reuse X for Y" premise was ground-truthed against X's source before the plan shipped (1c).
 4. User-facing work carries an `## Acceptance flows` matrix with mandatory per-flow edges (1g).
 5. The task list is shaped (1d): every task tiered, every phase gated, clusters ≤~4 tasks with `── REVIEW GATE ──` markers + provisional tiers, `[HUMAN]` steps marked, a `Loop budget` line present.
-6. `gate-check.py` is GREEN (or the manual checklist was applied and stated, graft-less projects).
+6. `gate-check.py` is GREEN — on every project, graft or no graft. No manual-checklist substitute.
 7. The spine STOPPED at the seam — artifacts presented, human approval awaited, zero tasks dispatched, `building` not invoked.
 
 If a gate that should have fired did not, this skill failed at its specific job — even if the plan reads well.
@@ -172,7 +176,7 @@ If a gate that should have fired did not, this skill failed at its specific job 
 | `harnessed-development` | **ROUTER / UPSTREAM.** Classifies the work (A–F) and enters this spine for Class A (full) and Class B (freshness review). Class D borrows exactly one gate from here: 1a on the diff. Class F never enters — brainstorm-only, no plan artifact. |
 | `building` | **DOWNSTREAM — the other spine.** Consumes the seam artifact. Its precondition re-runs `gate-check.py`; it refuses Class A/B work without the approved `tasks.md`. Never invoked by this skill — the human bridges the seam. |
 | `superpowers:brainstorming` | **STAGE 0.** Front-loaded when intent is unclear; stack sub-plugin brainstorming/domain skills replace it when loaded. |
-| `spec-authoring` | **STAGE 0.5.** Wraps `/speckit.specify` + `/speckit.clarify`; HALTs on unresolved `[NEEDS CLARIFICATION]`. |
+| `spec-authoring` | **STAGE 0.5 — unconditional.** Gates the spec brainstorming authored at `specs/<feature>/spec.md`; HALTs on unresolved `[NEEDS CLARIFICATION]` and on unmeasurable success criteria. Owns the hand-back-ambiguity rule. |
 | `superpowers:writing-plans` | **STAGE 1.** The plan this spine wraps the gates around; with the graft, written from the override `plan-template.md`. |
 | `threat-modeling` | **GATE 1a.** Fired by trigger list at plan-time, or on an ad-hoc security diff (Class D). Becomes the `/code-review` convergence target. |
 | `architecture-invariants` | **GATE 1b.** Fired when a convergence point is touched; authored at plan-time if the doc is missing. |

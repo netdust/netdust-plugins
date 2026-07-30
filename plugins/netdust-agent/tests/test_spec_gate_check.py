@@ -46,6 +46,70 @@ SPEC_WITH_UNRESOLVED = """# Feature Specification: Importer
 - [x] Untrusted parsing (frontmatter, payloads, uploads, AI tool-call args)
 """
 
+# ── `success-criteria` fixtures (spec-template.md `## Success criteria`) ─────
+# The gate exists so shake-out signs off against a comparison rather than a
+# judgement call: every SC line must carry a number. Measurability is tested
+# crudely — "the line contains a digit" — which admits `100% of users are
+# happy` but catches the failure mode that actually occurs: prose success
+# criteria nobody can sign off against.
+
+SPEC_SC_MEASURABLE = """# Feature Specification: Course publishing
+
+## Success criteria
+
+> Feature-level, technology-agnostic, and **measurable** — every line carries a number.
+
+- **SC-1:** an editor publishes a course module in under 3 minutes, unassisted
+- **SC-2:** the module list renders in under 500 ms at 4,000 users
+
+## Security-relevant surfaces
+- [x] None of the above
+"""
+
+# Mixed: SC-1 carries a number, SC-2/SC-3 are prose. FAIL must name the offenders,
+# not just report a count — the author needs to know WHICH line to rewrite.
+SPEC_SC_VAGUE = """# Feature Specification: Course publishing
+
+## Success criteria
+
+- **SC-1:** an editor publishes a course module in under 3 minutes, unassisted
+- **SC-2:** editors find the publishing flow intuitive
+- **SC-3:** the module list feels fast
+
+## Security-relevant surfaces
+- [x] None of the above
+"""
+
+# The section present but never filled in — bracketed `[e.g. …]` bodies exactly as
+# templates/spec-template.md ships them. Template guidance is not a criterion, so this
+# must FAIL rather than PASS on the placeholder's own digits ("3 minutes", "500 ms").
+SPEC_SC_TEMPLATE_UNTOUCHED = """# Feature Specification: [FEATURE NAME]
+
+## Success criteria
+
+> Feature-level, technology-agnostic, and **measurable** — every line carries a number.
+
+- **SC-1:** [e.g. an editor publishes a course module in under 3 minutes, unassisted]
+- **SC-2:** [e.g. the module list renders in under 500 ms at 4,000 users]
+
+## Security-relevant surfaces
+- [x] None of the above
+"""
+
+# A spec authored before the template carried the section at all → WARN, never FAIL.
+# Same retro-compat stance as test-author-mode's pre-0.8 WARN: the gate only bites
+# once the template is in use. Flip gate-check.py's "warn" to "fail" when every live
+# specs/ dir carries the section.
+SPEC_PRE_TEMPLATE_NO_SC = """# Feature Specification: Rename a label
+
+## Problem / why
+
+The footer copyright label reads 2019.
+
+## Security-relevant surfaces
+- [x] None of the above
+"""
+
 PLAN_GATES_FULL = """# Implementation Plan: Webhook receiver
 
 ## Constitution check  [GATE]
@@ -313,6 +377,33 @@ def run():
     # 10. fully good set → PASS
     rc, out = _run({"spec.md": SPEC_TRIGGERED, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_GOOD})
     results.append((rc == 0 and "GATE: PASS" in out, "complete, gate-bearing set PASSES"))
+
+    # ── `success-criteria` — the spec-stage half of the Stage-0.5 gate ────────
+    # Run through the CLI (_run) rather than unit-level, because the WARN-vs-FAIL
+    # distinction is only load-bearing via the exit code: a pre-template spec must
+    # stay green while a filled-in-but-unmeasurable one must not.
+
+    # 10a. every SC line carries a number → PASS
+    rc, out = _run({"spec.md": SPEC_SC_MEASURABLE})
+    results.append((rc == 0 and "✓ [success-criteria]" in out,
+                    "measurable ## Success criteria PASSES"))
+
+    # 10b. prose SC lines → FAIL, naming the offending ids (not just a count)
+    rc, out = _run({"spec.md": SPEC_SC_VAGUE})
+    results.append((rc == 1 and "success-criteria" in out
+                     and "SC-2" in out and "SC-3" in out and "SC-1" not in out,
+                    "SC line with no number FAILs and names SC-2/SC-3 only"))
+
+    # 10c. section present but only untouched `[e.g. …]` placeholders → FAIL
+    # (the placeholders' own digits must not be mistaken for a measurement)
+    rc, out = _run({"spec.md": SPEC_SC_TEMPLATE_UNTOUCHED})
+    results.append((rc == 1 and "success-criteria" in out and "placeholder" in out,
+                    "untouched template placeholders FAIL, digits in the example ignored"))
+
+    # 10d. retro-compat: no ## Success criteria section at all → WARN, gate stays PASS
+    rc, out = _run({"spec.md": SPEC_PRE_TEMPLATE_NO_SC})
+    results.append((rc == 0 and "! [success-criteria]" in out,
+                    "pre-template spec with no ## Success criteria WARNs, never FAILs"))
 
     # ── D1 `test-author-mode` — one fixture per plan.md D1 rules-table row ────
     # check_test_author_mode() is called DIRECTLY (unit level), independent of

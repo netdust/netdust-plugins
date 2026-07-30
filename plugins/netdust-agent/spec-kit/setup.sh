@@ -21,6 +21,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OVERRIDES_SRC="${SCRIPT_DIR}/overrides"
+# spec-template.md is NOT a spec-kit override any more — the spec is authored by
+# superpowers:brainstorming straight into specs/<feature>/spec.md and read there by
+# gate-check.py. It lives in ../templates/ and is still installed into the override
+# slot below, so a graft-ed project that does drive /speckit.specify resolves the
+# same shape. Its source of truth is ../templates/spec-template.md.
+TEMPLATES_SRC="${SCRIPT_DIR}/../templates"
 PROJECT_ROOT="${1:-$PWD}"
 SPECIFY_REF="${SPECIFY_REF:-main}"
 
@@ -28,11 +34,13 @@ say() { printf '  %s\n' "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 [ -d "$OVERRIDES_SRC" ] || die "override templates not found at $OVERRIDES_SRC"
+[ -d "$TEMPLATES_SRC" ] || die "netdust templates not found at $TEMPLATES_SRC"
 [ -d "$PROJECT_ROOT" ]  || die "project root does not exist: $PROJECT_ROOT"
 
 echo "netdust × spec-kit setup"
 say "project : $PROJECT_ROOT"
 say "overrides: $OVERRIDES_SRC"
+say "templates: $TEMPLATES_SRC"
 say "spec-kit ref: $SPECIFY_REF"
 
 # 1. Install spec-kit core (.specify/) if not already present.
@@ -52,7 +60,10 @@ fi
 DEST="$PROJECT_ROOT/.specify/templates/overrides"
 mkdir -p "$DEST"
 echo "==> installing netdust override templates → $DEST"
-for f in spec-template.md plan-template.md tasks-template.md; do
+[ -f "$TEMPLATES_SRC/spec-template.md" ] || die "missing template: $TEMPLATES_SRC/spec-template.md"
+cp "$TEMPLATES_SRC/spec-template.md" "$DEST/spec-template.md"
+say "✓ spec-template.md  (from ../templates — netdust spec template, not a spec-kit override)"
+for f in plan-template.md tasks-template.md; do
   [ -f "$OVERRIDES_SRC/$f" ] || die "missing override: $OVERRIDES_SRC/$f"
   cp "$OVERRIDES_SRC/$f" "$DEST/$f"
   say "✓ $f"
@@ -77,5 +88,7 @@ fi
 
 echo "Done. Next:"
 say "1. Run the constitution-bridge skill to generate the constitution from RULES/SOUL/invariants."
-say "2. Use /speckit.specify → /speckit.clarify → /speckit.plan → /speckit.tasks."
+say "2. The spec does NOT come from /speckit.specify — superpowers:brainstorming writes"
+say "   specs/<feature>/spec.md from templates/spec-template.md (see the spec-authoring skill)."
+say "   From there: /speckit.plan → /speckit.tasks."
 say "3. Hand tasks.md to building Stage 2. NEVER run /speckit.implement."

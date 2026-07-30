@@ -21,6 +21,29 @@ Harness-level facts. Shipped with the netdust-agent plugin; injected into every 
 - **Never deploy to prod without explicit "production" confirmation.** `/deploy` enforces this.
 - **Never use `git stash` as temporary holding.** Audit on 2026-05-18 found 17 abandoned stashes across multiple sessions (unrecoverable real work — kebab redesign, 545-line tab-offertes redesign, 289-line AdminAPIController changes). Pattern: `git stash` → operation → `git stash pop` fails on a cache file → work re-applied manually → original stash later `drop`'d → commit becomes unreachable. Instead: (a) leave the tree dirty, (b) commit a `wip:` to the current branch and amend/reset later, (c) `git worktree add ../<name> <branch>` for parallel exploration, (d) `git checkout <commit> -- <file>` + `git checkout HEAD -- <file>` for single-file inspection. The `session-stop.py` auto-capture hook only commits `memory/` + `tasks/` and is NOT the cause. Recovery: `git fsck --unreachable` + `git update-ref refs/recovery/<name> <sha>` to pin before gc.
 
+## Harness preferences (these OVERRIDE upstream skill defaults)
+
+Standing preferences, stated here because this file is injected into every session — an
+upstream skill reads them as user preference and yields to them.
+
+- **Spec location is `specs/<feature>/spec.md`.** `superpowers:brainstorming` defaults to
+  writing its design doc to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, and its
+  own skill says a user preference for spec location overrides that default. **This is that
+  preference.** Write the spec to `specs/<feature>/spec.md`, using
+  `netdust-agent/templates/spec-template.md` as its shape. This is not cosmetic filing:
+  `spec-kit/gate-check.py` reads `specs/<feature>/`, so a spec written to the upstream
+  default is a spec **no gate ever checks** — the clarify-HALT and success-criteria checks
+  simply never fire. Applies to every project, with or without the spec-kit graft.
+
+- **Open questions are handed back, never defaulted away.** Brainstorming's spec self-review
+  says: if a requirement could be read two ways, pick one and make it explicit. The harness
+  overrides that. Anything still open after the design dialogue is written as a
+  `[NEEDS CLARIFICATION: <substance>]` marker and handed back to Stefan — the Stage-0.5 HALT
+  is mechanical and will stop the plan anyway. Defaults you *did* choose go in the spec's
+  `## Assumptions` section, one line each, so they are visible at the user review gate.
+  (A script can detect an unresolved marker; it can never detect a silently resolved one.
+  `## Assumptions` + the human review gate are the only control there.)
+
 ## SSH aliases (pattern)
 
 - `ploi-staging` / `ploi-<sitename>-staging` — Hetzner via Ploi

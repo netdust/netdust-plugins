@@ -233,9 +233,10 @@ When all bugs are resolved or explicitly deferred by the human:
 
 1. Run abbreviated final sweep — focus on previously broken areas
 2. Update manifest with final status
-3. Present to human: "All [N] resolved. [N] deferred. Here's what changed."
-4. Invoke `superpowers:verification-before-completion`
-5. Invoke `superpowers:finishing-a-development-branch`
+3. **Sign off against the spec's `## Success criteria`, one `SC-n` at a time.** Every SC line carries a number (`gate-check.py`'s `success-criteria` check is what guarantees that), so this is a **comparison, not a judgement call**: state the measured value beside the target and mark it met / not met / not measured. A criterion you cannot measure here is a finding — either it belongs in Acceptance criteria or the spec set a target nothing produces. Never sign off on an SC by narrating that it feels satisfied.
+4. Present to human: "All [N] resolved. [N] deferred. [N/N] success criteria met. Here's what changed."
+5. Invoke `superpowers:verification-before-completion`
+6. Invoke `superpowers:finishing-a-development-branch`
 
 </process>
 
@@ -308,6 +309,7 @@ Shake-out is complete when:
 - Bug manifest compiled and confirmed by human (Phase 2)
 - All bugs resolved or explicitly deferred (Phase 3)
 - Final re-sweep passes on previously broken areas
+- Every `SC-n` in the spec's `## Success criteria` signed off with a measured value beside its target — met, not met, or explicitly not measured
 - Manifest file updated with final status
 - `verification-before-completion` invoked and passing
 - `finishing-a-development-branch` invoked

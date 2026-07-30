@@ -15,11 +15,18 @@ run** — it bypasses Stage-2 gates (threat-model verify, test tiers, review-clu
 spec-kit/
 ├── README.md            ← this file
 ├── setup.sh             ← per-project installer (spec-kit core + netdust overrides)
+├── gate-check.py        ← the gate checker — reads specs/<feature>/ directly, NOT spec-kit
 └── overrides/           ← BUNDLED gate-bearing template overrides
-    ├── spec-template.md   (what/why; [NEEDS CLARIFICATION] HALT gate)
     ├── plan-template.md   (threat-model, invariants, spec-premise, review-cluster [GATE]s)
     └── tasks-template.md  (per-task test tiers + the [P] / REVIEW GATE reconciliation)
 ```
+
+**The spec template is no longer here.** It lives at `../templates/spec-template.md`,
+because the spec is not a spec-kit artifact any more: `superpowers:brainstorming` writes
+`specs/<feature>/spec.md` from it, and `gate-check.py` reads that file directly. `setup.sh`
+still copies it into the override slot so a graft-ed project driving `/speckit.specify`
+resolves the same shape — but the graft is not what makes the spec gate fire. Nothing in
+the spec stage depends on spec-kit being installed.
 
 ## Decision: bundled overrides, per-project spec-kit
 
@@ -66,8 +73,8 @@ Parallelism is a within-cluster optimization; the gate is the between-cluster ba
 ## Where this sits in the harness
 
 ```
-Stage 0    brainstorm
-Stage 0.5  spec-authoring    → spec.md     (Phase B skill — wraps /speckit.specify + /clarify)
+Stage 0    brainstorm        → spec.md     (superpowers:brainstorming, from ../templates/spec-template.md)
+Stage 0.5  spec-authoring    → verifies that spec.md  (gate-check.py: clarify-halt + success-criteria)
 Stage 1    writing-plans     → plan.md     (uses overrides/plan-template.md  ← THIS DIR)
 Stage 1.5  spec-analysis     → consistency + gate-presence  (Phase B skill — wraps /speckit.analyze)
 Stage 2    subagent-driven-development  ◄── HANDOFF: tasks.md   (NEVER /speckit.implement)

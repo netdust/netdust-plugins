@@ -103,6 +103,51 @@ def check_clarify(spec_text: str, f: Findings) -> None:
         f.add("pass", "clarify-halt", "no unresolved [NEEDS CLARIFICATION] markers")
 
 
+# SC line = `- **SC-1:** <text>`; measurable means the text carries a digit. A body that is
+# only a bracketed placeholder (`[e.g. …]`) is template guidance, not a criterion.
+SC_LINE = re.compile(r"^\s*[-*]\s+\**SC-(\d+)\**\s*:?\s*\**\s*(.*)$")
+PLACEHOLDER = re.compile(r"^\[.*\]$")
+DIGIT = re.compile(r"\d")
+
+
+def check_success_criteria(spec_text: str, f: Findings) -> None:
+    """Feature-level success must be measurable — this is what shake-out signs off against.
+
+    FAIL: no `## Success criteria` section · section present but no SC line survives the
+    placeholder filter · an SC line carrying no number (unmeasurable by construction).
+    """
+    body = section_body(spec_text, "Success criteria")
+    if body is None:
+        # pre-template spec (same retro-compat stance as test-author-mode). Flip to "fail"
+        # once every live specs/ dir carries the section.
+        f.add("warn", "success-criteria", "pre-template spec — no ## Success criteria section")
+        return
+
+    real, unmeasurable = [], []
+    for ln in body.splitlines():
+        m = SC_LINE.match(ln)
+        if not m:
+            continue
+        sc_id, text = f"SC-{m.group(1)}", m.group(2).strip()
+        if not text or PLACEHOLDER.match(text):
+            continue  # untouched template line
+        real.append(sc_id)
+        if not DIGIT.search(text):
+            unmeasurable.append(sc_id)
+
+    if not real:
+        f.add("fail", "success-criteria",
+              "## Success criteria has no filled-in SC line (template placeholders only)")
+        return
+    if unmeasurable:
+        f.add("fail", "success-criteria",
+              f"{len(unmeasurable)}/{len(real)} criterion/criteria carry no number: "
+              + ", ".join(unmeasurable[:5]))
+        return
+    f.add("pass", "success-criteria", f"{len(real)} measurable criterion/criteria: "
+          + ", ".join(real[:8]))
+
+
 REQUIRED_PLAN_GATES = [
     "Constitution check",
     "Threat model",
@@ -369,6 +414,7 @@ def run_checks(spec_dir: Path) -> Findings:
 
     if spec_text is not None:
         check_clarify(spec_text, f)
+        check_success_criteria(spec_text, f)
     if plan_text is not None:
         check_plan_gates(plan_text, f)
         check_threat_model(plan_text, spec_text, f)
