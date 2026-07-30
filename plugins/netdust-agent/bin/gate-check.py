@@ -184,6 +184,56 @@ def spec_security_triggered(spec_text: str) -> list[str]:
     return hits
 
 
+SURFACE_BOX = re.compile(r"^\s*- \[([ xX])\]\s+(.*)$")
+
+
+def check_security_surfaces(spec_text: str, f: Findings) -> None:
+    """The arming switch for the plan's 1a gate — and the one check whose absence is
+    invisible rather than loud.
+
+    A `## Security-relevant surfaces` section that is missing, or present with every box
+    blank, makes `spec_security_triggered()` return nothing. check_threat_model then reads
+    "no surface flagged", a plan's `N/A — small feature` PASSES, and the checker prints
+    reassurance. So an auth feature reaches execution with no threat model, by INACTION.
+    Blank is not "none": answer the surfaces that apply, or "None of the above" explicitly.
+    """
+    body = section_body(spec_text, "Security-relevant surfaces")
+    if body is None:
+        f.add("fail", "security-surfaces",
+              "no ## Security-relevant surfaces section — nothing can arm the plan's 1a "
+              "threat-model gate, so a security feature would pass with an N/A threat model")
+        return
+
+    boxes = [m for m in (SURFACE_BOX.match(ln) for ln in body.splitlines()) if m]
+    if not boxes:
+        f.add("fail", "security-surfaces",
+              "## Security-relevant surfaces carries no `- [ ]` checkbox lines — the 1a gate "
+              "reads checkboxes, so prose here arms nothing")
+        return
+
+    checked = [m.group(2).strip() for m in boxes if m.group(1) in "xX"]
+    if not checked:
+        f.add("fail", "security-surfaces",
+              f"## Security-relevant surfaces: 0 of {len(boxes)} boxes answered — blank is not "
+              "'none', it silently disarms the 1a gate. Check what applies, or "
+              "'None of the above' explicitly")
+        return
+
+    armed = [c for c in checked if not SURFACE_NONE.search(c)]
+    none_of_the_above = len(armed) < len(checked)
+    if armed and none_of_the_above:
+        f.add("fail", "security-surfaces",
+              "## Security-relevant surfaces checks both a real surface "
+              f"[{armed[0][:40]}] and 'None of the above' — contradictory; pick one")
+        return
+    if armed:
+        f.add("pass", "security-surfaces",
+              f"{len(armed)} surface(s) flagged — the plan's 1a threat model is REQUIRED")
+    else:
+        f.add("pass", "security-surfaces",
+              "answered 'None of the above' — a plan threat model of N/A is legitimate")
+
+
 def check_threat_model(plan_text: str, spec_text: str | None, f: Findings) -> None:
     body = section_body(plan_text, "Threat model")
     if body is None:
@@ -229,9 +279,22 @@ def strip_fenced(text: str) -> str:
     return "\n".join(out)
 
 
+# A review-gate STOP marker, and the provisional review tier (1h) that rides either the
+# cluster heading (`### Cluster C1  (3 tasks · provisional tier: STANDARD)`) or the marker
+# line itself (`── REVIEW GATE ──  *(STOP: … — tier STANDARD)*`). Either location counts:
+# the corpus writes both, and over-constraining the placement buys nothing.
+REVIEW_GATE_MARKER = re.compile(r"──\s*REVIEW GATE\s*──")
+REVIEW_TIER = re.compile(r"\b(FULL|STANDARD|LIGHT)\b")
+
+
 def parse_clusters(tasks_text: str):
-    """Yield dicts {name, tasks:[(id, has_p)], irreversible:bool}. Tasks under a
-    `### Cluster` heading until the next cluster or level-2 heading."""
+    """Yield dicts {name, tasks:[(id, has_p)], irreversible:bool, gate:bool, tier:str|None}.
+    Tasks under a `### Cluster` heading until the next cluster or level-2 heading.
+
+    `gate` is True when a `── REVIEW GATE ──` marker appears after the cluster's own lines
+    and before the next cluster / level-2 heading. A marker in the file's prose legend sits
+    ahead of every cluster heading, so it is never miscounted as a cluster's gate.
+    """
     clusters = []
     cur = None
     for ln in strip_fenced(tasks_text).splitlines():
@@ -240,8 +303,10 @@ def parse_clusters(tasks_text: str):
             if cur:
                 clusters.append(cur)
             label = cm.group(1)
+            tier = REVIEW_TIER.search(label)
             cur = {"name": ln.strip(), "tasks": [],
-                   "irreversible": bool(re.search(r"irreversible|solo", label, re.IGNORECASE))}
+                   "irreversible": bool(re.search(r"irreversible|solo", label, re.IGNORECASE)),
+                   "gate": False, "tier": tier.group(1) if tier else None}
             continue
         h = heading_text(ln)
         if h and h[0] <= 2:  # phase boundary or end-of-clusters section
@@ -249,12 +314,61 @@ def parse_clusters(tasks_text: str):
                 clusters.append(cur)
                 cur = None
             continue
+        if cur is not None and REVIEW_GATE_MARKER.search(ln):
+            cur["gate"] = True
+            if cur["tier"] is None:
+                tier = REVIEW_TIER.search(ln)
+                if tier:
+                    cur["tier"] = tier.group(1)
+            continue
         tm = TASK_LINE.match(ln)
         if tm and cur is not None:
             cur["tasks"].append((tm.group(1), bool(HAS_P.search(tm.group(2)))))
     if cur:
         clusters.append(cur)
     return clusters
+
+
+def check_review_gates(tasks_text: str, f: Findings) -> None:
+    """1f / building Step 2.8 — every cluster ends at a `── REVIEW GATE ──` STOP marker.
+
+    Cluster SIZING was already checked; the marker is what makes the boundary exist at run
+    time. `building` HALTs *at the marker*: no marker, no HALT, and execution runs the phase
+    flat into the un-bisectable mega-diff the cluster rule exists to prevent (calibration:
+    `teardown-cluster`). Sized clusters with no markers is the shape that passed before.
+    """
+    clusters = parse_clusters(tasks_text)
+    if not clusters:
+        return  # check_clusters already reports "no `### Cluster` headings"
+    missing = [c["name"].lstrip("# ").split("(")[0].strip() for c in clusters if not c["gate"]]
+    if missing:
+        f.add("fail", "review-gate-marker",
+              f"{len(missing)}/{len(clusters)} cluster(s) end with no `── REVIEW GATE ──` "
+              "marker, so nothing HALTs execution there: " + ", ".join(missing[:5]))
+    else:
+        f.add("pass", "review-gate-marker",
+              f"all {len(clusters)} cluster(s) close at a `── REVIEW GATE ──` STOP marker")
+
+
+def check_review_tiers(tasks_text: str, f: Findings) -> None:
+    """1h — each cluster carries a provisional review tier (FULL / STANDARD / LIGHT).
+
+    `building` restates the tier at each gate and may escalate one-way from it. With no tier
+    declared there is nothing to restate and nothing to escalate FROM, so the fan-out
+    silently becomes whatever the executing agent feels like.
+    """
+    clusters = parse_clusters(tasks_text)
+    if not clusters:
+        return
+    missing = [c["name"].lstrip("# ").split("(")[0].strip() for c in clusters if not c["tier"]]
+    if missing:
+        f.add("fail", "review-tier",
+              f"{len(missing)}/{len(clusters)} cluster(s) declare no provisional review tier "
+              "(FULL/STANDARD/LIGHT): " + ", ".join(missing[:5]))
+    else:
+        f.add("pass", "review-tier",
+              "all cluster(s) carry a provisional tier: "
+              + ", ".join(f"{c['tier']}" for c in clusters[:6]))
 
 
 def check_task_tiers(tasks_text: str, f: Findings) -> None:
@@ -372,6 +486,75 @@ def check_test_author_mode(tasks_text: str, f: Findings) -> None:
     f.add("pass", "test-author-mode", f"all {total} tasks carry a test-author mode")
 
 
+UNIT_TEST_LINE = re.compile(r"^\s+Unit test:\s*(\S.*)$")
+NO_UNIT_TEST = re.compile(r"^no unit test\b", re.IGNORECASE)
+
+
+def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
+    """1d — every task states the behavioral contract its test asserts.
+
+    `Test-author:` says WHO writes the test; this says WHAT it must prove. A task with a tier
+    and an author but no contract hands the implementer a tier marker and no target, which is
+    where a denial path quietly stops being tested. Tier B opts out explicitly with
+    `no unit test: Tier B, <reason>` — a stated waiver, not an omission.
+
+    A **Tier A** task may never take that waiver: security/auth/parsing/state/transform/
+    migration work is Tier A precisely because it needs the RED-first behavioral test, and
+    talking one down to "no unit test" is the erosion this tier system exists to stop.
+
+    Retro-compat matches test-author-mode: no task carrying the line at all is an older
+    tasks.md and WARNs; partial presence is a defect and FAILs.
+    """
+    lines = strip_fenced(tasks_text).splitlines()
+    n = len(lines)
+    total, missing, tier_a_waived = 0, [], []
+    i = 0
+    while i < n:
+        tm = TASK_LINE.match(lines[i])
+        if not tm:
+            i += 1
+            continue
+        total += 1
+        task_id, task_rest = tm.group(1), tm.group(2)
+        is_tier_a = bool(TIER_A.search(task_rest))
+
+        found = None
+        j = i + 1
+        while j < n:
+            if TASK_LINE.match(lines[j]) or heading_text(lines[j]):
+                break
+            m = UNIT_TEST_LINE.match(lines[j])
+            if m:
+                found = m.group(1).strip()
+                break
+            j += 1
+
+        if found is None:
+            missing.append(task_id)
+        elif is_tier_a and NO_UNIT_TEST.match(found):
+            tier_a_waived.append(task_id)
+        i += 1
+
+    if total == 0:
+        return  # check_task_tiers already reports "no task lines"
+
+    if len(missing) == total:
+        f.add("warn", "unit-test-contract",
+              f"no task carries a `Unit test:` line ({total} tasks) — pre-contract tasks.md")
+        return
+    if missing:
+        f.add("fail", "unit-test-contract",
+              f"{len(missing)}/{total} task(s) state no `Unit test:` contract: "
+              + ", ".join(missing[:8]))
+        return
+    if tier_a_waived:
+        f.add("fail", "unit-test-contract",
+              "Tier A may not waive its test with `no unit test:` — "
+              + ", ".join(tier_a_waived[:8]))
+        return
+    f.add("pass", "unit-test-contract", f"all {total} tasks state a `Unit test:` contract")
+
+
 def check_clusters(tasks_text: str, f: Findings) -> None:
     clusters = parse_clusters(tasks_text)
     if not clusters:
@@ -416,13 +599,17 @@ def run_checks(spec_dir: Path) -> Findings:
     if spec_text is not None:
         check_clarify(spec_text, f)
         check_success_criteria(spec_text, f)
+        check_security_surfaces(spec_text, f)
     if plan_text is not None:
         check_plan_gates(plan_text, f)
         check_threat_model(plan_text, spec_text, f)
     if tasks_text is not None:
         check_task_tiers(tasks_text, f)
         check_test_author_mode(tasks_text, f)
+        check_unit_test_contract(tasks_text, f)
         check_clusters(tasks_text, f)
+        check_review_gates(tasks_text, f)
+        check_review_tiers(tasks_text, f)
     return f
 
 

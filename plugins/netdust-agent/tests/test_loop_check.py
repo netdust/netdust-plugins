@@ -11,13 +11,15 @@ TIERED = """# Tasks: demo
 
 ## Phase 1
 
-### Cluster C1
+### Cluster C1  (3 tasks · provisional tier: STANDARD)
 - [{t1}] T01 [Tier A] first task  (files: a.py)
       Unit test: contract
 - [{t2}] T02 [Tier B] second task  (files: b.py)
       Unit test: no unit test: Tier B, glue
 - [{t3}] T03 {human}[Tier A] third task  (files: c.py)
       Unit test: contract
+
+── REVIEW GATE ──  *(STOP: commit C1, `/integration`, `/code-review` — tier STANDARD)*
 """
 
 FENCED_EXAMPLE = """

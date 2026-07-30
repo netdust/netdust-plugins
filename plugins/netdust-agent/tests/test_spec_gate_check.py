@@ -110,6 +110,99 @@ The footer copyright label reads 2019.
 - [x] None of the above
 """
 
+# ── `security-surfaces` fixtures — the arming switch for the plan's 1a gate ───
+# THE case: an auth feature whose surface boxes were all left blank. Before this check,
+# spec_security_triggered() returned nothing, the plan's `N/A` threat model PASSED, and
+# gate-check printed "no spec surface flagged" as reassurance. Disarmed by inaction.
+SPEC_SURFACES_ALL_BLANK = """# Feature Specification: Token minting endpoint
+
+## Success criteria
+- **SC-1:** a token mints in under 200 ms
+- **SC-2:** 0 tokens issued to an unauthenticated caller
+
+## Security-relevant surfaces
+- [ ] User-controlled URLs / server-side outbound requests
+- [ ] Auth / session / token / capability surfaces
+- [ ] Untrusted parsing (frontmatter, payloads, uploads, AI tool-call args)
+- [ ] BYOK / stored credentials
+- [ ] Multi-tenancy / cross-actor visibility
+- [ ] None of the above — *(state so explicitly)*
+"""
+
+# No section at all — same disarmed outcome, reached by omission rather than by blankness.
+SPEC_SURFACES_MISSING = """# Feature Specification: Token minting endpoint
+
+## Success criteria
+- **SC-1:** a token mints in under 200 ms
+"""
+
+# Contradictory: a real surface AND "None of the above".
+SPEC_SURFACES_CONTRADICTORY = """# Feature Specification: Token minting endpoint
+
+## Success criteria
+- **SC-1:** a token mints in under 200 ms
+
+## Security-relevant surfaces
+- [x] Auth / session / token / capability surfaces
+- [x] None of the above — *(state so explicitly)*
+"""
+
+# ── `review-gate-marker` / `review-tier` fixtures (1f / 1h) ───────────────────
+# Sized clusters, tiers declared, but NO STOP marker: `building` HALTs at the marker, so
+# this runs the phase flat into the un-bisectable mega-diff (calibration: teardown-cluster).
+TASKS_NO_REVIEW_GATE = """# Tasks: x
+
+### Cluster C1  (2 tasks · provisional tier: STANDARD)
+- [ ] T01 [Tier B] a  (f: a)
+      Unit test: no unit test: Tier B, glue
+- [ ] T02 [Tier B] b  (f: b)
+      Unit test: no unit test: Tier B, glue
+
+### Cluster C2  (1 task · provisional tier: LIGHT)
+- [ ] T03 [Tier B] c  (f: c)
+      Unit test: no unit test: Tier B, copy edit
+"""
+
+# Markers present, but no cluster declares a provisional tier — `building` restates the
+# tier at each gate and escalates one-way FROM it; with none there is nothing to restate.
+TASKS_NO_REVIEW_TIER = """# Tasks: x
+
+### Cluster C1
+- [ ] T01 [Tier B] a  (f: a)
+      Unit test: no unit test: Tier B, glue
+
+── REVIEW GATE ──  *(STOP: commit C1, `/integration`, `/code-review`)*
+
+### Cluster C2
+- [ ] T02 [Tier B] b  (f: b)
+      Unit test: no unit test: Tier B, glue
+
+── REVIEW GATE ──  *(STOP: commit C2, `/integration`, `/code-review`)*
+"""
+
+# ── `unit-test-contract` fixtures (1d) ───────────────────────────────────────
+# Partial presence: T02 has a tier and an author but states no contract — a tier marker
+# with no target is where a denial path stops being tested.
+TASKS_PARTIAL_UNIT_TEST = """# Tasks: x
+
+### Cluster C1  (2 tasks · provisional tier: STANDARD)
+- [ ] T01 [Tier A] validate URL  (files: lib/url.ts)
+      Unit test: rejects RFC1918; allows a public https URL
+- [ ] T02 [Tier A] parse the payload  (files: lib/parse.ts)
+
+── REVIEW GATE ──  *(tier STANDARD)*
+"""
+
+# A Tier A task waiving its test outright — the erosion the tier system exists to stop.
+TASKS_TIER_A_WAIVES_TEST = """# Tasks: x
+
+### Cluster C1  (1 task · provisional tier: FULL)
+- [ ] T01 [Tier A] rewrite the auth token store  (files: db/tokens.sql)
+      Unit test: no unit test: it is mostly SQL
+
+── REVIEW GATE ──  *(tier FULL)*
+"""
+
 PLAN_GATES_FULL = """# Implementation Plan: Webhook receiver
 
 ## Constitution check  [GATE]
@@ -163,20 +256,27 @@ N/A.
 See tasks.md.
 """
 
+# The reference COMPLIANT tasks.md: sized clusters, a STOP marker closing each, a
+# provisional tier per cluster (1h), and a stated Unit test: contract per task (1d).
+# It carries the tiers and contracts on the cluster headings / continuation lines exactly
+# as the live specs/ dirs write them.
 TASKS_GOOD = """# Tasks: Webhook receiver
 
 ## Phase 1 — receiver
 
-### Cluster C1  (<=4 tasks)
+### Cluster C1  (2 tasks · provisional tier: FULL)
 - [ ] T01 [P] [Tier A] validate URL  (files: lib/url.ts)
+      Unit test: rejects an RFC1918 target and an http:// downgrade; allows a public https URL
 - [ ] T02 [Tier B] wire route  (files: routes.ts)
+      Unit test: no unit test: Tier B, wiring only — covered by the cluster integration gate
 
-── REVIEW GATE ──
+── REVIEW GATE ──  *(STOP: commit C1, `/integration`, `/code-review` — tier FULL)*
 
 ### Cluster C2 — (irreversible: drop legacy table) — solo
 - [ ] T03 [Tier A] migration  (files: migrations/001.sql)
+      Unit test: replays the migration on a seeded fixture; denial path: refuses to run twice
 
-── REVIEW GATE ──
+── REVIEW GATE ──  *(STOP: commit C2, `/integration`, `/code-review`, `/security-review` — tier FULL)*
 """
 
 TASKS_NO_TIER = """# Tasks: x
@@ -404,6 +504,65 @@ def run():
     rc, out = _run({"spec.md": SPEC_PRE_TEMPLATE_NO_SC})
     results.append((rc == 0 and "! [success-criteria]" in out,
                     "spec predating the contract, no ## Success criteria: WARNs, never FAILs"))
+
+    # ── `security-surfaces` — the arming switch (spec side) ───────────────────
+    # These four are the highest-value cases in this file: each one is a spec that
+    # previously reached execution with the 1a threat-model gate silently disarmed.
+
+    # 10e. every surface box blank on an auth feature → FAIL (was: green + reassurance)
+    rc, out = _run({"spec.md": SPEC_SURFACES_ALL_BLANK, "plan.md": PLAN_THREATMODEL_NA,
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "security-surfaces" in out and "0 of 6" in out,
+                    "all surface boxes blank FAILs — blank is not 'none', it disarms 1a"))
+
+    # 10f. no ## Security-relevant surfaces section at all → FAIL (same hole, by omission)
+    rc, out = _run({"spec.md": SPEC_SURFACES_MISSING})
+    results.append((rc == 1 and "security-surfaces" in out,
+                    "missing ## Security-relevant surfaces section FAILs"))
+
+    # 10g. a real surface AND "None of the above" → FAIL as contradictory
+    rc, out = _run({"spec.md": SPEC_SURFACES_CONTRADICTORY})
+    results.append((rc == 1 and "security-surfaces" in out and "contradictory" in out,
+                    "a real surface plus 'None of the above' FAILs as contradictory"))
+
+    # 10h. answered honestly → PASS, and the finding says whether 1a is armed
+    rc, out = _run({"spec.md": SPEC_TRIGGERED, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "1a threat model is REQUIRED" in out,
+                    "a flagged surface PASSES and states that the plan's 1a model is required"))
+
+    # ── `review-gate-marker` / `review-tier` — the cluster boundary (1f / 1h) ──
+
+    # 10i. sized clusters with tiers but no STOP marker → FAIL (nothing HALTs execution)
+    rc, out = _run({"tasks.md": TASKS_NO_REVIEW_GATE})
+    results.append((rc == 1 and "review-gate-marker" in out and "2/2" in out,
+                    "clusters with no `── REVIEW GATE ──` marker FAIL, naming them"))
+
+    # 10j. markers present but no provisional tier declared → FAIL (nothing to restate)
+    rc, out = _run({"tasks.md": TASKS_NO_REVIEW_TIER})
+    results.append((rc == 1 and "review-tier" in out,
+                    "clusters with no provisional review tier FAIL"))
+
+    # 10k. the compliant reference file → both PASS, tiers reported back
+    rc, out = _run({"tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "review-gate-marker" in out and "FULL" in out,
+                    "a compliant tasks.md PASSES marker + tier checks, echoing the tiers"))
+
+    # ── `unit-test-contract` (1d) ─────────────────────────────────────────────
+
+    # 10l. partial presence → FAIL naming the task with no stated contract
+    rc, out = _run({"tasks.md": TASKS_PARTIAL_UNIT_TEST})
+    results.append((rc == 1 and "unit-test-contract" in out and "T02" in out,
+                    "a task with a tier but no `Unit test:` contract FAILs, naming it (T02)"))
+
+    # 10m. a Tier A task waiving its test → FAIL (the tier-erosion case)
+    rc, out = _run({"tasks.md": TASKS_TIER_A_WAIVES_TEST})
+    results.append((rc == 1 and "unit-test-contract" in out and "Tier A may not waive" in out,
+                    "a Tier A task waiving its test with `no unit test:` FAILs"))
+
+    # 10n. retro-compat: zero `Unit test:` lines anywhere → WARN, never FAIL
+    rc, out = _run({"tasks.md": TASKS_NO_TEST_AUTHOR_LINES})
+    results.append(("! [unit-test-contract]" in out,
+                    "zero `Unit test:` lines WARNs as a pre-contract tasks.md, never FAILs"))
 
     # ── D1 `test-author-mode` — one fixture per plan.md D1 rules-table row ────
     # check_test_author_mode() is called DIRECTLY (unit level), independent of

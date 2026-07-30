@@ -23,10 +23,10 @@ Two kinds of requirement live here, and the difference matters:
 | Must appear | Exact shape | Read by |
 |---|---|---|
 | `## Success criteria` | `- **SC-1:** <text containing a number>` — one line per criterion, numbered `SC-n` | `success-criteria` check: FAILs on a line with no digit, and on a body that is only a bracketed `[…]` placeholder |
-| `## Security-relevant surfaces` | one `- [ ]` / `- [x]` line per surface, from the six in `<security_surfaces>` — **answer it: at least one box checked, `None of the above` included as a real option** | `threat-model` check: any checked box that isn't "none of the above" ARMS the plan's 1a gate |
+| `## Security-relevant surfaces` | one `- [ ]` / `- [x]` line per surface, from the six in `<security_surfaces>` | `security-surfaces` check: **FAILs** on a missing section, on zero boxes checked, and on a real surface checked together with `None of the above`. `threat-model` check: any checked box that isn't "none of the above" ARMS the plan's 1a gate |
 | anywhere in the file | `[NEEDS CLARIFICATION: <substance>]` | `clarify-halt` check: any real marker FAILs the gate (backticked examples and empty `…` placeholders are correctly ignored) |
 
-A section whose heading is absent, or whose checkbox lines are all blank, does not fail loudly — it makes the corresponding gate **pass by finding nothing**. That is the failure mode to fear here, not a rejection.
+Historically a section whose heading was absent, or whose boxes were all blank, did not fail loudly — it made the 1a gate **pass by finding nothing**, and the checker printed "no spec surface flagged" as reassurance while an auth feature walked through. `security-surfaces` now FAILs all three shapes, so the silent-disarm path is closed. `## Success criteria` is the one that still WARNs rather than FAILs when wholly absent, and only because two live spec dirs predate it.
 
 **AUTHORED — required content, your words, no prescribed shape.**
 
@@ -72,6 +72,7 @@ Two spec-stage findings decide the HALT:
 
   - `[clarify-halt]` FAIL — ambiguity remains. Loop back to Step 3: resolve it *with the human*, not by defaulting.
   - `[success-criteria]` FAIL — the section is present but carries only bracketed placeholder text, or an `SC-n` line carries no number. The finding names the offending ids. Rewrite those lines with a number, or move them to `## Acceptance criteria`.
+  - `[security-surfaces]` FAIL — the section is missing, no box is checked, or a real surface is checked alongside `None of the above`. Answer the six; blank is a disarmed gate, not a "no".
   - `[success-criteria]` WARN — the section is missing entirely. This is retro-compat for the spec dirs that predate the contract, **not** a licence to omit it: on a new spec, treat the WARN as a defect and add the section.
 
 **Do not proceed to Stage 1 planning until the checker passes.** A spec with an open ambiguity is too generic to plan, and a plan built on it inherits the ambiguity as a wrong premise.

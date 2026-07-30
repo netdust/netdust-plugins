@@ -28,9 +28,10 @@ The checker FAILS (exit 1) on any of:
 - a missing required `[GATE]` heading in `plan.md` (constitution / threat model / invariants / spec-premise / review clusters);
 - **a security surface checked in `spec.md` but the plan's `## Threat model` left N/A or empty** — the proactive 1a gate not satisfied (this is the case the whole gate exists to catch);
 - an unresolved `[NEEDS CLARIFICATION: …]` marker in `spec.md` (the Stage-0.5 HALT, re-asserted here);
-- a `## Success criteria` line carrying no number, or a section holding only untouched template placeholders — shake-out cannot sign off against prose;
-- a task line with no `[Tier A|B]` marker (1d);
-- a review cluster with >4 tasks, or an irreversible/solo cluster that isn't exactly one non-`[P]` task (1f / Step 2.8).
+- a `## Success criteria` line carrying no number, or a section holding only bracketed placeholder text — shake-out cannot sign off against prose;
+- a `## Security-relevant surfaces` section that is missing, has zero boxes checked, or checks a real surface alongside `None of the above` — blank silently disarms the 1a gate below rather than failing loudly;
+- a task line with no `[Tier A|B]` marker, no `Test-author:` mode, or no `Unit test:` contract while its siblings carry one; a Tier A task waiving its test with `no unit test:` (1d);
+- a review cluster with >4 tasks, or an irreversible/solo cluster that isn't exactly one non-`[P]` task; a cluster ending with no `── REVIEW GATE ──` marker, or declaring no provisional review tier (1f / 1h / Step 2.8).
 
 **If the checker reports FAIL, STOP. Do not dispatch any task.** Route back:
 - missing/N/A threat model on a flagged surface → author it via `netdust-agent:threat-modeling`, embed in the plan.

@@ -12,6 +12,7 @@ RUN_TRACE = Path(__file__).resolve().parent.parent / "bin" / "run-trace.py"
 
 TASKS_ONE_OPEN = (
     "- [x] T01 [Tier A] done  (files: a.py)\n"
+    "      Unit test: contract\n"
     "- [ ] T02 [Tier B] open  (files: b.py)\n"
     "      Unit test: no unit test: Tier B, glue\n"
 )

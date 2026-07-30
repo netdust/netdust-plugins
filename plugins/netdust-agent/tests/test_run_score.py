@@ -76,11 +76,14 @@ def tasks_md(clusters: list[tuple[str, list[str]]]) -> str:
     'x T01 [Tier A] first  (files: a.py)' or ' T02 [HUMAN] [Tier B] wait'."""
     out = ["# Tasks: demo\n"]
     for suffix, task_lines in clusters:
-        out.append(f"### Cluster {suffix}\n")
+        # gate-check requires a provisional review tier on the cluster and a
+        # `── REVIEW GATE ──` STOP marker closing it (1f / 1h) — loop-check gates
+        # on gate-check being green, so a fixture without them is not "well-formed".
+        out.append(f"### Cluster {suffix}  (provisional tier: STANDARD)\n")
         for tl in task_lines:
             box, rest = tl[0], tl[1:].lstrip(" ")
             out.append(f"- [{box}] {rest}\n")
-        out.append("\n")
+        out.append("\n── REVIEW GATE ──  *(tier STANDARD)*\n\n")
     return "".join(out)
 
 
