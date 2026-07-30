@@ -16,7 +16,7 @@ The pairing is deliberate: coverage needs judgment (does this task satisfy that 
 
 **Step 1 — semantic consistency.** Cross-check spec ↔ plan ↔ tasks for coverage and contradiction: every `FR-n` and `SC-n` traced to at least one task, every task traced back to something the spec asks for, no plan section disagreeing with the spec. Read the three files against each other. Resolve any inconsistency (missing requirement coverage, orphan task, plan/spec disagreement) before continuing.
 
-  - **State plainly that this step is not machine-checked.** No script verifies requirement coverage today — Step 2 does not cover it. Naming that is what keeps it from being mistaken for a green gate. (A mechanical `FR-n`/`SC-n` → task coverage check in `gate-check.py` is the open follow-up that would close it.)
+  - **Coverage is now partly mechanical — know which part.** `gate-check.py`'s `requirement-coverage` check answers the weaker question: is each `FR-n` / `SC-n` cited **anywhere** in `tasks.md`. It cannot tell you whether the task that cites `FR-2` actually satisfies it, and it does not hunt orphan tasks in the reverse direction. So read the artifacts for *substance* and say plainly that the judgement half is yours: a green `requirement-coverage` means nothing was left untraced, not that the tasks are adequate.
 
 **Step 2 — `gate-check.py` (mechanical gate-presence) — BLOCKING.**
 
@@ -31,6 +31,7 @@ The checker FAILS (exit 1) on any of:
 - a `## Success criteria` line carrying no number, or a section holding only bracketed placeholder text — shake-out cannot sign off against prose;
 - a `## Security-relevant surfaces` section that is missing, has zero boxes checked, or checks a real surface alongside `None of the above` — blank silently disarms the 1a gate below rather than failing loudly;
 - a task line with no `[Tier A|B]` marker, no `Test-author:` mode, or no `Unit test:` contract while its siblings carry one; a Tier A task waiving its test with `no unit test:` (1d);
+- an `FR-n` / `SC-n` traced to no task, once the task list cites any requirement id at all (a list citing none is pre-convention and WARNs);
 - a review cluster with >4 tasks, or an irreversible/solo cluster that isn't exactly one non-`[P]` task; a cluster ending with no `── REVIEW GATE ──` marker, or declaring no provisional review tier (1f / 1h / Step 2.8).
 
 **If the checker reports FAIL, STOP. Do not dispatch any task.** Route back:
@@ -59,7 +60,7 @@ Gate-check is a backstop, not a substitute for authoring the gates well. A plan 
 </red_flags>
 
 <success_criteria>
-1. spec ↔ plan ↔ tasks are consistent (inconsistencies resolved), and the transcript states that this half was a read, not a machine check.
+1. spec ↔ plan ↔ tasks are consistent (inconsistencies resolved), and the transcript separates what the `requirement-coverage` check proved (nothing untraced) from what only the read can judge (the tasks actually satisfy the requirements they cite).
 2. `gate-check.py` exits 0 — every required gate present; no unresolved clarification marker; success criteria measurable; threat model present iff a surface was flagged; all tasks tiered; clusters ≤4 and irreversible steps solo/non-[P].
 3. The pass is recorded in the transcript as the Stage-2 green light.
 4. If anything was missing, it was authored/fixed in the artifacts BEFORE any task dispatch — not deferred.

@@ -203,6 +203,58 @@ TASKS_TIER_A_WAIVES_TEST = """# Tasks: x
 ── REVIEW GATE ──  *(tier FULL)*
 """
 
+# ── `requirement-coverage` fixtures — the one cross-artifact check ────────────
+# Asks whether each FR-n / SC-n is visible in the task list at all. Retro-compat: a task
+# list citing NO id is pre-convention and WARNs (both live specs/ dirs are that shape);
+# once ANY id is cited the convention is in use, so a gap FAILs.
+
+SPEC_WITH_REQS = """# Feature Specification: Course publishing
+
+## Success criteria
+- **SC-1:** an editor publishes a module in under 3 minutes
+
+## Functional requirements
+- **FR-1:** system MUST publish a module
+- **FR-2:** system MUST reject an unauthorised editor
+- **FR-3:** system MUST log every publish
+
+## Security-relevant surfaces
+- [x] None of the above
+"""
+
+TASKS_COVERS_ALL_REQS = """# Tasks: Course publishing
+
+### Cluster C1  (3 tasks \u00b7 provisional tier: STANDARD)
+- [ ] T01 [Tier A] publish a module (FR-1, SC-1)  (files: publish.ts)
+      Unit test: publishes in one call; denial path: unauthorised editor rejected
+- [ ] T02 [Tier A] authorisation guard (FR-2)  (files: guard.ts)
+      Unit test: rejects a non-editor; allows an editor
+- [ ] T03 [Tier B] publish audit log (FR-3)  (files: log.ts)
+      Unit test: no unit test: Tier B, wiring over the existing logger
+
+\u2500\u2500 REVIEW GATE \u2500\u2500  *(STOP: commit C1 \u2014 tier STANDARD)*
+"""
+
+# FR-1 cited, FR-2 / FR-3 / SC-1 traced to nothing → the convention IS in use, so FAIL.
+TASKS_COVERS_SOME_REQS = """# Tasks: Course publishing
+
+### Cluster C1  (1 task \u00b7 provisional tier: STANDARD)
+- [ ] T01 [Tier A] publish a module (FR-1)  (files: publish.ts)
+      Unit test: publishes in one call; denial path: unauthorised editor rejected
+
+\u2500\u2500 REVIEW GATE \u2500\u2500  *(STOP: commit C1 \u2014 tier STANDARD)*
+"""
+
+# No id cited anywhere — the live-corpus shape. WARN, never FAIL.
+TASKS_CITES_NO_REQS = """# Tasks: Course publishing
+
+### Cluster C1  (1 task \u00b7 provisional tier: STANDARD)
+- [ ] T01 [Tier A] publish a module  (files: publish.ts)
+      Unit test: publishes in one call; denial path: unauthorised editor rejected
+
+\u2500\u2500 REVIEW GATE \u2500\u2500  *(STOP: commit C1 \u2014 tier STANDARD)*
+"""
+
 PLAN_GATES_FULL = """# Implementation Plan: Webhook receiver
 
 ## Constitution check  [GATE]
@@ -563,6 +615,29 @@ def run():
     rc, out = _run({"tasks.md": TASKS_NO_TEST_AUTHOR_LINES})
     results.append(("! [unit-test-contract]" in out,
                     "zero `Unit test:` lines WARNs as a pre-contract tasks.md, never FAILs"))
+
+    # ── `requirement-coverage` — spec ids traced into the task list ───────────
+
+    # 10o. every FR/SC cited by a task → PASS
+    rc, out = _run({"spec.md": SPEC_WITH_REQS, "tasks.md": TASKS_COVERS_ALL_REQS})
+    results.append((rc == 0 and "requirement-coverage" in out and "all 4 requirement" in out,
+                    "every FR-n/SC-n cited in tasks.md PASSES"))
+
+    # 10p. convention in use but gaps remain → FAIL naming the untraced ids only
+    rc, out = _run({"spec.md": SPEC_WITH_REQS, "tasks.md": TASKS_COVERS_SOME_REQS})
+    results.append((rc == 1 and "requirement-coverage" in out
+                     and "FR-2" in out and "FR-3" in out and "SC-1" in out,
+                    "partial requirement coverage FAILs, naming only the untraced ids"))
+
+    # 10q. retro-compat (the live-corpus shape): no id cited at all → WARN, gate stays PASS
+    rc, out = _run({"spec.md": SPEC_WITH_REQS, "tasks.md": TASKS_CITES_NO_REQS})
+    results.append((rc == 0 and "! [requirement-coverage]" in out,
+                    "a task list citing no requirement id WARNs as pre-convention, never FAILs"))
+
+    # 10r. a spec with no numbered requirements at all → WARN (nothing is traceable)
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "tasks.md": TASKS_CITES_NO_REQS})
+    results.append(("! [requirement-coverage]" in out and "no FR-n" in out,
+                    "a spec declaring no FR-n/SC-n ids WARNs — nothing is traceable"))
 
     # ── D1 `test-author-mode` — one fixture per plan.md D1 rules-table row ────
     # check_test_author_mode() is called DIRECTLY (unit level), independent of

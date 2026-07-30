@@ -17,8 +17,8 @@ bin/
 ├── gate-check.py     ← THE GATE. Lints specs/<feature>/: clarify-halt, success criteria,
 │                       security surfaces answered, [GATE] headings, threat-model-iff-
 │                       flagged, task tiers, Test-author: modes, Unit test: contracts,
-│                       review-cluster sizing, REVIEW GATE markers + provisional tiers.
-│                       Exit 1 = blocked.
+│                       review-cluster sizing, REVIEW GATE markers + provisional tiers,
+│                       FR-n/SC-n → task coverage. Exit 1 = blocked.
 ├── loop-check.py     ← the loop ledger: derives FINISHED from tasks.md boxes + gate-check,
 │                       never from an agent's assertion
 ├── run-trace.py      ← in-loop event trace (single-writer append; `show --durations`)

@@ -555,6 +555,62 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
     f.add("pass", "unit-test-contract", f"all {total} tasks state a `Unit test:` contract")
 
 
+REQ_ID = re.compile(r"\b(FR|SC)-(\d+)\b")
+
+
+def _req_ids(text: str) -> list[str]:
+    """Requirement ids in document order, de-duplicated. `FR-n` (literal n) is template
+    prose and never matches; only real numbered ids do."""
+    seen, out = set(), []
+    for m in REQ_ID.finditer(strip_fenced(text)):
+        rid = f"{m.group(1)}-{m.group(2)}"
+        if rid not in seen:
+            seen.add(rid)
+            out.append(rid)
+    return out
+
+
+def check_requirement_coverage(spec_text: str, tasks_text: str, f: Findings) -> None:
+    """Stage 1.5's coverage half — the only cross-artifact check here.
+
+    Asks the weaker of two questions deliberately: **is each requirement visible in the task
+    list at all**, not *which exact task owns it*. A citation anywhere in `tasks.md` counts.
+    The stronger question needs a per-task citation convention the corpus does not have, and
+    a check that demands one nobody writes is a check that gets worked around.
+
+    Retro-compat matches test-author-mode and unit-test-contract: a task list citing NO
+    requirement id is pre-convention and WARNs — both live specs/ dirs are exactly that
+    shape, declaring FR-1..n while their task lists cite none. Once ANY id is cited the
+    convention is in use, so a gap is a defect and FAILs, naming the untraced ids.
+
+    Not checked, and noisier by nature: the reverse direction. A task tracing back to nothing
+    in the spec is often legitimate infrastructure, so orphan-hunting stays a Stage-1.5 read.
+    """
+    ids = _req_ids(spec_text)
+    if not ids:
+        f.add("warn", "requirement-coverage",
+              "spec declares no FR-n / SC-n identifiers — nothing can be traced to a task; "
+              "number the functional requirements so coverage is checkable")
+        return
+
+    cited = set(_req_ids(tasks_text))
+    covered = [r for r in ids if r in cited]
+    uncovered = [r for r in ids if r not in cited]
+
+    if not covered:
+        f.add("warn", "requirement-coverage",
+              f"no requirement id is cited in tasks.md — pre-convention task list, so all "
+              f"{len(ids)} ({ids[0]}…{ids[-1]}) are untraced and coverage is a human read")
+        return
+    if uncovered:
+        f.add("fail", "requirement-coverage",
+              f"{len(uncovered)}/{len(ids)} requirement(s) traced to no task: "
+              + ", ".join(uncovered[:8]))
+        return
+    f.add("pass", "requirement-coverage",
+          f"all {len(ids)} requirement(s) cited in tasks.md: " + ", ".join(ids[:8]))
+
+
 def check_clusters(tasks_text: str, f: Findings) -> None:
     clusters = parse_clusters(tasks_text)
     if not clusters:
@@ -610,6 +666,8 @@ def run_checks(spec_dir: Path) -> Findings:
         check_clusters(tasks_text, f)
         check_review_gates(tasks_text, f)
         check_review_tiers(tasks_text, f)
+    if spec_text is not None and tasks_text is not None:
+        check_requirement_coverage(spec_text, tasks_text, f)  # the only cross-artifact check
     return f
 
 
