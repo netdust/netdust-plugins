@@ -20,6 +20,8 @@ See **Task risk tier** below for how to classify, and **What the per-task gate c
 
 ## Who authors vs who greens — the test/dev split, made tier-conditional (no self-grading)
 
+> **The review-stage twin.** This section governs who writes the TEST. Its counterpart governs who reviews the CODE: `building` Step 2.8's reviewer-independence rule — the agent that wrote a cluster never reviews it. Both exist because self-assessment converges on the happy path; on `solo` tasks the review gate IS the independent check, so the two rules carry each other.
+
 **The agent that writes the code must not be the agent that writes and certifies its test — on the tasks where that grading matters.** A coder who authors both grades their own homework: the test drifts to fit the code it was written against, the denial path quietly goes missing, and a risky guard gets self-classified "Tier B, just wiring" by the very agent that benefits from skipping the test. RED-first alone does not fix this — it only reorders the same author's two acts.
 
 **The RULE below (what's Tier A, the erosion guard, what needs a RED-first behavioral test) is UNCHANGED and applies identically regardless of mode.** What changed (2026-07-04, `building` `<test_dev_split>`) is only **WHO applies it**, and that is set by the task's `Test-author:` mode in `tasks.md` (the D1 rule: `split` iff Tier A **and** a security-boundary category — auth/guards, untrusted-input parsing, migrations/schema, money/billing, or a named 1a-trigger surface; everything else is `solo`). The controller reads the field; no test-author, implementer, or controller re-decides it at run time.

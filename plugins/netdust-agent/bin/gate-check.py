@@ -486,6 +486,110 @@ def check_test_author_mode(tasks_text: str, f: Findings) -> None:
     f.add("pass", "test-author-mode", f"all {total} tasks carry a test-author mode")
 
 
+# D1's security-boundary categories, detected in TWO places with different confidence.
+#
+# Calibrated against the live corpus, which rejected the first attempt: matching the task
+# DESCRIPTION for words like "session" and "guard" flagged three doc-editing tasks — "no code
+# will change this session", and prose discussing the erosion *guard* — pure noise. A WARN
+# nobody trusts is a WARN nobody reads, so:
+#
+#   FILES  — the `(files: …)` paths carry the truth. A task touching db/tokens.sql IS token
+#            work whatever its prose says; one touching skills/building/SKILL.md is not,
+#            however much it discusses guards. Broad list, matched here.
+#   PROSE  — only terms that are unambiguous in any sentence. Deliberately narrow; "session",
+#            "guard", "token", "parse" and friends are excluded because English uses them for
+#            everything.
+#
+# This makes a downgrade VISIBLE. It cannot know what a task really touches, and the planner
+# applying D1 remains the real control.
+# Substring matching on purpose (so `tokens.sql` and `migrations/` hit), which makes the
+# exclusions load-bearing — the corpus found three: `auth` inside test-AUTHor.md, `acl` inside
+# performance-orACLe.md, and `pars` inside sPARSe. Hence the lookahead and the two anchors.
+FILES_SECURITY = re.compile(
+    r"(auth(?!or)|authoris|authoriz|token|session|credential|password|secret|api[-_]?key|crypt"
+    r"|csrf|nonce|guard|permission|capabilit|migrat|schema|upload|payment|billing|invoice"
+    r"|tenant|sanitiz|\bpars|login|signin|signup|\bacl\b|role|scope)", re.IGNORECASE)
+PROSE_SECURITY = re.compile(
+    r"\b(authn|authz|authoris\w*|authoriz\w*|credential\w*|password|api[-_ ]?key|encrypt\w*"
+    r"|decrypt\w*|csrf|sanitiz\w*|sql injection|injection attack|multi[- ]?tenanc\w*"
+    r"|cross[- ]tenant|untrusted input|untrusted pars\w*)\b", re.IGNORECASE)
+FILES_SEGMENT = re.compile(r"\(\s*f(?:iles?)?\s*:\s*([^)]*)\)", re.IGNORECASE)
+
+
+def _boundary_hit(task_rest: str) -> str | None:
+    """The matched term, or None. Files first (higher confidence), then narrow prose."""
+    seg = FILES_SEGMENT.search(task_rest)
+    if seg:
+        m = FILES_SECURITY.search(seg.group(1))
+        if m:
+            return m.group(0).lower()
+    m = PROSE_SECURITY.search(FILES_SEGMENT.sub("", task_rest))
+    return m.group(0).lower() if m else None
+
+
+def check_security_boundary_mode(tasks_text: str, f: Findings) -> None:
+    """D1's no-self-downgrade rule, made visible where the mode check cannot reach.
+
+    `test-author-mode` verifies a Tier-A `solo` states SOME reason; it cannot judge whether the
+    reason is true. So it accepts `solo — A-lite, pure transform` on a task that rewrites an
+    auth token store — precisely the self-downgrade the split exists to prevent. Two heuristic
+    WARNs close the visibility gap:
+
+      - **Tier A + solo + a security-boundary signal** — D1 says a Tier-A task in one of those
+        categories is ALWAYS `split`. Either the mode is wrong, or the stated reason is
+        describing a different task than the one in front of you.
+      - **Tier B + a security-boundary signal** — upstream of the mode question: per
+        `testing-workflow`'s erosion guard, security/auth/parsing/migration work is Tier A
+        *always, regardless of line count*. A Tier-B classification there is the earlier,
+        cheaper error.
+
+    WARN, never FAIL: a keyword is not knowledge. A false positive costs one dismissal; a FAIL
+    on a false positive would teach people to route around the gate.
+    """
+    lines = strip_fenced(tasks_text).splitlines()
+    n = len(lines)
+    downgraded, tier_b_boundary = [], []
+    i = 0
+    while i < n:
+        tm = TASK_LINE.match(lines[i])
+        if not tm:
+            i += 1
+            continue
+        task_id, task_rest = tm.group(1), tm.group(2)
+        term = _boundary_hit(task_rest)
+        if term is None:
+            i += 1
+            continue
+        is_tier_a = bool(TIER_A.search(task_rest))
+
+        mode = None
+        j = i + 1
+        while j < n:
+            if TASK_LINE.match(lines[j]) or heading_text(lines[j]):
+                break
+            m = TEST_AUTHOR_LINE.match(lines[j])
+            if m:
+                mode = m.group(1)
+                break
+            j += 1
+
+        if is_tier_a and mode == "solo":
+            downgraded.append(f"{task_id} ({term})")
+        elif not is_tier_a and TIER.search(task_rest):
+            tier_b_boundary.append(f"{task_id} ({term})")
+        i += 1
+
+    if downgraded:
+        f.add("warn", "security-boundary-mode",
+              "Tier A + `solo` on what reads like a security-boundary category — D1 says "
+              "ALWAYS split; confirm the mode or correct it: " + ", ".join(downgraded[:6]))
+    if tier_b_boundary:
+        f.add("warn", "security-boundary-mode",
+              "Tier B on what reads like a security-boundary category — testing-workflow's "
+              "erosion guard makes those Tier A regardless of size: "
+              + ", ".join(tier_b_boundary[:6]))
+
+
 UNIT_TEST_LINE = re.compile(r"^\s+Unit test:\s*(\S.*)$")
 NO_UNIT_TEST = re.compile(r"^no unit test\b", re.IGNORECASE)
 
@@ -662,6 +766,7 @@ def run_checks(spec_dir: Path) -> Findings:
     if tasks_text is not None:
         check_task_tiers(tasks_text, f)
         check_test_author_mode(tasks_text, f)
+        check_security_boundary_mode(tasks_text, f)
         check_unit_test_contract(tasks_text, f)
         check_clusters(tasks_text, f)
         check_review_gates(tasks_text, f)

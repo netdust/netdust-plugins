@@ -255,6 +255,57 @@ TASKS_CITES_NO_REQS = """# Tasks: Course publishing
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(STOP: commit C1 \u2014 tier STANDARD)*
 """
 
+# ── `security-boundary-mode` fixtures — D1's no-self-downgrade, made visible ──
+# test-author-mode accepts ANY reason text after `solo —`, so a Tier-A auth task talked down
+# to "A-lite, pure transform" passes it exactly like a legitimate one. These WARN.
+TASKS_TIER_A_SOLO_ON_BOUNDARY = """# Tasks: x
+
+### Cluster C1  (1 task \u00b7 provisional tier: FULL)
+- [ ] T01 [Tier A] rewrite the token store  (files: db/tokens.sql)
+      Test-author: solo \u2014 A-lite, pure transform, no security-boundary category
+      Unit test: replays the migration on a seeded fixture
+
+\u2500\u2500 REVIEW GATE \u2500\u2500  *(tier FULL)*
+"""
+
+# Correct mode on the same task — no warning.
+TASKS_TIER_A_SPLIT_ON_BOUNDARY = """# Tasks: x
+
+### Cluster C1  (1 task \u00b7 provisional tier: FULL)
+- [ ] T01 [Tier A] rewrite the token store  (files: db/tokens.sql)
+      Test-author: split
+      Unit test: replays the migration on a seeded fixture
+
+\u2500\u2500 REVIEW GATE \u2500\u2500  *(tier FULL)*
+"""
+
+# Tier B on a security-boundary file — the earlier, cheaper error (erosion guard).
+TASKS_TIER_B_ON_BOUNDARY = """# Tasks: x
+
+### Cluster C1  (1 task \u00b7 provisional tier: FULL)
+- [ ] T01 [Tier B] tidy the session guard  (files: lib/session-guard.ts)
+      Test-author: solo \u2014 Tier B
+      Unit test: no unit test: Tier B, tidy-up only
+
+\u2500\u2500 REVIEW GATE \u2500\u2500  *(tier FULL)*
+"""
+
+# The calibration cases the live corpus produced: `auth` inside test-AUTHor.md, `acl` inside
+# performance-orACLe.md. Doc-editing tasks on this repo's own files must stay silent, or the
+# WARN becomes noise nobody reads.
+TASKS_BOUNDARY_FALSE_FRIENDS = """# Tasks: x
+
+### Cluster C1  (2 tasks \u00b7 provisional tier: LIGHT)
+- [ ] T01 [Tier B] update the agent preambles  (files: agents/test-author.md, agents/implementer.md)
+      Test-author: solo \u2014 Tier B
+      Unit test: no unit test: Tier B, agent-prose edit
+- [ ] T02 [Tier B] retune a reviewer persona  (files: agents/performance-oracle.md)
+      Test-author: solo \u2014 Tier B
+      Unit test: no unit test: Tier B, agent-prose edit
+
+\u2500\u2500 REVIEW GATE \u2500\u2500  *(tier LIGHT)*
+"""
+
 PLAN_GATES_FULL = """# Implementation Plan: Webhook receiver
 
 ## Constitution check  [GATE]
@@ -615,6 +666,31 @@ def run():
     rc, out = _run({"tasks.md": TASKS_NO_TEST_AUTHOR_LINES})
     results.append(("! [unit-test-contract]" in out,
                     "zero `Unit test:` lines WARNs as a pre-contract tasks.md, never FAILs"))
+
+    # ── `security-boundary-mode` — the free-form `solo` reason, made visible ───
+
+    # 10s. Tier A + solo on a token/migration file → WARN (gate still PASSes: heuristic)
+    rc, out = _run({"tasks.md": TASKS_TIER_A_SOLO_ON_BOUNDARY})
+    results.append((rc == 0 and "! [security-boundary-mode]" in out
+                     and "T01" in out and "ALWAYS split" in out,
+                    "Tier A + solo on a security-boundary file WARNs, never FAILs"))
+
+    # 10t. same task, correct `split` mode → silent
+    rc, out = _run({"tasks.md": TASKS_TIER_A_SPLIT_ON_BOUNDARY})
+    results.append((rc == 0 and "security-boundary-mode" not in out,
+                    "the same task with `split` produces no boundary warning"))
+
+    # 10u. Tier B on a security-boundary file → WARN (the erosion guard, upstream of the mode)
+    rc, out = _run({"tasks.md": TASKS_TIER_B_ON_BOUNDARY})
+    results.append((rc == 0 and "! [security-boundary-mode]" in out and "erosion guard" in out,
+                    "Tier B on a security-boundary file WARNs as tier erosion"))
+
+    # 10v. CALIBRATION: test-AUTHor.md / performance-orACLe.md must not match. The first
+    # cut of this check flagged three live doc tasks on exactly these substrings, which is
+    # the noise that trains people to ignore WARNs.
+    rc, out = _run({"tasks.md": TASKS_BOUNDARY_FALSE_FRIENDS})
+    results.append((rc == 0 and "security-boundary-mode" not in out,
+                    "`auth` in test-author.md and `acl` in performance-oracle.md do not match"))
 
     # ── `requirement-coverage` — spec ids traced into the task list ───────────
 
