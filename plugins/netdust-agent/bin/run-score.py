@@ -61,7 +61,7 @@ LOOP_EVENTS = {
 
 def parse_tasks(tasks_md: str) -> list[dict]:
     """Task lines outside fenced code blocks. Same fencing rule as
-    spec-kit/loop-check.py's parse_tasks — a fenced format-example line
+    bin/loop-check.py's parse_tasks — a fenced format-example line
     must never count as a real task."""
     tasks = []
     in_fence = False

@@ -1,5 +1,5 @@
 """
-test_spec_gate_check.py — verifies the spec-kit gate checker (spec-kit/gate-check.py).
+test_spec_gate_check.py — verifies the harness gate checker (bin/gate-check.py).
 
 The checker is the MECHANICAL backstop for the harness's non-test gates: it must FAIL a
 spec/plan/tasks set that skips a gate, and PASS one that carries them. The load-bearing
@@ -12,7 +12,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-CHECKER = Path(__file__).parent.parent / "spec-kit" / "gate-check.py"
+CHECKER = Path(__file__).parent.parent / "bin" / "gate-check.py"
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
 

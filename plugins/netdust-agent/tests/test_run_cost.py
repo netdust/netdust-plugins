@@ -1,4 +1,4 @@
-"""Tests for spec-kit/run-cost.py — per-dispatch / per-stage token-cost report.
+"""Tests for bin/run-cost.py — per-dispatch / per-stage token-cost report.
 
 Contract (specs/harness-efficiency/plan.md D6, tasks.md T11):
 
@@ -46,8 +46,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-RUN_COST = Path(__file__).resolve().parent.parent / "spec-kit" / "run-cost.py"
-RUN_TRACE = Path(__file__).resolve().parent.parent / "spec-kit" / "run-trace.py"
+RUN_COST = Path(__file__).resolve().parent.parent / "bin" / "run-cost.py"
+RUN_TRACE = Path(__file__).resolve().parent.parent / "bin" / "run-trace.py"
 
 
 def run_cost(feature_dir: Path, transcript_dir: Path | None = None) -> tuple[int, str, str]:

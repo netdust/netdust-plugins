@@ -1,4 +1,4 @@
-"""Tests for spec-kit/run-score.py — the evaluator rubric compiler.
+"""Tests for bin/run-score.py — the evaluator rubric compiler.
 
 Contract (specs/run-observability/spec.md FR-4/FR-5, plan.md's thresholds
 table, tasks.md T04):
@@ -36,7 +36,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-RUN_SCORE = Path(__file__).resolve().parent.parent / "spec-kit" / "run-score.py"
+RUN_SCORE = Path(__file__).resolve().parent.parent / "bin" / "run-score.py"
 
 
 def run_score(feature_dir: Path) -> tuple[int, str, str]:

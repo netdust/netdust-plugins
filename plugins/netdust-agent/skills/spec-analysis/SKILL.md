@@ -1,27 +1,27 @@
 ---
 name: spec-analysis
-description: Stage 1.5 of the harness — the pre-execution gate that verifies spec.md, plan.md, and tasks.md are consistent AND that the netdust Stage-1 gates actually landed in the artifacts, before any task is dispatched. Two parts: (a) spec-kit's /speckit.analyze for semantic cross-artifact consistency, and (b) spec-kit/gate-check.py for MECHANICAL gate-presence — threat model present iff a security surface was flagged, every required [GATE] heading present, every task carries a test tier, review clusters <=4 tasks, irreversible steps solo and non-[P]. This is what turns the harness's previously skill-honored non-test gates into a machine-checked barrier. Runs AFTER planning (Stage 1) and BEFORE execution (Stage 2). Triggers when a plan+tasks are ready to execute. The mechanical half needs no spec-kit graft — gate-check.py reads specs/<feature>/ directly; without the graft the semantic cross-check is done by reading the three artifacts against each other.
+description: Stage 1.5 of the harness — the pre-execution gate that verifies spec.md, plan.md, and tasks.md are consistent AND that the netdust Stage-1 gates actually landed in the artifacts, before any task is dispatched. Two parts: (a) a semantic cross-artifact consistency read, and (b) bin/gate-check.py for MECHANICAL gate-presence — threat model present iff a security surface was flagged, every required [GATE] heading present, every task carries a test tier, review clusters <=4 tasks, irreversible steps solo and non-[P]. This is what turns the harness's previously skill-honored non-test gates into a machine-checked barrier. Runs AFTER planning (Stage 1) and BEFORE execution (Stage 2). Triggers when a plan+tasks are ready to execute. Part (b) is BLOCKING on every project — gate-check.py reads specs/<feature>/ directly and depends on no external tooling; part (a) is judgment and no script verifies it.
 ---
 
 <objective>
 Before `building` Stage 2 dispatches a single task, confirm two things mechanically:
 
-1. **Consistency** — the spec, plan, and tasks describe the *same* feature: every functional requirement and success criterion has tasks, no task invents scope the spec doesn't have, no plan section contradicts the spec. With the spec-kit graft this is `/speckit.analyze`; without it, you read the three files against each other. Either way it is **judgment, not a script** — the one part of this gate that is an assertion.
-2. **Gate-presence** — the Stage-1 gates the harness depends on are physically present in the artifacts. This is the load-bearing addition: the harness's threat-model (1a), invariants (1b), spec-premise (1c), per-task tiers (1d), and review-cluster sizing (1f) gates were previously *skill-honored* — they fired only because a skill sequenced them, and a session that under-honored the skill skipped them silently. `spec-kit/gate-check.py` makes them a **verifiable property of the files**, failing the gate if one is missing.
+1. **Consistency** — the spec, plan, and tasks describe the *same* feature: every functional requirement and success criterion has tasks, no task invents scope the spec doesn't have, no plan section contradicts the spec. You read the three files against each other — this is **judgment, not a script**, and it is the one part of this gate that is an assertion.
+2. **Gate-presence** — the Stage-1 gates the harness depends on are physically present in the artifacts. This is the load-bearing addition: the harness's threat-model (1a), invariants (1b), spec-premise (1c), per-task tiers (1d), and review-cluster sizing (1f) gates were previously *skill-honored* — they fired only because a skill sequenced them, and a session that under-honored the skill skipped them silently. `bin/gate-check.py` makes them a **verifiable property of the files**, failing the gate if one is missing.
 
-The pairing is deliberate: `/speckit.analyze` needs judgment (does this task satisfy that requirement?); gate-presence is mechanical (is `## Threat model` non-N/A when a security surface was flagged?). The mechanical half is the backstop — it cannot be talked out of a finding.
+The pairing is deliberate: coverage needs judgment (does this task satisfy that requirement?); gate-presence is mechanical (is `## Threat model` non-N/A when a security surface was flagged?). The mechanical half is the backstop — it cannot be talked out of a finding.
 </objective>
 
 <process>
 
-**Step 1 — semantic consistency.** Cross-check spec ↔ plan ↔ tasks for coverage and contradiction: every `FR-n` and `SC-n` traced to at least one task, every task traced back to something the spec asks for, no plan section disagreeing with the spec. With the spec-kit graft, invoke `/speckit.analyze` over `specs/<feature>/`; without it, read the three files against each other yourself. Resolve any inconsistency (missing requirement coverage, orphan task, plan/spec disagreement) before continuing.
+**Step 1 — semantic consistency.** Cross-check spec ↔ plan ↔ tasks for coverage and contradiction: every `FR-n` and `SC-n` traced to at least one task, every task traced back to something the spec asks for, no plan section disagreeing with the spec. Read the three files against each other. Resolve any inconsistency (missing requirement coverage, orphan task, plan/spec disagreement) before continuing.
 
-  - **State plainly which mode you ran, and that this step is not machine-checked.** No script verifies requirement coverage today — Step 2 does not cover it. Naming that is what keeps it from being mistaken for a green gate. (A mechanical `FR-n`/`SC-n` → task coverage check in `gate-check.py` is the open follow-up that would close it.)
+  - **State plainly that this step is not machine-checked.** No script verifies requirement coverage today — Step 2 does not cover it. Naming that is what keeps it from being mistaken for a green gate. (A mechanical `FR-n`/`SC-n` → task coverage check in `gate-check.py` is the open follow-up that would close it.)
 
 **Step 2 — `gate-check.py` (mechanical gate-presence) — BLOCKING.**
 
 ```bash
-python3 <netdust-agent>/spec-kit/gate-check.py specs/<feature>
+python3 <netdust-agent>/bin/gate-check.py specs/<feature>
 ```
 
 The checker FAILS (exit 1) on any of:
@@ -51,7 +51,6 @@ Gate-check is a backstop, not a substitute for authoring the gates well. A plan 
 | Thought | Reality |
 |---|---|
 | "The consistency check passed, I'll start executing" | That is only half — and the half no script verifies. Run `gate-check.py`; the mechanical gate-presence check is what catches a skipped threat model or an un-tiered task. |
-| "No spec-kit in this project, so Stage 1.5 doesn't apply here" | Step 2 needs no graft — `gate-check.py` reads `specs/<feature>/` directly and is BLOCKING on every project. Only Step 1's tooling changes. |
 | "The checker flagged a missing threat model but the feature feels harmless" | The checker only flags it because a Security-relevant surface was checked in the spec. Either the box was wrong (fix the spec) or the threat model is genuinely missing (author it). It is never "ignore the finding." |
 | "I'll fix the gate-check findings after the first cluster ships" | That is the retrospective failure mode the harness exists to kill (1a BLOCKING). Gate-presence is a pre-dispatch barrier. Fix before task one. |
 | "One cluster has 6 tasks but they're all small" | Size is the cap, not effort. >4 tasks = an un-bisectable review diff (1f). Split it. The checker is right. |
@@ -59,7 +58,7 @@ Gate-check is a backstop, not a substitute for authoring the gates well. A plan 
 </red_flags>
 
 <success_criteria>
-1. spec ↔ plan ↔ tasks are consistent (inconsistencies resolved), and the transcript says whether that came from `/speckit.analyze` or from reading the artifacts.
+1. spec ↔ plan ↔ tasks are consistent (inconsistencies resolved), and the transcript states that this half was a read, not a machine check.
 2. `gate-check.py` exits 0 — every required gate present; no unresolved clarification marker; success criteria measurable; threat model present iff a surface was flagged; all tasks tiered; clusters ≤4 and irreversible steps solo/non-[P].
 3. The pass is recorded in the transcript as the Stage-2 green light.
 4. If anything was missing, it was authored/fixed in the artifacts BEFORE any task dispatch — not deferred.
@@ -69,10 +68,9 @@ Gate-check is a backstop, not a substitute for authoring the gates well. A plan 
 
 | Skill / artifact | Relationship |
 |---|---|
-| `superpowers:writing-plans` + override `plan-template.md` | **UPSTREAM (Stage 1).** Produces the plan this gate verifies. |
+| `superpowers:writing-plans` + `templates/plan-template.md` | **UPSTREAM (Stage 1).** Produces the plan this gate verifies. |
 | `netdust-agent:spec-authoring` | **UPSTREAM (Stage 0.5).** Its Security-relevant surfaces flags are what the threat-model cross-check keys on. |
-| spec-kit `/speckit.analyze` | **WRAPPED (part a) WHEN PRESENT.** Semantic consistency; without the graft this step is done by reading the three artifacts, and is not machine-checked either way. |
-| `spec-kit/gate-check.py` | **THE MECHANICAL GATE (part b).** Exit code is the barrier. Needs no graft — it reads the feature dir directly. |
+| `bin/gate-check.py` | **THE MECHANICAL GATE (part b).** Exit code is the barrier. Reads the feature dir directly, no external tooling. |
 | `netdust-agent:threat-modeling` / `architecture-invariants` / `testing-workflow` | **REMEDIATION.** Where the checker fails, these author the missing gate. |
 | `superpowers:subagent-driven-development` | **DOWNSTREAM (Stage 2).** Only runs once this gate is green. |
 | `netdust-agent:planning` | **SEQUENCER.** Fires this as Stage 1.5 — the machine check the plan/build seam rests on; `building`'s precondition re-runs `gate-check.py` at entry. |

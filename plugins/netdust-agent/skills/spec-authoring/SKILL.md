@@ -1,6 +1,6 @@
 ---
 name: spec-authoring
-description: Stage 0.5 of the harness — the gate over a feature's spec.md (what/why, prioritized user stories, functional + acceptance criteria, measurable success criteria, NO tech stack). The spec is AUTHORED by superpowers:brainstorming into specs/<feature>/spec.md; this skill verifies it mechanically with spec-kit/gate-check.py and HALTs until every [NEEDS CLARIFICATION] marker is resolved and every SC line carries a number. Owns the ambiguity rule: anything still open is handed back as a marker, never resolved by picking a plausible default. Runs AFTER brainstorming (Stage 0) and BEFORE writing-plans (Stage 1), so the plan is built on a clarified spec instead of vibes. Triggers when starting a new feature whose intent is concrete enough to specify but not yet planned. NOT for trivial one-file edits, Class D security one-liners, research, or prose — those skip the spec stage. Needs no spec-kit graft — gate-check.py reads specs/<feature>/ directly.
+description: Stage 0.5 of the harness — the gate over a feature's spec.md (what/why, prioritized user stories, functional + acceptance criteria, measurable success criteria, NO tech stack). The spec is AUTHORED by superpowers:brainstorming into specs/<feature>/spec.md; this skill verifies it mechanically with bin/gate-check.py and HALTs until every [NEEDS CLARIFICATION] marker is resolved and every SC line carries a number. Owns the ambiguity rule: anything still open is handed back as a marker, never resolved by picking a plausible default. Runs AFTER brainstorming (Stage 0) and BEFORE writing-plans (Stage 1), so the plan is built on a clarified spec instead of vibes. Triggers when starting a new feature whose intent is concrete enough to specify but not yet planned. NOT for trivial one-file edits, Class D security one-liners, research, or prose — those skip the spec stage.
 ---
 
 <objective>
@@ -8,9 +8,9 @@ Drive `specs/<feature>/spec.md` — the *what and why*, with no technology stack
 
 **Division of labour: content comes from upstream, verification lives here.** `superpowers:brainstorming` runs the design dialogue and writes the spec; this skill does not re-author it and does not duplicate brainstorming's craft. What this stage adds is the netdust HALT: **a plan may not be written against a spec that still contains `[NEEDS CLARIFICATION]`, or whose success criteria nobody can sign off against.**
 
-The HALT is mechanical. `spec-kit/gate-check.py` parses the spec and fails on any real unresolved marker (template guidance and backticked examples are correctly ignored) and on any `SC-n` line carrying no number. The gate is the script's exit code, not a human glance — same philosophy as the testing gate's structured evidence.
+The HALT is mechanical. `bin/gate-check.py` parses the spec and fails on any real unresolved marker (template guidance and backticked examples are correctly ignored) and on any `SC-n` line carrying no number. The gate is the script's exit code, not a human glance — same philosophy as the testing gate's structured evidence.
 
-**This stage no longer depends on the spec-kit graft.** `gate-check.py` lints whatever of `spec.md` / `plan.md` / `tasks.md` exists in a directory; it imports nothing from spec-kit. The one thing that makes it fire is the spec being at `specs/<feature>/spec.md` — which is why that location is a standing preference in `memory/GLOBAL.md`, not a per-project choice.
+**This stage depends on no external tooling.** `gate-check.py` lints whatever of `spec.md` / `plan.md` / `tasks.md` exists in a directory. The one thing that makes it fire is the spec being at `specs/<feature>/spec.md` — which is why that location is a standing preference in `memory/GLOBAL.md`, not a per-project choice.
 </objective>
 
 <process>
@@ -37,7 +37,7 @@ The HALT is mechanical. `spec-kit/gate-check.py` parses the spec and fails on an
 **Step 4 — HALT gate (mechanical).** Run the checker over the spec:
 
 ```bash
-python3 <netdust-agent>/spec-kit/gate-check.py specs/<feature>
+python3 <netdust-agent>/bin/gate-check.py specs/<feature>
 ```
 
 Two spec-stage findings decide the HALT:
@@ -80,10 +80,10 @@ Two spec-stage findings decide the HALT:
 | Skill / artifact | Relationship |
 |---|---|
 | `superpowers:brainstorming` | **UPSTREAM (Stage 0) — AUTHORS the spec.** Runs the design dialogue and the user review gate, and writes `specs/<feature>/spec.md` (per the `memory/GLOBAL.md` spec-location preference). This skill verifies that output; it does not re-author it. Its self-review's "pick one reading" rule is overridden by Step 3. |
-| `templates/spec-template.md` | **THE SHAPE.** The section contract this skill checks against. Also installed into `.specify/templates/overrides/` by `spec-kit/setup.sh` for projects that drive `/speckit.specify`. |
-| `spec-kit/gate-check.py` | **THE GATE.** Mechanical `clarify-halt` + `success-criteria` checks; its exit code is the HALT. Reads the feature dir directly — no spec-kit dependency. |
+| `templates/spec-template.md` | **THE SHAPE.** The section contract this skill checks against. |
+| `bin/gate-check.py` | **THE GATE.** Mechanical `clarify-halt` + `success-criteria` checks; its exit code is the HALT. Reads the feature dir directly. |
 | `memory/GLOBAL.md` | **THE PREFERENCE.** Holds the spec-location and hand-back-ambiguity preferences that make Step 1 and Step 3 bind on brainstorming at runtime. |
-| `superpowers:writing-plans` + `plan-template.md` | **DOWNSTREAM (Stage 1).** Plans against the clarified spec; review clusters follow this spec's P1/P2/P3 story boundaries. |
+| `superpowers:writing-plans` + `templates/plan-template.md` | **DOWNSTREAM (Stage 1).** Plans against the clarified spec; review clusters follow this spec's P1/P2/P3 story boundaries. |
 | `netdust-agent:spec-analysis` | **DOWNSTREAM (Stage 1.5).** Cross-checks the Security-relevant surfaces flags against the plan's threat model. |
 | `netdust-agent:shake-out` | **DOWNSTREAM (Stage 3).** Signs off against this spec's `## Success criteria` — which is why they must carry numbers. |
 | `netdust-agent:planning` | **SEQUENCER.** Fires this as Stage 0.5, unconditionally. |

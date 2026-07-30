@@ -1,4 +1,4 @@
-"""Tests for spec-kit/run-trace.py — the single-writer run-log convergence point.
+"""Tests for bin/run-trace.py — the single-writer run-log convergence point.
 
 Contract (specs/run-observability/spec.md, specs/run-observability/tasks.md T01):
   - `append <feature-dir> <event> [k=v ...]` writes one timestamped JSON line to
@@ -31,7 +31,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-RUN_TRACE = Path(__file__).resolve().parent.parent / "spec-kit" / "run-trace.py"
+RUN_TRACE = Path(__file__).resolve().parent.parent / "bin" / "run-trace.py"
 
 
 def run_trace(*args: str) -> tuple[int, str, str]:

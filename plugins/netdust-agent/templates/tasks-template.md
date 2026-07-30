@@ -1,10 +1,12 @@
 # Tasks: [FEATURE NAME]
 
-> **netdust override template.** Overrides spec-kit's core `tasks-template.md`. It is the
-> **handoff artifact — THE SEAM**: `building` Stage 2 executes from this file, and refuses to start until `gate-check.py` is green and the plan is approved. spec-kit's
-> `/speckit.implement` is **never** run — it would bypass the Stage-2 gates (threat-model
-> verify, test tiers, review-cluster HALT, `subagent-stop.py`). Execution is driven by
-> `superpowers:subagent-driven-development` / `executing-plans` under the netdust spine.
+> **netdust tasks template.** Written to `specs/<feature>/tasks.md` at `planning` Stage 1.
+> It is the **handoff artifact — THE SEAM**: `building` Stage 2 executes from this file, and
+> refuses to start until `gate-check.py` is green and the plan is approved. It is never
+> executed FLAT — a runner that walks these lines top to bottom bypasses the Stage-2 gates
+> (threat-model verify, test tiers, review-cluster HALT, `subagent-stop.py`). Execution is
+> driven task-by-task by `superpowers:subagent-driven-development` / `executing-plans`
+> under the netdust spine.
 >
 > `spec-analysis` (Stage 1.5) verifies: every task carries a **test tier**, every phase a
 > per-phase integration gate, clusters are ≤4 tasks, and irreversible steps are solo.

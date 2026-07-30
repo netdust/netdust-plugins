@@ -1,11 +1,11 @@
-"""Tests for spec-kit/loop-check.py — the loop ledger."""
+"""Tests for bin/loop-check.py — the loop ledger."""
 
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-LOOP_CHECK = Path(__file__).resolve().parent.parent / "spec-kit" / "loop-check.py"
+LOOP_CHECK = Path(__file__).resolve().parent.parent / "bin" / "loop-check.py"
 
 TIERED = """# Tasks: demo
 

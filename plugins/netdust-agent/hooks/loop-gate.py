@@ -4,7 +4,7 @@ loop-gate.py — netdust-agent harness
 
 Stop hook: the loop driver. When a feature loop is ARMED (marker file
 tasks/.harness-loop.json exists, written by /loop), this hook runs
-spec-kit/loop-check.py at every session stop and BLOCKS the stop while
+bin/loop-check.py at every session stop and BLOCKS the stop while
 Stage 2 is unfinished — the exact mechanism subagent-stop.py uses on
 subagents, one level up. No marker → no-op (zero cost for every normal
 session).
@@ -39,8 +39,8 @@ from pathlib import Path
 from datetime import datetime
 
 LOG_PATH = Path.home() / ".claude" / "logs" / "memory-hook.log"
-LOOP_CHECK = Path(__file__).resolve().parent.parent / "spec-kit" / "loop-check.py"
-RUN_TRACE = Path(__file__).resolve().parent.parent / "spec-kit" / "run-trace.py"
+LOOP_CHECK = Path(__file__).resolve().parent.parent / "bin" / "loop-check.py"
+RUN_TRACE = Path(__file__).resolve().parent.parent / "bin" / "run-trace.py"
 MARKER_REL = Path("tasks") / ".harness-loop.json"
 DEFAULT_MAX_ITERATIONS = 25
 MAX_DRY = 2

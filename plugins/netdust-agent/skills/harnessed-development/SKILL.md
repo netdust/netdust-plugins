@@ -6,7 +6,7 @@ description: The single entry point for any code-changing work in a Netdust proj
 <objective>
 Make one truth hold: **if this skill was invoked, every gate the work's class warrants fired — and none was left to "remember to do it."**
 
-This skill no longer sequences the stages itself. It does exactly one job — classify the work and route it to the right spine — because the gate-coverage durability it used to buy by sequencing everything in one file is now enforced **structurally at the seam**: `planning` cannot end without an approved `tasks.md` + `spec-kit/gate-check.py` GREEN, and `building` refuses to start Class A/B work without exactly that artifact. One skill remembering every gate has been replaced by a boundary that checks them mechanically.
+This skill no longer sequences the stages itself. It does exactly one job — classify the work and route it to the right spine — because the gate-coverage durability it used to buy by sequencing everything in one file is now enforced **structurally at the seam**: `planning` cannot end without an approved `tasks.md` + `bin/gate-check.py` GREEN, and `building` refuses to start Class A/B work without exactly that artifact. One skill remembering every gate has been replaced by a boundary that checks them mechanically.
 
 ```
 planning   brainstorm → spec → plan(+gates 1a–1g, task-shaping) → analyze

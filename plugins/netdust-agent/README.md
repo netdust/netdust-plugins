@@ -46,9 +46,9 @@ What the harness *loads* at each step. Each craft skill **layers on top of its s
 
 ### Spec-kit graft — run observability
 
-Sibling to the spec-kit tools above (`gate-check.py`, `loop-check.py`): `spec-kit/run-trace.py` and `spec-kit/run-score.py` add an in-loop event trace and a deterministic 5-dimension evaluator rubric. `loop-gate.py` emits trace events at the decision sites automatically (fail-open — a trace-write failure never blocks the loop); `/shakeout` surfaces the graded rubric at spec-close and `/evaluate` reads the run-log before falling back to git archaeology. Report-only — it adds no new gate.
+Sibling to the gating tools in `bin/` (`gate-check.py`, `loop-check.py`): `bin/run-trace.py` and `bin/run-score.py` add an in-loop event trace and a deterministic 5-dimension evaluator rubric. `loop-gate.py` emits trace events at the decision sites automatically (fail-open — a trace-write failure never blocks the loop); `/shakeout` surfaces the graded rubric at spec-close and `/evaluate` reads the run-log before falling back to git archaeology. Report-only — it adds no new gate.
 
-Cost telemetry rides the same trace: `run-trace.py show --durations` prints a per-segment timing table over the existing log, and `spec-kit/run-cost.py` is a strictly read-only transcript miner — it walks the local Claude Code session/subagent `*.jsonl` files and emits per-dispatch and per-stage token tables (joined to the run-log's stage boundaries), stdout only, counts and metadata never message content.
+Cost telemetry rides the same trace: `run-trace.py show --durations` prints a per-segment timing table over the existing log, and `bin/run-cost.py` is a strictly read-only transcript miner — it walks the local Claude Code session/subagent `*.jsonl` files and emits per-dispatch and per-stage token tables (joined to the run-log's stage boundaries), stdout only, counts and metadata never message content.
 
 ---
 
@@ -116,7 +116,7 @@ netdust-agent/
 │   │                            #   (memory-audit + pattern-miner are netdust-core's)
 └── hooks/                       # SessionStart/Stop, SubagentStop testing-gate,
                                  #   PreToolUse guard, Stop loop-gate — the /loop
-                                 #   driver over spec-kit/loop-check.py (hooks.json)
+                                 #   driver over bin/loop-check.py (hooks.json)
 ```
 
 ---

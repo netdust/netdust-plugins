@@ -2,8 +2,7 @@
 
 > **netdust spec template.** Authored by `superpowers:brainstorming` (Stage 0 → spec) and
 > written to `specs/<feature>/spec.md`. Describes **what** and **why** — **no technology
-> stack** (that is `plan.md`). `spec-kit/gate-check.py` reads this file directly; it does
-> not require spec-kit.
+> stack** (that is `plan.md`). `bin/gate-check.py` reads this file directly.
 >
 > **Gate contract** — gate-check.py FAILS on: any unresolved `[NEEDS CLARIFICATION: …]`
 > marker anywhere in this file · a missing `## Success criteria` section or an SC line with

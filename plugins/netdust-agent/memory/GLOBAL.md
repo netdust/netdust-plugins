@@ -31,9 +31,9 @@ upstream skill reads them as user preference and yields to them.
   own skill says a user preference for spec location overrides that default. **This is that
   preference.** Write the spec to `specs/<feature>/spec.md`, using
   `netdust-agent/templates/spec-template.md` as its shape. This is not cosmetic filing:
-  `spec-kit/gate-check.py` reads `specs/<feature>/`, so a spec written to the upstream
+  `bin/gate-check.py` reads `specs/<feature>/`, so a spec written to the upstream
   default is a spec **no gate ever checks** — the clarify-HALT and success-criteria checks
-  simply never fire. Applies to every project, with or without the spec-kit graft.
+  simply never fire. Applies to every project.
 
 - **Open questions are handed back, never defaulted away.** Brainstorming's spec self-review
   says: if a requirement could be read two ways, pick one and make it explicit. The harness

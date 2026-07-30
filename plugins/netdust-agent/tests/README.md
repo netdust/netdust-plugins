@@ -37,7 +37,7 @@ Drop a `test_*.py` file in this directory. Convention:
 | `test_pretooluse_guard.py` | The PreToolUse destructive-action guard: denylist matches emit `ask` (never `deny` in v1), fails OPEN on malformed input/non-Bash tools/internal errors, never exits 2 |
 | `test_session_start.py` | session-start.sh emits memory blocks when memory/STATE.md, lessons.md, todo.md exist, and logs the right found/missing keys |
 | `test_session_start_budget.py` | session-start.sh enforces a real token/size budget on injected memory content |
-| `test_spec_gate_check.py` | The spec-kit gate checker (`spec-kit/gate-check.py`) |
+| `test_spec_gate_check.py` | The harness gate checker (`bin/gate-check.py`) |
 | `test_standards_gate_hook.py` | The standards backstop added to `subagent-stop.py` |
 | `test_stop_hook_dedup.py` | Dedup survives sidecar loss — the target file (not just the gitignored `.stop-hook-state.json` ring) is the durable dedup record, so losing the sidecar doesn't re-append every tag on the next scan |
 | `test_stop_hook_idempotency.py` | The Stop hook's idempotency — re-running does not duplicate captured tags |

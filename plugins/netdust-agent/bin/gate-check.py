@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""gate-check.py — deterministic verification that a spec-kit feature directory
+"""gate-check.py — deterministic verification that a feature directory
 carries the netdust harness gates.
 
 Used by:
-  - spec-authoring  (Stage 0.5): after /speckit.clarify, with only spec.md present
+  - spec-authoring  (Stage 0.5): with only spec.md present
                     → enforces the [NEEDS CLARIFICATION] HALT.
-  - spec-analysis   (Stage 1.5): after /speckit.tasks, with spec.md + plan.md + tasks.md
+  - spec-analysis   (Stage 1.5): with spec.md + plan.md + tasks.md
                     → enforces gate-presence (threat model, invariants, spec-premise,
                       review clusters) + per-task test tiers + the [P]/cluster rules.
 
@@ -426,7 +426,7 @@ def run_checks(spec_dir: Path) -> Findings:
 
 
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(description="netdust × spec-kit gate checker")
+    ap = argparse.ArgumentParser(description="netdust harness gate checker")
     ap.add_argument("spec_dir", type=Path)
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)

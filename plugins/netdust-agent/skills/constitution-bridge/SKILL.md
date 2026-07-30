@@ -1,16 +1,16 @@
 ---
 name: constitution-bridge
-description: Generate or refresh a project's spec-kit constitution (.specify/memory/constitution.md) as a VIEW over the netdust governance sources — RULES.md (non-negotiables), SOUL.md (voice/altitude), and the project's ARCHITECTURE-INVARIANTS.md — instead of authoring an independent constitution. Keeps one source of truth so spec-kit's /speckit.plan and /speckit.implement consult the SAME governance the harness already enforces. Use when setting up spec-kit on a project (replaces /speckit.constitution), or after RULES.md / SOUL.md / ARCHITECTURE-INVARIANTS.md change. NOT a place to invent new rules — if a new non-negotiable is needed it goes in RULES.md first, then this skill regenerates the view.
+description: Generate or refresh a project's constitution (docs/constitution.md) as a VIEW over the netdust governance sources — RULES.md (non-negotiables), SOUL.md (voice/altitude), and the project's ARCHITECTURE-INVARIANTS.md — instead of authoring an independent constitution. Keeps one source of truth, so the plan's `## Constitution check` gate verifies against the SAME governance the harness already enforces. Use when setting up a project, or after RULES.md / SOUL.md / ARCHITECTURE-INVARIANTS.md change. NOT a place to invent new rules — if a new non-negotiable is needed it goes in RULES.md first, then this skill regenerates the view.
 ---
 
 <objective>
-spec-kit's `/speckit.constitution` wants to author `.specify/memory/constitution.md` — the document its planner and implementer consult for "code quality, testing standards, governance." The netdust harness already has that governance, split across three authored sources:
+The plan template opens with a `## Constitution check  [GATE]` heading — a required section `gate-check.py` verifies is present. That gate needs one document to check the approach against: "code quality, testing standards, governance." The netdust harness already has that governance, split across three authored sources:
 
 - `RULES.md` — universal non-negotiables (secrets, `vendor/`, branch discipline, deploy confirmation…).
 - `SOUL.md` — voice and altitude (pushback over flattery, YAGNI, name the trade-off behind "best practice").
 - `<project>/ARCHITECTURE-INVARIANTS.md` — the convergence points (where each cross-cutting property is decided).
 
-Authoring a *fourth* governance doc forks the source of truth — the two will drift, and a reviewer can no longer tell which one binds. This skill instead **generates the constitution as a derived VIEW** over those three, with a banner that says so. One source of truth; spec-kit consults the same rules the harness enforces.
+Authoring a *fourth* governance doc forks the source of truth — the two will drift, and a reviewer can no longer tell which one binds. This skill instead **generates the constitution as a derived VIEW** over those three, with a banner that says so. One source of truth; the plan gate checks against the same rules the harness enforces.
 </objective>
 
 <extremely_important>
@@ -36,7 +36,7 @@ The generated file is **derived, not authored**. It carries a `<!-- GENERATED --
 | IV. Architecture invariants | the project's `ARCHITECTURE-INVARIANTS.md` convergence points |
 | V. Voice & altitude | `SOUL.md` (pushback, YAGNI, name the trade-off) |
 
-**Step 3 — Emit `.specify/memory/constitution.md`** using `<output_template>`. Include the GENERATED banner, the source list with paths, and the generation date.
+**Step 3 — Emit `docs/constitution.md`** using `<output_template>`. Include the GENERATED banner, the source list with paths, and the generation date.
 
 **Step 4 — Report the trace.** List which source fed which article, and flag any article with a missing source (e.g. invariants doc absent) so the human can fill the gap upstream.
 
@@ -55,8 +55,8 @@ The generated file is **derived, not authored**. It carries a `<!-- GENERATED --
 
 # Project Constitution
 
-> Derived view. The binding text lives in the sources above; this file exists so spec-kit's
-> /speckit.plan and consistency checks consult the same governance the harness enforces.
+> Derived view. The binding text lives in the sources above; this file exists so the plan's
+> `## Constitution check` gate verifies against the same governance the harness enforces.
 
 ## Article I — Non-negotiables (from RULES.md)
 [verbatim rule list, core + stack]
@@ -92,7 +92,7 @@ behind "best practice".]
 </red_flags>
 
 <success_criteria>
-1. `.specify/memory/constitution.md` exists, carries the GENERATED banner + source paths + date.
+1. `docs/constitution.md` exists, carries the GENERATED banner + source paths + date.
 2. Every article traces to a named source heading; no article contains invented governance.
 3. Article II names the concrete coding standard (`standards-gate`'s enforcement target).
 4. The trace report lists source→article and flags any missing source.
@@ -102,8 +102,7 @@ behind "best practice".]
 
 | Skill / artifact | Relationship |
 |---|---|
-| spec-kit `/speckit.constitution` | **REPLACES.** Run this instead — it produces the same file as a view, not a fork. |
-| `netdust-spec-templates` (plan override) | **CONSUMER.** The plan template's "Constitution check [GATE]" verifies the approach against this file. |
+| `templates/plan-template.md` | **CONSUMER.** Its `## Constitution check  [GATE]` section verifies the approach against this file; `gate-check.py` requires the heading to be present. |
 | `netdust-agent:standards-gate` | **CONSUMER.** Enforces Article II (coding standards) at task close. |
 | `netdust-agent:testing-workflow` | **REFERENCED.** Article III summarizes its tiers. |
 | `netdust-agent:architecture-invariants` | **SOURCE.** Article IV is its convergence points. |

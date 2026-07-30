@@ -1,5 +1,31 @@
 # ADR — Grafting spec-kit onto the netdust harness
 
+> ## SUPERSEDED — 2026-07-30. The graft is reverted; spec-kit is not used.
+>
+> **This file is kept as a record of a decision that was taken and then undone.** Nothing
+> below describes how the harness works today. Do not implement from it, and do not cite it
+> as current design — it is here for the *why*, not the *what*.
+>
+> **What replaced it.** The harness owns its own artifacts and its own tooling, and depends
+> on no external CLI: `superpowers:brainstorming` authors `specs/<feature>/spec.md` from
+> `templates/spec-template.md`; `planning` Stage 1 writes `plan.md` + `tasks.md` from the
+> sibling templates; `bin/gate-check.py` (bare `python3`, no third-party imports) is the
+> blocking gate at Stages 0.5 and 1.5 and at `building`'s entry. No `.specify/`, no
+> `/speckit.*` command, no override-template resolution, no per-project installer.
+>
+> **Why it was reverted.** The graft was never actually used on a project. Because the
+> harness had been written to *degrade* where the graft was absent — "apply gates 1a–1g as a
+> manual checklist and say so explicitly" — the strongest gate in the harness silently
+> became self-attestation on every real project. The two useful things the graft supplied
+> were ideas, not machinery: the section shapes now in `templates/spec-template.md`
+> (measurable `SC-n` success criteria, prioritized P1/P2/P3 stories, `## Assumptions`) were
+> adopted from upstream `github/spec-kit` and re-authored in netdust's own voice. Ideas
+> kept; dependency dropped.
+>
+> The keystone invariant survives the reversal in a tool-independent form: **the handoff is
+> `tasks.md`, and it is never executed flat** — a runner that walks the task list top to
+> bottom bypasses every Stage-2 gate, whatever that runner is called.
+
 > **Re-homing note (2026-06-23):** this work was originally authored against
 > `plugins/netdust-core/`, on the branch `claude/writing-plans-thread-modeling-Se2Sx`.
 > Since then the coding harness was split out of `netdust-core` into the standalone
@@ -8,7 +34,7 @@
 > now owns). The historical `netdust-core` references below describe the original decision and
 > are left intact; the *operative* paths and skill namespaces live under `netdust-agent`.
 
-**Status:** PROPOSED — design locked, implementation not started
+**Status:** SUPERSEDED (2026-07-30) — implemented, never adopted on a project, reverted. See the banner above.
 **Created:** 2026-06-17
 **Source of truth for this plan:** this file. Source repo: `github.com:netdust/netdust-plugins`, plugin path `plugins/netdust-core/`.
 **Origin:** Evaluation of [github/spec-kit](https://github.com/github/spec-kit) (Spec-Driven Development) against the netdust-core harness. Branch `claude/writing-plans-thread-modeling-Se2Sx`.

@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 LOOP_GATE = Path(__file__).resolve().parent.parent / "hooks" / "loop-gate.py"
-RUN_TRACE = Path(__file__).resolve().parent.parent / "spec-kit" / "run-trace.py"
+RUN_TRACE = Path(__file__).resolve().parent.parent / "bin" / "run-trace.py"
 
 TASKS_ONE_OPEN = (
     "- [x] T01 [Tier A] done  (files: a.py)\n"

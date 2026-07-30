@@ -24,7 +24,7 @@ gate's dry-iteration detection):
     LOOP: CONTINUE — next: T03 [Tier A] wire the adapter
     progress: done=2 total=7
 
-Scope: v1 requires the spec-kit graft (a machine-readable tasks.md). Class
+Scope: v1 requires a machine-readable tasks.md. Class
 C/D/E work is a single cycle — there is nothing to loop.
 """
 
@@ -86,7 +86,7 @@ def main() -> int:
     tasks_path = feature_dir / "tasks.md"
     if not tasks_path.exists():
         print(f"LOOP: BLOCKED — no tasks.md in {feature_dir} (arming error: "
-              "the loop needs the spec-kit graft's machine-readable task list)")
+              "the loop needs a machine-readable tasks.md)")
         return 2
 
     tasks = parse_tasks(tasks_path.read_text())

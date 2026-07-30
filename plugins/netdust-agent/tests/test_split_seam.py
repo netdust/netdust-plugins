@@ -52,8 +52,14 @@ def run():
     check("building: carries the verbatim dispatch addenda (test/dev split pair)",
           "## Netdust addendum — test-author close-out (RED)" in building
           and "## Netdust addendum — implementer close-out (GREEN)" in building)
-    check("building: keeps the /speckit.implement red flag",
-          "NEVER `/speckit.implement`" in building)
+    # The seam's other half: tasks.md is executed task-by-task THROUGH the gates.
+    # Any flat executor over the task list bypasses threat-model verify, per-task
+    # tiers, the review-cluster HALT and the subagent-stop backstop — so the red
+    # flag against it must survive, whatever tool is proposing to do the walking.
+    check("building: keeps the flat-executor red flag (tasks.md is never run flat)",
+          "flat" in building.lower()
+          and "bypass" in building.lower()
+          and "The handoff is `tasks.md`" in building)
     check("building: owns the armed loop protocol",
           "loop-gate.py" in building and "loop-check.py" in building)
     check("building: no plan-authoring content (1a gate text lives in planning only)",
