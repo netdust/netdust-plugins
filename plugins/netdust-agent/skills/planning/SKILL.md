@@ -82,33 +82,44 @@ Invoke `netdust-agent:spec-authoring` **before** writing the plan. Stage 0 wrote
 
 Invoke `superpowers:writing-plans`. Follow its checklist. **The plan is written against the Stage-0.5 `spec.md`**, to the output contract below. Then layer the netdust gates below **before task breakdown is finalized** — they are not optional add-ons, they change what tasks the plan contains.
 
-### The output contract — two files, and only the parsed grammar is fixed
+### The output contract — who writes what, and what the gate reads
 
-`superpowers:writing-plans` emits ONE document, at its own default location. The harness reads TWO files under `specs/<feature>/`. **You do that mapping as you author** — not as a copy-paste pass afterwards, because the fields in the PARSED table below are *decided by gate 1d*, and a plan split up after the fact gets them back-filled without ever having been reasoned about. That is the same defect as a retrofitted threat model.
+`superpowers:writing-plans` emits ONE document at its own default location. The harness reads TWO files under `specs/<feature>/`. Three questions keep that boundary honest, and they have different answers:
 
-**There are no plan or tasks templates.** `gate-check.py` is the only definition of the artifact, so a template restating its requirements would be a second implementation of one rule — free to drift, and the thing this repo's own conventions forbid. Write the two files; the grammar below is what makes them machine-checkable, and everything else is yours.
+**1 — What upstream writes: the plan's substance.** The approach and architecture, the tech stack (named here for the first time — it was kept out of `spec.md`), the file map, the task decomposition itself, and each task's Create/Modify/Test paths and RED/GREEN steps. That is upstream's craft and this skill does not duplicate or second-guess it. What you change is **where it lands and how it splits**: `plan.md` for the reasoning, `tasks.md` for the executable list, both under `specs/<feature>/`. A plan left at the upstream default path is a plan `gate-check.py` never reads.
 
-**PARSED — `gate-check.py` reads these literally.**
+**2 — What the harness ADDS: fields upstream has no concept of.** This is the half that is not verification of anything — these fields are *decided* by the gates below, and `writing-plans` produces none of them. It is also why the mapping happens **as you author**: you cannot back-fill a decision you never made, and a doc split up afterwards gets these fields invented to satisfy a checker. That is the retrofitted-threat-model defect wearing different clothes.
 
-| File | Must appear | Exact shape |
+| The harness adds | Decided by | Because |
 |---|---|---|
-| `plan.md` | five gate headings, each present even when it does not apply | `## Constitution check` · `## Threat model` · `## Architecture invariants touched` · `## Spec-premise ground-truth` · `## Phases & review clusters` — a trailing `[GATE]` marker is tolerated. **A missing heading reads as a skipped gate; `N/A — <one-line reason>` under a present heading is a legitimate answer** |
-| `plan.md` | `## Threat model` content, when the spec flagged a surface | at least one numbered `1. **<attack>** → **<mitigation>**` line. `N/A` here while the spec has a checked security box is a FAIL |
-| `tasks.md` | every task line | `- [ ] T01 [P?] [Tier A|B] <description>  (files: <paths>)` — zero-padded `Tnn`; the tier marker is required on every line |
-| `tasks.md` | a continuation line per task | `      Test-author: split` or `      Test-author: solo — <reason>` (the reason is mandatory for Tier A) |
-| `tasks.md` | cluster grouping | `### Cluster <name>` headings, ≤4 tasks each; a cluster whose heading says `irreversible` or `solo` must hold exactly one non-`[P]` task |
+| the five `## … [GATE]` section bodies | 1a / 1b / 1c | the threat model, invariants touched and premise ground-truth are gate output, not plan prose |
+| `[Tier A\|B]` on every task | 1d (`testing-workflow` owns the rule) | what tier of test the task's risk warrants |
+| `Test-author: split \| solo — <reason>` | 1d (D1) | who writes the RED test — set here, read by the controller, never re-decided at run time |
+| `Unit test:` / `no unit test: Tier B, <reason>` | 1d | the behavioral contract that test must assert, denial path included |
+| `### Cluster` boundaries, `── REVIEW GATE ──`, provisional tier | 1d (the 1f / 1h facets) | where execution HALTs, and the review fan-out it escalates one-way from |
+| `[HUMAN]` marks, `Loop budget: ~N iterations` | 1d loop-auditability | planned yield points and the ceiling an armed `/loop` reads |
+| `## Acceptance flows` matrix | 1g | the behavioral contract Stage 3 drives instead of re-discovering |
+| `(FR-1, SC-1)` citations on the task lines that carry them | traceability to the Stage-0.5 spec | what makes `requirement-coverage` answerable at all — a list citing nothing only WARNs, and coverage falls back to a human read |
+
+**3 — What `gate-check.py` reads literally.** The grammar below is a contract, not a suggestion: it is the whole reason bucket 2 can be machine-checked rather than remembered. **There are no plan or tasks templates** — the script is the only definition of the artifact, so a template restating it would be a second implementation of one rule, free to drift.
+
+| File | Must appear | Exact shape · verdict |
+|---|---|---|
+| `plan.md` | the five gate headings, present even when they do not apply | `## Constitution check` · `## Threat model` · `## Architecture invariants touched` · `## Spec-premise ground-truth` · `## Phases & review clusters`; a trailing `[GATE]` marker is tolerated. **Missing heading → FAIL**; `N/A — <one-line reason>` under a present heading is a legitimate answer |
+| `plan.md` | `## Threat model` content when the spec flagged a surface | at least one numbered `1. **<attack>** → **<mitigation>**` line. `N/A` while the spec has a checked security box → **FAIL** |
+| `tasks.md` | every task line | `- [ ] T01 [P?] [Tier A\|B] <description>  (files: <paths>)` — zero-padded `Tnn`. Any task without a tier → **FAIL** |
+| `tasks.md` | a `Test-author:` continuation line per task | `split`, or `solo — <reason>` with the reason mandatory for Tier A. Partial presence, an invalid value, or bare Tier-A `solo` → **FAIL**; none at all → WARN (pre-convention) |
+| `tasks.md` | a `Unit test:` continuation line per task | the contract, or `no unit test: Tier B, <reason>`. Partial presence → **FAIL** naming the bare tasks; a **Tier A** task waiving it → **FAIL**; none at all → WARN |
+| `tasks.md` | `### Cluster <name>` grouping | ≤4 tasks each → over that, **FAIL**; a cluster whose heading says `irreversible`/`solo` must hold exactly one non-`[P]` task |
+| `tasks.md` | a `── REVIEW GATE ──` marker closing each cluster | absent → **FAIL**: `building` HALTs at the marker, so without it execution runs the phase flat |
+| `tasks.md` | a provisional tier per cluster | `FULL` / `STANDARD` / `LIGHT`, on the cluster heading or the marker line. Absent → **FAIL**: nothing for `building` to restate or escalate from |
+| both | each `FR-n` / `SC-n` cited somewhere in `tasks.md` | once ANY id is cited, an untraced one → **FAIL**; a list citing none → WARN |
 
 Fenced code blocks are stripped before parsing, so an example inside a fence never counts as a real task.
 
-**AUTHORED — required content, your words, no prescribed shape.** In `plan.md`: the approach and the tech stack (named here for the first time — it was kept out of `spec.md`), the file map, the gate bodies themselves, and a `Loop budget: ~N iterations` line if the feature may run under an armed `/loop`. In `tasks.md`: each task's `Unit test:` contract (or `no unit test: Tier B, <reason>`), each phase's integration gate, the `── REVIEW GATE ──` markers with their provisional tier, and `[HUMAN]` on any step no agent may take alone.
+**Division between the two files: reasoning in `plan.md`, the executable list in `tasks.md`.** `## Phases & review clusters` names the clusters, their order and their tiers, then points at `tasks.md` — it does not restate the task lines. Two copies of a task list drift, and the one `building` executes is `tasks.md`.
 
-**Division of labour between the two files: reasoning in `plan.md`, the executable list in `tasks.md`.** `## Phases & review clusters` names the clusters, their order and their tiers, then points at `tasks.md` — it does not restate the task lines. Two copies of a task list drift, and the one `building` executes is `tasks.md`.
-
-The task-list grammar above is enforced further than the tier marker alone: `gate-check.py` FAILs a cluster that ends with **no `── REVIEW GATE ──` marker** (nothing would HALT execution there), a cluster that declares **no provisional tier** (`building` restates and escalates one-way FROM it, so with none there is nothing to restate), a task that states **no `Unit test:` contract** while its siblings do, and a **Tier A** task that waives its test with `no unit test:` — tier erosion the tier system exists to stop.
-
-Cite the spec's requirement ids on the task lines that carry them — `(FR-1, SC-1)` after the description is enough. That is what makes `requirement-coverage` able to answer at all: a task list citing nothing is treated as pre-convention and only WARNs, so the coverage question falls back to a human read.
-
-**Know what the gate still does NOT check**, so you do not mistake green for complete: it verifies that the five headings exist, not that their bodies are substantive; that a tier and a `Test-author:` mode are present, not that either is *honest* — the `solo — <reason>` text is free-form, so any prose satisfies it; and that a requirement id appears somewhere in the task list, not that the task citing it satisfies it. Those remain authoring obligations this skill sequences, and 1d below is where they are decided.
+**Know what the gate does NOT check**, so you never read green as complete: it verifies that the five headings exist, not that their bodies are substantive; that a tier and a `Test-author:` mode are present, not that either is *honest* — the `solo — <reason>` text is free-form, so any prose satisfies it; and that a requirement id appears somewhere in the task list, not that the task citing it satisfies it. Those stay authoring obligations this skill sequences, and 1d below is where they are decided.
 
 **Stack plan-requirements (override layer).** If a stack sub-plugin provides a plan-requirements skill (see `<stack_overrides>`), invoke it HERE, alongside 1a/1b — it injects the stack's mandatory requirement sections into the plan before task breakdown, so those become per-task acceptance criteria and the `/code-review` convergence target.
 
