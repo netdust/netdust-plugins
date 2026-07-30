@@ -82,6 +82,26 @@ Invoke `netdust-agent:spec-authoring` **before** writing the plan. Stage 0 wrote
 
 Invoke `superpowers:writing-plans`. Follow its checklist. **The plan is written against the Stage-0.5 `spec.md`, from `templates/plan-template.md`** — its gate sections are pre-structured as the `[GATE]` headings `gate-check.py` requires. Then layer the netdust gates below **before task breakdown is finalized** — they are not optional add-ons, they change what tasks the plan contains.
 
+### The output contract — upstream writes ONE doc, the harness reads TWO files
+
+`superpowers:writing-plans` produces a single document at `docs/superpowers/plans/<name>.md`: a Goal / Architecture / Tech Stack header, Global Constraints, then `### Task N` blocks carrying exact Create/Modify/Test paths, RED/GREEN steps and a commit command. The harness reads two files under `specs/<feature>/` — `plan.md` (the five `## … [GATE]` headings) and `tasks.md` (`- [ ] Tnn` lines carrying `[Tier A|B]`, `Test-author:`, `Unit test:`).
+
+**The shapes are compatible, so this is a mapping, not a fork.** Upstream's task blocks already name the test per task, which is the hard part. What you must not do is leave its output where it lands and hope: a plan at the upstream default path is a plan `gate-check.py` never reads, exactly as a spec at the upstream default path is a spec no gate checks. **Do the mapping HERE, as you author, and write to `specs/<feature>/`** — never as a copy-paste pass afterwards, because the netdust-only fields in the last row below are decided by gate 1d and cannot be back-filled honestly.
+
+| `superpowers:writing-plans` emits | Lands in | Note |
+|---|---|---|
+| Goal | `plan.md` → `## Summary` | one paragraph; the *why* stays in `spec.md` |
+| Architecture + Tech Stack | `plan.md` → `## Technical context` | the stack belongs here and nowhere upstream of here |
+| Global Constraints | `plan.md` → `## Constitution check  [GATE]` | checked against `docs/constitution.md` (or RULES/SOUL/invariants directly) |
+| `### Task N` — Create / Modify paths | `tasks.md` → `- [ ] Tnn … (files: <paths>)` | renumber to zero-padded `T01`, `T02`… — `gate-check.py` matches `T\d+` |
+| `### Task N` — Test path + RED/GREEN steps | that task's `Unit test:` line (+ `Seam test:` when the task wires a piece into the real chain) | the **tier** decides what the test must be, not the presence of upstream's test step |
+| `### Task N` — commit command | **dropped** | `building` owns commit-craft via `versioning-with-git`; a plan that scripts commits duplicates it and drifts |
+| *(no upstream equivalent)* | `[Tier A\|B]` · `Test-author:` · `[P]` · `── REVIEW GATE ──` + provisional tier · `[HUMAN]` · `Loop budget:` | **authored by gate 1d below.** Upstream has no concept of any of these; they are the whole reason Stage 1.5 can machine-check the plan |
+
+**Division of the two files: reasoning in `plan.md`, the executable list in `tasks.md`.** `## Phases & review clusters  [GATE]` names the clusters, their order and their provisional tiers, then points at `tasks.md` for the task lines — it does not restate them. Two copies of a task list drift, and the one `building` executes is `tasks.md`.
+
+**`gate-check.py` is the arbiter, and it does not care where the prose came from** — only that the `[GATE]` headings exist, that every task line carries a tier and a `Test-author:` mode, and that clusters are sized. If the mapping was skipped or done sloppily, that surfaces at Stage 1.5 as a missing heading or an untiered task, one stage later and more expensively than fixing it here.
+
 **Stack plan-requirements (override layer).** If a stack sub-plugin provides a plan-requirements skill (see `<stack_overrides>`), invoke it HERE, alongside 1a/1b — it injects the stack's mandatory requirement sections into the plan before task breakdown, so those become per-task acceptance criteria and the `/code-review` convergence target.
 
 **1a. Threat-modeling gate.** Invoke `threat-modeling` and embed its `## Threat model` section inline in the plan IF the feature touches any of: user-controlled URLs (webhooks, BYOK provider URLs, OAuth redirects, embed/CMS endpoints), auth/session/token surfaces, untrusted parsing (frontmatter from external sources, AI tool-call args, webhook payloads, file uploads), BYOK credentials, multi-tenancy / workspace boundaries, or any path where the server makes outbound requests to user-supplied addresses. Named assets → named attacks → named mitigations → explicit deferrals, BEFORE task breakdown. The threat model then becomes the `/code-review` convergence target (reviews verify against named mitigations instead of free-form hunting — converging in one round instead of probabilistically over many).
@@ -148,6 +168,8 @@ These thoughts mean you are about to skip a plan-time gate. Stop.
 | "The semantic cross-check passed, the plan is ready" | That is half of Stage 1.5, and the half no script verifies. Run `gate-check.py` — it is what catches a skipped threat model, an un-tiered task, or an oversized cluster. Green checker + human approval = the seam. |
 | "I'll apply the gates as a checklist and note that I did" | That degradation is deleted. `gate-check.py` reads `specs/<feature>/` directly on every project. A stated checklist is the self-attestation the gate exists to replace. |
 | "Brainstorming already wrote the design doc, so Stage 0.5 has nothing to do" | Stage 0.5 never authored the spec; it verifies it. Check the path first (`specs/<feature>/spec.md`) — at the upstream default path every check silently no-ops. |
+| "writing-plans produced a good plan doc — I'll split it into plan.md/tasks.md once the gates are done" | Backwards. The tier, `Test-author:` mode and cluster markers are DECIDED by gate 1d, so a split done afterwards back-fills fields you never actually reasoned about. Map as you author (the output contract), then gate. |
+| "I'll put the task list in `plan.md` too, so the plan reads complete on its own" | Two copies of a task list drift, and `building` executes `tasks.md`. `## Phases & review clusters` names clusters, order and tiers, then points at `tasks.md`. |
 | "One 7-task phase with a review at the end keeps the plan simple" | That is the un-bisectable mega-diff (`teardown-cluster`). Clusters of ~3–4; irreversible steps review alone. |
 | "The user is mid-pivot and I'm dispatching a background planner" | A background plan finished during live steering has a shelf life of minutes — two sub-10-minute pivots each invalidated a just-finished background plan (calibration: `background-planner-pivots`). Plan inline while requirements are still moving; dispatch background only once the human has stepped away or the run is unattended. |
 
@@ -162,8 +184,9 @@ This skill has succeeded when:
 3. Every "reuse X for Y" premise was ground-truthed against X's source before the plan shipped (1c).
 4. User-facing work carries an `## Acceptance flows` matrix with mandatory per-flow edges (1g).
 5. The task list is shaped (1d): every task tiered, every phase gated, clusters ≤~4 tasks with `── REVIEW GATE ──` markers + provisional tiers, `[HUMAN]` steps marked, a `Loop budget` line present.
-6. `gate-check.py` is GREEN — on every project, graft or no graft. No manual-checklist substitute.
-7. The spine STOPPED at the seam — artifacts presented, human approval awaited, zero tasks dispatched, `building` not invoked.
+6. The output contract held: `specs/<feature>/plan.md` + `tasks.md` both exist at that path, with the reasoning in the former and the executable task list in the latter — not one upstream doc left at `docs/superpowers/plans/`, and not the task list duplicated across both.
+7. `gate-check.py` is GREEN — on every project. No manual-checklist substitute.
+8. The spine STOPPED at the seam — artifacts presented, human approval awaited, zero tasks dispatched, `building` not invoked.
 
 If a gate that should have fired did not, this skill failed at its specific job — even if the plan reads well.
 
@@ -177,7 +200,7 @@ If a gate that should have fired did not, this skill failed at its specific job 
 | `building` | **DOWNSTREAM — the other spine.** Consumes the seam artifact. Its precondition re-runs `gate-check.py`; it refuses Class A/B work without the approved `tasks.md`. Never invoked by this skill — the human bridges the seam. |
 | `superpowers:brainstorming` | **STAGE 0.** Front-loaded when intent is unclear; stack sub-plugin brainstorming/domain skills replace it when loaded. |
 | `spec-authoring` | **STAGE 0.5 — unconditional.** Gates the spec brainstorming authored at `specs/<feature>/spec.md`; HALTs on unresolved `[NEEDS CLARIFICATION]` and on unmeasurable success criteria. Owns the hand-back-ambiguity rule. |
-| `superpowers:writing-plans` | **STAGE 1.** The plan this spine wraps the gates around, written from `templates/plan-template.md`. |
+| `superpowers:writing-plans` | **STAGE 1.** The plan this spine wraps the gates around. It emits ONE doc; the harness reads `plan.md` + `tasks.md` from `templates/`. Stage 1's **output contract** maps its sections onto the two files and redirects the output to `specs/<feature>/` — a mapping, not a fork of upstream. |
 | `threat-modeling` | **GATE 1a.** Fired by trigger list at plan-time, or on an ad-hoc security diff (Class D). Becomes the `/code-review` convergence target. |
 | `architecture-invariants` | **GATE 1b.** Fired when a convergence point is touched; authored at plan-time if the doc is missing. |
 | `feature-acceptance` | **GATE 1g (author).** Plan-time acceptance-flows matrix; `building` Stage 3 drives it. |
