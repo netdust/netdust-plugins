@@ -70,37 +70,41 @@ The `planner` agent persona owns this whole spine (Stage 0 → the seam): it cla
 
 If the feature's intent, scope, or shape is not already pinned down, invoke `superpowers:brainstorming` **before** any plan exists (prefer the stack sub-plugin's brainstorming/domain skill when loaded — see `<stack_overrides>`). Skip only when the work is a well-specified change with no open design questions.
 
-Brainstorming is what **authors the spec**, and it writes it to `specs/<feature>/spec.md` from `templates/spec-template.md` — the location preference in `memory/GLOBAL.md` overrides its `docs/superpowers/specs/` default. Content is upstream's job; Stage 0.5 only verifies. If the spec lands anywhere else, the whole spec gate silently no-ops, so check the path before moving on.
+Brainstorming is what **authors the spec**, and it writes it to `specs/<feature>/spec.md` against `spec-authoring`'s `<artifact_contract>` — the location preference in `memory/GLOBAL.md` overrides its `docs/superpowers/specs/` default. Content is upstream's job; Stage 0.5 only verifies. If the spec lands anywhere else, the whole spec gate silently no-ops, so check the path before moving on.
 
 ## Stage 0.5 — Gate the spec (always)
 
-Invoke `netdust-agent:spec-authoring` **before** writing the plan. Stage 0 wrote `specs/<feature>/spec.md` from `templates/spec-template.md` (what/why, prioritized P1/P2/P3 user stories, acceptance criteria, measurable `SC-n` success criteria — no tech stack); Stage 0.5 is the gate over it. It HALTS on any unresolved `[NEEDS CLARIFICATION]` and on any success criterion carrying no number, both enforced mechanically by `bin/gate-check.py`. The Stage-1 plan is then written against a clarified spec, the spec's Security-relevant-surfaces flags pre-arm the 1a threat-model gate, and its story boundaries become the review clusters in 1d.
+Invoke `netdust-agent:spec-authoring` **before** writing the plan. Stage 0 wrote `specs/<feature>/spec.md` (what/why, prioritized P1/P2/P3 user stories, acceptance criteria, measurable `SC-n` success criteria — no tech stack); Stage 0.5 is the gate over it, against the contract that skill owns. It HALTS on any unresolved `[NEEDS CLARIFICATION]` and on any success criterion carrying no number, both enforced mechanically by `bin/gate-check.py`. The Stage-1 plan is then written against a clarified spec, the spec's Security-relevant-surfaces flags pre-arm the 1a threat-model gate, and its story boundaries become the review clusters in 1d.
 
 **This stage is unconditional.** `gate-check.py` reads whatever of `spec.md` / `plan.md` / `tasks.md` sits in the feature dir and depends on no external tooling. The one prerequisite is that the spec is at `specs/<feature>/spec.md`, which is a standing preference in `memory/GLOBAL.md` rather than a per-project choice — a spec at brainstorming's upstream default path is a spec no gate ever reads. Skip this stage only in Class B freshness-review mode (where the spec predates you).
 
 ## Stage 1 — Write the plan, with the plan-time gates baked in
 
-Invoke `superpowers:writing-plans`. Follow its checklist. **The plan is written against the Stage-0.5 `spec.md`, from `templates/plan-template.md`** — its gate sections are pre-structured as the `[GATE]` headings `gate-check.py` requires. Then layer the netdust gates below **before task breakdown is finalized** — they are not optional add-ons, they change what tasks the plan contains.
+Invoke `superpowers:writing-plans`. Follow its checklist. **The plan is written against the Stage-0.5 `spec.md`**, to the output contract below. Then layer the netdust gates below **before task breakdown is finalized** — they are not optional add-ons, they change what tasks the plan contains.
 
-### The output contract — upstream writes ONE doc, the harness reads TWO files
+### The output contract — two files, and only the parsed grammar is fixed
 
-`superpowers:writing-plans` produces a single document at `docs/superpowers/plans/<name>.md`: a Goal / Architecture / Tech Stack header, Global Constraints, then `### Task N` blocks carrying exact Create/Modify/Test paths, RED/GREEN steps and a commit command. The harness reads two files under `specs/<feature>/` — `plan.md` (the five `## … [GATE]` headings) and `tasks.md` (`- [ ] Tnn` lines carrying `[Tier A|B]`, `Test-author:`, `Unit test:`).
+`superpowers:writing-plans` emits ONE document, at its own default location. The harness reads TWO files under `specs/<feature>/`. **You do that mapping as you author** — not as a copy-paste pass afterwards, because the fields in the PARSED table below are *decided by gate 1d*, and a plan split up after the fact gets them back-filled without ever having been reasoned about. That is the same defect as a retrofitted threat model.
 
-**The shapes are compatible, so this is a mapping, not a fork.** Upstream's task blocks already name the test per task, which is the hard part. What you must not do is leave its output where it lands and hope: a plan at the upstream default path is a plan `gate-check.py` never reads, exactly as a spec at the upstream default path is a spec no gate checks. **Do the mapping HERE, as you author, and write to `specs/<feature>/`** — never as a copy-paste pass afterwards, because the netdust-only fields in the last row below are decided by gate 1d and cannot be back-filled honestly.
+**There are no plan or tasks templates.** `gate-check.py` is the only definition of the artifact, so a template restating its requirements would be a second implementation of one rule — free to drift, and the thing this repo's own conventions forbid. Write the two files; the grammar below is what makes them machine-checkable, and everything else is yours.
 
-| `superpowers:writing-plans` emits | Lands in | Note |
+**PARSED — `gate-check.py` reads these literally.**
+
+| File | Must appear | Exact shape |
 |---|---|---|
-| Goal | `plan.md` → `## Summary` | one paragraph; the *why* stays in `spec.md` |
-| Architecture + Tech Stack | `plan.md` → `## Technical context` | the stack belongs here and nowhere upstream of here |
-| Global Constraints | `plan.md` → `## Constitution check  [GATE]` | checked against `docs/constitution.md` (or RULES/SOUL/invariants directly) |
-| `### Task N` — Create / Modify paths | `tasks.md` → `- [ ] Tnn … (files: <paths>)` | renumber to zero-padded `T01`, `T02`… — `gate-check.py` matches `T\d+` |
-| `### Task N` — Test path + RED/GREEN steps | that task's `Unit test:` line (+ `Seam test:` when the task wires a piece into the real chain) | the **tier** decides what the test must be, not the presence of upstream's test step |
-| `### Task N` — commit command | **dropped** | `building` owns commit-craft via `versioning-with-git`; a plan that scripts commits duplicates it and drifts |
-| *(no upstream equivalent)* | `[Tier A\|B]` · `Test-author:` · `[P]` · `── REVIEW GATE ──` + provisional tier · `[HUMAN]` · `Loop budget:` | **authored by gate 1d below.** Upstream has no concept of any of these; they are the whole reason Stage 1.5 can machine-check the plan |
+| `plan.md` | five gate headings, each present even when it does not apply | `## Constitution check` · `## Threat model` · `## Architecture invariants touched` · `## Spec-premise ground-truth` · `## Phases & review clusters` — a trailing `[GATE]` marker is tolerated. **A missing heading reads as a skipped gate; `N/A — <one-line reason>` under a present heading is a legitimate answer** |
+| `plan.md` | `## Threat model` content, when the spec flagged a surface | at least one numbered `1. **<attack>** → **<mitigation>**` line. `N/A` here while the spec has a checked security box is a FAIL |
+| `tasks.md` | every task line | `- [ ] T01 [P?] [Tier A|B] <description>  (files: <paths>)` — zero-padded `Tnn`; the tier marker is required on every line |
+| `tasks.md` | a continuation line per task | `      Test-author: split` or `      Test-author: solo — <reason>` (the reason is mandatory for Tier A) |
+| `tasks.md` | cluster grouping | `### Cluster <name>` headings, ≤4 tasks each; a cluster whose heading says `irreversible` or `solo` must hold exactly one non-`[P]` task |
 
-**Division of the two files: reasoning in `plan.md`, the executable list in `tasks.md`.** `## Phases & review clusters  [GATE]` names the clusters, their order and their provisional tiers, then points at `tasks.md` for the task lines — it does not restate them. Two copies of a task list drift, and the one `building` executes is `tasks.md`.
+Fenced code blocks are stripped before parsing, so an example inside a fence never counts as a real task.
 
-**`gate-check.py` is the arbiter, and it does not care where the prose came from** — only that the `[GATE]` headings exist, that every task line carries a tier and a `Test-author:` mode, and that clusters are sized. If the mapping was skipped or done sloppily, that surfaces at Stage 1.5 as a missing heading or an untiered task, one stage later and more expensively than fixing it here.
+**AUTHORED — required content, your words, no prescribed shape.** In `plan.md`: the approach and the tech stack (named here for the first time — it was kept out of `spec.md`), the file map, the gate bodies themselves, and a `Loop budget: ~N iterations` line if the feature may run under an armed `/loop`. In `tasks.md`: each task's `Unit test:` contract (or `no unit test: Tier B, <reason>`), each phase's integration gate, the `── REVIEW GATE ──` markers with their provisional tier, and `[HUMAN]` on any step no agent may take alone.
+
+**Division of labour between the two files: reasoning in `plan.md`, the executable list in `tasks.md`.** `## Phases & review clusters` names the clusters, their order and their tiers, then points at `tasks.md` — it does not restate the task lines. Two copies of a task list drift, and the one `building` executes is `tasks.md`.
+
+**Know what the gate does NOT check**, so you do not mistake green for complete: it verifies that the five headings exist, not that their bodies are substantive; that a tier and a `Test-author:` mode are present, not that either is honest; that clusters are sized, not that `── REVIEW GATE ──` markers or provisional tiers exist at all; and nothing traces an `FR-n`/`SC-n` to a task. Those are authoring obligations this skill sequences, and 1d below is where they are decided.
 
 **Stack plan-requirements (override layer).** If a stack sub-plugin provides a plan-requirements skill (see `<stack_overrides>`), invoke it HERE, alongside 1a/1b — it injects the stack's mandatory requirement sections into the plan before task breakdown, so those become per-task acceptance criteria and the `/code-review` convergence target.
 
@@ -200,7 +204,7 @@ If a gate that should have fired did not, this skill failed at its specific job 
 | `building` | **DOWNSTREAM — the other spine.** Consumes the seam artifact. Its precondition re-runs `gate-check.py`; it refuses Class A/B work without the approved `tasks.md`. Never invoked by this skill — the human bridges the seam. |
 | `superpowers:brainstorming` | **STAGE 0.** Front-loaded when intent is unclear; stack sub-plugin brainstorming/domain skills replace it when loaded. |
 | `spec-authoring` | **STAGE 0.5 — unconditional.** Gates the spec brainstorming authored at `specs/<feature>/spec.md`; HALTs on unresolved `[NEEDS CLARIFICATION]` and on unmeasurable success criteria. Owns the hand-back-ambiguity rule. |
-| `superpowers:writing-plans` | **STAGE 1.** The plan this spine wraps the gates around. It emits ONE doc; the harness reads `plan.md` + `tasks.md` from `templates/`. Stage 1's **output contract** maps its sections onto the two files and redirects the output to `specs/<feature>/` — a mapping, not a fork of upstream. |
+| `superpowers:writing-plans` | **STAGE 1.** The plan this spine wraps the gates around. It emits ONE doc at its own default path; Stage 1's **output contract** is what turns that into `specs/<feature>/plan.md` + `tasks.md` — authored to the contract, never a template fill-in, and never a post-hoc split. |
 | `threat-modeling` | **GATE 1a.** Fired by trigger list at plan-time, or on an ad-hoc security diff (Class D). Becomes the `/code-review` convergence target. |
 | `architecture-invariants` | **GATE 1b.** Fired when a convergence point is touched; authored at plan-time if the doc is missing. |
 | `feature-acceptance` | **GATE 1g (author).** Plan-time acceptance-flows matrix; `building` Stage 3 drives it. |

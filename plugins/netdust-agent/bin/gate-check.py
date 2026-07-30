@@ -104,7 +104,7 @@ def check_clarify(spec_text: str, f: Findings) -> None:
 
 
 # SC line = `- **SC-1:** <text>`; measurable means the text carries a digit. A body that is
-# only a bracketed placeholder (`[e.g. …]`) is template guidance, not a criterion.
+# only a bracketed placeholder (`[e.g. …]`) is placeholder text, not a criterion.
 SC_LINE = re.compile(r"^\s*[-*]\s+\**SC-(\d+)\**\s*:?\s*\**\s*(.*)$")
 PLACEHOLDER = re.compile(r"^\[.*\]$")
 DIGIT = re.compile(r"\d")
@@ -118,9 +118,10 @@ def check_success_criteria(spec_text: str, f: Findings) -> None:
     """
     body = section_body(spec_text, "Success criteria")
     if body is None:
-        # pre-template spec (same retro-compat stance as test-author-mode). Flip to "fail"
-        # once every live specs/ dir carries the section.
-        f.add("warn", "success-criteria", "pre-template spec — no ## Success criteria section")
+        # Spec predates the contract (same retro-compat stance as test-author-mode). The two
+        # live specs/ dirs are the only reason this is not "fail" — flip it once they carry
+        # the section. The contract itself lives in the spec-authoring skill, not a template.
+        f.add("warn", "success-criteria", "no ## Success criteria section (spec predates the contract)")
         return
 
     real, unmeasurable = [], []

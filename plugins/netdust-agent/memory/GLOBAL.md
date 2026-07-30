@@ -29,8 +29,9 @@ upstream skill reads them as user preference and yields to them.
 - **Spec location is `specs/<feature>/spec.md`.** `superpowers:brainstorming` defaults to
   writing its design doc to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, and its
   own skill says a user preference for spec location overrides that default. **This is that
-  preference.** Write the spec to `specs/<feature>/spec.md`, using
-  `netdust-agent/templates/spec-template.md` as its shape. This is not cosmetic filing:
+  preference.** Write the spec to `specs/<feature>/spec.md`, to the contract in the
+  `spec-authoring` skill (there is no template — the spec is authored, not filled in).
+  This is not cosmetic filing:
   `bin/gate-check.py` reads `specs/<feature>/`, so a spec written to the upstream
   default is a spec **no gate ever checks** — the clarify-HALT and success-criteria checks
   simply never fire. Applies to every project.

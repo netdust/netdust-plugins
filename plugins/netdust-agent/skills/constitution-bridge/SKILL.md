@@ -102,7 +102,7 @@ behind "best practice".]
 
 | Skill / artifact | Relationship |
 |---|---|
-| `templates/plan-template.md` | **CONSUMER.** Its `## Constitution check  [GATE]` section verifies the approach against this file; `gate-check.py` requires the heading to be present. |
+| `plan.md`'s `## Constitution check` gate | **CONSUMER.** Verifies the plan's approach against this file; `gate-check.py` requires the heading to be present (see `planning` Stage 1's output contract). |
 | `netdust-agent:standards-gate` | **CONSUMER.** Enforces Article II (coding standards) at task close. |
 | `netdust-agent:testing-workflow` | **REFERENCED.** Article III summarizes its tiers. |
 | `netdust-agent:architecture-invariants` | **SOURCE.** Article IV is its convergence points. |

@@ -24,9 +24,13 @@ bin/
 └── run-cost.py       ← read-only transcript miner: per-dispatch / per-stage token tables
 ```
 
-The artifact templates live one level up, in `../templates/` —
-`spec-template.md`, `plan-template.md`, `tasks-template.md`. They are plain markdown
-skeletons, copied by hand or by the authoring skill; nothing installs them into a project.
+**There are no artifact templates.** The scripts here are the only definition of what
+`spec.md` / `plan.md` / `tasks.md` must carry, and the authoring skills state that contract in
+prose: `spec-authoring`'s `<artifact_contract>` for the spec, `planning` Stage 1's output
+contract for the plan and task list. A template restating those requirements would be a second
+implementation of one rule, free to drift from the script that actually decides — and a
+skeleton whose *untouched* state passes the gate is how the security-surface checkboxes came to
+be disarmed by default. The artifacts are authored, not filled in.
 
 ## Usage
 
@@ -54,7 +58,7 @@ Two markers on the task list, on orthogonal axes — they compose rather than co
 | `[P]` | scheduling | task has no dependency on a sibling **in the same cluster** + touches different files → subagents may run it concurrently |
 | `── REVIEW GATE ──` | review | a **barrier**: join all parallel work, commit, `/integration` + `/code-review`, then release the next cluster |
 
-**Rules that make them compose** (shaped by `tasks-template.md`, verified by `gate-check.py`):
+**Rules that make them compose** (stated in `planning` Stage 1's contract, verified by `gate-check.py`):
 
 1. `[P]` parallelism **never crosses** a `── REVIEW GATE ──`.
 2. A cluster is **≤4 tasks**; `[P]` applies only *within* a cluster.
@@ -66,9 +70,9 @@ Parallelism is a within-cluster optimization; the gate is the between-cluster ba
 ## Where this sits in the harness
 
 ```
-Stage 0    brainstorm        → spec.md   (superpowers:brainstorming, from ../templates/spec-template.md)
+Stage 0    brainstorm        → spec.md   (superpowers:brainstorming, to spec-authoring's artifact contract)
 Stage 0.5  spec-authoring    → GATES that spec.md      (gate-check.py: clarify-halt + success-criteria)
-Stage 1    writing-plans     → plan.md + tasks.md      (from ../templates/, [GATE] headings baked in)
+Stage 1    writing-plans     → plan.md + tasks.md      (to planning Stage 1's output contract)
 Stage 1.5  spec-analysis     → consistency read + gate-presence   (gate-check.py, BLOCKING)
            ─────────────────── THE SEAM: approved tasks.md + gate-check GREEN ───────────────────
 Stage 2    building          ◄── executes tasks.md task-by-task, through the gates

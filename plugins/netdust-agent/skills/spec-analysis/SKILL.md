@@ -68,7 +68,7 @@ Gate-check is a backstop, not a substitute for authoring the gates well. A plan 
 
 | Skill / artifact | Relationship |
 |---|---|
-| `superpowers:writing-plans` + `templates/plan-template.md` | **UPSTREAM (Stage 1).** Produces the plan this gate verifies. |
+| `superpowers:writing-plans` | **UPSTREAM (Stage 1).** Produces the plan this gate verifies, to `planning` Stage 1's output contract. |
 | `netdust-agent:spec-authoring` | **UPSTREAM (Stage 0.5).** Its Security-relevant surfaces flags are what the threat-model cross-check keys on. |
 | `bin/gate-check.py` | **THE MECHANICAL GATE (part b).** Exit code is the barrier. Reads the feature dir directly, no external tooling. |
 | `netdust-agent:threat-modeling` / `architecture-invariants` / `testing-workflow` | **REMEDIATION.** Where the checker fails, these author the missing gate. |

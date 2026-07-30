@@ -46,7 +46,7 @@ SPEC_WITH_UNRESOLVED = """# Feature Specification: Importer
 - [x] Untrusted parsing (frontmatter, payloads, uploads, AI tool-call args)
 """
 
-# ── `success-criteria` fixtures (spec-template.md `## Success criteria`) ─────
+# ── `success-criteria` fixtures (the spec-authoring artifact contract) ───────
 # The gate exists so shake-out signs off against a comparison rather than a
 # judgement call: every SC line must carry a number. Measurability is tested
 # crudely — "the line contains a digit" — which admits `100% of users are
@@ -80,9 +80,10 @@ SPEC_SC_VAGUE = """# Feature Specification: Course publishing
 - [x] None of the above
 """
 
-# The section present but never filled in — bracketed `[e.g. …]` bodies exactly as
-# templates/spec-template.md ships them. Template guidance is not a criterion, so this
-# must FAIL rather than PASS on the placeholder's own digits ("3 minutes", "500 ms").
+# The section present but never filled in — bracketed `[e.g. …]` bodies, the shape an
+# agent produces when it copies guidance instead of answering it. Placeholder text is not
+# a criterion, so this must FAIL rather than PASS on its own digits ("3 minutes", "500 ms").
+# (This case is why there is no spec template: a skeleton's untouched state must not pass.)
 SPEC_SC_TEMPLATE_UNTOUCHED = """# Feature Specification: [FEATURE NAME]
 
 ## Success criteria
@@ -96,10 +97,9 @@ SPEC_SC_TEMPLATE_UNTOUCHED = """# Feature Specification: [FEATURE NAME]
 - [x] None of the above
 """
 
-# A spec authored before the template carried the section at all → WARN, never FAIL.
-# Same retro-compat stance as test-author-mode's pre-0.8 WARN: the gate only bites
-# once the template is in use. Flip gate-check.py's "warn" to "fail" when every live
-# specs/ dir carries the section.
+# A spec that predates the contract carrying this section at all → WARN, never FAIL.
+# Same retro-compat stance as test-author-mode's pre-0.8 WARN. The two live specs/ dirs
+# are the only reason it is not "fail" — flip gate-check.py's "warn" once they carry it.
 SPEC_PRE_TEMPLATE_NO_SC = """# Feature Specification: Rename a label
 
 ## Problem / why
@@ -273,7 +273,7 @@ TASKS_ALL_COHERENT = """# Tasks: x
       Test-author: solo — A-lite, pure transform, no security-boundary category
 """
 
-# A FENCED `Test-author:` example (as tasks-template.md ships) must never count —
+# A FENCED `Test-author:` example (as a plan's own per-task format block carries) must never count —
 # neither as "present" (it's documentation, not a real task's mode) nor trip the
 # partial-presence FAIL. Wrapping TASKS_NO_TEST_AUTHOR_LINES's real tasks with a
 # fenced per-task-format example ahead of them must still yield the WARN verdict,
@@ -394,16 +394,16 @@ def run():
                      and "SC-2" in out and "SC-3" in out and "SC-1" not in out,
                     "SC line with no number FAILs and names SC-2/SC-3 only"))
 
-    # 10c. section present but only untouched `[e.g. …]` placeholders → FAIL
-    # (the placeholders' own digits must not be mistaken for a measurement)
+    # 10c. section present but only bracketed `[e.g. …]` placeholder text → FAIL
+    # (the placeholder's own digits must not be mistaken for a measurement)
     rc, out = _run({"spec.md": SPEC_SC_TEMPLATE_UNTOUCHED})
     results.append((rc == 1 and "success-criteria" in out and "placeholder" in out,
-                    "untouched template placeholders FAIL, digits in the example ignored"))
+                    "bracketed placeholder body FAILs, digits in the example ignored"))
 
     # 10d. retro-compat: no ## Success criteria section at all → WARN, gate stays PASS
     rc, out = _run({"spec.md": SPEC_PRE_TEMPLATE_NO_SC})
     results.append((rc == 0 and "! [success-criteria]" in out,
-                    "pre-template spec with no ## Success criteria WARNs, never FAILs"))
+                    "spec predating the contract, no ## Success criteria: WARNs, never FAILs"))
 
     # ── D1 `test-author-mode` — one fixture per plan.md D1 rules-table row ────
     # check_test_author_mode() is called DIRECTLY (unit level), independent of
