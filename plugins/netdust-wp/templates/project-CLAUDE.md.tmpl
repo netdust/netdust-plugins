@@ -20,7 +20,7 @@ For operational config (stack, hosting, deploy method, risk level), see `site.ym
 
 5. **Architecture-invariants gate (fired by `harnessed-development` Stage 1b).** If the project has an `ARCHITECTURE-INVARIANTS.md`, the work citing a convergence point invokes `netdust-agent:architecture-invariants`. `/shakeout` auto-dispatches the `invariant-auditor` (and, on WP, the `ntdst-drift-reviewer`). If the doc doesn't exist yet, author it via `/architecture-invariants audit`.
 
-6. Run tests before committing. Testing is automatic under the harness: `testing-workflow` detects WordPress and selects Codeception/PHPUnit; `wp-testing` covers writing them. `composer lint` (WPCS) must pass.
+6. **Tests + quality: this project ships the standardized 9-tier gate layer.** Per-task suite: `ddev composer test:unit` (seconds, Brain Monkey, no WP/DB). Full gate: `composer gate` (host-invoked) — lint (phpcs PSR-12 + WP-security/DB + PHPCompat), lint:js, analyse (PHPStan lvl 6), audit:deps, test:unit, test:js, build:check, test:int (wp-phpunit on `wptests`, never the dev DB), test:e2e (Playwright). The gate's exit code is the single source of truth — see `README-testing.md`. Formatting (`composer format`, pint) is editor-side, outside the gate.
 
 7. Commit atomically per task. Update `memory/STATE.md` and `tasks/todo.md` as you go.
 

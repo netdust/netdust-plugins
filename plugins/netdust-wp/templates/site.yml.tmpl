@@ -1,7 +1,8 @@
 # site.yml — operational config for {{PROJECT_NAME}}
-# Read into context at session start by netdust-core's session-start hook.
-# Keep the top-level keys (site / structure / hosting / deploy / local) — the
-# hook greps for them to surface deploy + risk info BEFORE you're asked to ship.
+# Read into context at session start by the netdust session-start hook.
+# Keep the top-level keys (site / structure / hosting / deploy / local /
+# commands) — the hook greps site…local to surface deploy + risk info BEFORE
+# you're asked to ship; commands carries the agent test/gate bindings.
 
 site:
   name: {{PROJECT_NAME}}
@@ -28,3 +29,9 @@ deploy:
 local:
   ddev_project: {{PROJECT_NAME}}     # DDEV project name
   url: https://{{PROJECT_NAME}}.ddev.site
+
+commands:
+  # Agent bindings (netdust harness): per-task test suite + the full gate.
+  # The gate's exit code is the single source of truth — see README-testing.md.
+  test: ddev composer test:unit
+  gate: composer gate          # host-invoked; orchestrates all 9 tiers (ddev gate works too)
