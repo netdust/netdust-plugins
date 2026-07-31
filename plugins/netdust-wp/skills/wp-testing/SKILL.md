@@ -1,6 +1,6 @@
 ---
 name: wp-testing
-description: Use when setting up or writing tests for a WordPress project — two stacks. Gate stack (born-gated projects, 2026-07+) — Brain Monkey unit tests, wp-phpunit integration on the wptests DB, Vitest theme tests, Playwright e2e, the composer gate umbrella. Legacy stack (Stride family) — Codeception, wp-browser, acceptance tests. Triggers on file edits in tests/, on phpunit.unit.xml, phpunit.integration.xml, bin/gate.sh, codeception.yml, playwright.config.ts. Activates on keywords PHPUnit, Brain Monkey, wp-phpunit, wptests, composer gate, gate tier, Vitest, Codeception, wp-browser, WPTestCase, WPUnit, WPAcceptance, Cest, $I->haveOptionInDatabase, WP_UnitTestCase, factory, fixture, Playwright, e2e, dataProvider, mocking $wpdb. Symptoms include writing the first test for a new module, deciding between unit/integration/e2e tiers, debugging a flaky acceptance test, adding coverage to a legacy plugin.
+description: Use when setting up or writing tests for a WordPress project — two stacks. Gate stack (born-gated projects, 2026-07+) — Brain Monkey unit tests, wp-phpunit integration on the wptests DB, Vitest theme tests, Playwright e2e, the composer gate umbrella. Legacy stack (Stride family) — Codeception, wp-browser, acceptance tests. Triggers on file edits in tests/, on phpunit.unit.xml, phpunit.integration.xml, phpunit.xml, bin/gate.sh, codeception.yml, playwright.config.ts. Activates on keywords PHPUnit, Brain Monkey, wp-phpunit, wptests, composer gate, gate tier, Vitest, Codeception, wp-browser, WPTestCase, WPUnit, WPAcceptance, Cest, $I->haveOptionInDatabase, WP_UnitTestCase, factory, fixture, Playwright, e2e, dataProvider, mocking $wpdb. Symptoms include writing the first test for a new module, deciding between unit/integration/e2e tiers, debugging a flaky acceptance test, adding coverage to a legacy plugin.
 ---
 
 # WordPress Testing — gate stack (primary) + legacy Codeception
@@ -14,7 +14,7 @@ description: Use when setting up or writing tests for a WordPress project — tw
 
 ## Gate stack
 
-Every check is a tier of `composer gate` (`bin/gate.sh`: cheapest-first, fail-fast, lint → analyse → audits → tests → build → e2e; the gate's exit code is the truth). The test tiers:
+Every check is a tier of `composer gate` (`bin/gate.sh`: cheapest-first, fail-fast, lint → analyse → audits → unit tests (PHP + JS) → build → integration → e2e; the gate's exit code is the truth). The test tiers:
 
 | Tier | Where | Tool | What | Run |
 |---|---|---|---|---|
@@ -53,7 +53,7 @@ Plain `@playwright/test` — on Bedrock the admin lives at `/wp/wp-admin`. Fixtu
 
 ### Falsifiability culture
 
-Every gate tier has a recorded red demonstration — deliberate violation, non-zero exit, green re-run — in the project's `docs/gate-falsifiability.md`. If you add a gate or check, prove it can fail before you trust it green.
+Every gate tier has a recorded red demonstration — deliberate violation, non-zero exit, green re-run — in the project's `docs/gate-falsifiability.md`. If you add a gate or check, prove it can fail before you trust it green. (Projects that ADOPT the gate later won't have `docs/gate-falsifiability.md` — the doc ships with template-scaffolded projects; adopters inherit the discipline, not the file.)
 
 Deeper detail (DDEV topology, tier timings, known limitations) lives in the project's `README-testing.md` and the real example tests in `tests/` — point there, don't duplicate here.
 
@@ -66,7 +66,7 @@ Codeception + wp-browser. **Canonical implementation: `~/Sites/stride/`** — 70
 | Unit | PHPUnit via Codeception WPUnit (`tests/unit/`) | Pure PHP logic — no DB. |
 | Integration | Codeception WPIntegration (`tests/integration/`) | `$wpdb`, hooks, options, transients — real isolated test DB. |
 | Acceptance | Codeception WPBrowser/WPWebDriver (`tests/acceptance/`) | User-facing flows in a real browser. |
-| Frontend e2e | Playwright | JS-heavy flows where Codeception is awkward (Stride: Stridence theme interactivity). |
+| Frontend e2e | Playwright | JS-heavy flows where Codeception is awkward (Alpine/Vue reactive state; trace-on-failure debugging; faster iteration than WebDriver). Stride: Stridence theme interactivity. |
 
 Setup: `composer require --dev codeception/codeception lucatume/wp-browser && vendor/bin/codecept init wpbrowser`, then edit `codeception.yml` + `tests/<suite>.suite.yml`. Layout: `tests/_bootstrap.php`, `_data/` (fixtures), `_support/` (Cest helpers, page objects), plus the three suites above.
 

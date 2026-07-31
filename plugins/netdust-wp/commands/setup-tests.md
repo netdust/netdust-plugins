@@ -12,6 +12,7 @@ Look for the target project's stack markers (same detection as the `wp-testing` 
 
 - **`phpunit.unit.xml` or `bin/gate.sh` present → gate stack. STOP — nothing to set up.** The project is born gated: the full test/gate layer (PHPUnit + Brain Monkey unit, wp-phpunit integration, Vitest, Playwright, `composer gate`) shipped at scaffold time via `new-site.sh`. Read the project's `README-testing.md` and the `wp-testing` skill to write and run tests. **Never install Codeception into a gate-stack project.**
 - **`codeception.yml` present** (legacy Stride-family maintenance), or a genuine, stated need for the legacy suite → continue with the legacy path below.
+- **Neither marker present → do NOT default to Codeception.** The gate layer is the target for any non-Stride project: adopt it from the canonical template (github netdust/bedrock — note that on an already-running project `wptests` is created by a post-start hook, so one `ddev restart` is needed before `test:int` works; README-testing §4c), or confirm with the user that the project is genuinely Stride-family before continuing to the legacy path.
 
 ## LEGACY PATH — Codeception + wp-browser (Stride family only)
 
