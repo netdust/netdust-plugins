@@ -166,6 +166,39 @@ def _edit_line_counts(tool_name: str, tool_input: dict) -> tuple[int, int]:
     return 0, 0
 
 
+# Command-recognition patterns. Module-level (not function-local) so the test
+# suite can assert them directly against command fixtures — the tests import
+# THIS module's patterns, not copies (see tests/test_phpstan_standards.py).
+# scan_subagent_activity() below is the only runtime consumer.
+LINT_CMD_PATTERN = re.compile(
+    r"\b("
+    r"(npx |bunx )?(eslint|prettier|biome)\b|"
+    r"vendor/bin/(phpcs|phpcbf|php-cs-fixer|phpstan)\b|"
+    r"(ddev exec )?(phpcs|phpcbf|php-cs-fixer)\b|"
+    # Bare `phpstan` is anchored on its subcommand (analyse/analyze), never
+    # `phpstan\b` alone — otherwise `cat phpstan.neon` / prose mentions would
+    # count as a standards run. vendor/bin/phpstan is path-anchored and safe.
+    r"(ddev exec )?phpstan analy[sz]e\b|"
+    r"(npm run|pnpm run|pnpm|yarn|bun run) (lint|format|cs|cs-fix|lint:fix)\b|"
+    # `ddev composer analyse` matches via the substring `composer analyse`,
+    # same as `ddev composer lint` always has.
+    r"composer (run-script )?(lint|phpcs|cs|cs-fix|format|analyse|analyze|phpstan)\b"
+    r")"
+)
+
+TEST_CMD_PATTERN = re.compile(
+    r"\b("
+    r"vendor/bin/(phpunit|codecept)|"
+    r"(ddev exec )?(phpunit|codecept)|"
+    r"npx (vitest|playwright|jest)|"
+    r"composer test|"
+    r"npm (run )?test|pnpm test|yarn test|"
+    r"bun (run )?(test|vitest|playwright)|"
+    r"bunx (vitest|playwright|jest)"
+    r")\b"
+)
+
+
 def scan_subagent_activity(messages: list[dict]) -> dict:
     """
     Walk the transcript and record what the subagent did.
@@ -199,28 +232,6 @@ def scan_subagent_activity(messages: list[dict]) -> dict:
     ran_lint_bash = False
     lines_added = 0
     lines_removed = 0
-
-    lint_cmd_pattern = re.compile(
-        r"\b("
-        r"(npx |bunx )?(eslint|prettier|biome)\b|"
-        r"vendor/bin/(phpcs|phpcbf|php-cs-fixer)\b|"
-        r"(ddev exec )?(phpcs|phpcbf|php-cs-fixer)\b|"
-        r"(npm run|pnpm run|pnpm|yarn|bun run) (lint|format|cs|cs-fix|lint:fix)\b|"
-        r"composer (run-script )?(lint|phpcs|cs|cs-fix|format)\b"
-        r")"
-    )
-
-    test_cmd_pattern = re.compile(
-        r"\b("
-        r"vendor/bin/(phpunit|codecept)|"
-        r"(ddev exec )?(phpunit|codecept)|"
-        r"npx (vitest|playwright|jest)|"
-        r"composer test|"
-        r"npm (run )?test|pnpm test|yarn test|"
-        r"bun (run )?(test|vitest|playwright)|"
-        r"bunx (vitest|playwright|jest)"
-        r")\b"
-    )
 
     for msg in messages:
         if msg.get("type") != "assistant":
@@ -259,9 +270,9 @@ def scan_subagent_activity(messages: list[dict]) -> dict:
 
             elif tool_name == "Bash":
                 cmd = tool_input.get("command", "") or ""
-                if test_cmd_pattern.search(cmd):
+                if TEST_CMD_PATTERN.search(cmd):
                     ran_tests_bash = True
-                if lint_cmd_pattern.search(cmd):
+                if LINT_CMD_PATTERN.search(cmd):
                     ran_lint_bash = True
 
     return {
@@ -293,6 +304,7 @@ def project_has_linter(cwd: str) -> bool:
         # PHP/WP
         "phpcs.xml", "phpcs.xml.dist", ".phpcs.xml", ".phpcs.xml.dist",
         ".php-cs-fixer.php", ".php-cs-fixer.dist.php",
+        "phpstan.neon", "phpstan.neon.dist",
     ]
     for name in config_names:
         if (root / name).exists():
@@ -318,10 +330,13 @@ def project_has_linter(cwd: str) -> bool:
             data = json.loads(comp.read_text())
             deps = {**(data.get("require") or {}), **(data.get("require-dev") or {})}
             if any(tok in d for d in deps
-                   for tok in ("phpcs", "php_codesniffer", "php-cs-fixer", "wpcs", "coding-standard")):
+                   for tok in ("phpcs", "php_codesniffer", "php-cs-fixer", "wpcs",
+                               "coding-standard", "phpstan")):
                 return True
             scripts = data.get("scripts", {}) or {}
-            if any("phpcs" in str(k) or "phpcs" in str(v) for k, v in scripts.items()):
+            if any(tok in str(k) or tok in str(v)
+                   for k, v in scripts.items()
+                   for tok in ("phpcs", "phpstan", "analyse")):
                 return True
         except Exception:
             pass
