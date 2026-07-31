@@ -35,7 +35,7 @@ Project Detection. Presence of any of these means standards are defined and this
 | `package.json` `scripts.lint` / `scripts.format` | TS/JS | `npm run lint` (or the script's runner) |
 | `phpcs.xml(.dist)` / `.phpcs.xml`, or `squizlabs/php_codesniffer` / WPCS in `composer.json` | PHP/WP | `vendor/bin/phpcs <files>` (prefix `ddev exec` if `.ddev/`) |
 | `.php-cs-fixer*.php` | PHP | `vendor/bin/php-cs-fixer fix --dry-run <files>` |
-| `phpstan.neon(.dist)`, or `phpstan/phpstan` (incl. `szepeviktor/phpstan-wordpress`) in `composer.json` require-dev, or an `analyse`/`phpstan` composer script | PHP static analysis | `composer analyse` (or `vendor/bin/phpstan analyse <files>`; prefix `ddev` / `ddev exec` if `.ddev/`, per the phpcs row) |
+| phpstan.neon(.dist), or phpstan in composer.json (dep or analyse script) | PHP static analysis | composer analyse, or vendor/bin/phpstan analyse <files> (ddev-prefix per the phpcs row) |
 
 If **none** is present, the project has no defined standard — **this gate no-ops**. Do not
 hand-roll a style opinion; record `Standards: n/a — no linter configured` and move on. (The

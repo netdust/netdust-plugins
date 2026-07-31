@@ -1,27 +1,10 @@
 """
-test_phpstan_standards.py — PHPStan recognized as standards evidence (FR-2, SC-2).
+test_phpstan_standards.py — PHPStan + full-gate runs as standards/test evidence.
 
-Contract (from the task's acceptance criteria, written BEFORE the implementation):
-
-  1. LINT_CMD_PATTERN — the hook's real, module-level lint-command regex —
-     matches PHPStan invocations (vendor/bin, ddev-prefixed, composer analyse,
-     bare `phpstan analyse`) and keeps rejecting non-invocations. Pre-existing
-     pattern behaviors (eslint, phpcs, composer lint) are regression-asserted.
-  2. project_has_linter() recognizes phpstan.neon / phpstan.neon.dist as
-     configured-linter files, and a composer.json with phpstan/phpstan (or the
-     WP extension) in require-dev, or an `analyse` script, as configured.
-  3. End-to-end (seam): the REAL hook run as a subprocess blocks on STANDARDS
-     when phpstan is configured but never ran, and passes through when a
-     phpstan command ran.
-
-Looseness note (deliberate, matches the existing pattern style): the regex
-matches command substrings anywhere, so the bare-binary form is anchored on
-its subcommand (`phpstan analy[sz]e`), never bare `phpstan\\b` — that keeps
-`cat phpstan.neon` and `echo phpstan is great` non-matching. vendor/bin/phpstan
-is path-anchored and safe to match bare.
-
-The pattern/function fixtures import the hook module ITSELF via importlib —
-they assert the real compiled regex and the real project_has_linter, not copies.
+Contract: (1) LINT_CMD_PATTERN matches phpstan + gate runs, rejects
+non-invocations; (2) gate runs also satisfy TEST_CMD_PATTERN; (3) the
+block message coaches phpstan/gate; (4) project_has_linter token-checks
+composer scripts. The hook's own comments are the source of truth.
 """
 
 import importlib.util
@@ -82,14 +65,27 @@ def _run(messages, cwd_files=None):
 
 # --- fixtures ---------------------------------------------------------------
 
-# Must MATCH the lint pattern after the change (6 phpstan positives).
+# Must MATCH the lint pattern (phpstan forms; the z-spelling kills analy[sz]e).
 LINT_POSITIVE = [
     "vendor/bin/phpstan analyse --no-progress",
-    "ddev exec vendor/bin/phpstan analyse",
     "composer analyse",
-    "ddev composer analyse",
     "composer run-script analyse",
     "phpstan analyse",
+    "phpstan analyze",
+]
+
+# Full-gate runs — must match BOTH patterns (the gate runs the unit tier AND
+# the analyse/lint tiers, so one gate run is evidence for both).
+GATE_POSITIVE = [
+    "composer gate",
+    "ddev composer gate",
+    "sh bin/gate.sh",
+]
+
+# Must NOT match either pattern (gate as prose / not the gate script).
+GATE_NEGATIVE = [
+    'git commit -m "gate"',
+    "composer gates",
 ]
 
 # Pre-existing behaviors that must KEEP matching (regression).
@@ -99,20 +95,41 @@ LINT_POSITIVE_REGRESSION = [
     "composer lint",
 ]
 
-# Must NOT match (realistic non-invocations; see looseness note above).
+# Must NOT match (realistic non-invocations).
 LINT_NEGATIVE = [
     "composer analyses src/",          # word boundary: not the analyse script
     'git commit -m "analyse"',         # analyse as prose, no runner
     "cat phpstan.neon",                # reading the config is not running it
-    "echo phpstan is great",           # mid-sentence mention, no subcommand
     "composer test:unit",              # a test script, not a standards run
 ]
+
+# The exact TEST_CMD_PATTERN source, incl. the gate additions — a literal
+# equality check is stronger than spot-checking one positive + one negative.
+EXPECTED_TEST_PATTERN = (
+    r"\b("
+    r"vendor/bin/(phpunit|codecept)|"
+    r"(ddev exec )?(phpunit|codecept)|"
+    r"npx (vitest|playwright|jest)|"
+    r"composer test|"
+    r"composer (run-script )?gate|"
+    r"bin/gate\.sh|"
+    r"npm (run )?test|pnpm test|yarn test|"
+    r"bun (run )?(test|vitest|playwright)|"
+    r"bunx (vitest|playwright|jest)"
+    r")\b"
+)
 
 COMPOSER_PHPSTAN_DEP = json.dumps(
     {"require-dev": {"phpstan/phpstan": "^2.0",
                      "szepeviktor/phpstan-wordpress": "^2.0"}})
 COMPOSER_ANALYSE_SCRIPT = json.dumps(
     {"scripts": {"analyse": "phpstan analyse --no-progress"}})
+# Value deliberately phpstan-free so the fixture kills the `analyze` token
+# itself, not the phpstan token.
+COMPOSER_ANALYZE_SCRIPT = json.dumps(
+    {"scripts": {"analyze": "tools/static-check.sh --strict"}})
+COMPOSER_ANALYSES_PROSE = json.dumps(
+    {"scripts": {"report": "run analyses report"}})
 COMPOSER_PLAIN = json.dumps({"require": {"php": ">=8.1"}})
 
 
@@ -122,11 +139,26 @@ def run():
     pattern = getattr(mod, "LINT_CMD_PATTERN", None)
     if pattern is None:
         return [(False, "hook module exposes LINT_CMD_PATTERN at module level")]
+    tpat = getattr(mod, "TEST_CMD_PATTERN", None)
+    if tpat is None:
+        return [(False, "hook module exposes TEST_CMD_PATTERN at module level")]
 
     # === lint pattern: phpstan positives ===
     for cmd in LINT_POSITIVE:
         results.append((bool(pattern.search(cmd)),
                         f"lint pattern MATCHES: {cmd!r}"))
+
+    # === gate runs: evidence for BOTH patterns ===
+    for cmd in GATE_POSITIVE:
+        results.append((bool(pattern.search(cmd)),
+                        f"lint pattern MATCHES gate run: {cmd!r}"))
+        results.append((bool(tpat.search(cmd)),
+                        f"test pattern MATCHES gate run: {cmd!r}"))
+    for cmd in GATE_NEGATIVE:
+        results.append((not pattern.search(cmd),
+                        f"lint pattern REJECTS: {cmd!r}"))
+        results.append((not tpat.search(cmd),
+                        f"test pattern REJECTS: {cmd!r}"))
 
     # === lint pattern: pre-existing positives (regression) ===
     for cmd in LINT_POSITIVE_REGRESSION:
@@ -138,11 +170,20 @@ def run():
         results.append((not pattern.search(cmd),
                         f"lint pattern REJECTS: {cmd!r}"))
 
-    # === test pattern untouched by the lift (regression) ===
-    tpat = getattr(mod, "TEST_CMD_PATTERN", None)
-    results.append((tpat is not None and bool(tpat.search("vendor/bin/phpunit"))
-                    and not tpat.search("echo 'testing the api manually'"),
-                    "TEST_CMD_PATTERN lifted unchanged (phpunit yes, prose no)"))
+    # === test pattern: exact literal (lift + gate additions, nothing else) ===
+    results.append((tpat.pattern == EXPECTED_TEST_PATTERN,
+                    "TEST_CMD_PATTERN source equals the expected literal"))
+
+    # === block message coaches phpstan + the full gate ===
+    activity = {"lines_added": 20, "invoked_testing": True}
+    tests_msg = mod.build_block_message(activity, ["tests"])
+    results.append(("composer gate" in tests_msg,
+                    "block message (tests): suggests composer gate"))
+    std_msg = mod.build_block_message(activity, ["standards"])
+    results.append(("composer analyse" in std_msg
+                    and "vendor/bin/phpstan analyse" in std_msg
+                    and "composer gate" in std_msg,
+                    "block message (standards): suggests analyse + full gate"))
 
     # === configured-linter detection: phpstan config files ===
     for fname in ("phpstan.neon", "phpstan.neon.dist"):
@@ -155,6 +196,8 @@ def run():
     for label, content, expected in [
         ("phpstan/phpstan in require-dev", COMPOSER_PHPSTAN_DEP, True),
         ("analyse script", COMPOSER_ANALYSE_SCRIPT, True),
+        ("analyze script (z-spelling)", COMPOSER_ANALYZE_SCRIPT, True),
+        ("'run analyses report' script value", COMPOSER_ANALYSES_PROSE, False),
         ("plain composer.json (no linter)", COMPOSER_PLAIN, False),
     ]:
         with tempfile.TemporaryDirectory() as tmp:
@@ -164,11 +207,14 @@ def run():
 
     # === end-to-end seam: the real hook, un-mocked, subprocess ===
 
-    # phpstan configured + tests ran + NO standards run → block on STANDARDS
+    # phpstan configured + tests ran + NO standards run → block on STANDARDS,
+    # and the block message coaches the analyse + full-gate commands
     d, out = _run([_msg(_write(BIG), _bash("vendor/bin/phpunit"))],
                   cwd_files={"phpstan.neon": "parameters:\n  level: 6\n"})
-    results.append((d == "block" and "STANDARDS" in out,
-                    "e2e: phpstan.neon + tests + no analyse → block (standards)"))
+    results.append((d == "block" and "STANDARDS" in out
+                    and "composer analyse" in out and "composer gate" in out,
+                    "e2e: phpstan.neon + tests + no analyse → block "
+                    "(standards, coaches analyse + gate)"))
 
     # phpstan configured + tests + phpstan ran → passthrough
     d, out = _run([_msg(_write(BIG), _bash("vendor/bin/phpunit"),
@@ -176,13 +222,6 @@ def run():
                   cwd_files={"phpstan.neon": "parameters:\n  level: 6\n"})
     results.append((d == "passthrough",
                     "e2e: phpstan.neon + tests + phpstan analyse → passthrough"))
-
-    # composer require-dev phpstan + tests + composer analyse → passthrough
-    d, out = _run([_msg(_write(BIG), _bash("vendor/bin/phpunit"),
-                        _bash("composer analyse"))],
-                  cwd_files={"composer.json": COMPOSER_PHPSTAN_DEP})
-    results.append((d == "passthrough",
-                    "e2e: composer phpstan dep + composer analyse → passthrough"))
 
     return results
 

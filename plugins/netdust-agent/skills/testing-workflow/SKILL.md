@@ -1,6 +1,6 @@
 ---
 name: testing-workflow
-description: "Use when verifying a task before marking it done, or a phase before sign-off, in the superpowers workflow — the per-task-close test-tier decision. Fires on 'I just finished a task — does it need a test, and at what tier?', 'should I write a test for this before marking it done', 'is this Tier A or B', 'I just added a lookup plus a thin React badge — does that need a test', 'do I write a RED test for this'. Risk-tiers what each task needs (RED-first test for logic/auth/parsing/migrations; no bespoke test for glue/wrappers/UI), and adds the seam test that catches wiring/wire-mock/concurrency bugs per-task unit tests miss. This is write-time / per-task. For AUDITING whether an already-green suite would actually go RED if a dangerous path broke — that is test-effectiveness (audit-time / per-phase), not this. Covers PHP (WordPress/Codeception/PHPUnit) and TypeScript (Vitest/Playwright)."
+description: "Use when verifying a task before marking it done, or a phase before sign-off, in the superpowers workflow — the per-task-close test-tier decision. Fires on 'I just finished a task — does it need a test, and at what tier?', 'should I write a test for this before marking it done', 'is this Tier A or B', 'I just added a lookup plus a thin React badge — does that need a test', 'do I write a RED test for this'. Risk-tiers what each task needs (RED-first test for logic/auth/parsing/migrations; no bespoke test for glue/wrappers/UI), and adds the seam test that catches wiring/wire-mock/concurrency bugs per-task unit tests miss. This is write-time / per-task. For AUDITING whether an already-green suite would actually go RED if a dangerous path broke — that is test-effectiveness (audit-time / per-phase), not this. Covers PHP (WordPress — Brain Monkey/wp-phpunit gate stack, or legacy Codeception/PHPUnit) and TypeScript (Vitest/Playwright)."
 ---
 
 # Testing Workflow
@@ -80,22 +80,20 @@ Plans MUST include test expectations. Every task needs a line stating what the u
 
 Run once at start. Cache the result.
 
-**Authoritative binding first — `site.yml` `commands:` block.** If the project's `site.yml` has a `commands:` block, that block IS the binding: its `test` entry is the per-task unit-suite command and its `gate` entry is the full gate. Use them verbatim — marker detection below is the FALLBACK for when the block is absent. This is how born-gated projects bind their runners; the project's `README-testing.md` is the per-project doc for what each command covers.
+**Authoritative binding first — `site.yml` `commands:` block.** If the project's `site.yml` has a `commands:` block, that block IS the binding: its `test` entry is the per-task unit-suite command and its `gate` entry is the full gate. Use them verbatim — marker detection below is the FALLBACK for when the block is absent. The project's `README-testing.md` is the per-project doc for what each command covers.
 
 | Marker | Stack | Unit Runner | E2E Runner |
 |--------|-------|-------------|------------|
-| `composer.json` + WordPress + `phpunit.unit.xml` | WP PHP (gate stack) | Brain Monkey unit (`composer test:unit`) / wp-phpunit integration (`ddev composer test:int`) | Playwright |
+| `composer.json` + WordPress + `phpunit.unit.xml` | WP PHP (gate stack) | Brain Monkey unit / wp-phpunit integration | Playwright |
 | `composer.json` + WordPress + `codeception.yml` | WP PHP (legacy — Stride family) | Codeception unit / PHPUnit | Codeception acceptance |
 | `composer.json` (no WP) | PHP | PHPUnit | Codeception acceptance |
 | `package.json` + TypeScript | TS | Vitest | Playwright |
 | `package.json` (JS only) | JS | Jest / Vitest | Playwright |
 
-Neither WordPress row forces the other's tooling: a gate-stack project never installs Codeception for this workflow, and a legacy Codeception project keeps its suites as-is.
-
 **Monorepo:** Both `composer.json` and `package.json` exist → run both stacks.
 
 Config file check:
-- `phpunit.unit.xml` + `phpunit.integration.xml` → netdust gate stack: per-tier PHPUnit configs, run via `composer test:unit` / `ddev composer test:int`
+- `phpunit.unit.xml` + `phpunit.integration.xml` → netdust gate stack: per-tier PHPUnit configs
 - `bin/gate.sh` → the full gate exists; run it via `composer gate`
 - `codeception.yml` → Codeception suites available (legacy stack)
 - `phpunit.xml` → PHPUnit available (generic fallback when no per-tier configs exist)
@@ -448,7 +446,7 @@ Load the appropriate patterns file for concrete code examples:
 
 | Project | File | Contents |
 |---------|------|----------|
-| PHP | `patterns-php.md` | PHPUnit unit patterns + Codeception acceptance patterns |
+| PHP (legacy Codeception) | `patterns-php.md` | PHPUnit unit patterns + Codeception acceptance patterns — gate-stack projects use the project's `README-testing.md` instead |
 | TypeScript | `patterns-typescript.md` | Vitest unit patterns + Playwright acceptance patterns |
 
 ---

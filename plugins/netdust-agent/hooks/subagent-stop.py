@@ -166,10 +166,7 @@ def _edit_line_counts(tool_name: str, tool_input: dict) -> tuple[int, int]:
     return 0, 0
 
 
-# Command-recognition patterns. Module-level (not function-local) so the test
-# suite can assert them directly against command fixtures — the tests import
-# THIS module's patterns, not copies (see tests/test_phpstan_standards.py).
-# scan_subagent_activity() below is the only runtime consumer.
+# Module-level so the tests assert the real compiled patterns (see tests/test_phpstan_standards.py).
 LINT_CMD_PATTERN = re.compile(
     r"\b("
     r"(npx |bunx )?(eslint|prettier|biome)\b|"
@@ -178,11 +175,11 @@ LINT_CMD_PATTERN = re.compile(
     # Bare `phpstan` is anchored on its subcommand (analyse/analyze), never
     # `phpstan\b` alone — otherwise `cat phpstan.neon` / prose mentions would
     # count as a standards run. vendor/bin/phpstan is path-anchored and safe.
-    r"(ddev exec )?phpstan analy[sz]e\b|"
+    r"phpstan analy[sz]e\b|"
     r"(npm run|pnpm run|pnpm|yarn|bun run) (lint|format|cs|cs-fix|lint:fix)\b|"
-    # `ddev composer analyse` matches via the substring `composer analyse`,
-    # same as `ddev composer lint` always has.
-    r"composer (run-script )?(lint|phpcs|cs|cs-fix|format|analyse|analyze|phpstan)\b"
+    # A gate run (composer gate / bin/gate.sh) runs the unit tier AND the analyse/lint tiers — evidence for BOTH patterns.
+    r"composer (run-script )?(lint|phpcs|cs|cs-fix|format|analy[sz]e|phpstan|gate)\b|"
+    r"bin/gate\.sh\b"
     r")"
 )
 
@@ -192,6 +189,9 @@ TEST_CMD_PATTERN = re.compile(
     r"(ddev exec )?(phpunit|codecept)|"
     r"npx (vitest|playwright|jest)|"
     r"composer test|"
+    # A gate run (composer gate / bin/gate.sh) runs the unit tier AND the analyse/lint tiers — evidence for BOTH patterns.
+    r"composer (run-script )?gate|"
+    r"bin/gate\.sh|"
     r"npm (run )?test|pnpm test|yarn test|"
     r"bun (run )?(test|vitest|playwright)|"
     r"bunx (vitest|playwright|jest)"
@@ -334,9 +334,10 @@ def project_has_linter(cwd: str) -> bool:
                                "coding-standard", "phpstan")):
                 return True
             scripts = data.get("scripts", {}) or {}
-            if any(tok in str(k) or tok in str(v)
-                   for k, v in scripts.items()
-                   for tok in ("phpcs", "phpstan", "analyse")):
+            # Word-bound, not raw substring: a script value like
+            # "run analyses report" must not read as an analyse script.
+            blob = " ".join(f"{k} {v}" for k, v in scripts.items())
+            if re.search(r"\b(phpcs|phpstan|analy[sz]e)\b", blob):
                 return True
         except Exception:
             pass
@@ -362,6 +363,7 @@ def build_block_message(activity: dict, missing: list[str]) -> str:
             "      vendor/bin/phpunit               (PHP/PHPUnit)\n"
             "      vendor/bin/codecept run unit     (Codeception)\n"
             "      ddev exec phpunit                (WP under DDEV)\n"
+            "      composer gate       (or run the full gate — satisfies tests AND standards)\n"
         )
 
     if "standards" in missing:
@@ -370,6 +372,8 @@ def build_block_message(activity: dict, missing: list[str]) -> str:
             "configured but you did not run it. Run it on the touched files:\n"
             "      npx eslint <files> && npx prettier --check <files>   (TS/JS)\n"
             "      vendor/bin/phpcs <files>                             (PHP/WP)\n"
+            "      composer analyse | vendor/bin/phpstan analyse <files> (PHP static analysis)\n"
+            "      composer gate       (or run the full gate — satisfies tests AND standards)\n"
             "Then record a `Standards: clean | <violations>` line in your "
             f"Test-evidence block. (See the {STANDARDS_SKILL} skill.)\n"
         )
