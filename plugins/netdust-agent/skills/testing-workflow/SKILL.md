@@ -80,27 +80,38 @@ Plans MUST include test expectations. Every task needs a line stating what the u
 
 Run once at start. Cache the result.
 
+**Authoritative binding first — `site.yml` `commands:` block.** If the project's `site.yml` has a `commands:` block, that block IS the binding: its `test` entry is the per-task unit-suite command and its `gate` entry is the full gate. Use them verbatim — marker detection below is the FALLBACK for when the block is absent. This is how born-gated projects bind their runners; the project's `README-testing.md` is the per-project doc for what each command covers.
+
 | Marker | Stack | Unit Runner | E2E Runner |
 |--------|-------|-------------|------------|
-| `composer.json` + WordPress | WP PHP | Codeception unit / PHPUnit | Codeception acceptance |
+| `composer.json` + WordPress + `phpunit.unit.xml` | WP PHP (gate stack) | Brain Monkey unit (`composer test:unit`) / wp-phpunit integration (`ddev composer test:int`) | Playwright |
+| `composer.json` + WordPress + `codeception.yml` | WP PHP (legacy — Stride family) | Codeception unit / PHPUnit | Codeception acceptance |
 | `composer.json` (no WP) | PHP | PHPUnit | Codeception acceptance |
 | `package.json` + TypeScript | TS | Vitest | Playwright |
 | `package.json` (JS only) | JS | Jest / Vitest | Playwright |
 
+Neither WordPress row forces the other's tooling: a gate-stack project never installs Codeception for this workflow, and a legacy Codeception project keeps its suites as-is.
+
 **Monorepo:** Both `composer.json` and `package.json` exist → run both stacks.
 
 Config file check:
-- `codeception.yml` → Codeception suites available
-- `phpunit.xml` → PHPUnit available
+- `phpunit.unit.xml` + `phpunit.integration.xml` → netdust gate stack: per-tier PHPUnit configs, run via `composer test:unit` / `ddev composer test:int`
+- `bin/gate.sh` → the full gate exists; run it via `composer gate`
+- `codeception.yml` → Codeception suites available (legacy stack)
+- `phpunit.xml` → PHPUnit available (generic fallback when no per-tier configs exist)
 - `vitest.config.ts` → Vitest available
 - `playwright.config.ts` → Playwright available
 
 ### DDEV / Docker
 
-If `.ddev/` exists, prefix PHP commands with `ddev exec`.
+If `.ddev/` exists, run anything that needs WordPress or the database through DDEV (`ddev composer …` / `ddev exec …`); Brain Monkey unit tests need neither and run on the host.
 
 ```bash
-ddev exec vendor/bin/phpunit --testsuite=unit
+# Gate stack (the composer scripts wrap the per-tier configs)
+composer test:unit          # Brain Monkey unit — no WP needed, runs anywhere
+ddev composer test:int      # wp-phpunit integration — needs the DDEV environment
+
+# Legacy Codeception
 ddev exec vendor/bin/codecept run acceptance --steps
 ```
 
@@ -193,12 +204,17 @@ Name tests by behavior, not by method name:
 
 ### Run commands
 
-**PHP (PHPUnit):**
+**PHP (gate stack — per-tier configs):**
+```bash
+vendor/bin/phpunit -c phpunit.unit.xml --filter=TestClassName
+```
+
+**PHP (generic PHPUnit):**
 ```bash
 vendor/bin/phpunit --filter=TestClassName
 ```
 
-**PHP (Codeception unit suite):**
+**PHP (Codeception unit suite, legacy):**
 ```bash
 vendor/bin/codecept run unit TestClassCest
 ```
@@ -211,8 +227,11 @@ npx vitest run src/path/to/file.test.ts
 Run the specific test file first. If green, run the full unit suite to catch regressions:
 
 ```bash
-# PHP
-vendor/bin/phpunit --testsuite=unit
+# PHP (gate stack — or the site.yml `commands.test` entry when present)
+composer test:unit
+
+# PHP (legacy / generic)
+vendor/bin/phpunit
 
 # TypeScript
 npx vitest run
@@ -299,7 +318,12 @@ Cover three flows minimum:
 
 ### Run commands
 
-**PHP integration (Codeception):**
+**PHP integration (gate stack):**
+```bash
+ddev composer test:int
+```
+
+**PHP acceptance (legacy Codeception):**
 ```bash
 vendor/bin/codecept run acceptance --steps
 ```
@@ -309,10 +333,13 @@ vendor/bin/codecept run acceptance --steps
 npx playwright test
 ```
 
-**Full regression (both suites):**
+**Full regression (stack-conditional):**
 ```bash
-# PHP
-vendor/bin/phpunit --testsuite=unit && vendor/bin/codecept run acceptance --steps
+# PHP (gate stack — or the site.yml `commands.gate` entry when present)
+composer test:unit && composer gate
+
+# PHP (legacy Codeception)
+vendor/bin/codecept run unit && vendor/bin/codecept run acceptance --steps
 
 # TypeScript
 npx vitest run && npx playwright test
@@ -390,14 +417,11 @@ These apply at every level. Subagents and controller must both avoid:
 
 If the project has no test tooling, the FIRST task is setting it up. This is not deferred — it blocks everything else.
 
-### PHP (WordPress) minimal setup
+### PHP (WordPress)
 
-```bash
-composer require --dev lucatume/wp-browser
-vendor/bin/codecept init wpbrowser
-```
+New netdust WP projects are **born gated** — the scaffold ships `phpunit.unit.xml`, `phpunit.integration.xml`, `bin/gate.sh`, and the `composer test:unit` / `test:int` / `gate` scripts, so there is nothing to set up. If those files are missing on a NEW project, the scaffold step was skipped — fix the scaffold, don't hand-install a test stack.
 
-This gives you `unit`, `wpunit`, `functional`, and `acceptance` suites.
+Legacy projects (Stride family) keep their existing wp-browser/Codeception suites (`unit`, `wpunit`, `functional`, `acceptance`) — do not migrate them to the gate stack as a side quest.
 
 ### TypeScript minimal setup
 
