@@ -1,8 +1,8 @@
 # site.yml — operational config for {{PROJECT_NAME}}
 # Read into context at session start by the netdust session-start hook.
 # Keep the top-level keys (site / structure / hosting / deploy / local /
-# commands) — the hook greps site…local to surface deploy + risk info BEFORE
-# you're asked to ship; commands carries the agent test/gate bindings.
+# commands) — the hook greps them to surface deploy + risk info BEFORE
+# you're asked to ship, plus the commands test/gate bindings.
 
 site:
   name: {{PROJECT_NAME}}

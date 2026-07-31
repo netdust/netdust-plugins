@@ -1,10 +1,21 @@
 ---
-description: Set up Codeception + wp-browser test infrastructure in a WordPress project
+description: Route a WordPress project to its test stack — gate-stack projects are born gated (nothing to set up); Codeception + wp-browser setup is for legacy Stride-family projects only
 argument-hint: [site-directory-path]
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ---
 
-Set up Codeception and wp-browser test infrastructure in the WordPress project at: $ARGUMENTS
+Set up test infrastructure in the WordPress project at: $ARGUMENTS
+
+## STACK ROUTING — check this before anything else
+
+Look for the target project's stack markers (same detection as the `wp-testing` skill):
+
+- **`phpunit.unit.xml` or `bin/gate.sh` present → gate stack. STOP — nothing to set up.** The project is born gated: the full test/gate layer (PHPUnit + Brain Monkey unit, wp-phpunit integration, Vitest, Playwright, `composer gate`) shipped at scaffold time via `new-site.sh`. Read the project's `README-testing.md` and the `wp-testing` skill to write and run tests. **Never install Codeception into a gate-stack project.**
+- **`codeception.yml` present** (legacy Stride-family maintenance), or a genuine, stated need for the legacy suite → continue with the legacy path below.
+
+## LEGACY PATH — Codeception + wp-browser (Stride family only)
+
+Everything below this line applies ONLY to legacy Stride-family projects; gate-stack projects never reach this section.
 
 ## Instructions
 
