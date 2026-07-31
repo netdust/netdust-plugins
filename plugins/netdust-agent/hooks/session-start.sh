@@ -194,7 +194,7 @@ if [[ -f "$SITE_YML" ]]; then
   OUTPUT+="## site.yml summary (project operational config)\n"
   # Surface the keys Claude needs to know BEFORE being asked to deploy
   OUTPUT+='```yaml\n'
-  OUTPUT+="$(grep -E '^(site|structure|hosting|deploy|local):|^  (name|domain|risk|description|type|webroot|wpcli_path|provider|ssh_staging|ssh_production|method|staging_command|production_command|command|note|ddev_project|url):' "$SITE_YML" 2>/dev/null | head -40)\n"
+  OUTPUT+="$(grep -E '^(site|structure|hosting|deploy|local|commands):|^  (name|domain|risk|description|type|webroot|wpcli_path|provider|ssh_staging|ssh_production|method|staging_command|production_command|command|note|ddev_project|url|test|gate):' "$SITE_YML" 2>/dev/null | head -40)\n"
   OUTPUT+='```\n\n'
 fi
 
