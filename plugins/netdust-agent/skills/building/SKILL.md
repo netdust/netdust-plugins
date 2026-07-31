@@ -146,6 +146,8 @@ Invoke it via the Skill tool. Its content is your primary instruction set for ex
     - Reconcile the two: the implementer's `RED proof (author's)` must match the test-author's, its `Contract test author` must name the independent author (not "self", except the Class E solo-mode inline exception), and `Weakened?` must be `NO`. A GREEN with no matching independent RED, or a `Weakened?` that isn't `NO`, means the split was bypassed — treat the task as NOT done regardless of a green suite.
   - **`solo` task:** ONE block, from the implementer, still complete: the Test-evidence + STATUS blocks showing the tier it classified, its own RED-first proof (or the Tier-B line), `Contract test author: self — solo mode (plan: Test-author: solo)`, `Weakened? n/a — self-authored (solo mode)`, and the deferral line. There is no second author's block to reconcile against — the independent check for a `solo` task is NOT this step; it is the cluster review gate (Step 2.8) + the phase-close test-effectiveness audit (Stage 3), per `<test_dev_split>`.
 
+  On an `Integration test:` contract, the RED/GREEN proofs must cite the integration runner (`test:int`) — a unit-suite proof does not close the task; an environment that cannot run the integration tier reports BLOCKED/NEEDS_CONTEXT.
+
   Those blocks — visible in the reports and commit bodies, one or two per task depending on mode — ARE the gate.
 
   Do **not** require either subagent to literally re-invoke `Skill("testing-workflow")` once per task: the gate skill itself states that *"Re-invoking the Skill tool once per task is **not** the discipline."* Each subagent reads testing-workflow **once per session** to internalize it; per-task re-invocation is the ghost ritual `subphase-a-0of7` retired.
@@ -343,6 +345,8 @@ you MUST:
      (Tier B: replace with `no unit test: Tier B, <reason>`)
    - Weakened? n/a — self-authored (solo mode)
    - GREEN proof: <command you ran> → <1-3 line snippet showing the test now passes>
+     (Integration test: contract → proofs must cite the integration runner,
+     e.g. `ddev composer test:int`; never substitute the unit suite.)
    - Seam test (if this task WIRES a piece into the real chain):
      <1 un-mocked-chain assertion + 1 negative/adversarial case, or "n/a — not a wiring task">
    - Suite delta: <app> was <N>, now <M>, <K> fails
