@@ -34,4 +34,4 @@ commands:
   # Agent bindings (netdust harness): per-task test suite + the full gate.
   # The gate's exit code is the single source of truth — see README-testing.md.
   test: ddev composer test:unit
-  gate: composer gate          # host-invoked; orchestrates all 9 tiers (ddev gate works too)
+  gate: composer gate          # host-invoked; runs every tier (ddev gate works too)
