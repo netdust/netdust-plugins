@@ -20,14 +20,14 @@
       "name": "netdust-agent",
       "source": "./plugins/netdust-agent",
       "description": "Netdust two-layer agent harness — a SKELETON layer (gates/steps/ordering: harnessed-development intake router (class dial A–F) → planning + building spines meeting at an enforced seam (approved tasks.md + gate-check GREEN; building refuses without it) + threat-modeling, architecture-invariants, testing-workflow, feature-acceptance, test-effectiveness, shake-out, standards-gate) and a CRAFT layer (gerund-named how-to the harness reaches for: writing-tests, designing-apis, building-frontend, engineering-context, versioning-with-git, driving-the-browser, refining-ideas, sourcing-from-docs, doubting-decisions, simplifying-code, deploying). Spec stage: brainstorming authors specs/<feature>/spec.md to the spec-authoring skill's stated artifact contract (prioritized stories, measurable SC-n success criteria, Assumptions) and bin/gate-check.py HALTs on an unresolved [NEEDS CLARIFICATION] or an unmeasurable success criterion. Self-contained tooling in bin/ (bare python3, no external CLI) is the single definition of the artifact shape — no templates, since a skeleton whose untouched state passes a gate is the defect; every gate binds on every project; the handoff is tasks.md and it is never executed flat. Naming: gerund = craft (how), gate-noun = harness (when/whether). Craft layers ON TOP of superpowers (never replaces it); addyosmani/agent-skills (MIT) concepts folded in. Standalone, self-contained coding harness. netdust-core is now business/ops/content only. Building Stage 2 runs a tier-conditional test/dev split: an independent test-author writes the RED test before the implementer greens it for Tier-A security-boundary tasks (set via the plan's Test-author field, machine-checked by gate-check.py); other tasks run solo RED-first TDD. Planning goes inline while the human is steering, or to a dispatched background planner when unattended. Adds run-observability: an in-loop event trace (run-trace.py, plus `show --durations`) + a deterministic evaluator rubric (run-score.py) + a read-only cost report (run-cost.py), surfaced in /shakeout and pointed to by /evaluate — report-only, zero new gates.",
-      "version": "0.14.0",
+      "version": "0.15.0",
       "strict": false
     },
     {
       "name": "netdust-wp",
       "source": "./plugins/netdust-wp",
       "description": "Netdust WordPress plugin — WP discipline, WP planning (plan-requirements gate + golden-path slice), WP reference, ntdst-core framework + golden-path feature exemplars, WP commands. Layers on netdust-core.",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "strict": false
     },
     {
