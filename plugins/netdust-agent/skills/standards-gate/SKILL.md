@@ -1,15 +1,15 @@
 ---
 name: standards-gate
-description: Stage-2 task-close gate that enforces a project's coding standards by actually RUNNING its linter/formatter on the touched files — eslint + prettier (TS/JS), phpcs (PHP/WordPress), biome, etc. — auto-detected per stack the way testing-workflow auto-detects the test runner. Adds a `Standards: clean | <violations>` line to the task's Test-evidence block, and is backstopped deterministically by the subagent-stop.py hook (which blocks a subagent close when a linter is configured but was never run). Closes the harness's goal #2: "respect any given coding standards" becomes enforced, not advisory. Fires at every code-task close alongside testing-workflow. NOT for projects with no linter configured (it no-ops), and not for doc/prose-only tasks.
+description: Stage-2 task-close gate that enforces a project's coding standards by actually RUNNING its linter/formatter on the touched files — eslint + prettier (TS/JS), phpcs (PHP/WordPress), biome, phpstan (PHP static analysis), etc. — auto-detected per stack the way testing-workflow auto-detects the test runner. Adds a `Standards: clean | <violations>` line to the task's Test-evidence block, and is backstopped deterministically by the subagent-stop.py hook (which blocks a subagent close when a linter is configured but was never run). Closes the harness's goal #2: "respect any given coding standards" becomes enforced, not advisory. Fires at every code-task close alongside testing-workflow. NOT for projects with no linter configured (it no-ops), and not for doc/prose-only tasks.
 ---
 
 <objective>
 The harness enforced *tests* (testing-workflow + the subagent-stop hook) but only *advised*
 coding standards — they lived in stack skills and reviewer agents as suggestions, and the
 mandatory static-analysis step was a typecheck (`tsc --noEmit`), not a linter. This skill
-closes that gap: at each code-task close it **runs the project's configured linter/formatter
-on the touched files** and records the result, giving standards the same enforcement tier as
-tests.
+closes that gap: at each code-task close it **runs the project's configured linter/formatter/
+static analyser on the touched files** and records the result, giving standards the same
+enforcement tier as tests.
 
 Two layers, same as the testing gate:
 1. **This skill** = the discipline: detect the linter, run it on the diff, record the
@@ -35,6 +35,7 @@ Project Detection. Presence of any of these means standards are defined and this
 | `package.json` `scripts.lint` / `scripts.format` | TS/JS | `npm run lint` (or the script's runner) |
 | `phpcs.xml(.dist)` / `.phpcs.xml`, or `squizlabs/php_codesniffer` / WPCS in `composer.json` | PHP/WP | `vendor/bin/phpcs <files>` (prefix `ddev exec` if `.ddev/`) |
 | `.php-cs-fixer*.php` | PHP | `vendor/bin/php-cs-fixer fix --dry-run <files>` |
+| `phpstan.neon(.dist)`, or `phpstan/phpstan` (incl. `szepeviktor/phpstan-wordpress`) in `composer.json` require-dev, or an `analyse`/`phpstan` composer script | PHP static analysis | `composer analyse` (or `vendor/bin/phpstan analyse <files>`; prefix `ddev` / `ddev exec` if `.ddev/`, per the phpcs row) |
 
 If **none** is present, the project has no defined standard — **this gate no-ops**. Do not
 hand-roll a style opinion; record `Standards: n/a — no linter configured` and move on. (The
