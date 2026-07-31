@@ -591,6 +591,7 @@ def check_security_boundary_mode(tasks_text: str, f: Findings) -> None:
 
 
 UNIT_TEST_LINE = re.compile(r"^\s+Unit test:\s*(\S.*)$")
+INTEGRATION_TEST_LINE = re.compile(r"^\s+Integration test:\s*(\S.*)$")
 NO_UNIT_TEST = re.compile(r"^no unit test\b", re.IGNORECASE)
 
 
@@ -602,16 +603,22 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
     where a denial path quietly stops being tested. Tier B opts out explicitly with
     `no unit test: Tier B, <reason>` — a stated waiver, not an omission.
 
+    `Integration test: <contract>` is EQUALLY a stated contract, for any tier (FR-5): a task
+    carries one contract line of either form; both on one task is belt+braces, the first
+    matching line wins for reporting. There is NO waiver form inside `Integration test:` —
+    text after it always reads as a contract, never a waiver, and Tier A's obligations
+    (incl. the named denial path) carry over to an integration contract unchanged.
+
     A **Tier A** task may never take that waiver: security/auth/parsing/state/transform/
     migration work is Tier A precisely because it needs the RED-first behavioral test, and
     talking one down to "no unit test" is the erosion this tier system exists to stop.
 
-    Retro-compat matches test-author-mode: no task carrying the line at all is an older
+    Retro-compat matches test-author-mode: no task carrying either line at all is an older
     tasks.md and WARNs; partial presence is a defect and FAILs.
     """
     lines = strip_fenced(tasks_text).splitlines()
     n = len(lines)
-    total, missing, tier_a_waived = 0, [], []
+    total, integration, missing, tier_a_waived = 0, 0, [], []
     i = 0
     while i < n:
         tm = TASK_LINE.match(lines[i])
@@ -622,21 +629,27 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
         task_id, task_rest = tm.group(1), tm.group(2)
         is_tier_a = bool(TIER_A.search(task_rest))
 
-        found = None
+        found, is_unit_form = None, False
         j = i + 1
         while j < n:
             if TASK_LINE.match(lines[j]) or heading_text(lines[j]):
                 break
             m = UNIT_TEST_LINE.match(lines[j])
             if m:
-                found = m.group(1).strip()
+                found, is_unit_form = m.group(1).strip(), True
+                break
+            m = INTEGRATION_TEST_LINE.match(lines[j])
+            if m:
+                found, is_unit_form = m.group(1).strip(), False
                 break
             j += 1
 
         if found is None:
             missing.append(task_id)
-        elif is_tier_a and NO_UNIT_TEST.match(found):
+        elif is_unit_form and is_tier_a and NO_UNIT_TEST.match(found):
             tier_a_waived.append(task_id)
+        elif not is_unit_form:
+            integration += 1
         i += 1
 
     if total == 0:
@@ -644,17 +657,23 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
 
     if len(missing) == total:
         f.add("warn", "unit-test-contract",
-              f"no task carries a `Unit test:` line ({total} tasks) — pre-contract tasks.md")
+              f"no task carries a `Unit test:` or `Integration test:` line ({total} tasks) "
+              "— pre-contract tasks.md")
         return
     if missing:
         f.add("fail", "unit-test-contract",
-              f"{len(missing)}/{total} task(s) state no `Unit test:` contract: "
-              + ", ".join(missing[:8]))
+              f"{len(missing)}/{total} task(s) state no test contract "
+              "(`Unit test:` / `Integration test:`): " + ", ".join(missing[:8]))
         return
     if tier_a_waived:
         f.add("fail", "unit-test-contract",
               "Tier A may not waive its test with `no unit test:` — "
               + ", ".join(tier_a_waived[:8]))
+        return
+    if integration:
+        f.add("pass", "unit-test-contract",
+              f"all {total} tasks state a test contract "
+              f"({integration} via `Integration test:`)")
         return
     f.add("pass", "unit-test-contract", f"all {total} tasks state a `Unit test:` contract")
 
