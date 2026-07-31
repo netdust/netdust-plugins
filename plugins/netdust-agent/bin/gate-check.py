@@ -590,35 +590,35 @@ def check_security_boundary_mode(tasks_text: str, f: Findings) -> None:
               + ", ".join(tier_b_boundary[:6]))
 
 
-UNIT_TEST_LINE = re.compile(r"^\s+Unit test:\s*(\S.*)$")
-INTEGRATION_TEST_LINE = re.compile(r"^\s+Integration test:\s*(\S.*)$")
+CONTRACT_LINE = re.compile(r"^\s+(Unit|Integration) test:\s*(\S.*)$")
 NO_UNIT_TEST = re.compile(r"^no unit test\b", re.IGNORECASE)
 
 
 def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
     """1d — every task states the behavioral contract its test asserts.
 
-    `Test-author:` says WHO writes the test; this says WHAT it must prove. A task with a tier
-    and an author but no contract hands the implementer a tier marker and no target, which is
-    where a denial path quietly stops being tested. Tier B opts out explicitly with
-    `no unit test: Tier B, <reason>` — a stated waiver, not an omission.
+    `Test-author:` says WHO writes the test; this says WHAT it must prove. Either line
+    satisfies, for any tier: `Unit test: <contract>` or `Integration test: <contract>`;
+    both on one task is belt+braces. Tier B may opt out explicitly with
+    `Unit test: no unit test: Tier B, <reason>` — a stated waiver, not an omission.
+    Text after `Integration test:` is NEVER a waiver; it always reads as a contract.
 
-    `Integration test: <contract>` is EQUALLY a stated contract, for any tier (FR-5): a task
-    carries one contract line of either form; both on one task is belt+braces, the first
-    matching line wins for reporting. There is NO waiver form inside `Integration test:` —
-    text after it always reads as a contract, never a waiver, and Tier A's obligations
-    (incl. the named denial path) carry over to an integration contract unchanged.
-
-    A **Tier A** task may never take that waiver: security/auth/parsing/state/transform/
-    migration work is Tier A precisely because it needs the RED-first behavioral test, and
-    talking one down to "no unit test" is the erosion this tier system exists to stop.
+    The task's WHOLE continuation block is scanned and every contract/waiver line
+    collected before deciding, so line order never changes an outcome. The block ends
+    at the next top-level list item or heading — a column-0 bullet is never a
+    continuation of the previous task, even when its id doesn't parse. Enforced:
+    - a **Tier A** task carrying the unit-waiver form FAILs, even when an
+      `Integration test:` line accompanies it — the waiver text is a defect or an
+      erosion attempt, and either deserves the loud stop;
+    - a task whose ONLY contract is `Integration test:` may not be marked `[P]` —
+      integration-contract tasks are never parallel; serialize them.
 
     Retro-compat matches test-author-mode: no task carrying either line at all is an older
     tasks.md and WARNs; partial presence is a defect and FAILs.
     """
     lines = strip_fenced(tasks_text).splitlines()
     n = len(lines)
-    total, integration, missing, tier_a_waived = 0, 0, [], []
+    total, missing, tier_a_waived, integration_parallel = 0, [], [], []
     i = 0
     while i < n:
         tm = TASK_LINE.match(lines[i])
@@ -629,27 +629,28 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
         task_id, task_rest = tm.group(1), tm.group(2)
         is_tier_a = bool(TIER_A.search(task_rest))
 
-        found, is_unit_form = None, False
+        has_unit_contract = has_unit_waiver = has_integration = False
         j = i + 1
         while j < n:
-            if TASK_LINE.match(lines[j]) or heading_text(lines[j]):
+            if lines[j].startswith("- ") or heading_text(lines[j]):
                 break
-            m = UNIT_TEST_LINE.match(lines[j])
+            m = CONTRACT_LINE.match(lines[j])
             if m:
-                found, is_unit_form = m.group(1).strip(), True
-                break
-            m = INTEGRATION_TEST_LINE.match(lines[j])
-            if m:
-                found, is_unit_form = m.group(1).strip(), False
-                break
+                is_unit_form = m.group(1) == "Unit"
+                if not is_unit_form:
+                    has_integration = True
+                elif NO_UNIT_TEST.match(m.group(2).strip()):
+                    has_unit_waiver = True
+                else:
+                    has_unit_contract = True
             j += 1
 
-        if found is None:
+        if not (has_unit_contract or has_unit_waiver or has_integration):
             missing.append(task_id)
-        elif is_unit_form and is_tier_a and NO_UNIT_TEST.match(found):
+        if is_tier_a and has_unit_waiver:
             tier_a_waived.append(task_id)
-        elif not is_unit_form:
-            integration += 1
+        if has_integration and not has_unit_contract and HAS_P.search(task_rest):
+            integration_parallel.append(task_id)
         i += 1
 
     if total == 0:
@@ -664,18 +665,16 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
         f.add("fail", "unit-test-contract",
               f"{len(missing)}/{total} task(s) state no test contract "
               "(`Unit test:` / `Integration test:`): " + ", ".join(missing[:8]))
-        return
     if tier_a_waived:
         f.add("fail", "unit-test-contract",
               "Tier A may not waive its test with `no unit test:` — "
               + ", ".join(tier_a_waived[:8]))
-        return
-    if integration:
-        f.add("pass", "unit-test-contract",
-              f"all {total} tasks state a test contract "
-              f"({integration} via `Integration test:`)")
-        return
-    f.add("pass", "unit-test-contract", f"all {total} tasks state a `Unit test:` contract")
+    if integration_parallel:
+        f.add("fail", "unit-test-contract",
+              "integration-contract task(s) marked [P] — integration contracts are "
+              "never parallel, serialize: " + ", ".join(integration_parallel[:8]))
+    if not (missing or tier_a_waived or integration_parallel):
+        f.add("pass", "unit-test-contract", f"all {total} tasks state a test contract")
 
 
 REQ_ID = re.compile(r"\b(FR|SC)-(\d+)\b")
