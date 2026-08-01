@@ -41,6 +41,7 @@ from datetime import datetime
 LOG_PATH = Path.home() / ".claude" / "logs" / "memory-hook.log"
 LOOP_CHECK = Path(__file__).resolve().parent.parent / "bin" / "loop-check.py"
 RUN_TRACE = Path(__file__).resolve().parent.parent / "bin" / "run-trace.py"
+VERIFY_BUDGET = Path(__file__).resolve().parent.parent / "bin" / "verify-budget.py"
 MARKER_REL = Path("tasks") / ".harness-loop.json"
 DEFAULT_MAX_ITERATIONS = 25
 MAX_DRY = 2
@@ -140,6 +141,37 @@ def main() -> None:
             trace(feature_dir, "loop-disarm-dry", cwd=cwd,
                   iteration=iteration, done=done)
             return
+
+    # Verification-budget tripwire (fail-open, same posture as every bin/ call here:
+    # any tooling problem means no opinion, never a trapped session). An armed loop is
+    # the one place effort can compound with no human watching, so before dispatching
+    # more work, ask whether the spend has already outrun the plan's declared stakes.
+    # On HALT: block ONCE with the stop-and-report instruction and KEEP the marker —
+    # the exit-2 posture, but the agent must be told, because unlike a [HUMAN] task it
+    # does not know. The stop_hook_active bypass bounds this to one block per cycle.
+    try:
+        if VERIFY_BUDGET.exists():
+            budget = subprocess.run(
+                [sys.executable, str(VERIFY_BUDGET), str(feature_dir), "--base", "main"],
+                capture_output=True, text=True, timeout=60, cwd=str(cwd))
+            if budget.returncode == 1:
+                log(f"yield reason=budget-halt iter={iteration} cwd={cwd}")
+                trace(feature_dir, "loop-yield-budget", cwd=cwd, iteration=iteration)
+                print(json.dumps({
+                    "decision": "block",
+                    "reason": (
+                        "verify-budget HALT: test-line spend has outrun the plan's "
+                        "declared Stakes: level. STOP dispatching. Run "
+                        "bin/verify-budget.py yourself, put its report in front of "
+                        "your human partner (what was verified, what it cost, which "
+                        "of its three causes applies), and wait — do NOT delete "
+                        "tests and do NOT quietly continue. To stop the loop, delete "
+                        f"{MARKER_REL}."
+                    ),
+                }))
+                return
+    except Exception:
+        pass  # fail-open: the tripwire must never break the loop mechanics
 
     marker["iteration"] = iteration
     marker_path.write_text(json.dumps(marker))

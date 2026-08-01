@@ -68,6 +68,23 @@ Detect the stack the same way `/integration` does. Run:
 
 If any fail: stop. Report. Don't proceed. The user fixes and re-runs.
 
+## Step 1b — Verification-budget over the WHOLE branch diff
+
+A per-cluster pass can stay under the ceiling at every `/integration` gate and still land a branch well over it — this is the one place the whole branch is measured:
+
+```bash
+VB_SCRIPT="<plugin>/bin/verify-budget.py"   # plugins/netdust-agent/bin/verify-budget.py
+SPEC_DIR=$(ls -d specs/*/ 2>/dev/null | head -1)
+if [[ -f "$VB_SCRIPT" ]]; then
+  python3 "$VB_SCRIPT" ${SPEC_DIR:+"$SPEC_DIR"} --base "$(git merge-base HEAD main)" \
+    || echo "BUDGET HALT — report it to the user with the branch summary before proceeding."
+else
+  echo "→ verify-budget.py not found — skipping the budget check (fail-open)."
+fi
+```
+
+It compares test lines added to implementation lines added against the ceiling the plan's `Stakes:` level justifies. **On a HALT: stop and put the script's report in front of the user** — the three causes it names (stakes line too low / evidence duplicated / drives committed as durable specs) are the user's triage, not yours, and deleting tests to silence it is forbidden. On PASS, fold the printed ratio into the final report — it is cheap observability either way. Missing script or git trouble fails OPEN.
+
 ## Step 2 — Playwright e2e (if configured)
 
 ```bash

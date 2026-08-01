@@ -52,6 +52,25 @@ Execute, in order, halting on first failure and reporting the failure to the use
 
 If anything fails: print the failing output, **do not** update `.last-integration`, and stop. The user fixes and re-runs.
 
+## Step 3b — Verification-budget tripwire (after the tests, before the marker)
+
+Run the stakes-scaled test-vs-implementation budget check over the group range:
+
+```bash
+VB_SCRIPT="<plugin>/bin/verify-budget.py"   # plugins/netdust-agent/bin/verify-budget.py
+SPEC_DIR=$(ls -d specs/*/ 2>/dev/null | head -1)  # the feature dir holding plan.md, if any
+if [[ -f "$VB_SCRIPT" ]]; then
+  python3 "$VB_SCRIPT" ${SPEC_DIR:+"$SPEC_DIR"} --base "${LAST:-$(git merge-base HEAD main)}" || {
+    echo "BUDGET HALT — do not write the marker; report to the user (see the script's three causes)."
+    exit 1
+  }
+else
+  echo "→ verify-budget.py not found — skipping the budget tripwire (fail-open)."
+fi
+```
+
+It compares test lines added against implementation lines added over the group diff, against the ceiling the plan's `Stakes:` level justifies (`standard` when the plan predates the dial). **A HALT is a stop-and-report to the user, never a cleanup task** — do not delete tests to pass it, and do not update `.last-integration` past it; the most common correct resolution is raising a too-low stakes line in a plan-correction commit. If the script is missing or git misbehaves, it fails OPEN — the gate never blocks on its own tooling.
+
 ## Step 4 — On green, write the marker and announce
 
 1. Write `NEW_SHA` (from Step 2) to `.claude/.last-integration`. Create the directory if needed. Do NOT commit this file — it's a per-machine state marker; add `.claude/.last-integration` to `.gitignore` if it isn't already (best-effort, don't fail the command if `.gitignore` is missing).
