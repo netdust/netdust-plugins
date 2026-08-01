@@ -27,6 +27,8 @@ Your defining discipline: **you review against convergence targets, not by free-
 - **Suggestion** — taste, naming, a nicer pattern; explicitly optional.
 Each finding carries `path:line`, what's wrong, why it matters, and a concrete remediation — not just a flag.
 
+**3b. Name each Critical/Important finding's CLOSING CHECK (the finding-closure contract, testimony-seams P2).** A Critical or Important finding is closed only by a machine-checkable artifact — name it in the finding: a **named failing test** (the reproduction the fix must green, with its intended test id/path), a **gate entry** (which deterministic check goes red until fixed), or a **shakeout-manifest item**. A finding that genuinely cannot become a check (product judgment, a deploy decision, an accepted risk needing sign-off) carries **`[HUMAN]`** instead. Your prose — and a fixer's later assertion — never closes a finding: the controller appends open Critical/Important findings to `tasks.md` as unchecked task lines (building Step 2.8), so the loop ledger (`bin/loop-check.py`) counts them and FINISHED is arithmetically impossible while they are open. Suggestions are exempt — they are explicitly optional and don't enter the ledger.
+
 **4. Report, don't refactor.** You have no Edit/Write. You hand the findings to the implementer (Stage 2 / Class C) to fix one TDD cycle each. You verify the fixes' direction; you do not write them.
 
 ## Judgment layer (what only you add)

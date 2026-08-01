@@ -43,6 +43,17 @@ Purpose:
   through bin/run-trace.py — the evidence bin/loop-check.py's FINISHED
   verdict is keyed to. Emission is fail-open and never affects the decision.
 
+  It also enforces the sensitive-path routing floor (P1b): a SOLO
+  implementer close that edited a production path matching the
+  sensitive-glob list (bin/sensitive-globs.txt, overridable by
+  .claude/sensitive-globs.txt) is blocked with an escalation instruction —
+  the machine floor under the planner's "a Tier-A task on a
+  security-boundary surface is ALWAYS split" rule (D1). The MODE is
+  resolved from the current task's `Test-author:` line in tasks.md (machine
+  artifact; feature dir from the loop marker or an edited specs/<feature>/
+  path) — never from the subagent-echoed evidence line, which could only
+  loosen the floor. Unresolvable mode → fail-open, no block.
+
   It catches the case where the parent dispatched a subagent without the
   required close-out instruction, or where the subagent ignored it.
 
@@ -64,6 +75,7 @@ Design:
 Logs to ~/.claude/logs/memory-hook.log (shared with session-stop.py).
 """
 
+import fnmatch
 import json
 import re
 import subprocess
@@ -74,6 +86,10 @@ from datetime import datetime
 LOG_PATH = Path.home() / ".claude" / "logs" / "memory-hook.log"
 RUN_TRACE = Path(__file__).resolve().parent.parent / "bin" / "run-trace.py"
 MARKER_REL = Path("tasks") / ".harness-loop.json"
+SENSITIVE_GLOBS_DEFAULT = (
+    Path(__file__).resolve().parent.parent / "bin" / "sensitive-globs.txt"
+)
+SENSITIVE_GLOBS_OVERRIDE_REL = Path(".claude") / "sensitive-globs.txt"
 
 # Tool names that indicate the subagent modified code.
 CODE_EDITING_TOOLS = {"Edit", "Write", "NotebookEdit", "MultiEdit"}
@@ -292,6 +308,7 @@ def scan_subagent_activity(messages: list[dict]) -> dict:
     lines_added = 0
     lines_removed = 0
     code_paths: list[str] = []
+    edited_paths: list[str] = []  # ALL edited paths incl. docs (specs detection)
     test_runs: list[dict] = []   # {"id": <tool_use id or "">, "cmd": <command>}
     lint_runs: list[dict] = []
 
@@ -317,6 +334,7 @@ def scan_subagent_activity(messages: list[dict]) -> dict:
                 # docs/specs/.md reports (research, planning) has nothing to
                 # test and must not be gated. Path missing/unknown → treated
                 # as code (gate stays on).
+                edited_paths.append(tool_input.get("file_path") or "")
                 if not _is_code_path(tool_input.get("file_path") or ""):
                     continue
                 edited = True
@@ -349,6 +367,7 @@ def scan_subagent_activity(messages: list[dict]) -> dict:
         "ran_tests_via_bash": ran_tests_bash,
         "ran_lint_via_bash": ran_lint_bash,
         "code_paths": code_paths,
+        "edited_paths": edited_paths,
         "test_runs": test_runs,
         "lint_runs": lint_runs,
     }
@@ -447,6 +466,107 @@ def scraped_run_status(runs: list[dict],
     return None
 
 
+def _read_globs(path: Path) -> list[str]:
+    return [ln.strip() for ln in path.read_text().splitlines()
+            if ln.strip() and not ln.strip().startswith("#")]
+
+
+def load_sensitive_globs(cwd: str) -> list[str]:
+    """The sensitive-path glob list (P1b): a present project override file
+    REPLACES the shipped defaults wholesale. A PRESENT-but-unreadable override
+    fails open — floor OFF ([]), logged — never a fallback to defaults the
+    project meant to replace, never a crash. Defaults absent/unreadable → []
+    (no list, no floor)."""
+    if cwd:
+        override = Path(cwd) / SENSITIVE_GLOBS_OVERRIDE_REL
+        try:
+            if override.exists():
+                return _read_globs(override)
+        except Exception as e:
+            log(f"sensitive-globs-override-unreadable path={override} err={e}")
+            return []
+    try:
+        if SENSITIVE_GLOBS_DEFAULT.exists():
+            return _read_globs(SENSITIVE_GLOBS_DEFAULT)
+    except Exception as e:
+        log(f"sensitive-globs-defaults-unreadable err={e}")
+    return []
+
+
+def matches_sensitive(file_path: str, globs: list[str]) -> bool:
+    """Case-insensitive fnmatch against the path with a leading '/' prepended,
+    so `*/auth/*` also matches a repo-relative `auth/login.php`. fnmatch's `*`
+    crosses `/` boundaries by design — the list is segment/name shaped (see
+    bin/sensitive-globs.txt for the anchoring calibration)."""
+    if not file_path or not globs:
+        return False
+    p = "/" + file_path.replace("\\", "/").lower().lstrip("/")
+    return any(fnmatch.fnmatch(p, g.lower()) for g in globs)
+
+
+_TASKS_TASK_LINE_RE = re.compile(r"^- \[( |x|X)\] T\d+\b")
+_TASKS_TEST_AUTHOR_RE = re.compile(r"^\s+Test-author:\s*(split|solo)\b")
+_SPECS_FEATURE_RE = re.compile(r"(?:^|/)specs/([^/]+)/")
+
+
+def resolve_task_mode(cwd: str, edited_paths: list[str]) -> str | None:
+    """The current task's `Test-author:` mode ("split" | "solo"), resolved
+    from the MACHINE artifact — tasks.md — never from the subagent-echoed
+    evidence line (an echoed mode=split could only LOOSEN the sensitive
+    floor, and testimony never loosens a verdict).
+
+    Feature dir: the loop marker's feature_dir when armed, else the first
+    edited path shaped specs/<feature>/…. Current task: the FIRST unchecked
+    task line (the loop/controller dispatch order — the controller checks the
+    box only after the close). Anything unresolvable — no marker and no specs
+    path, no tasks.md, no unchecked task, no Test-author line (pre-0.8
+    artifacts default to split upstream) — returns None and the caller fails
+    open (no block)."""
+    try:
+        base = Path(cwd or ".")
+        feature_dir = None
+        marker_path = base / MARKER_REL
+        if marker_path.exists():
+            marker = json.loads(marker_path.read_text())
+            fd = marker.get("feature_dir") or ""
+            if fd:
+                feature_dir = base / fd
+        if feature_dir is None:
+            for p in edited_paths:
+                m = _SPECS_FEATURE_RE.search((p or "").replace("\\", "/"))
+                if m:
+                    feature_dir = base / "specs" / m.group(1)
+                    break
+        if feature_dir is None:
+            return None
+        tasks_path = feature_dir / "tasks.md"
+        if not tasks_path.exists():
+            return None
+
+        in_fence = False
+        in_current = False
+        for ln in tasks_path.read_text().splitlines():
+            if ln.lstrip().startswith("```"):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                continue
+            tm = _TASKS_TASK_LINE_RE.match(ln)
+            if tm:
+                if in_current:
+                    return None  # first unchecked task carried no mode line
+                in_current = tm.group(1) == " "
+                continue
+            if in_current:
+                am = _TASKS_TEST_AUTHOR_RE.match(ln)
+                if am:
+                    return am.group(1)
+        return None
+    except Exception as e:
+        log(f"resolve-task-mode-failed err={e}")
+        return None
+
+
 def emit_suite_green(cwd: str, cmd: str) -> None:
     """Append one `suite-green` event (sha + cmd) through bin/run-trace.py when
     a harness loop is armed for this cwd. Unarmed → skip silently. Fail-open:
@@ -534,9 +654,10 @@ def project_has_linter(cwd: str) -> bool:
 def build_block_message(activity: dict, missing: list[str],
                         details: dict | None = None) -> str:
     """The message Claude (the subagent) sees when we block its stop. `missing`
-    is a subset of {"tests", "suite-red", "standards", "standards-red"} — the
-    close-out gates not yet satisfied. `details` carries the facts the reason
-    must name (suite cmd/exit, lint exit)."""
+    is a subset of {"tests", "suite-red", "standards", "standards-red",
+    "sensitive"} — the close-out gates not yet satisfied. `details` carries
+    the facts the reason must name (suite cmd/exit, lint exit, sensitive
+    paths)."""
     details = details or {}
     parts = [
         "netdust-agent/SubagentStop: close-out gate not satisfied.\n\n",
@@ -576,6 +697,21 @@ def build_block_message(activity: dict, missing: list[str],
             "violations (or justify narrowly inline), re-run to clean, and "
             "update the `Standards:` evidence line (and the optional "
             f"`lint=<code>` field). (See the {STANDARDS_SKILL} skill.)\n"
+        )
+
+    if "sensitive" in missing:
+        paths = ", ".join(details.get("sensitive_paths", [])[:5]) or "<paths>"
+        parts.append(
+            "\nBLOCKED — SENSITIVE-PATH ROUTING FLOOR. This close edited "
+            f"production path(s) on a security-boundary surface [{paths}] "
+            "under a task whose tasks.md line reads `Test-author: solo`. The "
+            "planner's hard rule — a Tier-A task on a security-boundary "
+            "surface is ALWAYS split — has a machine floor here. Report "
+            "NEEDS_CONTEXT to the controller: the task must be escalated to "
+            "a split dispatch (independent test-author first) and the "
+            "cluster's review tier promoted (building Step 2.8, one-way "
+            "escalation). Do not silently re-classify the work, and do not "
+            "edit the tasks.md mode yourself.\n"
         )
 
     if "standards" in missing:
@@ -752,7 +888,28 @@ def main() -> None:
             missing.append("standards-red")
             details["lint_exit"] = lint["exit"]
 
-    log(f"evidence role={role} claimed={claimed_role} suite={suite} lint={lint}")
+    # ── The sensitive-path routing floor (testimony-seams P1b) ────────────
+    # D1's hard rule — a Tier-A task on a security-boundary surface is ALWAYS
+    # split — gets a machine floor here, keyed to the paths ACTUALLY edited.
+    # The mode comes from tasks.md (machine artifact), NEVER from the
+    # subagent-echoed evidence line: an echoed mode could only loosen the
+    # floor, and testimony never loosens a verdict. Unresolvable mode →
+    # fail-open (no block).
+    sensitive_hits: list[str] = []
+    globs = load_sensitive_globs(cwd)
+    if role == "implementer" and globs:
+        candidates = [p for p in activity["code_paths"]
+                      if p and not _is_test_path(p)
+                      and matches_sensitive(p, globs)]
+        if candidates and resolve_task_mode(cwd, activity["edited_paths"]) == "solo":
+            sensitive_hits = candidates
+            missing.append("sensitive")
+            details["sensitive_paths"] = sensitive_hits
+
+    log(
+        f"evidence role={role} claimed={claimed_role} "
+        f"suite={suite} lint={lint} sensitive={len(sensitive_hits)}"
+    )
 
     # Record the green fact for the loop ledger (loop-check's FINISHED
     # consumes it): implementer suite verified green + loop armed → one

@@ -1,0 +1,84 @@
+# netdust-agent — sensitive-path globs (the testimony-seams P1b routing floor).
+#
+# One fnmatch glob per line; '#' starts a comment; blank lines ignored.
+# Matching is case-insensitive against each edited path with a leading '/'
+# prepended, so `*/auth/*` also matches a repo-relative `auth/login.php`.
+# fnmatch's `*` crosses `/` boundaries by design — keep patterns segment/name
+# shaped. Test paths (tests/, __tests__/, test_*.py, *.spec.ts, …) are
+# exempted by the hook BEFORE matching — these globs gate production surfaces
+# only.
+#
+# CALIBRATION (post-contact-page-8k posture): anchor on path SEGMENTS and
+# filename STEMS, the way gate-check.py's FILES_SECURITY anchors its risky
+# tokens — never bare full-path substrings. The donor list's `*token*` /
+# `*capabilit*` blocked `tokenizer.ts` and `capability-table.ts`, which are
+# ordinary production files; a floor that cries wolf teaches people to route
+# around it. Stem patterns below require a word boundary (`.`/`-`/`_` or a
+# path separator) around the risky word, so `token-store.ts` gates and
+# `tokenizer.ts` does not. Under-matching is accepted: this floor is the
+# machine BACKSTOP under the planner's D1 rule, not the primary control.
+#
+# Consumer: hooks/subagent-stop.py (authoritative, at SubagentStop — it
+# blocks a SOLO implementer close whose actually-edited paths match; the mode
+# comes from the task's `Test-author:` line in tasks.md, never from
+# subagent-echoed evidence). Override per project with
+# <project>/.claude/sensitive-globs.txt — it REPLACES this list wholesale; an
+# unreadable override fails open (floor off, logged).
+#
+# The worst false-positive cost is one blocked stop round-trip with an
+# escalation message (stop_hook_active passes the second attempt) — same cost
+# class as the testing gate.
+
+# auth / guards / capability / session surfaces (directory segments)
+*/auth/*
+*/authentication/*
+*/authorization/*
+*/authn/*
+*/authz/*
+*/guards/*
+*/capabilities/*
+*/permissions/*
+*/roles/*
+*/sessions/*
+
+# schema / migrations
+*/migrations/*
+*/schema/*
+
+# money
+*/billing/*
+*/payments/*
+*/payment/*
+
+# secret / credential / crypto surfaces (directory segments)
+*/secrets/*
+*/credentials/*
+*/crypto/*
+*/oauth/*
+*/tokens/*
+*/tenancy/*
+
+# filename stems — word-boundary shaped (`token-store.ts`, `tokens.sql`,
+# `refresh_token.php` gate; `tokenizer.ts` does not)
+*/token.*
+*/tokens.*
+*/token[._-]*
+*/*[._-]token.*
+*/*[._-]tokens.*
+*/secret.*
+*/secrets.*
+*/secret[._-]*
+*/*[._-]secret.*
+*/*[._-]secrets.*
+*/credential*
+*/*[._-]credential*
+*/password*
+*/*[._-]password*
+*/oauth.*
+*/oauth[._-]*
+*/*[._-]oauth.*
+*/csrf*
+*/*[._-]csrf*
+*/nonce.*
+*/nonce[._-]*
+*/*[._-]nonce.*

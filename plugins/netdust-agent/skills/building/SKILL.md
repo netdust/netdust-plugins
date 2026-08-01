@@ -32,6 +32,7 @@ Be honest about enforcement strength — the gates are NOT equally hard:
 
 - **The seam precondition is MACHINE-CHECKED.** `gate-check.py` exits non-zero; you run it and read the exit code. It cannot be talked out of a finding.
 - **The per-task testing + standards gates are HOOK-ENFORCED — including GREEN-ness for implementer closes (testimony-seams P0).** `subagent-stop.py` (a real SubagentStop hook) blocks a subagent that edited code from stopping without a test command having actually run, blocks an **implementer-class stop whose suite exited non-zero** (the `HARNESS-EVIDENCE:` close-out line is the designed evidence; the last test-command tool_result is the scraped fallback), and blocks a close whose configured linter was skipped **or exited non-zero**. It backstops BOTH halves of the split: the `test-author` must have run its RED test (run-only — RED is its job, honored only when every edited path is a test path), the `implementer` must have run the suite **to green**. Role/mode fields on the evidence line can tighten the hook's verdict, never loosen it, and a claimed suite command must match the hook's test-command recognizer (composer gate / bin/gate.sh count) or the claim is ignored. Even so, the *auditable* evidence is the structured blocks in the reports/commits — the hook is the backstop.
+- **The sensitive-path routing floor is HOOK-ENFORCED (testimony-seams P1b).** A SOLO implementer close that edited a production path matching the sensitive-glob list (`bin/sensitive-globs.txt`, segment/stem-anchored; overridable per project by `.claude/sensitive-globs.txt`) is blocked with an escalation instruction. This is the machine floor under the planner's "a Tier-A task on a security-boundary surface is ALWAYS split" rule — it catches the misclassification against the paths *actually edited*, not the plan's prose. The mode is resolved from the current task's `Test-author:` line in `tasks.md` (feature dir from the loop marker or an edited specs path) — never from the subagent-echoed evidence line, which could only loosen the floor; unresolvable → fail-open. `gate-check.py`'s `security-boundary-mode` check remains the plan-time (Stage 1.5) advisory twin; the SubagentStop check is the authoritative run-time gate.
 - **The tier/mode boundary itself is MACHINE-CHECKED.** `gate-check.py`'s `test-author-mode` check (T01) verifies, at the seam, that every task carries a valid `Test-author:` line and that a `[Tier A]` task claiming `solo` states a reason — it FAILs a bare Tier-A solo and WARNs an over-ceremonious Tier-B split. This closes the loophole one layer up from dispatch: the *decision* of which tasks get which mode is checked before execution ever starts, not trusted to the controller's judgment mid-run.
 - **The controller reading that field is SEQUENCER-ENFORCED.** Given a machine-checked `tasks.md`, nothing hooks-enforces that the controller actually dispatches per the stated mode instead of improvising — that discipline is this skill's job (Step 2.1b).
 - **The test/dev split (authorship independence) is SEQUENCER-ENFORCED, not hook-enforced, for `split` tasks.** The hook can confirm a test *ran*; it cannot confirm the implementer didn't *write* the test it ran — a single SubagentStop invocation sees one subagent's transcript, not the pair. What guarantees independence on a `split` task is the DISPATCH ORDER this skill mandates (Step 2.1b): `test-author` first, RED_READY received, only then the `implementer` with that test already committed. The two separate commits (test predates code, different authors) are the audit trail. Do not collapse them into one dispatch to save a round-trip — that silently reverts to self-grading, and nothing will hard-stop you.
@@ -185,6 +186,15 @@ If any required block or line is missing for the task's mode, or a `split` task'
   - **LIGHT** (doc/copy/config/skill-body only) → a single generalist `reviewer` pass. No fan-out.
 
   **Escalation is one-way.** If ANY finder/reviewer surfaces a finding on a 1a surface, the cluster is immediately promoted to **FULL** — dispatch the FULL-tier reviewers you skipped, on this same cluster, before proceeding. Never de-escalate mid-review. And regardless of tier, `/security-review` still fires if a plan-time `## Threat model` exists for this work — tier governs finder/persona fan-out; it never cancels the security-review obligation.
+
+  **Findings close by ledger arithmetic, never by prose (the finding-closure contract, testimony-seams P2).** Before the cluster proceeds, append every open **Critical/Important** finding to `tasks.md` as an unchecked task line, so `bin/loop-check.py` counts it and FINISHED is arithmetically impossible while findings are open:
+
+  ```
+  - [ ] Tnn [Tier A|B] fix: <one-line finding> — closes when <check id> green  (files: <paths>)
+        Test-author: <split | solo — reason>  (D1 rule; a 1a-surface finding is split)
+  ```
+
+  The `<check id>` is the machine-checkable artifact the reviewer named (3b of its contract): the reproducing test, the gate entry, or the shakeout-manifest item. A finding that cannot become a check carries `[HUMAN]` on its task line instead (a planned yield — `loop-check` BLOCKs on it for your human partner). A reviewer re-reading the diff, or a fixer asserting "addressed", closes nothing — the box is checked only when the named check is green (Step 2.7's TDD cycle per finding is unchanged and is HOW the box gets checked). Suggestions stay out of the ledger — explicitly optional.
 
 ## Stage 3 — Phase close, shake-out, finish
 
@@ -413,7 +423,11 @@ you MUST:
 
 5. The very LAST line of your final message is the machine-parsed close-out
    evidence line, verbatim in this format (the SubagentStop hook consumes it
-   and BLOCKS an implementer stop whose suite exit isn't 0):
+   and BLOCKS an implementer stop whose suite exit isn't 0; the hook reads
+   your task's solo mode from tasks.md itself — if it blocks you for
+   touching a sensitive path on this solo task, escalate NEEDS_CONTEXT;
+   never edit tasks.md's mode, and echoing mode=split would not loosen the
+   floor anyway):
 
    HARNESS-EVIDENCE: role=implementer mode=solo suite="<the suite command you ran>" exit=<its exit code> lint=<linter exit code, omit if no linter>
 
