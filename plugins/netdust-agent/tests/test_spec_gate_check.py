@@ -28,6 +28,11 @@ SPEC_TRIGGERED = """# Feature Specification: Webhook receiver
 
 ## Open questions / [NEEDS CLARIFICATION]
 [List remaining ambiguities as `[NEEDS CLARIFICATION: …]`. This section must be empty.]
+## User-facing surfaces
+- [ ] A view / screen / page
+- [ ] A form / wizard / multi-step flow
+- [x] None of the above
+
 """
 
 SPEC_CLEAN_NOSEC = """# Feature Specification: Rename a label
@@ -41,6 +46,11 @@ SPEC_CLEAN_NOSEC = """# Feature Specification: Rename a label
 
 ## Clarifications
 - Q: which label? → A: the footer copyright label
+## User-facing surfaces
+- [ ] A view / screen / page
+- [ ] A form / wizard / multi-step flow
+- [x] None of the above
+
 """
 
 SPEC_WITH_UNRESOLVED = """# Feature Specification: Importer
@@ -53,6 +63,11 @@ SPEC_WITH_UNRESOLVED = """# Feature Specification: Importer
 
 ## Security-relevant surfaces
 - [x] Untrusted parsing (frontmatter, payloads, uploads, AI tool-call args)
+## User-facing surfaces
+- [ ] A view / screen / page
+- [ ] A form / wizard / multi-step flow
+- [x] None of the above
+
 """
 
 # ── `success-criteria` fixtures (the spec-authoring artifact contract) ───────
@@ -73,6 +88,11 @@ SPEC_SC_MEASURABLE = """# Feature Specification: Course publishing
 
 ## Security-relevant surfaces
 - [x] None of the above
+## User-facing surfaces
+- [ ] A view / screen / page
+- [ ] A form / wizard / multi-step flow
+- [x] None of the above
+
 """
 
 # Mixed: SC-1 carries a number, SC-2/SC-3 are prose. FAIL must name the offenders,
@@ -87,6 +107,11 @@ SPEC_SC_VAGUE = """# Feature Specification: Course publishing
 
 ## Security-relevant surfaces
 - [x] None of the above
+## User-facing surfaces
+- [ ] A view / screen / page
+- [ ] A form / wizard / multi-step flow
+- [x] None of the above
+
 """
 
 # The section present but never filled in — bracketed `[e.g. …]` bodies, the shape an
@@ -104,6 +129,11 @@ SPEC_SC_TEMPLATE_UNTOUCHED = """# Feature Specification: [FEATURE NAME]
 
 ## Security-relevant surfaces
 - [x] None of the above
+## User-facing surfaces
+- [ ] A view / screen / page
+- [ ] A form / wizard / multi-step flow
+- [x] None of the above
+
 """
 
 # A spec that predates the contract carrying this section at all. The silent WARN floor is
@@ -120,6 +150,11 @@ The footer copyright label reads 2019.
 
 ## Security-relevant surfaces
 - [x] None of the above
+## User-facing surfaces
+- [ ] A view / screen / page
+- [ ] A form / wizard / multi-step flow
+- [x] None of the above
+
 """
 
 # ── `security-surfaces` fixtures — the arming switch for the plan's 1a gate ───
@@ -139,6 +174,11 @@ SPEC_SURFACES_ALL_BLANK = """# Feature Specification: Token minting endpoint
 - [ ] BYOK / stored credentials
 - [ ] Multi-tenancy / cross-actor visibility
 - [ ] None of the above — *(state so explicitly)*
+## User-facing surfaces
+- [ ] A view / screen / page
+- [ ] A form / wizard / multi-step flow
+- [x] None of the above
+
 """
 
 # No section at all — same disarmed outcome, reached by omission rather than by blankness.
@@ -157,6 +197,11 @@ SPEC_SURFACES_CONTRADICTORY = """# Feature Specification: Token minting endpoint
 ## Security-relevant surfaces
 - [x] Auth / session / token / capability surfaces
 - [x] None of the above — *(state so explicitly)*
+## User-facing surfaces
+- [ ] A view / screen / page
+- [ ] A form / wizard / multi-step flow
+- [x] None of the above
+
 """
 
 # ── `review-gate-marker` / `review-tier` fixtures (1f / 1h) ───────────────────
@@ -232,6 +277,11 @@ SPEC_WITH_REQS = """# Feature Specification: Course publishing
 
 ## Security-relevant surfaces
 - [x] None of the above
+## User-facing surfaces
+- [ ] A view / screen / page
+- [ ] A form / wizard / multi-step flow
+- [x] None of the above
+
 """
 
 TASKS_COVERS_ALL_REQS = """# Tasks: Course publishing
@@ -414,6 +464,105 @@ TASKS_BOUNDARY_FALSE_FRIENDS = """# Tasks: x
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(tier LIGHT)*
 """
 
+# ── 1g fixtures: `user-facing-surfaces` (arming switch) + `acceptance-flows` ──
+# The 1g twin of the security fixtures above, and it exists for the same reason: `planning`
+# requires an `## Acceptance flows` matrix for user-facing work, `building` Stage 3 /
+# `/shakeout` / `shakeout-qa` / `test-author` all READ it out of the plan — and nothing
+# checked it, because no spec field said "this is user-facing" for a check to key on.
+
+SPEC_USER_FACING = """# Feature Specification: Invoice wizard
+
+## Success criteria
+- **SC-1:** an editor issues an invoice in under 2 minutes
+
+## Security-relevant surfaces
+- [x] None of the above
+
+## User-facing surfaces
+- [x] A form / wizard / multi-step flow
+- [ ] A view / screen / page
+- [ ] None of the above
+"""
+
+SPEC_USER_FACING_ALL_BLANK = """# Feature Specification: Invoice wizard
+
+## Success criteria
+- **SC-1:** an editor issues an invoice in under 2 minutes
+
+## Security-relevant surfaces
+- [x] None of the above
+
+## User-facing surfaces
+- [ ] A view / screen / page
+- [ ] A form / wizard / multi-step flow
+- [ ] A CRUD surface
+- [ ] An endpoint a client or agent drives
+- [ ] None of the above
+"""
+
+SPEC_USER_FACING_CONTRADICTORY = """# Feature Specification: Invoice wizard
+
+## Success criteria
+- **SC-1:** an editor issues an invoice in under 2 minutes
+
+## Security-relevant surfaces
+- [x] None of the above
+
+## User-facing surfaces
+- [x] A form / wizard / multi-step flow
+- [x] None of the above
+"""
+
+PLAN_FLOWS_NA = """# Implementation Plan: Invoice wizard
+
+## Constitution check
+- [x] ok
+
+## Threat model
+N/A — no surface flagged.
+
+## Acceptance flows
+N/A — small feature.
+
+## Architecture invariants touched
+N/A
+
+## Spec-premise ground-truth
+N/A
+
+## Phases & review clusters
+See tasks.md.
+
+## Stakes
+Stakes: standard — fixture
+
+## Technical context
+- **Loop budget:** ~6 iterations
+"""
+
+# A matrix with a header and separator but no filled-in row — the shape produced by copying
+# the table skeleton without answering it. `/shakeout` has nothing to drive, so when 1g is
+# armed this must FAIL exactly as an N/A does.
+PLAN_FLOWS_EMPTY_TABLE = PLAN_FLOWS_NA.replace(
+    "## Acceptance flows\nN/A — small feature.",
+    """## Acceptance flows
+
+| Flow | Expected | Edges |
+|---|---|---|
+""",
+)
+
+PLAN_FLOWS_FILLED = PLAN_FLOWS_NA.replace(
+    "## Acceptance flows\nN/A — small feature.",
+    """## Acceptance flows
+
+| Flow | Expected | Edges |
+|---|---|---|
+| issue an invoice | PDF stored, editor sees it listed | empty: no line items → blocked with a message; denied: viewer role refused; re-entry: back-then-submit does not double-issue; concurrent: double-submit issues one; boundary: 0.00 total refused; mid-flow failure: storage error rolls the record back |
+| email the invoice | recipient receives it once | empty: no recipient → blocked; denied: viewer cannot send; re-entry: resend is idempotent per invoice; concurrent: two sends deliver one; boundary: 500-char subject truncated; mid-flow failure: SMTP error leaves it queued, not sent |
+""",
+)
+
 # ── `files-segment` fixtures — the declared task-line grammar, and what it protects ──
 # THE demonstration case: a Tier-B task doing auth + payment work, with no `(files: …)`
 # segment. Before this check it drew NO security-boundary WARN at all — `auth` and `payment`
@@ -551,6 +700,9 @@ Stakes: standard — fixture
 
 ## Technical context
 - **Loop budget:** ~20 iterations — 12 tasks + 5 clusters + slack
+## Acceptance flows
+N/A — no user-facing surface.
+
 """
 
 PLAN_NO_LOOP_BUDGET = """# Implementation Plan: x
@@ -572,6 +724,9 @@ See tasks.md.
 
 ## Stakes
 Stakes: standard — fixture
+## Acceptance flows
+N/A — no user-facing surface.
+
 """
 
 # A plan whose ONLY budget line sits inside a fence (quoting the template) — strip_fenced
@@ -626,6 +781,9 @@ See tasks.md.
 
 ## Technical context
 - **Loop budget:** ~6 iterations — 3 tasks + 2 clusters + slack
+## Acceptance flows
+N/A — no user-facing surface.
+
 """
 
 PLAN_GATES_FULL = PLAN_GATES_BASE + """
@@ -699,6 +857,11 @@ SPEC_MONEY = """# Feature Specification: Refund flow
 
 ## Notes
 Handles payment provider webhooks and refund amounts.
+## User-facing surfaces
+- [ ] A view / screen / page
+- [ ] A form / wizard / multi-step flow
+- [x] None of the above
+
 """
 
 # S9 — a money spec with NO checked security box (so the `low` FAIL stays out of the way),
@@ -715,6 +878,11 @@ SPEC_MONEY_NO_BOX = """# Feature Specification: Refund flow
 
 ## Notes
 Handles payment provider webhooks and refund amounts.
+## User-facing surfaces
+- [ ] A view / screen / page
+- [ ] A form / wizard / multi-step flow
+- [x] None of the above
+
 """
 
 PLAN_STAKES_LOW_NO_REASON = PLAN_GATES_BASE + """
@@ -808,6 +976,9 @@ See tasks.md.
 
 ## Stakes  [GATE]
 Stakes: standard — a failure breaks the webhook flow for real users, recoverably
+## Acceptance flows
+N/A — no user-facing surface.
+
 """
 
 PLAN_MISSING_HEADING = """# Implementation Plan: Webhook receiver
@@ -829,6 +1000,9 @@ See tasks.md.
 
 ## Stakes  [GATE]
 Stakes: standard — a failure breaks the webhook flow for real users, recoverably
+## Acceptance flows
+N/A — no user-facing surface.
+
 """
 
 # The reference COMPLIANT tasks.md: sized clusters, a STOP marker closing each, a
@@ -1128,6 +1302,60 @@ def run():
     rc, out = _run({"spec.md": SPEC_TRIGGERED, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_GOOD})
     results.append((rc == 0 and "1a threat model is REQUIRED" in out,
                     "a flagged surface PASSES and states that the plan's 1a model is required"))
+
+    # ── 1g: `user-facing-surfaces` (arming) + `acceptance-flows` ──────────────
+    # These mirror the 1a cases above one-for-one. THE load-bearing one is 10ad: before the
+    # arming switch existed, a wizard reached execution with no matrix and the gate said
+    # GREEN, because nothing in the spec could tell a checker the work was user-facing.
+
+    # 10ad. flagged user-facing surface + N/A acceptance flows → FAIL
+    rc, out = _run({"spec.md": SPEC_USER_FACING, "plan.md": PLAN_FLOWS_NA,
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "acceptance-flows" in out,
+                    "flagged user-facing surface + N/A ## Acceptance flows FAILS the gate"))
+
+    # 10ae. flagged surface + a filled-in matrix → PASS, echoing the row count
+    rc, out = _run({"spec.md": SPEC_USER_FACING, "plan.md": PLAN_FLOWS_FILLED,
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "2 filled-in flow row(s)" in out,
+                    "flagged user-facing surface + a filled matrix PASSES"))
+
+    # 10af. a header+separator skeleton with no filled row is not a matrix → FAIL when armed
+    rc, out = _run({"spec.md": SPEC_USER_FACING, "plan.md": PLAN_FLOWS_EMPTY_TABLE,
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "acceptance-flows" in out,
+                    "an empty table skeleton does not satisfy 1g — nothing to drive"))
+
+    # 10ag. no user-facing surface flagged + N/A flows → PASS (legitimate; the corpus shape)
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_FLOWS_NA,
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "✓ [acceptance-flows]" in out,
+                    "no user-facing surface + N/A acceptance flows PASSES"))
+
+    # 10ah. every user-facing box blank → FAIL (disarm by inaction, same as 1a's blank case)
+    rc, out = _run({"spec.md": SPEC_USER_FACING_ALL_BLANK, "plan.md": PLAN_FLOWS_NA,
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "user-facing-surfaces" in out and "0 of 5" in out,
+                    "all user-facing boxes blank FAILs — blank is not 'none', it disarms 1g"))
+
+    # 10ai. a real surface AND "None of the above" → FAIL as contradictory
+    rc, out = _run({"spec.md": SPEC_USER_FACING_CONTRADICTORY, "plan.md": PLAN_FLOWS_NA,
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "user-facing-surfaces" in out and "contradictory" in out,
+                    "a user-facing surface plus 'None of the above' FAILs as contradictory"))
+
+    # 10aj. no ## User-facing surfaces section at all → FAIL (the hole by omission)
+    rc, out = _run({"spec.md": SPEC_SURFACES_MISSING})
+    results.append((rc == 1 and "user-facing-surfaces" in out,
+                    "missing ## User-facing surfaces section FAILs"))
+
+    # 10ak. `## Acceptance flows` is a required plan heading like the other five
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC,
+                    "plan.md": PLAN_FLOWS_NA.replace(
+                        "## Acceptance flows\nN/A — small feature.\n", ""),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "Acceptance flows" in out,
+                    "a plan missing ## Acceptance flows FAILs on the heading check"))
 
     # ── `review-gate-marker` / `review-tier` — the cluster boundary (1f / 1h) ──
 

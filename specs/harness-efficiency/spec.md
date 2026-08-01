@@ -85,3 +85,10 @@ The 2026-07-04 runs produced the harness's first empirical self-measurement, and
 ## Open questions / [NEEDS CLARIFICATION]
 
 (none — section intentionally empty; all shape questions resolved under Clarifications)
+
+## User-facing surfaces
+- [ ] A view / screen / page
+- [ ] A form / wizard / multi-step flow
+- [ ] A CRUD surface
+- [ ] An endpoint a client or agent drives
+- [x] None of the above — *(harness/CLI tooling: no view, form, CRUD surface, or network endpoint of its own)*

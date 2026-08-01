@@ -222,3 +222,6 @@ Provisional review tiers (1h facet — restate at each gate): **C1 STANDARD** (h
 - [x] Spec-premise ground-truthed (twelve premises, file/line + live-run evidence above)
 - [x] Review clusters declared with gates (≤4 tasks/cluster; none irreversible) — verified by `spec-analysis`
 - [x] `tasks.md` generated and carries per-task test tiers + test-author modes (dogfooding D1)
+
+## Acceptance flows
+N/A — no user-facing surface (harness tooling; the spec's User-facing surfaces answers 'None of the above').

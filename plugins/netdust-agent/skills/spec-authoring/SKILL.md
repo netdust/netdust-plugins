@@ -8,7 +8,7 @@ Drive `specs/<feature>/spec.md` — the *what and why*, with no technology stack
 
 **Division of labour: content comes from upstream, verification lives here.** `superpowers:brainstorming` runs the design dialogue and writes the spec; this skill does not re-author it and does not duplicate brainstorming's craft. What this stage adds is the netdust HALT: **a plan may not be written against a spec that still contains `[NEEDS CLARIFICATION]`, or whose success criteria nobody can sign off against.**
 
-The HALT is mechanical. `bin/gate-check.py` parses the spec and fails on any real unresolved marker (bracketed placeholder text and backticked examples are correctly ignored) and on any `SC-n` line carrying no number. The gate is the script's exit code, not a human glance — same philosophy as the testing gate's structured evidence.
+The HALT is mechanical. `bin/gate-check.py` parses the spec and fails on any real unresolved marker (bracketed placeholder text and backticked examples are correctly ignored), on any `SC-n` line carrying no number, and on either surface list left unanswered — the two lists are the arming switches for the plan's 1a and 1g gates, so a blank one silently makes a mandatory gate optional. The gate is the script's exit code, not a human glance — same philosophy as the testing gate's structured evidence.
 
 **This stage depends on no external tooling.** `gate-check.py` lints whatever of `spec.md` / `plan.md` / `tasks.md` exists in a directory. The one thing that makes it fire is the spec being at `specs/<feature>/spec.md` — which is why that location is a standing preference in `memory/GLOBAL.md`, not a per-project choice.
 </objective>
@@ -24,9 +24,10 @@ Two kinds of requirement live here, and the difference matters:
 |---|---|---|
 | `## Success criteria` | `- **SC-1:** <text containing a number>` — one line per criterion, numbered `SC-n` | `success-criteria` check: FAILs on a line with no digit, and on a body that is only a bracketed `[…]` placeholder |
 | `## Security-relevant surfaces` | one `- [ ]` / `- [x]` line per surface, from the six in `<security_surfaces>` | `security-surfaces` check: **FAILs** on a missing section, on zero boxes checked, and on a real surface checked together with `None of the above`. `threat-model` check: any checked box that isn't "none of the above" ARMS the plan's 1a gate |
+| `## User-facing surfaces` | one `- [ ]` / `- [x]` line per surface, from the five in `<user_facing_surfaces>` | `user-facing-surfaces` check: **FAILs** on the same three shapes as its security sibling (one shared checker enforces both). `acceptance-flows` check: any checked box that isn't "none of the above" ARMS the plan's 1g gate, and the plan's matrix must then carry a filled-in row rather than `N/A` |
 | anywhere in the file | `[NEEDS CLARIFICATION: <substance>]` | `clarify-halt` check: any real marker FAILs the gate (backticked examples and empty `…` placeholders are correctly ignored) |
 
-Historically a section whose heading was absent, or whose boxes were all blank, did not fail loudly — it made the 1a gate **pass by finding nothing**, and the checker printed "no spec surface flagged" as reassurance while an auth feature walked through. `security-surfaces` now FAILs all three shapes, so the silent-disarm path is closed. `## Success criteria` is the one that still WARNs rather than FAILs when wholly absent, and only because two live spec dirs predate it.
+Historically a section whose heading was absent, or whose boxes were all blank, did not fail loudly — it made the 1a gate **pass by finding nothing**, and the checker printed "no spec surface flagged" as reassurance while an auth feature walked through. `security-surfaces` (and now its 1g twin `user-facing-surfaces`) FAILs all three shapes, so the silent-disarm path is closed. `## Success criteria` FAILs when wholly absent too: an all-or-nothing floor rewarded writing zero criteria over writing some, and made a brand-new spec indistinguishable from a 2026-07 one. An artifact that genuinely predates a convention states so with a `<!-- gate-check: legacy-artifact — <reason> -->` marker, which downgrades ABSENCE ONLY to a WARN that names the waiver — never partial presence, and never without a stated reason.
 
 **AUTHORED — required content, your words, no prescribed shape.**
 
@@ -49,6 +50,16 @@ The six surfaces. Answer by the literal list, not by gut — a checked box here 
 - Multi-tenancy / cross-actor visibility
 - None of the above — *(state so explicitly)*
 </security_surfaces>
+
+<user_facing_surfaces>
+The five. Same rule as the security list, for the same reason: a checked box here is what arms the plan's acceptance-flows gate (1g), the behavioral twin of the threat model. **Blank is not an answer** — it is a disarmed gate, and 1g had NO arming switch at all until this section existed, which is why a wizard could reach execution with no matrix while the checker printed reassurance.
+
+- A view / screen / page
+- A form / wizard / multi-step flow
+- A CRUD surface
+- An endpoint a client or agent drives
+- None of the above — *(state so explicitly)*
+</user_facing_surfaces>
 
 <process>
 
@@ -73,7 +84,8 @@ Two spec-stage findings decide the HALT:
   - `[clarify-halt]` FAIL — ambiguity remains. Loop back to Step 3: resolve it *with the human*, not by defaulting.
   - `[success-criteria]` FAIL — the section is present but carries only bracketed placeholder text, or an `SC-n` line carries no number. The finding names the offending ids. Rewrite those lines with a number, or move them to `## Acceptance criteria`.
   - `[security-surfaces]` FAIL — the section is missing, no box is checked, or a real surface is checked alongside `None of the above`. Answer the six; blank is a disarmed gate, not a "no".
-  - `[success-criteria]` WARN — the section is missing entirely. This is retro-compat for the spec dirs that predate the contract, **not** a licence to omit it: on a new spec, treat the WARN as a defect and add the section.
+  - `[user-facing-surfaces]` FAIL — the same three shapes on `## User-facing surfaces`. Answer the five; a blank list disarms the plan's 1g acceptance-flows gate exactly as a blank security list disarms 1a.
+  - `[success-criteria]` FAIL — the section is missing entirely. It is no longer a silent WARN: an artifact that genuinely predates the convention states so with a `<!-- gate-check: legacy-artifact — <reason> -->` marker, which downgrades ABSENCE ONLY to a WARN that names the waiver — never partial presence, and never without a stated reason. The live spec dirs carry exactly that marker, with their reasons stated; a new spec has no business carrying one.
 
 **Do not proceed to Stage 1 planning until the checker passes.** A spec with an open ambiguity is too generic to plan, and a plan built on it inherits the ambiguity as a wrong premise.
 
@@ -89,7 +101,8 @@ Two spec-stage findings decide the HALT:
 | "This requirement could be read two ways — I'll pick the sensible one and note it" | That is upstream's rule, and the harness overrides it. Write the `[NEEDS CLARIFICATION]` marker and hand it back. A default you chose alone is a wrong premise the plan inherits (Step 3). |
 | "There's one [NEEDS CLARIFICATION] left but it's minor, I'll plan around it" | The HALT is binary and mechanical — the checker fails. Resolve it. |
 | "Success criteria: 'the flow feels fast and editors are happy'" | Unmeasurable, and the gate FAILs it by naming the SC id. Shake-out has to sign off against a comparison, not a judgement call. Give it a number or move it to Acceptance criteria. |
-| "I'll skip the Success criteria section — the gate only WARNs" | The WARN is retro-compat for the two spec dirs that predate the contract, and the comment at the flip point in `gate-check.py` says so. Omitting it on new work is exactly the hole the WARN was chosen to tolerate, not to bless. |
+| "I'll skip the Success criteria section — the gate only WARNs" | It FAILs now. The old WARN was retro-compat for the spec dirs that predate the contract, and omitting the section on new work was exactly the hole it tolerated. Those dirs now carry an explicit `legacy-artifact` waiver with a stated reason; there is no silent version of this any more. |
+| "This feature has a UI but the flows are obvious — the plan can skip the matrix" | Then check the box and author it. A checked User-facing surface makes the plan's `## Acceptance flows` matrix mechanically required, and `building` Stage 3 / `/shakeout` DRIVE those rows instead of re-discovering broken flows free-form. The escapes that shipped past a green suite were all intended-use edges nobody drove. |
 | "I'll note the tech stack in the spec so the plan is easier" | No. The spec is what/why. Tech in the spec leaks implementation into requirements and pre-commits the plan. Stack lands in plan.md. |
 | "I'll leave the Security-relevant surfaces boxes blank to move faster" | Blank ≠ none — blank is a **disarmed gate**. With nothing checked, `spec_security_triggered()` returns empty, the plan's `N/A` threat model PASSES, and the checker prints "no spec surface flagged" as reassurance. Answer the six explicitly, `None of the above` included. |
 
@@ -97,10 +110,11 @@ Two spec-stage findings decide the HALT:
 
 <success_criteria>
 1. `specs/<feature>/spec.md` exists **at that path**: what/why, prioritized user stories, functional + acceptance criteria, no tech stack.
-2. `## Success criteria` present, every `SC-n` line measurable — `gate-check.py` reports `success-criteria` PASS, not WARN.
+2. `## Success criteria` present, every `SC-n` line measurable — `gate-check.py` reports `success-criteria` PASS. A WARN here means a `legacy-artifact` waiver is being exercised, which is never right on a spec you just wrote.
 3. `gate-check.py` passes the `clarify-halt` check — zero unresolved `[NEEDS CLARIFICATION]`.
 4. Every default chosen on the user's behalf is written in `## Assumptions`, not left implicit.
 5. `## Security-relevant surfaces` **answered** — at least one of the six boxes checked (`None of the above` counts, blank does not), by the literal list rather than by gut.
+5b. `## User-facing surfaces` **answered** the same way — at least one of the five checked. This is what arms 1g; blank leaves the acceptance-flows matrix optional in practice.
 6. Control handed to Stage 1 with a clarified spec.
 </success_criteria>
 
@@ -113,7 +127,7 @@ Two spec-stage findings decide the HALT:
 | `bin/gate-check.py` | **THE GATE.** Mechanical `clarify-halt` + `success-criteria` checks; its exit code is the HALT. Reads the feature dir directly. |
 | `memory/GLOBAL.md` | **THE PREFERENCE.** Holds the spec-location and hand-back-ambiguity preferences that make Step 1 and Step 3 bind on brainstorming at runtime. |
 | `superpowers:writing-plans` | **DOWNSTREAM (Stage 1).** Plans against the clarified spec; review clusters follow this spec's P1/P2/P3 story boundaries. |
-| `netdust-agent:spec-analysis` | **DOWNSTREAM (Stage 1.5).** Cross-checks the Security-relevant surfaces flags against the plan's threat model. |
+| `netdust-agent:spec-analysis` | **DOWNSTREAM (Stage 1.5).** Cross-checks the Security-relevant surfaces flags against the plan's threat model, and the User-facing surfaces flags against its acceptance-flows matrix. |
 | `netdust-agent:shake-out` | **DOWNSTREAM (Stage 3).** Signs off against this spec's `## Success criteria` — which is why they must carry numbers. |
 | `netdust-agent:planning` | **SEQUENCER.** Fires this as Stage 0.5, unconditionally. |
 

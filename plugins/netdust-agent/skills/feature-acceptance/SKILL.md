@@ -95,7 +95,7 @@ The per-stack driving patterns (Playwright/`use_browser`/Hono/MCP for TypeScript
 1. From the spec, list every **intended-use flow** — the things a user/agent will actually do with this feature, in their words ("create and assign a task", "filter the list and save the view", "set up a provider").
 2. For each flow, fill the row: actor, faithful layer, steps, expected — then **enumerate the six edge classes**, dropping one only with a written reason. A flow with an empty Edges column is an incomplete row; do not ship the plan.
 3. Mark each flow's **driving layer** per `<driving_layers>`. Flag any flow whose faithful layer is the browser, so the executor knows a browser-driven check is owed at shake-out.
-4. Embed the `## Acceptance flows` matrix in the plan. It is now the behavioral contract `/shakeout` verifies against — the reviewers verify flow outcomes instead of re-discovering them.
+4. Embed the `## Acceptance flows` matrix in the plan. It is now the behavioral contract `/shakeout` verifies against — the reviewers verify flow outcomes instead of re-discovering them. **This is machine-checked at Stage 1.5:** `gate-check.py`'s `acceptance-flows` check FAILs a plan whose matrix is `N/A`, or is only an unfilled table skeleton, when the spec's `## User-facing surfaces` flags a surface — the same arming relationship `## Security-relevant surfaces` has with the threat model.
 
 **Situation B — verify the matrix (shake-out).** After `test-effectiveness`, before reviewer dispatch:
 1. Bring up the real surface (start the dev server for browser flows; have the API reachable for backend flows).

@@ -203,6 +203,7 @@ def check_success_criteria(spec_text: str, f: Findings) -> None:
 REQUIRED_PLAN_GATES = [
     "Constitution check",
     "Threat model",
+    "Acceptance flows",
     "Architecture invariants touched",
     "Spec-premise ground-truth",
     "Phases & review clusters",
@@ -238,6 +239,60 @@ def spec_security_triggered(spec_text: str) -> list[str]:
 SURFACE_BOX = re.compile(r"^\s*- \[([ xX])\]\s+(.*)$")
 
 
+def check_surface_section(spec_text: str, f: Findings, *, section: str, check: str,
+                          gate: str, disarm_consequence: str, required_what: str,
+                          na_what: str) -> None:
+    """THE one checker for the spec's arming-switch checkbox sections — shared by
+    `security-surfaces` (arms 1a) and `user-facing-surfaces` (arms 1g), which are the same
+    mechanism with different consequences. One implementation, one set of failure shapes:
+
+      - **missing section** → FAIL: nothing can arm the downstream gate, so it passes by
+        finding nothing and the checker prints reassurance — disarmed by omission.
+      - **no checkbox lines** → FAIL: the gate reads checkboxes; prose arms nothing.
+      - **every box blank** → FAIL: blank is not "none", it is a disarmed gate — answer
+        what applies, or "None of the above" explicitly.
+      - **a real surface AND "None of the above"** → FAIL as contradictory.
+
+    Factored deliberately: the two checks were ~40 duplicated lines apart, and duplicated
+    arming logic drifts — the next surface list would get a third copy with its own bugs.
+    """
+    body = section_body(spec_text, section)
+    if body is None:
+        f.add("fail", check,
+              f"no ## {section} section — nothing can arm the plan's {gate} gate, "
+              f"so {disarm_consequence}")
+        return
+
+    boxes = [m for m in (SURFACE_BOX.match(ln) for ln in body.splitlines()) if m]
+    if not boxes:
+        f.add("fail", check,
+              f"## {section} carries no `- [ ]` checkbox lines — the {gate.split()[0]} gate "
+              "reads checkboxes, so prose here arms nothing")
+        return
+
+    checked = [m.group(2).strip() for m in boxes if m.group(1) in "xX"]
+    if not checked:
+        f.add("fail", check,
+              f"## {section}: 0 of {len(boxes)} boxes answered — blank is not "
+              f"'none', it silently disarms the {gate.split()[0]} gate. Check what applies, "
+              "or 'None of the above' explicitly")
+        return
+
+    armed = [c for c in checked if not SURFACE_NONE.search(c)]
+    none_of_the_above = len(armed) < len(checked)
+    if armed and none_of_the_above:
+        f.add("fail", check,
+              f"## {section} checks both a real surface "
+              f"[{armed[0][:40]}] and 'None of the above' — contradictory; pick one")
+        return
+    if armed:
+        f.add("pass", check,
+              f"{len(armed)} surface(s) flagged — the plan's {required_what} is REQUIRED")
+    else:
+        f.add("pass", check,
+              f"answered 'None of the above' — a plan {na_what} of N/A is legitimate")
+
+
 def check_security_surfaces(spec_text: str, f: Findings) -> None:
     """The arming switch for the plan's 1a gate — and the one check whose absence is
     invisible rather than loud.
@@ -248,41 +303,47 @@ def check_security_surfaces(spec_text: str, f: Findings) -> None:
     reassurance. So an auth feature reaches execution with no threat model, by INACTION.
     Blank is not "none": answer the surfaces that apply, or "None of the above" explicitly.
     """
-    body = section_body(spec_text, "Security-relevant surfaces")
+    check_surface_section(
+        spec_text, f,
+        section="Security-relevant surfaces", check="security-surfaces",
+        gate="1a threat-model",
+        disarm_consequence="a security feature would pass with an N/A threat model",
+        required_what="1a threat model", na_what="threat model")
+
+
+def spec_user_facing_triggered(spec_text: str) -> list[str]:
+    """Any checked box under 'User-facing surfaces' that isn't 'None of the above' — the
+    arming switch for the plan's 1g gate, exactly as spec_security_triggered() arms 1a."""
+    body = section_body(spec_text, "User-facing surfaces")
     if body is None:
-        f.add("fail", "security-surfaces",
-              "no ## Security-relevant surfaces section — nothing can arm the plan's 1a "
-              "threat-model gate, so a security feature would pass with an N/A threat model")
-        return
+        return []
+    hits = []
+    for ln in body.splitlines():
+        m = CHECKED_BOX.match(ln)
+        if m and not SURFACE_NONE.search(m.group(1)):
+            hits.append(m.group(1).strip())
+    return hits
 
-    boxes = [m for m in (SURFACE_BOX.match(ln) for ln in body.splitlines()) if m]
-    if not boxes:
-        f.add("fail", "security-surfaces",
-              "## Security-relevant surfaces carries no `- [ ]` checkbox lines — the 1a gate "
-              "reads checkboxes, so prose here arms nothing")
-        return
 
-    checked = [m.group(2).strip() for m in boxes if m.group(1) in "xX"]
-    if not checked:
-        f.add("fail", "security-surfaces",
-              f"## Security-relevant surfaces: 0 of {len(boxes)} boxes answered — blank is not "
-              "'none', it silently disarms the 1a gate. Check what applies, or "
-              "'None of the above' explicitly")
-        return
+def check_user_facing_surfaces(spec_text: str, f: Findings) -> None:
+    """1g's arming switch, and the reason it had to exist at all.
 
-    armed = [c for c in checked if not SURFACE_NONE.search(c)]
-    none_of_the_above = len(armed) < len(checked)
-    if armed and none_of_the_above:
-        f.add("fail", "security-surfaces",
-              "## Security-relevant surfaces checks both a real surface "
-              f"[{armed[0][:40]}] and 'None of the above' — contradictory; pick one")
-        return
-    if armed:
-        f.add("pass", "security-surfaces",
-              f"{len(armed)} surface(s) flagged — the plan's 1a threat model is REQUIRED")
-    else:
-        f.add("pass", "security-surfaces",
-              "answered 'None of the above' — a plan threat model of N/A is legitimate")
+    `planning`'s success criterion 4 requires an `## Acceptance flows` matrix for
+    user-facing work; `building` Stage 3, `/shakeout`, `shakeout-qa` and `test-author` all
+    READ that matrix out of the plan. Nothing checked it, and — worse — nothing COULD: 1a is
+    armed by the spec's security checkboxes, but no spec field said "this is user-facing",
+    so there was no signal a mechanical check could key on. 1g sat exactly where 1a sat
+    before `security-surfaces` landed: a mandatory gate with an honour-system trigger.
+
+    Same failure shapes as its 1a sibling, via the shared checker, for the same reason —
+    blank is not "none", it is a disarmed gate that then prints reassurance.
+    """
+    check_surface_section(
+        spec_text, f,
+        section="User-facing surfaces", check="user-facing-surfaces",
+        gate="1g acceptance-flows",
+        disarm_consequence="a wizard or CRUD surface would pass with no matrix",
+        required_what="1g acceptance-flows matrix", na_what="acceptance-flows matrix")
 
 
 def check_threat_model(plan_text: str, spec_text: str | None, f: Findings) -> None:
@@ -309,6 +370,66 @@ def check_threat_model(plan_text: str, spec_text: str | None, f: Findings) -> No
     else:
         f.add("warn", "threat-model",
               "## Threat model is neither N/A nor substantive — confirm it is intentional")
+
+
+# A real matrix row: a pipe table row with at least three cells (flow · expectation ·
+# edges), not the header and not the `|---|` separator. `planning` 1g makes the Edges
+# column mandatory, so a row whose first three cells are not all filled is incomplete and
+# does not count as substance.
+FLOW_ROW = re.compile(r"^\s*\|(?P<cells>.*\|)\s*$")
+TABLE_SEPARATOR = re.compile(r"^\s*\|[\s:|-]+\|\s*$")
+
+
+def _flow_rows(body_lines: list[str]) -> int:
+    """Count filled-in matrix rows, skipping the header row and the separator."""
+    rows, seen_separator = 0, False
+    for ln in body_lines:
+        if TABLE_SEPARATOR.match(ln):
+            seen_separator = True
+            continue
+        m = FLOW_ROW.match(ln)
+        if not m or not seen_separator:
+            continue  # prose, or the header row that precedes the separator
+        cells = [c.strip() for c in m.group("cells").rstrip("|").split("|")]
+        if len(cells) >= 3 and all(cells[:3]):
+            rows += 1
+    return rows
+
+
+def check_acceptance_flows(plan_text: str, spec_text: str | None, f: Findings) -> None:
+    """1g — the behavioral twin of the threat model, checked the same way.
+
+    Substance is a filled-in matrix row, not prose: `building` Stage 3 and `/shakeout` DRIVE
+    the rows, so a section of paragraphs gives them nothing to drive. As with the threat
+    model, a green verdict means the gate was not skipped — never that the flows are
+    complete (and `_flow_rows` counts filled cells, not row quality: a three-cell row of
+    filler passes the machine check and only the human read catches it).
+    """
+    body = section_body(plan_text, "Acceptance flows")
+    if body is None:
+        return  # already reported by check_plan_gates
+    author_lines = [ln for ln in body.strip().splitlines() if not ln.lstrip().startswith(">")]
+    author = "\n".join(author_lines).strip()
+    is_na = bool(re.match(r"^N/?A\b", author, re.IGNORECASE))
+    rows = _flow_rows(author_lines)
+
+    triggered = spec_user_facing_triggered(spec_text) if spec_text else []
+    if triggered and (is_na or not rows):
+        f.add("fail", "acceptance-flows",
+              "spec flags user-facing surface(s) "
+              f"[{', '.join(triggered[:3])}] but the plan's ## Acceptance flows is "
+              f"{'N/A' if is_na else 'empty/placeholder'} — the 1g gate is not satisfied, so "
+              "shake-out would re-discover the flows free-form instead of driving them")
+    elif rows:
+        f.add("pass", "acceptance-flows",
+              f"## Acceptance flows carries {rows} filled-in flow row(s)")
+    elif is_na:
+        f.add("pass", "acceptance-flows",
+              "## Acceptance flows marked N/A and no user-facing spec surface flagged")
+    else:
+        f.add("warn", "acceptance-flows",
+              "## Acceptance flows is neither N/A nor a filled-in matrix — confirm it is "
+              "intentional")
 
 
 TIER = re.compile(r"\[Tier\s+[AB]\]", re.IGNORECASE)
@@ -1288,9 +1409,11 @@ def run_checks(spec_dir: Path) -> Findings:
         check_clarify(spec_text, f)
         check_success_criteria(spec_text, f)
         check_security_surfaces(spec_text, f)
+        check_user_facing_surfaces(spec_text, f)
     if plan_text is not None:
         check_plan_gates(plan_text, f)
         check_threat_model(plan_text, spec_text, f)
+        check_acceptance_flows(plan_text, spec_text, f)
         check_stakes(plan_text, spec_text, f)
         check_loop_budget(plan_text, f)
     if tasks_text is not None:

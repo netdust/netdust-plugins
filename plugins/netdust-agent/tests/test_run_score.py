@@ -154,6 +154,8 @@ PLAN_GATES_CLEAN = (
     "- [x] No non-negotiable violated.\n\n"
     "## Threat model  [GATE]\n\n"
     "N/A — no 1a-trigger surface (fixture: same-repo harness artifacts only).\n\n"
+    "## Acceptance flows  [GATE]\n\n"
+    "N/A — no user-facing surface (fixture: CLI-only harness artifacts).\n\n"
     "## Architecture invariants touched  [GATE]\n\n"
     "N/A — no ARCHITECTURE-INVARIANTS.md in this fixture repo.\n\n"
     "## Spec-premise ground-truth  [GATE]\n\n"

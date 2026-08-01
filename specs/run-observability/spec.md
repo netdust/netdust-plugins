@@ -74,3 +74,10 @@ The harness's observability is post-hoc and log-shaped: `/evaluate` laboriously 
 ## Open questions / [NEEDS CLARIFICATION]
 
 (none — section intentionally empty; all shape questions resolved under Clarifications)
+
+## User-facing surfaces
+- [ ] A view / screen / page
+- [ ] A form / wizard / multi-step flow
+- [ ] A CRUD surface
+- [ ] An endpoint a client or agent drives
+- [x] None of the above — *(harness/CLI tooling: no view, form, CRUD surface, or network endpoint of its own)*

@@ -25,13 +25,16 @@ python3 <netdust-agent>/bin/gate-check.py specs/<feature>
 ```
 
 The checker FAILS (exit 1) on any of:
-- a missing required `[GATE]` heading in `plan.md` (constitution / threat model / invariants / spec-premise / review clusters);
+- a missing required `[GATE]` heading in `plan.md` (constitution / threat model / acceptance flows / invariants / spec-premise / review clusters);
 - **a security surface checked in `spec.md` but the plan's `## Threat model` left N/A or empty** — the proactive 1a gate not satisfied (this is the case the whole gate exists to catch);
 - an unresolved `[NEEDS CLARIFICATION: …]` marker in `spec.md` (the Stage-0.5 HALT, re-asserted here);
 - a `## Success criteria` line carrying no number, or a section holding only bracketed placeholder text — shake-out cannot sign off against prose;
 - a `## Security-relevant surfaces` section that is missing, has zero boxes checked, or checks a real surface alongside `None of the above` — blank silently disarms the 1a gate below rather than failing loudly;
-- a task line with no `[Tier A|B]` marker, no `Test-author:` mode, or no test contract (`Unit test:` or `Integration test:`) while its siblings carry one; a Tier A task waiving its test with `no unit test:` (1d);
-- an `FR-n` / `SC-n` traced to no task, once the task list cites any requirement id at all (a list citing none is pre-convention and WARNs);
+- the same three shapes on `## User-facing surfaces`, which arms 1g; and a plan whose `## Acceptance flows` is `N/A` or an unfilled table skeleton while the spec flags a user-facing surface — shake-out would re-discover the flows free-form instead of driving them;
+- a task line with no `[Tier A|B]` marker, no `Test-author:` mode, or no `(files: <paths>)` segment (`[HUMAN]` yield points excepted); a task with no test contract (`Unit test:` or `Integration test:`) — including the case where NO task states one, which FAILs unless waived; a Tier A task waiving its test with `no unit test:` (1d);
+- a task marked both `[HUMAN]` and `[P]` — a planned yield point an armed `/loop` could dispatch past;
+- a review cluster stating no `Integration gate:` — the Step 2.8 HALT would run `/integration` against nothing — or a `plan.md` with no `Loop budget: ~N iterations` line, or no `Stakes:` line (1d loop-auditability / 1i);
+- an `FR-n` / `SC-n` traced to no task — including a task list citing no id at all, which FAILs unless the file states a `<!-- gate-check: legacy-artifact — <reason> -->` waiver (absence only; the waiver never excuses a coverage gap once the convention is in use);
 - a review cluster with >4 tasks, or an irreversible/solo cluster that isn't exactly one non-`[P]` task; a cluster ending with no `── REVIEW GATE ──` marker, or declaring no provisional review tier (1f / 1h / Step 2.8).
 
 **If the checker reports FAIL, STOP. Do not dispatch any task.** Route back:
