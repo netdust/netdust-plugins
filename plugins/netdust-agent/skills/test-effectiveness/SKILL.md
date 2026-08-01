@@ -56,6 +56,18 @@ Each mode is: **the escape** (how a bug passes green) → **the audit move** (ho
 
 **The one-line litmus for an audit:** for each guard, fixture, wire, mount, and timer the phase touched — *name the test that would go RED if the dangerous path broke.* If you can't name it, that's the finding.
 
+**A machine gate is a legitimate answer to the litmus.** "Name the thing that goes red" does not mean "name a test." If the project runs a gate that would fail the build when this path breaks — a security scan that finds the missing nonce, a type-checker that catches the shape change, a render check that catches the fatal — that gate IS the answer, and it is a *better* one: it covers every call site rather than the one a test happens to touch. Record it as `covered — <gate>`. Manufacturing a test that duplicates a gate's finding adds a second copy of a proof you already have, and the copy is narrower (per `testing-workflow`'s evidence ladder).
+
+**How deep the audit goes — read the plan's `Stakes:` line.** The seven modes are always the lenses; what changes is the surface they sweep.
+
+| Stakes | Sweep | Sibling sweep |
+|---|---|---|
+| **high** | every dangerous path the diff introduced | yes — modes 1, 4 and 5 almost always have a sibling the primary fix missed |
+| **standard** | the paths the plan already NAMED — the threat model's mitigations, the architecture invariants touched, and every wire/mount the diff introduced | on any `blind` finding |
+| **low** | two questions: does the project's machine floor cover this diff, and is every wire crossed un-mocked at least once | only on a `blind` finding |
+
+At `low` stakes this audit should take minutes, not the ~20 the full sweep costs — and if a `low`-stakes phase keeps producing real `blind` findings, that is evidence the stakes line was wrong, not that the audit should have been longer. Say so and raise it in the plan.
+
 </the_seven_failure_modes>
 
 <process>
@@ -104,6 +116,8 @@ These thoughts mean a green suite is lying to you. Stop.
 | "It passed, so the race is fine." | One green run of a concurrency path passes by scheduling luck (mode 7). Force the interleaving and run ≥3×, or you've proven nothing. |
 | "Let me add mutation testing to catch these." | Mutation testing catches weak assertions on TESTED code. Your escapes are UNTESTED dangerous paths — mutation finds ~none of them. Fix coverage of the dangerous path first; mutation is a later, narrower tool. |
 | "I'll write the effectiveness audit after shake-out finds things." | That inverts the gate. The audit is cheaper than the shake-out fix loop and is the convergence target that makes shake-out a verification pass, not a discovery pass. Audit BEFORE dispatch. |
+| "The litmus wants a test, and there isn't one — that's a `blind` finding." | Only if nothing else goes red. A machine gate that fails the build when this path breaks answers the litmus better than a test does: it covers every call site, not the one a test reaches. Record `covered — <gate>` and write nothing. |
+| "Seven modes, full sweep, every phase — that's the discipline." | The modes are the lenses; the surface they sweep is set by the plan's stakes. A full seven-mode sweep of a marketing page's diff spends a security phase's budget on a phase whose worst outcome is a broken-looking page. Read the dial. |
 
 </red_flags>
 

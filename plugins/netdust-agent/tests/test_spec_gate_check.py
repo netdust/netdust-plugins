@@ -279,7 +279,9 @@ TASKS_TIER_A_SPLIT_ON_BOUNDARY = """# Tasks: x
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(tier FULL)*
 """
 
-# Tier B on a security-boundary file — the earlier, cheaper error (erosion guard).
+# Tier B on a security-boundary file with NOTHING proving it — a guard nobody checks.
+# Before 0.15 this WARNed on the TIER alone; it now WARNs on the ABSENT EVIDENCE, which is
+# what the finding was always reaching for.
 TASKS_TIER_B_ON_BOUNDARY = """# Tasks: x
 
 ### Cluster C1  (1 task \u00b7 provisional tier: FULL)
@@ -288,6 +290,73 @@ TASKS_TIER_B_ON_BOUNDARY = """# Tasks: x
       Unit test: no unit test: Tier B, tidy-up only
 
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(tier FULL)*
+"""
+
+# The same shape with its presence proof NAMED. This is the `contact-page-8k` fix: a direct
+# call to a hardened framework primitive carries no decision of its own, so it owes a presence
+# proof, not a bespoke behavioural test — and naming that proof must draw no warning, or every
+# form handler in a WordPress feature gets pushed up to Tier A + split.
+TASKS_TIER_B_ON_BOUNDARY_PROVEN = """# Tasks: x
+
+### Cluster C1  (1 task \u00b7 provisional tier: FULL)
+- [ ] T01 [Tier B] call the nonce check on the contact handler  (files: src/contact-nonce.php)
+      Test-author: solo \u2014 Tier B
+      Proven by: machine gate \u2014 the project gate asserts a nonce on every handler
+      Unit test: no unit test: Tier B, direct call to a framework primitive
+
+\u2500\u2500 REVIEW GATE \u2500\u2500  *(tier FULL)*
+"""
+
+# Tier B and `Proven by: new test` contradict each other — the tier says no bespoke test,
+# the evidence line says one is being written. One of them is wrong.
+TASKS_TIER_B_ON_BOUNDARY_CONTRADICTORY = """# Tasks: x
+
+### Cluster C1  (1 task \u00b7 provisional tier: FULL)
+- [ ] T01 [Tier B] tidy the session guard  (files: lib/session-guard.ts)
+      Test-author: solo \u2014 Tier B
+      Proven by: new test
+      Unit test: no unit test: Tier B, tidy-up only
+
+\u2500\u2500 REVIEW GATE \u2500\u2500  *(tier FULL)*
+"""
+
+# THE EXEMPTION (F2): Tier B + an `Integration test:` contract + `Proven by: new test` is
+# NOT a contradiction \u2014 it is the designed WP wiring path (`Integration test:` became
+# first-class in 0.15): the "new test" IS the integration test the contract line states.
+# The contradiction WARN is reserved for a waived Tier B claiming a test nobody is writing.
+TASKS_TIER_B_BOUNDARY_INTEGRATION_NEW_TEST = """# Tasks: x
+
+### Cluster C1  (1 task \u00b7 provisional tier: FULL)
+- [ ] T01 [Tier B] cron wiring for the token sweep  (files: inc/token-cron.php)
+      Test-author: solo \u2014 Tier B
+      Proven by: new test
+      Integration test: the scheduled sweep fires once and expired rows are gone; denial: live rows survive
+
+\u2500\u2500 REVIEW GATE \u2500\u2500  *(tier FULL)*
+"""
+
+# F1 regression: an unparseable bullet id (`T07b` \u2014 TASK_LINE requires `T\\d+\\b`) between
+# two tasks is NOT a continuation of the task above it. A walker that only ends a block at a
+# PARSEABLE task line / heading attributes the malformed bullet's Test-author:/Proven by:
+# lines to T01 and grades T01 with another task's evidence \u2014 silently, on every
+# block-based check at once. One boundary rule, shared by every block-based check: any
+# column-0 bullet ends the block (the rule `check_unit_test_contract` already carried on
+# main, ae65211).
+TASKS_MALFORMED_BULLET_LEAK = """# Tasks: x
+
+### Cluster C1  (2 tasks \u00b7 provisional tier: STANDARD)
+- [ ] T01 [Tier B] wire the session refresh call  (files: lib/session-refresh.ts)
+      Unit test: no unit test: Tier B, direct call to a framework primitive
+- [ ] T07b [Tier B] malformed id \u2014 these lines belong to NO task
+      Test-author: solo \u2014 Tier B
+      Proven by: machine gate \u2014 the auth gate asserts refresh on every route
+      Unit test: no unit test: Tier B, covered elsewhere
+- [ ] T02 [Tier B] render the badge  (files: src/badge.tsx)
+      Test-author: solo \u2014 Tier B
+      Proven by: framework \u2014 typed lib, presence via the suite
+      Unit test: no unit test: Tier B, presentational
+
+\u2500\u2500 REVIEW GATE \u2500\u2500  *(tier STANDARD)*
 """
 
 # The calibration cases the live corpus produced: `auth` inside test-AUTHor.md, `acl` inside
@@ -324,6 +393,130 @@ N/A — no reuse premise.
 
 ## Phases & review clusters  [GATE]
 See tasks.md.
+"""
+
+# ── `stakes` fixtures — the consequence dial (1i) ─────────────────────────────
+# The class dial scales PLANNING ceremony; this scales VERIFICATION effort. `low` buys the
+# lightest verification in the harness, so the one place it must be unreachable is work the
+# SPEC ITSELF flagged as security-relevant. `standard` there is fine — that is the honest
+# classification for most input-handling features, and presence-vs-decision keeps it cheap.
+
+PLAN_STAKES_LOW = PLAN_GATES_FULL + """
+## Stakes  [GATE]
+Stakes: low \u2014 worst case is a broken-looking page
+"""
+
+PLAN_STAKES_STANDARD = PLAN_GATES_FULL + """
+## Stakes  [GATE]
+Stakes: standard \u2014 a failure breaks a working feature for real users, recoverably
+"""
+
+PLAN_STAKES_UNREADABLE = PLAN_GATES_FULL + """
+## Stakes  [GATE]
+Stakes: medium-ish \u2014 somewhere in between
+"""
+
+PLAN_STAKES_HIGH_NO_REASON = PLAN_GATES_FULL + """
+## Stakes  [GATE]
+Stakes: high
+"""
+
+# F3 — the field tolerates any human reason-punctuation. A declared level must never be
+# silently demoted to the no-line WARN because its reason used parentheses or a comma
+# instead of an em-dash: the WARN reads "fall back to standard", which is a silent
+# downgrade of a level somebody stated.
+PLAN_STAKES_HIGH_PAREN_REASON = PLAN_GATES_FULL + """
+## Stakes  [GATE]
+Stakes: high (touches billing rows that cannot be replayed)
+"""
+
+PLAN_STAKES_STANDARD_COMMA_REASON = PLAN_GATES_FULL + """
+## Stakes  [GATE]
+Stakes: standard, breaks a working feature recoverably
+"""
+
+# F3 — a fenced `Stakes:` example (a plan quoting the template) is not a declared level.
+# The plan below carries ONLY the fenced sample, so the verdict must be the no-line WARN.
+PLAN_STAKES_FENCED_ONLY = PLAN_GATES_FULL + """
+## Stakes  [GATE]
+
+The dial goes here, e.g.:
+
+```
+Stakes: high — money on the line
+```
+"""
+
+# I8 — under-calling stakes on a money/PII spec. WARN, never FAIL: the spec's own words
+# are weaker evidence than its checked security boxes (which drive the `low` FAIL), but a
+# `standard` plan on a spec that talks about payments deserves one visible question.
+SPEC_MONEY = """# Feature Specification: Refund flow
+
+## Success criteria
+- **SC-1:** a refund lands back on the customer's card within 5 days
+
+## Security-relevant surfaces
+- [x] Auth / session / token / capability surfaces
+- [ ] None of the above
+
+## Notes
+Handles payment provider webhooks and refund amounts.
+"""
+
+# ── `proven-by` fixtures — the evidence ladder (1d) ───────────────────────────
+# Name what ALREADY proves the property before writing a test. Rungs 1\u20133 assert the
+# evidence lives elsewhere, so they must NAME it; rung 4 need not, because the task's own
+# `Unit test:` line already carries the contract.
+
+TASKS_PROVEN_BY_COMPLETE = """# Tasks: Contact page
+
+### Cluster C1  (2 tasks \u00b7 provisional tier: STANDARD)
+- [ ] T01 [Tier B] call the nonce check on the submit handler  (files: src/submit.php)
+      Test-author: solo \u2014 Tier B
+      Proven by: framework \u2014 wp_verify_nonce; presence asserted by the project security gate
+      Unit test: no unit test: Tier B, direct call to a framework primitive
+- [ ] T02 [Tier A] enforce the 2000-character message cap  (files: src/validate.php)
+      Test-author: solo \u2014 A-lite, a project threshold, no security-boundary category
+      Proven by: new test
+      Unit test: a 2001-character message is refused, a 2000-character one is accepted
+
+\u2500\u2500 REVIEW GATE \u2500\u2500  *(tier STANDARD)*
+"""
+
+TASKS_PROVEN_BY_PARTIAL = """# Tasks: x
+
+### Cluster C1  (2 tasks \u00b7 provisional tier: STANDARD)
+- [ ] T01 [Tier A] enforce the message cap  (files: src/validate.php)
+      Test-author: solo \u2014 A-lite, a project threshold
+      Proven by: new test
+      Unit test: a 2001-character message is refused
+- [ ] T02 [Tier B] render the confirmation partial  (files: src/views/thanks.php)
+      Test-author: solo \u2014 Tier B
+      Unit test: no unit test: Tier B, presentational
+
+\u2500\u2500 REVIEW GATE \u2500\u2500  *(tier STANDARD)*
+"""
+
+TASKS_PROVEN_BY_BAD_RUNG = """# Tasks: x
+
+### Cluster C1  (1 task \u00b7 provisional tier: STANDARD)
+- [ ] T01 [Tier B] render the confirmation partial  (files: src/views/thanks.php)
+      Test-author: solo \u2014 Tier B
+      Proven by: the suite covers it
+      Unit test: no unit test: Tier B, presentational
+
+\u2500\u2500 REVIEW GATE \u2500\u2500  *(tier STANDARD)*
+"""
+
+TASKS_PROVEN_BY_UNNAMED = """# Tasks: x
+
+### Cluster C1  (1 task \u00b7 provisional tier: STANDARD)
+- [ ] T01 [Tier B] render the confirmation partial  (files: src/views/thanks.php)
+      Test-author: solo \u2014 Tier B
+      Proven by: machine gate
+      Unit test: no unit test: Tier B, presentational
+
+\u2500\u2500 REVIEW GATE \u2500\u2500  *(tier STANDARD)*
 """
 
 PLAN_THREATMODEL_NA = """# Implementation Plan: Webhook receiver
@@ -680,10 +873,44 @@ def run():
     results.append((rc == 0 and "security-boundary-mode" not in out,
                     "the same task with `split` produces no boundary warning"))
 
-    # 10u. Tier B on a security-boundary file → WARN (the erosion guard, upstream of the mode)
+    # 10u. Tier B on a security-boundary file with NO evidence named → WARN.
+    # The finding moved from the tier to the missing proof; the warning must still fire, and
+    # must still never FAIL (a keyword is not knowledge).
     rc, out = _run({"tasks.md": TASKS_TIER_B_ON_BOUNDARY})
-    results.append((rc == 0 and "! [security-boundary-mode]" in out and "erosion guard" in out,
-                    "Tier B on a security-boundary file WARNs as tier erosion"))
+    results.append((rc == 0 and "! [security-boundary-mode]" in out and "NOTHING proving it" in out,
+                    "Tier B on a security-boundary file with no evidence WARNs"))
+
+    # 10u-b. THE REGRESSION THAT MATTERS (`contact-page-8k`). The same boundary surface, with a
+    # presence proof named, must be SILENT. If this ever warns again, every framework-primitive
+    # call in a WP feature gets pushed to Tier A + split and the contact page repeats itself.
+    rc, out = _run({"tasks.md": TASKS_TIER_B_ON_BOUNDARY_PROVEN})
+    results.append((rc == 0 and "security-boundary-mode" not in out,
+                    "Tier B on a boundary surface WITH a named presence proof draws no warning"))
+
+    # 10u-c. Tier B + `Proven by: new test` contradict each other → WARN naming the conflict.
+    rc, out = _run({"tasks.md": TASKS_TIER_B_ON_BOUNDARY_CONTRADICTORY})
+    results.append((rc == 0 and "! [security-boundary-mode]" in out and "one of them is wrong" in out,
+                    "Tier B claiming `Proven by: new test` WARNs as self-contradictory"))
+
+    # 10u-d. F2 — the SAME shape WITH an `Integration test:` contract is the designed WP
+    # wiring path (the "new test" is the integration test the contract states) → SILENT.
+    rc, out = _run({"tasks.md": TASKS_TIER_B_BOUNDARY_INTEGRATION_NEW_TEST})
+    results.append((rc == 0 and "security-boundary-mode" not in out,
+                    "Tier B + Integration contract + `Proven by: new test` draws no warning"))
+
+    # 10u-e. F1 — a malformed bullet's lines must not be attributed to the task above, on
+    # ANY block-based check. Three checks, one boundary rule:
+    rc, out = _run({"tasks.md": TASKS_MALFORMED_BULLET_LEAK})
+    results.append((rc == 1 and "test-author-mode" in out and "T01" in out,
+                    "F1: T01 is reported as missing its Test-author line — the malformed "
+                    "bullet's mode line is not attributed to T01"))
+    results.append(("! [security-boundary-mode]" in out and "NOTHING proving it" in out
+                    and "T01 (session" in out,
+                    "F1: T01 (Tier B, boundary file) WARNs as unproven — the malformed "
+                    "bullet's `Proven by: machine gate` does not shield it"))
+    results.append(("[proven-by]" in out and "missing a `Proven by:` line: T01" in out,
+                    "F1: proven-by FAILs naming T01 — the malformed bullet's rung line "
+                    "does not leak upward"))
 
     # 10v. CALIBRATION: test-AUTHor.md / performance-orACLe.md must not match. The first
     # cut of this check flagged three live doc tasks on exactly these substrings, which is
@@ -825,6 +1052,87 @@ def run():
     results.append((rc == 1 and "test-author-mode" in out,
                     "seam: a tmp fixture dir violating D1 (partial presence) exits 1 "
                     "once test-author-mode is wired into run_checks()"))
+
+    # ── 21. `stakes` — the consequence dial (1i) ──────────────────────────────
+    # The erosion control: `low` is not reachable on a spec that flagged a security surface.
+    # This is the ONE stakes finding that is not a judgment call, because the spec's own
+    # checkboxes are the evidence and no plan prose overrides them.
+    rc, out = _run({"spec.md": SPEC_TRIGGERED, "plan.md": PLAN_STAKES_LOW})
+    results.append((rc == 1 and "[stakes]" in out and "not reachable here" in out,
+                    "`Stakes: low` on a security-flagged spec FAILS the gate"))
+
+    # The same spec at `standard` passes — over-classifying every input-handling feature to
+    # `high` is the failure this whole dial exists to end, so `standard` must be comfortable.
+    rc, out = _run({"spec.md": SPEC_TRIGGERED, "plan.md": PLAN_STAKES_STANDARD})
+    results.append((rc == 0 and "\u2713 [stakes]" in out,
+                    "`Stakes: standard` on a security-flagged spec PASSES"))
+
+    # A level no downstream gate can read is worse than no level: each would pick its own
+    # default and they would silently diverge.
+    rc, out = _run({"plan.md": PLAN_STAKES_UNREADABLE})
+    results.append((rc == 1 and "unreadable stakes level" in out,
+                    "an unrecognised stakes level FAILS"))
+
+    # Retro-compat, same stance as test-author-mode: pre-0.16 plans predate the dial.
+    rc, out = _run({"plan.md": PLAN_GATES_FULL})
+    results.append((rc == 0 and "! [stakes]" in out and "pre-0.16 plan" in out,
+                    "a plan with no `Stakes:` line WARNs and falls back to standard"))
+
+    # `high` and `low` are departures from the default and owe a reason — but a stated level
+    # with a thin reason still beats no level, so this WARNs rather than FAILs.
+    rc, out = _run({"plan.md": PLAN_STAKES_HIGH_NO_REASON})
+    results.append((rc == 0 and "! [stakes]" in out and "states no reason" in out,
+                    "`Stakes: high` with no reason WARNs, never FAILs"))
+
+    # F3 — punctuated reasons parse to the DECLARED level. A parenthesised or comma'd
+    # reason must never demote a stated level to the no-line fallback: that WARN reads
+    # "fall back to standard", which silently downgrades `high`.
+    rc, out = _run({"plan.md": PLAN_STAKES_HIGH_PAREN_REASON})
+    results.append((rc == 0 and "✓ [stakes]" in out and "Stakes: high" in out
+                    and "pre-0.16" not in out,
+                    "`Stakes: high (reason)` parses to level `high` with its reason read"))
+
+    rc, out = _run({"plan.md": PLAN_STAKES_STANDARD_COMMA_REASON})
+    results.append((rc == 0 and "✓ [stakes]" in out and "Stakes: standard" in out,
+                    "`Stakes: standard, reason` parses to level `standard`"))
+
+    # F3 — a fenced `Stakes:` example never counts as a declared level.
+    rc, out = _run({"plan.md": PLAN_STAKES_FENCED_ONLY})
+    results.append((rc == 0 and "! [stakes]" in out and "pre-0.16" in out,
+                    "a fenced `Stakes:` sample is ignored — the plan reads as no-line WARN"))
+
+    # I8 — under-calling on a money/PII spec: `standard` while the spec talks payments →
+    # WARN (visible question), never FAIL (the spec's words are weaker evidence than its
+    # checked boxes, which drive the `low` FAIL above).
+    rc, out = _run({"spec.md": SPEC_MONEY, "plan.md": PLAN_STAKES_STANDARD})
+    results.append((rc == 0 and "! [stakes]" in out and "money/PII" in out,
+                    "`Stakes: standard` on a spec mentioning payments WARNs as an under-call"))
+
+    # ── 22. `proven-by` — the evidence ladder (1d) ────────────────────────────
+    rc, out = _run({"tasks.md": TASKS_PROVEN_BY_COMPLETE})
+    results.append((rc == 0 and "\u2713 [proven-by]" in out,
+                    "every task naming an evidence rung PASSES"))
+
+    # Half-adopted is worse than absent: a reader cannot tell "nothing proves this" from
+    # "nobody filled it in".
+    rc, out = _run({"tasks.md": TASKS_PROVEN_BY_PARTIAL})
+    results.append((rc == 1 and "proven-by" in out and "T02" in out,
+                    "a partially-adopted `Proven by:` field FAILS, naming the gap"))
+
+    rc, out = _run({"tasks.md": TASKS_PROVEN_BY_BAD_RUNG})
+    results.append((rc == 1 and "unrecognised evidence rung" in out,
+                    "free-text evidence ('the suite covers it') FAILS \u2014 the ladder is the point"))
+
+    # Rungs 1\u20133 claim the evidence lives elsewhere; an unnamed claim is the assertion this
+    # harness refuses to trust.
+    rc, out = _run({"tasks.md": TASKS_PROVEN_BY_UNNAMED})
+    results.append((rc == 1 and "does not NAME it" in out,
+                    "`Proven by: machine gate` with nothing named FAILS"))
+
+    # Retro-compat: a task list where NO task carries the line is a pre-0.16 artifact.
+    rc, out = _run({"tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "! [proven-by]" in out and "pre-0.16" in out,
+                    "zero `Proven by:` lines WARNs as a pre-0.16 tasks.md, never FAILs"))
 
     return results
 

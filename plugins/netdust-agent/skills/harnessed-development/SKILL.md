@@ -33,6 +33,18 @@ Before any other action, classify the work in one sentence in your transcript. T
 
 State your class and one-sentence reason before routing. If you cannot classify, the request is ambiguous — ask your human partner. Do not improvise.
 
+**State the stakes too — it is a second, independent dial.** Alongside the class, declare: `Stakes: high | standard | low — <one-sentence reason>`. The two dials answer different questions and they do not track each other: class asks **how big is this work**, stakes asks **what breaks if it's wrong**. A contact page is a genuine Class A (new feature, several tasks) at `low`/`standard` stakes; a one-line change to a token store is Class D at `high`.
+
+| Stakes | A failure… |
+|---|---|
+| **high** | loses money, data, access or privacy, or cannot be undone — payment/billing, the product's own auth and tenancy rules, PII, destructive operations, live-data migrations |
+| **standard** | breaks a working feature for real users, visibly and recoverably. **The default** |
+| **low** | shows a broken or empty page, and is caught by looking at it |
+
+The class dial routes the work; the stakes dial scales what VERIFYING it buys — `testing-workflow`'s tier obligations, `feature-acceptance`'s edge driving, `test-effectiveness`'s audit depth, and `verify-budget.py`'s ceiling all read it. On Class A/B this statement is provisional: `planning` gate 1i records the binding value in the plan, where `gate-check.py` checks it and every later gate reads it. On C/D/E there is no plan, so the statement you make here IS the value — carry it into `building`.
+
+**Under-calling stakes is the dangerous direction, exactly as with class** — and one rule makes it safe to relax the rest: **stakes never waives a guard.** It governs how much evidence *beyond a guard's proven presence* the work buys. A `low`-stakes feature still proves every guard is present and still tests any predicate encoding a rule this project chose. (Skipping the dial entirely is not neutral either: it was the state of the harness until 2026-08-01, and it is why a contact page bought an auth subsystem's verification — calibration: `contact-page-8k`.)
+
 **The dial, in one line:** F = brainstorm only, notes at most · E = red/green only · C = TDD-cycle-per-finding · D = + diff threat model · B = + freshness review · A = both spines, seam in between. Match the class to the *actual* work — a tweak is Class E, not a small Class A; a vision brief is Class F, not a head start on a plan. Over-calling the class wastes ceremony; under-calling A/D (skipping a plan or a security gate that was warranted) is the dangerous direction. When the change is genuinely small and self-contained, **E is not cutting a corner — it is the correct class.** The one rule that never relaxes with class: anything touching a named security-boundary file is D (never E), and any non-trivial logic still gets its Tier-A RED test.
 </intake>
 
@@ -49,6 +61,8 @@ For Class A/B, the plan/build boundary is a **human review checkpoint, not a for
 | "The plan is approved in spirit, I'll start building while the human reads it" | The seam is a hard stop. `building` will re-run gate-check and demand the approval; don't pre-empt it. |
 | "I'll just do the work here instead of routing — it's faster than loading another skill" | This file has no gates. Work done "here" is work done ungated — the exact failure the harness exists to prevent. Route. |
 | "The user is describing a vision — I'll get a head start on the plan" | Don't manufacture a plan artifact for work that won't change code this session. A vision brief is Class F: brainstorm-only, notes at most. Ceremony for work that isn't executing yet is pure wait-time (calibration: `vision-brief-ceremony` — teacher-app, 2026-07-04: 30+ min of unwanted planning). |
+| "It's a real feature with real tasks — Class A, so full verification" | Class A says how the work is PLANNED, not what verifying it is worth. A contact page and a billing engine are both Class A; they are not both `high` stakes. State the second dial (calibration: `contact-page-8k`). |
+| "It touches a nonce and a sanitizer, so it's high stakes" | Those are framework primitives, present on every form in the stack. Calling a primitive is not making a decision — stakes is about what a FAILURE COSTS, not which functions appear in the diff. A contact form that leaks nothing and loses at most a lead is not an auth subsystem. |
 
 </red_flags>
 

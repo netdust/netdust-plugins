@@ -7,7 +7,8 @@ Used by:
                     → enforces the [NEEDS CLARIFICATION] HALT.
   - spec-analysis   (Stage 1.5): with spec.md + plan.md + tasks.md
                     → enforces gate-presence (threat model, invariants, spec-premise,
-                      review clusters) + per-task test tiers + the [P]/cluster rules.
+                      review clusters) + per-task test tiers + the [P]/cluster rules
+                      + the stakes dial (1i) + the per-task evidence rung (`Proven by:`).
 
 It checks whatever of spec.md / plan.md / tasks.md exist, so the same tool serves both
 stages. This is the MECHANICAL backstop that turns the harness's previously skill-honored
@@ -262,6 +263,127 @@ def check_threat_model(plan_text: str, spec_text: str | None, f: Findings) -> No
 
 TIER = re.compile(r"\[Tier\s+[AB]\]", re.IGNORECASE)
 TIER_A = re.compile(r"\[Tier\s+A\]", re.IGNORECASE)
+
+
+# ── the stakes dial (what a failure here costs) ───────────────────────────────
+#
+# The class dial (harnessed-development A–F) scales PLANNING ceremony: how much design
+# a piece of work warrants. This scales VERIFICATION effort, which is a different
+# question — not "how big is this work?" but "what does a failure here cost?" Nothing
+# in the harness asked that until 2026-07-31, and its absence is what let a contact page
+# buy an auth subsystem's verification (calibration: `contact-page-8k`).
+#
+# Set ONCE, at plan time, read everywhere after — the same no-self-downgrade posture the
+# `Test-author:` field has under D1. No run-time agent may lower it to save effort.
+
+# The line match is deliberately loose (any non-empty tail); the LEVEL is the tail's first
+# word-token and the reason is whatever follows, however punctuated — `Stakes: high — x`,
+# `Stakes: high (x)`, `Stakes: high, x` and bare `Stakes: high` all parse to `high`. A
+# stricter tail-shape here silently demoted a DECLARED level to the no-line WARN whenever
+# the reason used parentheses or a comma, and a silent downgrade is the one outcome this
+# field must never have.
+STAKES_LINE = re.compile(
+    r"^\s*(?:[-*]\s+)?(?:\*\*)?Stakes(?:\*\*)?:\s*(\S.*?)\s*$",
+    re.IGNORECASE | re.MULTILINE)
+STAKES_TOKEN = re.compile(r"[A-Za-z][\w-]*")
+STAKES_LEVELS = ("high", "standard", "low")
+
+# I8's keyword net for the under-call WARN — deliberately narrow (money and PII terms that
+# are unambiguous in any sentence), for the same reason PROSE_SECURITY is narrow: a WARN
+# nobody trusts is a WARN nobody reads.
+SPEC_HIGH_STAKES = re.compile(
+    r"\b(payment|billing|invoice|refund|checkout|payout|PII"
+    r"|personally identifiable|credit card|bank account)s?\b", re.IGNORECASE)
+
+
+def plan_stakes(plan_text: str) -> tuple[str | None, str]:
+    """(level, reason) from the plan's `Stakes:` line.
+
+    `level` is None when the plan states no line at all, and the raw lowercased token when
+    it states an unrecognised one — the caller decides which of those is a failure.
+
+    NOTE: `bin/verify-budget.py` parses the same field to pick its ratio ceiling. The FIELD
+    is parsed in two places because the bin/ scripts are deliberately standalone (no
+    cross-imports, hyphenated filenames); the RULE — what each level buys — lives in exactly
+    one place per axis: the ceilings in verify-budget.py, the verification obligations in
+    `skills/testing-workflow/SKILL.md`. Keep the tolerant token parsing mirrored in both.
+    """
+    m = STAKES_LINE.search(strip_fenced(plan_text))
+    if not m:
+        return None, ""
+    tail = m.group(1).strip()
+    tok = STAKES_TOKEN.match(tail)
+    if not tok:
+        return tail.lower(), ""
+    level = tok.group(0).lower()
+    reason = tail[tok.end():].strip(" \t—–-,;:()")
+    return level, reason
+
+
+def check_stakes(plan_text: str, spec_text: str | None, f: Findings) -> None:
+    """1i — the stakes dial is stated, readable, and not talked below the spec's own evidence.
+
+    Three findings, in the order they matter:
+
+      - **No line at all** → WARN. Pre-0.16 plans predate the dial; every downstream gate
+        falls back to `standard`, which is exactly what it did unconditionally before the
+        dial existed. Retro-compat, same stance as `test-author-mode`.
+      - **An unrecognised level** → FAIL. A dial nobody can read is worse than no dial:
+        each downstream gate would silently pick its own default and they would diverge.
+      - **`low` on a spec that flagged a security surface** → FAIL. This is the erosion
+        control, and it is the one place the dial is not a judgment call. `low` buys the
+        lightest verification in the harness; it must never be reachable on work the SPEC
+        ITSELF says touches untrusted input, auth, or outbound requests. The spec's
+        checkboxes are the evidence and no plan prose overrides them.
+
+    `standard` on a security-flagged spec is *fine* — it is the honest classification for
+    most input-handling features, and the presence-vs-decision rule (testing-workflow) is
+    what keeps it cheap. The dial never waives a guard; it governs how much evidence beyond
+    that guard's proven presence the feature buys.
+    """
+    level, reason = plan_stakes(plan_text)
+
+    if level is None:
+        f.add("warn", "stakes",
+              "no `Stakes:` line — pre-0.16 plan; verification gates fall back to `standard`")
+        return
+
+    if level not in STAKES_LEVELS:
+        f.add("fail", "stakes",
+              f"unreadable stakes level `{level}` — must be one of: "
+              + ", ".join(STAKES_LEVELS))
+        return
+
+    if level == "low" and spec_text is not None:
+        flagged = spec_security_triggered(spec_text)
+        if flagged:
+            f.add("fail", "stakes",
+                  "`Stakes: low` on a spec that flagged a security-relevant surface "
+                  f"({'; '.join(flagged[:3])}) — `low` is not reachable here; the honest "
+                  "classification is `standard`, and presence-vs-decision is what keeps it cheap")
+            return
+
+    # I8 — the under-call WARN. Money/PII in the spec's own prose while the plan declares
+    # less than `high` deserves one visible question. WARN, never FAIL: prose keywords are
+    # weaker evidence than the spec's checked security boxes (which drive the `low` FAIL
+    # above), and a FAIL on a keyword would teach people to route around the dial.
+    if level != "high" and spec_text is not None:
+        m = SPEC_HIGH_STAKES.search(strip_fenced(spec_text))
+        if m:
+            f.add("warn", "stakes",
+                  f"`Stakes: {level}` while the spec mentions `{m.group(0)}` — money/PII "
+                  "surfaces usually read `high`; confirm the under-call is deliberate")
+            return
+
+    if level in ("high", "low") and not reason:
+        f.add("warn", "stakes",
+              f"`Stakes: {level}` states no reason — both are departures from the default; "
+              "say why in one line so a reviewer can challenge it")
+        return
+
+    f.add("pass", "stakes", f"Stakes: {level}" + (f" — {reason[:60]}" if reason else ""))
+
+
 HAS_P = re.compile(r"\[P\]")
 
 
@@ -396,35 +518,22 @@ TEST_AUTHOR_ANY_VALUE = re.compile(r"^\s+Test-author:\s*(\S.*)$")
 def check_test_author_mode(tasks_text: str, f: Findings) -> None:
     """D1 — verify every task's `Test-author:` continuation line per the
     harness-efficiency plan's rules table (specs/harness-efficiency/plan.md
-    section D1). Scans continuation lines between a matched TASK_LINE and the
-    next task line / heading / fence; fenced blocks are stripped first via the
-    existing strip_fenced so documentation examples never count."""
+    section D1). Walks each task's continuation block via the shared
+    `task_blocks()` walker (one boundary definition for every block-based
+    check); fenced blocks are stripped there so documentation examples never
+    count."""
     total = 0
     missing = []          # task ids with NO Test-author: line at all
     invalid = []          # (task_id, raw_value) — line present but doesn't match split|solo
     tier_a_solo_bare = [] # task ids: [Tier A] + solo with no reason after a dash
     tier_b_split = []     # task ids: [Tier B] + split (over-ceremony)
 
-    lines = strip_fenced(tasks_text).splitlines()
-    n = len(lines)
-    i = 0
-    while i < n:
-        tm = TASK_LINE.match(lines[i])
-        if not tm:
-            i += 1
-            continue
+    for task_id, task_rest, cont in task_blocks(tasks_text):
         total += 1
-        task_id = tm.group(1)
-        task_rest = tm.group(2)
         is_tier_a = bool(TIER_A.search(task_rest))
 
-        # Scan continuation lines until the next task line / heading / end.
-        j = i + 1
         found_line = None
-        while j < n:
-            nxt = lines[j]
-            if TASK_LINE.match(nxt) or heading_text(nxt):
-                break
+        for nxt in cont:
             m = TEST_AUTHOR_LINE.match(nxt)
             if m:
                 found_line = (m.group(1), (m.group(2) or "").strip())
@@ -433,11 +542,9 @@ def check_test_author_mode(tasks_text: str, f: Findings) -> None:
             if any_m:
                 found_line = ("__invalid__", any_m.group(1).strip())
                 break
-            j += 1
 
         if found_line is None:
             missing.append(task_id)
-            i += 1
             continue
 
         mode, reason = found_line
@@ -447,8 +554,6 @@ def check_test_author_mode(tasks_text: str, f: Findings) -> None:
             tier_a_solo_bare.append(task_id)
         elif mode == "split" and not is_tier_a:
             tier_b_split.append(task_id)
-
-        i += 1
 
     present = total - len(missing)
 
@@ -538,56 +643,206 @@ def check_security_boundary_mode(tasks_text: str, f: Findings) -> None:
       - **Tier A + solo + a security-boundary signal** — D1 says a Tier-A task in one of those
         categories is ALWAYS `split`. Either the mode is wrong, or the stated reason is
         describing a different task than the one in front of you.
-      - **Tier B + a security-boundary signal** — upstream of the mode question: per
-        `testing-workflow`'s erosion guard, security/auth/parsing/migration work is Tier A
-        *always, regardless of line count*. A Tier-B classification there is the earlier,
-        cheaper error.
+      - **Tier B + a security-boundary signal AND no presence proof** — a guard classified
+        Tier B with nothing at all proving it. Note the second half of that condition: it is
+        new, and it is the fix for `contact-page-8k`.
+
+    **Why Tier B on a boundary surface is no longer suspicious by itself.** This check used
+    to warn on EVERY Tier-B task whose files matched the boundary list, on the reading that
+    `testing-workflow`'s erosion guard makes security work Tier A regardless of size. That
+    reading conflated two obligations the skill now separates:
+
+      - **presence** — the guard is actually there, on every path, and actually reached.
+        Cheapest and broadest as a machine gate over the whole diff; never waived.
+      - **decision** — the predicate encodes a rule THIS PROJECT invented (a role, a window,
+        an ownership test, a threshold). That is Tier A at every stakes level.
+
+    A direct call to a hardened framework primitive — `wp_verify_nonce`, `current_user_can`,
+    `sanitize_text_field`, `is_email` — carries no decision of its own; its behaviour is
+    upstream's and upstream tests it. The project's risk is *omission*, which a presence proof
+    catches on every call site forever and a bespoke unit test catches on one call site once.
+    Warning on those pushed every form handler in a WordPress feature up to Tier A + `split`,
+    which is how a contact page bought an auth subsystem's verification.
+
+    So the signal is now the ABSENCE OF EVIDENCE, not the tier: Tier B on a boundary surface
+    is fine when the task names a presence proof on the ladder's first three rungs, and is a
+    WARN when it names nothing — or names `new test`, which contradicts its own tier
+    (exempt: the task also states an `Integration test:` contract — Tier B + an integration
+    contract + `Proven by: new test` is the designed WP wiring path, not a contradiction).
 
     WARN, never FAIL: a keyword is not knowledge. A false positive costs one dismissal; a FAIL
     on a false positive would teach people to route around the gate.
     """
+    downgraded, unproven, contradictory = [], [], []
+
+    for task_id, task_rest, cont in task_blocks(tasks_text):
+        term = _boundary_hit(task_rest)
+        if term is None:
+            continue
+        is_tier_a = bool(TIER_A.search(task_rest))
+
+        mode = None
+        for ln in cont:
+            m = TEST_AUTHOR_LINE.match(ln)
+            if m:
+                mode = m.group(1)
+                break
+
+        if is_tier_a and mode == "solo":
+            downgraded.append(f"{task_id} ({term})")
+        elif not is_tier_a and TIER.search(task_rest):
+            value = task_proven_by(cont)
+            rung = None
+            if value:
+                m = PROVEN_BY_RUNG.match(value)
+                rung = m.group(1).lower() if m else None
+            if rung in EVIDENCE_ELSEWHERE:
+                continue                      # presence proven elsewhere — the designed path
+            if rung == "new test":
+                # F2 exemption: Tier B + an `Integration test:` contract + `new test` is
+                # the designed WP wiring path — the "new test" IS the integration test the
+                # contract line states, not a contradiction of the tier.
+                if any(m and m.group(1) == "Integration"
+                       for m in (CONTRACT_LINE.match(ln) for ln in cont)):
+                    continue
+                contradictory.append(f"{task_id} ({term})")
+            else:
+                unproven.append(f"{task_id} ({term})")
+
+    if downgraded:
+        f.add("warn", "security-boundary-mode",
+              "Tier A + `solo` on what reads like a security-boundary category — D1 says "
+              "ALWAYS split; confirm the mode or correct it: " + ", ".join(downgraded[:6]))
+    if unproven:
+        f.add("warn", "security-boundary-mode",
+              "Tier B on a security-boundary surface with NOTHING proving it — name the "
+              "presence proof (`Proven by: machine gate|framework|existing test — <what>`) "
+              "or raise the tier: " + ", ".join(unproven[:6]))
+    if contradictory:
+        f.add("warn", "security-boundary-mode",
+              "Tier B but `Proven by: new test` — the tier says no bespoke test and the "
+              "evidence line says one is being written; one of them is wrong: "
+              + ", ".join(contradictory[:6]))
+
+
+# ── the evidence ladder ───────────────────────────────────────────────────────
+#
+# Before authoring a test, name what ALREADY proves the property. The ladder, cheapest and
+# broadest first:
+#
+#   1. machine gate   — a check the project already runs over the whole diff, every run
+#   2. framework      — the primitive is hardened upstream; your risk is omission, not
+#                       behaviour, and omission is a presence proof (rung 1), not a test
+#   3. existing test  — a test or seam assertion already reaches this path
+#   4. new test       — only now do you write one
+#
+# The point is not to write fewer tests. It is that evidence which is cheap, broad and
+# permanent outranks evidence that is expensive, narrow and one-off: a gate proving every
+# handler carries a nonce, forever, beats a unit test proving one handler carried one once.
+# Re-proving rung 1 or 2 by hand is the duplicated-evidence failure `contact-page-8k` is
+# made of — and the expensive copy is the weaker one.
+
+PROVEN_BY_RUNGS = ("machine gate", "framework", "existing test", "new test")
+PROVEN_BY_LINE = re.compile(r"^\s+Proven by:\s*(\S.*)$")
+PROVEN_BY_RUNG = re.compile(r"^(" + "|".join(PROVEN_BY_RUNGS) + r")\b", re.IGNORECASE)
+
+# Rungs 1–3 say the evidence lives SOMEWHERE ELSE. That one property drives both uses below,
+# which is why it is one tuple and not two:
+#   - it must be NAMED — an unnamed "Proven by: machine gate" is precisely the assertion this
+#     harness refuses to trust (rung 4 needs no name; `Unit test:` carries the contract);
+#   - it counts as a PRESENCE proof, so a Tier-B task on a security-boundary surface that
+#     names one is the designed path, not tier erosion (see check_security_boundary_mode).
+EVIDENCE_ELSEWHERE = ("machine gate", "framework", "existing test")
+
+
+def task_blocks(tasks_text: str):
+    """Yield (task_id, task_rest, [continuation lines]) per task, fences already stripped.
+
+    THE one boundary definition for every block-based check (`test-author-mode`,
+    `proven-by`, `security-boundary-mode`, `unit-test-contract` all walk it): a task's
+    continuation block ends at the next COLUMN-0 bullet (`- `) or heading. A top-level
+    bullet is never a continuation of the previous task, *even when its id doesn't
+    parse* — otherwise a malformed `- [ ] T07b …` bullet leaks its `Test-author:` /
+    `Proven by:` / waiver lines into the task above it, and that task gets graded on
+    another task's evidence (the ae65211 rule, generalized from unit-test-contract).
+    """
     lines = strip_fenced(tasks_text).splitlines()
     n = len(lines)
-    downgraded, tier_b_boundary = [], []
     i = 0
     while i < n:
         tm = TASK_LINE.match(lines[i])
         if not tm:
             i += 1
             continue
-        task_id, task_rest = tm.group(1), tm.group(2)
-        term = _boundary_hit(task_rest)
-        if term is None:
-            i += 1
-            continue
-        is_tier_a = bool(TIER_A.search(task_rest))
-
-        mode = None
+        cont = []
         j = i + 1
-        while j < n:
-            if TASK_LINE.match(lines[j]) or heading_text(lines[j]):
-                break
-            m = TEST_AUTHOR_LINE.match(lines[j])
-            if m:
-                mode = m.group(1)
-                break
+        while j < n and not lines[j].startswith("- ") and not heading_text(lines[j]):
+            cont.append(lines[j])
             j += 1
+        yield tm.group(1), tm.group(2), cont
+        i = j
 
-        if is_tier_a and mode == "solo":
-            downgraded.append(f"{task_id} ({term})")
-        elif not is_tier_a and TIER.search(task_rest):
-            tier_b_boundary.append(f"{task_id} ({term})")
-        i += 1
 
-    if downgraded:
-        f.add("warn", "security-boundary-mode",
-              "Tier A + `solo` on what reads like a security-boundary category — D1 says "
-              "ALWAYS split; confirm the mode or correct it: " + ", ".join(downgraded[:6]))
-    if tier_b_boundary:
-        f.add("warn", "security-boundary-mode",
-              "Tier B on what reads like a security-boundary category — testing-workflow's "
-              "erosion guard makes those Tier A regardless of size: "
-              + ", ".join(tier_b_boundary[:6]))
+def task_proven_by(cont: list[str]) -> str | None:
+    """The task's `Proven by:` value, or None."""
+    for ln in cont:
+        m = PROVEN_BY_LINE.match(ln)
+        if m:
+            return m.group(1).strip()
+    return None
+
+
+def check_proven_by(tasks_text: str, f: Findings) -> None:
+    """1d — every task names what proves its behaviour, from the evidence ladder.
+
+    Retro-compat matches `test-author-mode`: a task list where NO task carries the line is a
+    pre-0.16 plan → WARN. Once any task carries one, they all must — a half-adopted field is
+    worse than an absent one, because a reader cannot tell "nothing proves this" from
+    "nobody filled it in".
+
+    An unrecognised rung FAILs: the ladder is the whole point, and a free-text answer
+    ("covered by the suite") is the vagueness it replaces. Rungs 1–3 must NAME their
+    evidence; rung 4 need not, because `Unit test:` already states the contract.
+    """
+    total = 0
+    missing, bad_rung, unnamed = [], [], []
+
+    for task_id, _rest, cont in task_blocks(tasks_text):
+        total += 1
+        value = task_proven_by(cont)
+        if value is None:
+            missing.append(task_id)
+            continue
+        m = PROVEN_BY_RUNG.match(value)
+        if not m:
+            bad_rung.append(f"{task_id} ({value[:24]})")
+            continue
+        rung = m.group(1).lower()
+        if rung in EVIDENCE_ELSEWHERE:
+            rest = value[m.end():].strip(" —–-\t")
+            if not rest:
+                unnamed.append(f"{task_id} ({rung})")
+
+    if total == 0:
+        f.add("warn", "proven-by", "no task lines found (- [ ] T..)")
+        return
+    if len(missing) == total:
+        f.add("warn", "proven-by", "pre-0.16 tasks.md — no `Proven by:` lines")
+        return
+    if missing:
+        f.add("fail", "proven-by",
+              f"{len(missing)}/{total} task(s) missing a `Proven by:` line: "
+              + ", ".join(missing[:8]))
+    if bad_rung:
+        f.add("fail", "proven-by",
+              "unrecognised evidence rung (use: " + " | ".join(PROVEN_BY_RUNGS) + "): "
+              + ", ".join(bad_rung[:6]))
+    if unnamed:
+        f.add("fail", "proven-by",
+              "rung states evidence exists elsewhere but does not NAME it — an unnamed "
+              "proof is the assertion this harness refuses to trust: " + ", ".join(unnamed[:6]))
+    if not (missing or bad_rung or unnamed):
+        f.add("pass", "proven-by", f"all {total} tasks name their evidence rung")
 
 
 CONTRACT_LINE = re.compile(r"^\s+(Unit|Integration) test:\s*(\S.*)$")
@@ -603,10 +858,11 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
     `Unit test: no unit test: Tier B, <reason>` — a stated waiver, not an omission.
     Text after `Integration test:` is NEVER a waiver; it always reads as a contract.
 
-    The task's WHOLE continuation block is scanned and every contract/waiver line
-    collected before deciding, so line order never changes an outcome. The block ends
-    at the next top-level list item or heading — a column-0 bullet is never a
-    continuation of the previous task, even when its id doesn't parse. Enforced:
+    The task's WHOLE continuation block (per the shared `task_blocks()` walker) is
+    scanned and every contract/waiver line collected before deciding, so line order
+    never changes an outcome. The block ends at the next top-level list item or
+    heading — a column-0 bullet is never a continuation of the previous task, even
+    when its id doesn't parse. Enforced:
     - a **Tier A** task carrying the unit-waiver form FAILs, even when an
       `Integration test:` line accompanies it — the waiver text is a defect or an
       erosion attempt, and either deserves the loud stop;
@@ -616,25 +872,14 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
     Retro-compat matches test-author-mode: no task carrying either line at all is an older
     tasks.md and WARNs; partial presence is a defect and FAILs.
     """
-    lines = strip_fenced(tasks_text).splitlines()
-    n = len(lines)
     total, missing, tier_a_waived, integration_parallel = 0, [], [], []
-    i = 0
-    while i < n:
-        tm = TASK_LINE.match(lines[i])
-        if not tm:
-            i += 1
-            continue
+    for task_id, task_rest, cont in task_blocks(tasks_text):
         total += 1
-        task_id, task_rest = tm.group(1), tm.group(2)
         is_tier_a = bool(TIER_A.search(task_rest))
 
         has_unit_contract = has_unit_waiver = has_integration = False
-        j = i + 1
-        while j < n:
-            if lines[j].startswith("- ") or heading_text(lines[j]):
-                break
-            m = CONTRACT_LINE.match(lines[j])
+        for ln in cont:
+            m = CONTRACT_LINE.match(ln)
             if m:
                 is_unit_form = m.group(1) == "Unit"
                 if not is_unit_form:
@@ -643,7 +888,6 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
                     has_unit_waiver = True
                 else:
                     has_unit_contract = True
-            j += 1
 
         if not (has_unit_contract or has_unit_waiver or has_integration):
             missing.append(task_id)
@@ -651,7 +895,6 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
             tier_a_waived.append(task_id)
         if has_integration and not has_unit_contract and HAS_P.search(task_rest):
             integration_parallel.append(task_id)
-        i += 1
 
     if total == 0:
         return  # check_task_tiers already reports "no task lines"
@@ -781,9 +1024,11 @@ def run_checks(spec_dir: Path) -> Findings:
     if plan_text is not None:
         check_plan_gates(plan_text, f)
         check_threat_model(plan_text, spec_text, f)
+        check_stakes(plan_text, spec_text, f)
     if tasks_text is not None:
         check_task_tiers(tasks_text, f)
         check_test_author_mode(tasks_text, f)
+        check_proven_by(tasks_text, f)
         check_security_boundary_mode(tasks_text, f)
         check_unit_test_contract(tasks_text, f)
         check_clusters(tasks_text, f)

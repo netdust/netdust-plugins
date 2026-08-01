@@ -1,6 +1,6 @@
 ---
 name: testing-workflow
-description: "Use when verifying a task before marking it done, or a phase before sign-off, in the superpowers workflow — the per-task-close test-tier decision. Fires on 'I just finished a task — does it need a test, and at what tier?', 'should I write a test for this before marking it done', 'is this Tier A or B', 'I just added a lookup plus a thin React badge — does that need a test', 'do I write a RED test for this'. Risk-tiers what each task needs (RED-first test for logic/auth/parsing/migrations; no bespoke test for glue/wrappers/UI), and adds the seam test that catches wiring/wire-mock/concurrency bugs per-task unit tests miss. This is write-time / per-task. For AUDITING whether an already-green suite would actually go RED if a dangerous path broke — that is test-effectiveness (audit-time / per-phase), not this. Covers PHP (WordPress — Brain Monkey/wp-phpunit gate stack, or legacy Codeception/PHPUnit) and TypeScript (Vitest/Playwright)."
+description: "Use when verifying a task before marking it done, or a phase before sign-off, in the superpowers workflow — the per-task-close test decision. Fires on 'I just finished a task — does it need a test, and at what tier?', 'should I write a test for this before marking it done', 'is this Tier A or B', 'I just added a lookup plus a thin React badge — does that need a test', 'do I write a RED test for this', 'do I need a test for this nonce/capability/sanitize call', 'we wrote way too many tests for this', 'this feature is drowning in tests'. Asks three questions in order: what does a failure COST (the plan's Stakes dial, read never re-decided), what ALREADY proves this (the evidence ladder — machine gate > framework guarantee > existing test > new test, recorded as `Proven by:`), and only then what tier of test this task needs. Risk-tiers what each task needs (RED-first denial test for predicates encoding a rule THIS PROJECT chose; presence proof only for direct calls to hardened framework primitives that decide nothing; no bespoke test for glue/wrappers/UI), and adds the seam test that catches wiring/wire-mock/concurrency bugs per-task unit tests miss. This is write-time / per-task. For AUDITING whether an already-green suite would actually go RED if a dangerous path broke — that is test-effectiveness (audit-time / per-phase), not this. Covers PHP (WordPress — Brain Monkey/wp-phpunit gate stack, or legacy Codeception/PHPUnit) and TypeScript (Vitest/Playwright)."
 ---
 
 # Testing Workflow
@@ -17,6 +17,43 @@ But *verification* is not the same as *a new unit test on every task*. The disci
 > **Why tiered, not uniform.** A binary "test exists or not done" gate fires identically for a one-line `clsx` wrapper and a multi-tenancy authorization guard. The evidence is that this (a) manufactures tautological tests on trivial units the project then never trusts, and (b) gives *false confidence* on the units that matter — every high-severity defect in this project's history (cross-tenant auth never mounted, wire-mocked UI green against a leaking server, a same-millisecond race that passed by scheduling luck) **passed a green per-task unit test and was caught one gate later**. Tiering routes effort to where it catches bugs and redirects the rest to the seam/integration/holistic gates that actually catch the escaped classes.
 
 See **Task risk tier** below for how to classify, and **What the per-task gate cannot catch** for what to hand downstream instead of over-testing.
+
+## Three questions, in this order
+
+Tiering answered one question well and left two unasked. Ask all three, in order — each one can make the next cheaper, and skipping straight to the third is how a contact page buys an auth subsystem's verification (calibration: `contact-page-8k`).
+
+| # | Question | Where the answer comes from |
+|---|---|---|
+| **1** | **What does a failure here cost?** | The plan's `Stakes:` line — **read, never re-decided** |
+| **2** | **What already proves this?** | The evidence ladder below — answered per task, recorded as `Proven by:` |
+| **3** | **Does this task need a test, at what tier?** | The tier table below — the question this skill always asked |
+
+**Question 1 — stakes.** The plan carries `Stakes: high | standard | low — <reason>`, set at plan time (gate 1i) and machine-checked by `gate-check.py`. It is the *consequence* dial, and it is a different axis from the class dial: class asks how big the work is, stakes asks what breaks if it's wrong.
+
+| Stakes | Means | What it changes here |
+|---|---|---|
+| **high** | a failure loses money, data, access or privacy, or is irreversible: payment/billing, the product's own auth and tenancy rules, PII, destructive operations, migrations of live data | The full rule below, unrelaxed. Every guard decision gets its denial test; sibling guards get swept. |
+| **standard** | a failure breaks a working feature for real users, visibly and recoverably — most CRUD, most app logic, most integrations. **The default**, and where most work lives | The full rule below, with presence-vs-decision doing the pruning. This is the honest classification for most input-handling features. |
+| **low** | a failure shows a broken or empty page and is caught by looking at it — presentational surfaces, marketing pages, copy, config | Presence proofs + one seam assertion per wire. Tier A only where the predicate encodes a project decision. |
+
+**Stakes never waives a guard.** It governs how much evidence *beyond a guard's proven presence* the feature buys. And it is read from the plan, never chosen at run time — the same no-self-downgrade invariant the `Test-author:` field carries, for the same reason: the agent that would save the effort is the worst-placed to authorise saving it. If no `Stakes:` line exists (a pre-0.16 plan), treat the work as `standard`.
+
+## The evidence ladder (question 2)
+
+**Before authoring any test, name what already proves the property.** Cheapest and broadest first:
+
+| Rung | Evidence | Reach |
+|---|---|---|
+| **1. machine gate** | a check the project already runs — its linter, analyzer, type-checker, security scan, render or accessibility check; whatever `standards-gate` runs, or a project-configured full gate | the whole diff, every run, forever |
+| **2. framework** | the primitive is hardened upstream and carries its own suite | wherever it is called |
+| **3. existing test** | a test or seam assertion already reaches this path | one path, already paid for |
+| **4. new test** | you write one | one path, and you pay for it now |
+
+**The rule: evidence that is cheap, broad and permanent outranks evidence that is expensive, narrow and one-off.** A gate proving every handler carries a nonce, forever, is *stronger* evidence than a unit test proving one handler carried one once — and it is free at the point of use. Re-proving rung 1 or 2 by hand is not extra safety; it is a second, weaker copy of a proof you already have, and it is most of what a runaway test suite is made of.
+
+Record the answer on the task: `Proven by: machine gate | framework | existing test | new test — <name it>`. Rungs 1–3 must **name** their evidence — an unnamed "proven by the gate" is exactly the assertion this harness refuses to trust, and `gate-check.py` FAILs on it. Rung 4 needs no name; the task's `Unit test:` line already carries the contract. One documented looseness (deliberate, not enforced): `gate-check.py` verifies that a rung-1–3 proof is *named*, not that the named gate or test actually exists and covers the path — a fabricated name passes the machine check, and challenging it belongs to the cluster review gate and the phase-close test-effectiveness audit.
+
+**Rung 2 is not a licence to skip guards.** A framework primitive's *behaviour* is upstream's problem; its *presence at every call site* is yours, and that is what the erosion guard below is about.
 
 ## Who authors vs who greens — the test/dev split, made tier-conditional (no self-grading)
 
@@ -135,15 +172,30 @@ Every task is one of two tiers. **Name the tier in your task-close report** and 
 | **A — must have a behavioral RED→GREEN unit test** | Pure functions with branching logic, data transforms, state machines, **any security/auth/scope predicate**, **any code parsing untrusted input** (frontmatter, AI tool-call args, webhook/JSON payloads, file uploads), **DB migrations**, anything in the threat-modeling predicate. | A test that was **RED first** (you watched it fail against the absent/old behavior), asserts the **contract from the acceptance criteria** (incl. the denial/negative path for guards), now GREEN. No skip. |
 | **B — do NOT manufacture a bespoke unit test** | Glue / wiring / mount, pass-through wrapper over a typed library, presentational UI (classname/layout-only render), config / enum / seed additions, docs. | Full unit suite green + the change is **reachable** by an existing or new integration/seam assertion. Record one line: `no unit test: Tier B, <reason>`. |
 
-**The litmus for Tier B:** if the only RED you can produce is *"the module/component doesn't exist yet"* (not a behavioral failure), the unit is Tier B — do **not** dress a tautology up as a contract test. A pure pass-through over typed third-party libraries (`cn = twMerge(clsx(x))`) has no contract of its own; testing it re-asserts the library, which the anti-patterns forbid. **But first check the Erosion guard below: a security/auth/scope guard, untrusted-input parser, or state machine is ALWAYS Tier A even when it looks like a one-line pass-through — it always yields a real behavioral RED (a denied actor was previously allowed), so it can never pass this litmus.**
+**The litmus for Tier B:** if the only RED you can produce is *"the module/component doesn't exist yet"* (not a behavioral failure), the unit is Tier B — do **not** dress a tautology up as a contract test. A pure pass-through over typed third-party libraries (`cn = twMerge(clsx(x))`) has no contract of its own; testing it re-asserts the library, which the anti-patterns forbid. **But first check the Erosion guard below: a security/auth/scope guard, untrusted-input parser, or state machine that encodes a decision of this project's own is ALWAYS Tier A even when it looks like a one-line pass-through — it always yields a real behavioral RED (a denied actor was previously allowed), so it can never pass this litmus.**
 
-**Erosion guard — these are ALWAYS Tier A, no matter how few lines:** security/auth/scope guards, untrusted-input parsing, state machines. A 3-line `if (role === 'member') return 403` is Tier A. "It's just wiring" is not a license to under-test a guard; short ≠ trivial. If you are tempted to call a guard Tier B, that is a red flag — stop and write the RED-first denial test.
+### Erosion guard — presence and decision are two obligations, not one
+
+**These are ALWAYS Tier A, no matter how few lines:** security/auth/scope guards, untrusted-input parsing, and state machines **that encode a decision this project made**. A 3-line `if (role === 'member') return 403` is Tier A. "It's just wiring" is not a license to under-test a guard; short ≠ trivial.
+
+The qualifier is load-bearing, and it is new. Every guard carries **two** obligations, and the old rule collapsed them into one:
+
+| Obligation | The question | Best proof | Waivable? |
+|---|---|---|---|
+| **Presence** | Is the guard actually there, on every path that needs it, and actually reached? | A **machine gate** over the whole diff (ladder rung 1). Where the project has none: one seam assertion through the un-mocked chain. | **Never** — at any stakes level |
+| **Decision** | Does the predicate encode a rule *this project invented*? | A **Tier-A RED-first test** asserting the denial path | Never, where a decision exists |
+
+**The litmus for which one you're looking at: name the rule this predicate encodes.** If the only answer is *"the framework's rule"* — `wp_verify_nonce`, `current_user_can('edit_posts')`, `sanitize_text_field`, `is_email`, a typed validator's `.parse()` — there is no decision here. Its behaviour is upstream's and upstream tests it. Your risk is **omission**, and omission is a presence proof, not a behaviour test. If you *can* state a rule this project chose — "the author, or an editor, but only inside the submission window", "≤ 2000 characters", "members of this tenant only" — that is a decision, and it is Tier A at **every** stakes level, including `low`.
+
+**Why this qualifier exists.** Without it the erosion guard is an infinite test generator on framework-heavy work. A WordPress contact form calls a nonce check, a capability check, and three sanitizers; under the unqualified rule every one of those was Tier A, and D1 then made each of them `split` — two dispatches per task, a RED-first denial test per framework primitive, none of which could fail for any reason inside the project's control. That is how a contact page came to carry an auth subsystem's verification (calibration: `contact-page-8k`).
+
+**What has NOT changed:** if you are tempted to call a *decision* Tier B, that is still a red flag — stop and write the RED-first denial test. The relaxation is only on primitives that decide nothing, and only when you **name the presence proof that replaces the test**. Naming nothing is not a downgrade, it is a gap, and `gate-check.py`'s `security-boundary-mode` check warns on exactly that.
 
 ### The `Integration test:` contract (when the risk lives in real WP)
 
 Some risk cannot be expressed at the unit tier at all. The decision rule, stated positively: **name the real-WP behaviour the risk lives in that Brain Monkey cannot express** — hook lifecycle (the hook actually fires, in order, with real arguments), CPT registration effects (rewrite rules, capabilities), DB/schema behaviour (the row actually persists, the migration does what it claims). If you can name it, the task carries an `Integration test: <contract>` line in `tasks.md` (instead of — or belt+braces beside — `Unit test:`); if you cannot, the risk is unit-expressible and the ordinary tiers above apply.
 
-- **Set at plan time, like the tier and the `Test-author:` mode.** The planner writes the `Integration test: <contract>` line (gate 1d); no test-author, implementer, or controller re-decides it at run time.
+- **Set at plan time, like the tier and the `Test-author:` mode.** The planner writes the `Integration test: <contract>` line (gate 1d); no test-author, implementer, or controller re-decides it at run time. Its evidence rung is `Proven by: new test` — the new test IS the integration test the contract states — and `gate-check.py` treats Tier B + an `Integration test:` contract + `Proven by: new test` as the designed path, never as a tier contradiction.
 - **Extraction is NOT absolved.** Logic mixed into WP calls still gets extracted and unit-contracted alongside — the Integration contract covers only the genuinely WP-coupled remainder. "It touches WP" never converts branching logic into integration-only coverage.
 - **Every Tier-A obligation carries over unchanged** — RED-first, behavioral, and the DENIAL/negative path named in the contract line. "Hook fires + row persists" happy-path-only contracts are the erosion vector to refuse: the contract must also name what must NOT happen (invalid payload persists nothing; the unauthorized actor's write is rejected). There is no waiver form inside `Integration test:` — text after it always reads as a contract, never a waiver — and a Tier-A task carrying the unit-waiver form FAILs `gate-check.py` even when an `Integration test:` line accompanies it (the waiver text is a defect or an erosion attempt; loud stop either way).
 - **Proof-tier fidelity.** The RED and GREEN proofs must cite the integration runner (`ddev composer test:int` / `vendor/bin/phpunit -c phpunit.integration.xml`). An environment that cannot run the integration tier makes the task **BLOCKED/NEEDS_CONTEXT** — the unit suite is NEVER a substitute proof, however green.
@@ -184,7 +236,8 @@ Ask: "What does this task promise to the caller?" Test that contract.
 
 This is a **hard exclusion**, not advice. Writing a bespoke unit test for any item below is itself an anti-pattern — it manufactures ceremony the project will not trust and gives false coverage. These are Tier B: verify via the full suite + a seam/integration assertion, and record `no unit test: Tier B, <reason>`.
 
-- **Pure pass-through over a typed third-party lib** — `cn = twMerge(clsx(x))`. Any assertion you write is re-asserting the library's behavior; the lib's own suite + TypeScript cover it. *(A one-line **security/auth/scope guard** is NOT a pass-through — it is always Tier A; see the Erosion guard. "It forwards an already-tested helper's decision" does not make a guard Tier B.)*
+- **Pure pass-through over a typed third-party lib** — `cn = twMerge(clsx(x))`. Any assertion you write is re-asserting the library's behavior; the lib's own suite + TypeScript cover it. *(A one-line guard that encodes a **decision of this project's own** is NOT a pass-through — it is always Tier A; see the Erosion guard. "It forwards an already-tested helper's decision" does not make a **project rule** Tier B.)*
+- **Direct call to a hardened framework primitive, with no project branching on the result** — `wp_verify_nonce`, `current_user_can('edit_posts')`, `sanitize_text_field`, `is_email`, `schema.parse(body)`. The primitive decides nothing on your behalf and its behavior is upstream-tested; your risk is that the call is **missing**, not that it is wrong. Owed: a **presence proof** (`Proven by: machine gate|framework — <what>`), never a bespoke behavioral test. The moment you branch on the result in a project-specific way — a role comparison, a window, a threshold, an exception — it is a decision and back to Tier A.
 - **Classname/style-only presentational render** — assert *behavior* or skip. A test asserting `/bg-info/` is on an element proves nothing the user cares about, and the real bug in this category (overflow/layout) is invisible to jsdom — it needs live-DOM measurement, not a unit test.
 - **Trivial key/array mappings, enum→label lookups, config/seed additions** — no branching logic to fail.
 - **Private methods** (test through the public interface).
@@ -252,11 +305,20 @@ npx vitest run
 
 If the honest answer is *"none — it re-asserts a library, a classname, or a tautology,"* the test is the wrong test: it is Tier B, skip it. If the answer is *"a real defect, but my unit test can't reach it (it's a seam / race / cross-actor / adversarial-input bug),"* don't fake a green test — write the **seam test** or record the **deferral line** below. Only when you can name a real bug the *unit* test catches do you write the unit test.
 
+**Then ask the ladder's follow-up, which is the one that was missing:**
+
+> **"…and is anything already catching that bug more cheaply than I'm about to?"**
+
+If a machine gate the project already runs would go red on it, or the primitive's own upstream suite covers it, you are about to buy a second, narrower copy of a proof you already own. Record the rung and move on. The first question stops you writing tests that catch nothing; this one stops you writing tests that catch something *already caught*. Yesterday's runaway suites are mostly made of the second kind, and they are harder to spot because every one of them is individually defensible.
+
 ### Task sign-off checklist
 
 The task is signed off across the split on a `split` task, or by the implementer alone on a `solo` task (per the `Test-author:` mode — see "Who authors vs who greens" above). On `split`, the **test-author** owns the first three boxes (authorship + tier); the **implementer** owns the rest (green without weakening + suite + statics). On `solo`, the **implementer** owns all of them itself, and "test-author" below reads as "the implementer, authoring its own test." The controller confirms ALL of them reconcile before the task is done:
 
-- [ ] **Tier named** (A or B) with a one-sentence justification — *by the test-author, from the acceptance criteria* — and security/auth/parsing/state-machine units are Tier A regardless of line count
+- [ ] **Stakes read, not decided** — the plan's `Stakes:` level is stated in the report (or `standard` when the plan predates the dial). A task that argues its way to a lower level than the plan's has bypassed the no-self-downgrade invariant; that is a HALT, not a judgment call
+- [ ] **`Proven by:` recorded** — the evidence rung (`machine gate | framework | existing test | new test`), with rungs 1–3 **naming** the evidence. "The gate covers it" without saying which gate is a failed box
+- [ ] **Tier named** (A or B) with a one-sentence justification — *by the test-author, from the acceptance criteria* — and security/auth/parsing/state-machine units **that encode a decision of this project's own** are Tier A regardless of line count
+- [ ] **Every guard has its presence proven** — named machine gate, or one seam assertion through the un-mocked chain. This box is **never** waived, at any stakes level, for any tier
 - [ ] **Tier A:** a behavioral test the test-author watched go **RED first**, asserting the contract incl. the **denial/negative path** for guards — *OR* — **Tier B:** `no unit test: Tier B, <reason>` recorded by the test-author
 - [ ] **If this task WIRES a piece into the real chain:** a seam test exists — ≥1 assertion through the un-mocked chain **+** ≥1 negative/adversarial case
 - [ ] **Implementer greened the author's test WITHOUT weakening it** (`Weakened? NO`); it did not re-author, relax, or skip the contract test — a dispute is an escalation, not an edit
@@ -270,6 +332,8 @@ If any box is unchecked, or the author's RED and the implementer's GREEN don't r
 The deferral line must name a **specific gate AND a specific risk class** — a vague "deferred to QA" is a failed box. The controller collects every deferral line at phase-complete and confirms each named risk was actually exercised before sign-off.
 
 > **Count is not quality.** A Tier-B task legitimately adds 0 tests; a Tier-A task adding **one sharp RED-first denial test outranks four happy-path mirror tests**. Keep the `Test count: <before> -> <after>` line in the commit body for observability, but do not treat count growth as a quality signal or a target — the right count is contract-driven.
+>
+> **And count is not free.** "Not a quality signal" was true and insufficient: it told you not to *aim* at a high count without giving anyone a way to notice one accumulating. `bin/verify-budget.py` is that sense — it compares added test lines to added implementation lines against the ceiling the feature's stakes justify, and HALTs to your human partner when the spend outruns the plan. `building` runs it at every cluster gate. A HALT is not "delete tests": most often the honest fix is that the stakes line was too low, and raising it is a normal outcome.
 
 ---
 
@@ -412,6 +476,8 @@ These apply at every level. Subagents and controller must both avoid:
 | **The coder authoring its own contract test on a `split` task** | Self-grading — the test drifts to fit the code, the denial path vanishes, a guard gets self-excused to Tier B | Dispatch per the plan's mode: an independent `test-author` writes the RED test from the contract BEFORE the implementer greens it. (On a `solo` task the implementer authoring its own test is the DESIGNED mode, not this anti-pattern — the independent check moves to review + test-effectiveness instead.) |
 | **Weakening a handed-over RED test to make it pass** | Moves the grader one seat over — the split is defeated, GREEN means nothing | Green it without editing the contract test; if the test is wrong, escalate `NEEDS_CONTEXT`, don't rewrite it |
 | **Tautological test on a zero-logic unit** | RED is only "module not found"; the test re-asserts a library/classname and proves nothing | It's Tier B — skip the unit test, record the reason, verify via the suite + seam |
+| **Re-proving by hand what a machine gate already proves** | A second, narrower, more expensive copy of a proof you already own — and it rots independently. The gate covers every call site forever; your test covers one, once | Walk the evidence ladder first. Record `Proven by: machine gate — <which>` and write no test |
+| **A behavioral test on a framework primitive that decides nothing** | `wp_verify_nonce`/`current_user_can`/`sanitize_*` are upstream-tested; the test can only fail if upstream broke. Your actual risk — the call being absent — is the one thing it does not check | Prove **presence** (gate, or one seam assertion). Save Tier A for predicates encoding a rule this project chose |
 | **Mocking the already-filtered server response** | Test goes green while the server filter is untested — both sides pass, the wire leaks | For any client↔server wire contract, add one test (or shake-out `curl`) that crosses the **un-mocked** wire |
 | `sleep(5)` / `wait(5000)` | Flaky, slow | Condition-based waits |
 | Happy path only | Error paths break too | Always test happy + error + edge |
@@ -480,6 +546,9 @@ Auditability is satisfied by the **full-suite run + the tier/deferral report in 
 - **test-author** (agent) — dispatched ONLY for `Test-author: split` tasks; owns the FIRST half of the split: classifies the tier and writes the Tier-A RED test (loading `writing-tests`) from the contract, independently of the coder. Reports `## Test contract` + `RED_READY`.
 - **implementer** (agent) — on `split`: owns the SECOND half, greens the author's test without weakening it. On `solo`: owns BOTH halves — classifies the tier, authors its own RED-first test, and greens it. Owns the deferral line + suite/static checks either way.
 - **writing-tests** (the CRAFT skill this gate reaches for — loaded by whichever agent is authoring the test: the `test-author` on `split`, the `implementer` itself on `solo`) — Governs RED→GREEN *within* a task: the mechanics of writing one test that bites (Arrange-Act-Assert, state-over-interactions, Real>Fakes>Stubs>Mocks, the denial path, the un-mocked seam, the behavioral-RED-via-shell for new symbols). This gate decides WHETHER and AT WHAT TIER; `writing-tests` is the HOW for Tier A. For **Tier A**, RED-first is mandatory (not the soft "or covers the new behavior" escape). The gate owns the sign-off checklist and deferral line; on `split`, `writing-tests` hands the written test back to the test-author, which hands the RED contract to the implementer; on `solo`, the implementer hands it straight to itself.
-- **threat-modeling** — Any unit in the threat-modeling predicate is Tier A; its named mitigations are the denial-path contracts your Tier-A tests assert
+- **threat-modeling** — Any unit in the threat-modeling predicate that encodes a decision of this project's own is Tier A; its named mitigations are the denial-path contracts your Tier-A tests assert. A mitigation implemented as a direct call to a hardened framework primitive is proven **present**, not re-tested — the mitigation is that the call is there on every path
+- **`planning` gate 1i** — authors the `Stakes:` line this skill reads. Set once, at plan time, machine-checked by `gate-check.py`'s `stakes` check; never re-decided by any run-time agent
+- **`standards-gate`** — the canonical example of ladder rung 1. Whatever linter/analyzer the project configures is a machine gate whose findings you never re-prove by hand. Where a project configures a broader gate (a security scan, a render check, an accessibility check), the same logic applies to everything it proves
+- **`bin/verify-budget.py`** — the tripwire on this skill's own output. Compares added test lines to added implementation lines against the ceiling the stakes level justifies, and HALTs to the human when verification outruns the plan. Run by `building` at every cluster gate
 - **test-effectiveness** — SIBLING at a different altitude. This skill is write-time + per-task ("does this task need a test, at what tier, is the RED-first/denial path written?"). `test-effectiveness` is audit-time + per-phase ("across the whole diff, would the suite go RED if any dangerous path broke?"). This skill WRITES the Tier-A denial test; test-effectiveness AUDITS that it exists across every sibling guard and crosses every un-mocked wire — and names the seven green-but-blind failure modes (stale fixture, test-world≠real-world, wire-mock leak, unmounted guard, missing-denial, no-coverage, concurrency) that a passing per-task suite still ships. Fired at building Stage 3, before shake-out.
 - **ntdst-architecture / ntdst-data / ntdst-patterns** (WP design skills) — design must still yield per-task tier + test expectations; rigorous review adds deeper checks

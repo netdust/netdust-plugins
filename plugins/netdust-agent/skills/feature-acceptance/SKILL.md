@@ -45,6 +45,18 @@ The `## Acceptance flows` section embedded in the plan. One row per intended-use
 | Create a work item | member | browser | open list → click +New → type title → Enter | row appears optimistically, persists on reload | **empty** title submitted; **denied** actor (viewer role) gets no +New; **double-submit** (Enter twice fast) → one row not two; **boundary** 10k-char title; **mid-flow fail** (network drops on save) → optimistic row rolls back + toast |
 | Assign via API | agent token | api | POST /items/:id {assignee} | 200, assignee set, event emitted | **unauthorized** token → 403; **nonexistent** id → 404; **concurrent** two assigns race → last-write-wins by updated_at; **malformed** body → 422 |
 
+**How many edges the matrix owes — read the plan's `Stakes:` line.** The six classes below are the enumeration; how many of them get *driven*, and whether a drive becomes a committed test file, scales with what a failure costs. Enumeration is never optional — listing an edge and recording why nobody drove it is cheap and honest; silently omitting it is the hole this matrix exists to close.
+
+| Stakes | Enumerate | Drive | Author a durable spec |
+|---|---|---|---|
+| **high** | all six | all six | yes — these flows recur and their regressions are expensive |
+| **standard** | all six | the classes with a **named failure history on this kind of surface** (for a form: empty submit, denied actor, double-submit, mid-flow failure), plus any edge the threat model names | only where the flow is a money/data path, or the edge **reproduced a real bug** |
+| **low** | all six | the happy flow **and the delivery seam** — the one thing whose silent failure nobody would notice by looking (the mail actually sends, the row actually writes) | no, unless an edge reproduced a real bug |
+
+**The rule that keeps the drive from becoming the suite: a drive is evidence, not necessarily a file.** Driving an edge through the real browser and recording `pass` in the manifest IS the verification — committing a Playwright spec for it is a *separate* decision about whether the flow will recur and is worth maintaining. Turning every drive into a durable spec by default is one of the two ways a low-stakes feature ends up carrying a high-stakes test suite (calibration: `contact-page-8k`); the other is re-proving framework guarantees, which `testing-workflow`'s evidence ladder owns.
+
+At `low` stakes the delivery seam is not negotiable. A contact form whose validation is exhaustively driven and whose `wp_mail` call was never once observed to deliver has verified the cheap half and skipped the half that loses the lead.
+
 **The six edge classes every flow is checked against** (omit one only with a written reason). Each carries a real Folio incident where a green suite shipped the bug:
 
 1. **Empty / zero state** — no data, blank input, first-run, empty list, a prop a data layer toggles to empty. *(Folio: `useDocumentDraft` seeded from `doc ?? placeholder`; React Query flipped `doc` to `undefined` on refetch mid-session → editor blanked + a stale-frontmatter 422 on agent-save. The unit test never saw the toggle.)*
@@ -108,6 +120,8 @@ These thoughts mean a feature is about to ship broken-in-use. Stop.
 |---|---|
 | "All the unit tests pass, the feature works." | Unit-green proves the code is correct in the small. It says nothing about the empty state, the denied actor, the double-submit, or the mid-flow network fail. Drive the flow. |
 | "I listed the flows, the matrix is done." | A flow with no edges is half a row. The bugs live in the edges, not the happy path. Enumerate the six edge classes or write why one doesn't apply. |
+| "I drove the edge, so I should commit the spec." | Two different decisions. The drive is the evidence; the committed spec is a maintenance commitment you take on only where the flow recurs and its regression is expensive. Defaulting to "commit everything" is how a marketing page ends up with a billing engine's test suite. |
+| "It's a low-stakes page, the drive can be light." | Light, yes — absent at the delivery seam, no. The one edge a `low` feature always drives is the thing whose failure is silent: the mail sends, the row writes, the webhook fires. Everything else on a broken page announces itself. |
 | "There's a Playwright test, the UI is covered." | Covered ≠ the edges are driven. A happy-path Playwright spec that never submits empty, never races, never drops the network proves the easy path only. |
 | "I tested it in jsdom, the component renders." | jsdom is not the browser. The rendered-DOM contract, the real CSS, the actual click target — drive the real browser or you've proven the unit, not the feature. |
 | "The API test mocks the client, it's fine." | Then you tested the mock. Drive the un-mocked wire once — the leak shows there, never in the mock. |

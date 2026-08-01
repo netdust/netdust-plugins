@@ -160,6 +160,16 @@ If any required block or line is missing for the task's mode, or a `split` task'
 
 **Step 2.8 — HALT at every review-gate marker (the cluster boundary is a hard stop).** When you reach a `── REVIEW GATE ──` / STOP marker in the plan (placed by `planning`'s task-shaping gate), OR the end of a phase's task group, you STOP. Commit the cluster's tasks, run `/integration` on that cluster's diff, then review — and do NOT begin the next task until that review is clear. The diff a reviewer holds must be one cluster (~3–4 tasks), never a whole long phase run flat. **The pull to "just keep going to the next task, I'll review at the end" is the exact failure the cluster rule exists to prevent** — it produces an un-bisectable mega-diff and lets the agent grade a large body of its own work in one pass. Treat the marker as non-negotiable as a failing test. If the plan you're executing is a long phase with NO such markers, that is a planning defect — add the markers (a plan-correction commit) before running past ~4 tasks. (Slug: `teardown-cluster`.)
 
+  **Run the verification-effort tripwire before you dispatch the review.** At each cluster gate:
+
+  ```bash
+  python3 <plugin>/bin/verify-budget.py specs/<feature> --base <base_ref>
+  ```
+
+  It compares added test lines against added implementation lines and HALTs when the spend exceeds what the plan's `Stakes:` level justifies. This is the only thing in the harness that can notice verification effort compounding — every other gate asks "is this verified?", none asked "is this verification worth what it cost?", and that gap let a contact page accumulate ~8000 lines of tests with every individual gate satisfied (calibration: `contact-page-8k`).
+
+  **A HALT is a STOP-and-report to your human partner, not a cleanup task.** Do not resolve it by deleting tests, and do not quietly continue. Report what was verified, what it cost, and which cause applies: (1) the stakes line was too low — raise it in a plan-correction commit and carry on, which is a normal and frequent outcome; (2) evidence is being duplicated — something on the ladder's cheaper rungs already proves what these tests re-prove by hand; (3) acceptance edges are being committed as durable specs where a single drive was the evidence owed. The script names all three at the HALT. It fails open on any git problem — its only power is to interrupt a human, and it must never spend that on its own tooling.
+
   **Reviewer independence — the agent that wrote the code never reviews it.** The review is a DISPATCH to the reviewer personas, never a pass you do inline over your own diff. This is the review-stage twin of `<test_dev_split>`, and it fails the same way when skipped: **a self-review converges on the happy path.** The author already believes the denial path is handled — that belief is what produced the code — so a reviewer holding it asks the same questions and finds the same nothing. `doubting-decisions` states the principle for a plan decision ("the agent that just made a decision is the worst-placed to attack it"); it applies verbatim to a diff.
 
   - **Fresh context, not just a fresh prompt.** The reviewer must not inherit the implementing agent's reasoning trail. An agent told what the code was *meant* to do reads the diff as intended rather than as written, which is precisely the blindness being bought out.
@@ -178,11 +188,12 @@ If any required block or line is missing for the task's mode, or a `split` task'
 
 After all tasks in a phase complete and the upstream skill's final-review step is done:
 
+0. **Read the plan's `Stakes:` line and state it** before running the gates below — steps 2 and 3 both scale against it, and neither may re-decide it (the no-self-downgrade invariant, same as `Test-author:`). A plan predating the dial reads as `standard`.
 1. **Phase-complete integration gate** — `testing-workflow` phase-complete (integration + acceptance), or run `/integration`.
-2. **Test-effectiveness audit** — invoke `test-effectiveness` (Situation A) over the phase diff. The integration gate proved the tests *pass*; this proves they would *bite*. Walk the seven failure modes over every dangerous path the diff introduced — for each guard, fixture, wire, mount, and timer, name the test that goes RED if it breaks, or record it `blind` and fix it. The resulting `covered`/`blind`/`fixed` manifest is the convergence target for the next step's reviewers. (Especially load-bearing on security-rich / multi-tenancy phases — see `traverse-clause`.)
+2. **Test-effectiveness audit** — invoke `test-effectiveness` (Situation A) over the phase diff. The integration gate proved the tests *pass*; this proves they would *bite*. Walk the seven failure modes over the surface the stakes level sets — every dangerous path at `high`, the paths the plan already named at `standard`, the machine floor + un-mocked wires at `low`; a machine gate that would fail the build is a legitimate answer to the litmus, not a gap — for each guard, fixture, wire, mount, and timer, name the test that goes RED if it breaks, or record it `blind` and fix it. The resulting `covered`/`blind`/`fixed` manifest is the convergence target for the next step's reviewers. (Especially load-bearing on security-rich / multi-tenancy phases — see `traverse-clause`.)
 3. **Feature-acceptance verification** — if the phase added/changed a user-facing feature, invoke `feature-acceptance` (Situation B) to *drive* the `## Acceptance flows` matrix `planning` authored at 1g. Drive each flow + edge through its faithful layer — UI flows through the real browser (Playwright spec → else `superpowers-chrome` `use_browser` against the running dev server), backend flows through the un-mocked wire — and emit a `pass`/`fail`/`not-reachable`/`unverified-no-browser` manifest. (`/shakeout` runs this for you.) No UI flow is `pass` without a browser driving it.
 4. **Shake-out** — invoke `shake-out`, or its stack-specific replacement (see `<stack_overrides>`); or run `/shakeout` at spec close. This is the spec-complete / pre-merge gate: re-runs integration, runs E2E, and dispatches the reviewer agents against the full branch diff. **The spec-close panel composition is set by the branch diff's review tier:** FULL → the 5-persona panel (`reviewer` + `code-simplicity-reviewer` + `security-sentinel` + `performance-oracle` + `invariant-auditor`; +`ntdst-drift-reviewer` on WP); STANDARD → `reviewer` + `invariant-auditor` only; LIGHT → a single `reviewer` pass. State the branch tier before dispatch; one-way escalation still applies. `/shakeout` reads the tier and dispatches accordingly.
-5. **Finish** — `superpowers:finishing-a-development-branch`. (`shake-out`'s own completion step has already invoked `superpowers:verification-before-completion` — don't re-run it here.)
+5. **Finish** — `superpowers:finishing-a-development-branch`. Run `verify-budget.py` once more over the WHOLE branch diff first: a per-cluster pass can stay under the ceiling at each gate and still land a branch well over it. Report the final ratio to your human partner with the branch summary — it is cheap observability on the question this harness could not previously ask itself. (`shake-out`'s own completion step has already invoked `superpowers:verification-before-completion` — don't re-run it here.)
 6. **Compound** (spec-close only) — invoke `compounding`. After the branch is finished, harvest what the spec taught into PROPOSALS: a patch to `docs/architecture/CODE-MAP.md` + a `/skill-audit` scoped to the skills touched this spec. Report-only — the user approves what's written, nothing auto-edits. **Cadence: spec-close / `/shakeout`-level only — NOT every sub-phase.**
 
 </process>
@@ -202,8 +213,14 @@ You author the test; you do NOT implement the logic. Before reporting STATUS:
 
 1. Apply the `testing-workflow` discipline (read it once per session):
    classify the task's risk tier (A/B) from the ACCEPTANCE CRITERIA + threat
-   model — not from any implementation. Apply the erosion guard literally
-   (guard/parser/state-machine = Tier A regardless of line count).
+   model — not from any implementation. Apply the erosion guard literally:
+   a guard/parser/state-machine that encodes a rule THIS PROJECT chose (a
+   role, a window, an ownership test, a threshold) = Tier A regardless of
+   line count. A direct call to a hardened framework primitive that decides
+   nothing (wp_verify_nonce, current_user_can, sanitize_*, schema.parse)
+   owes a PRESENCE proof, not a behavioural test — name it on the
+   `Proven by:` line. Read the plan's `Stakes:` line; you do NOT re-decide
+   it.
 
 2. Derive the contract from the criteria / threat-model mitigation, never
    from code. For Tier A, write the RED-first BEHAVIORAL test incl. the
@@ -218,7 +235,10 @@ You author the test; you do NOT implement the logic. Before reporting STATUS:
 4. End your final message with this block, verbatim and complete:
 
    ## Test contract
-   - Tier: <A | B> — <one-sentence justification (erosion guard applied)>
+   - Stakes: <high | standard | low> (read from the plan; `standard` if it predates the dial)
+   - Proven by: <machine gate | framework | existing test | new test> — <named; rungs 1-3 MUST name it>
+   - Tier: <A | B> — <one-sentence justification (erosion guard applied: presence vs decision)>
+   - Guard presence: <the gate or seam assertion proving every guard is reachable, or "n/a — no guard">
    - Contract source: <acceptance criterion / threat-model mitigation / flow row>
    - Test file(s): <paths, or "none — Tier B">
    - Signature shell (new symbol only): <path + sentinel body, or "n/a">
@@ -320,7 +340,11 @@ you MUST:
 1. Apply the `testing-workflow` discipline (read it once per session):
    classify the task's risk tier (A/B) from the ACCEPTANCE CRITERIA + threat
    model — not from code you're about to write. Apply the erosion guard
-   literally (guard/parser/state-machine = Tier A regardless of line count).
+   literally: a guard/parser/state-machine that encodes a rule THIS PROJECT
+   chose = Tier A regardless of line count. A direct call to a hardened
+   framework primitive that decides nothing owes a PRESENCE proof, not a
+   behavioural test — name it on the `Proven by:` line. Read the plan's
+   `Stakes:` line; you do NOT re-decide it.
    You do NOT get to re-decide `solo` vs `split` — that mode arrived from
    the plan via the controller; if you believe this task should have been
    `split` (a security-boundary Tier-A task marked solo by mistake), escalate
@@ -342,7 +366,10 @@ you MUST:
 4. End your final message with these two blocks, verbatim and complete:
 
    ## Test evidence
-   - Tier: <A | B> — <one-sentence justification (erosion guard applied)>
+   - Stakes: <high | standard | low> (read from the plan; `standard` if it predates the dial)
+   - Proven by: <machine gate | framework | existing test | new test> — <named; rungs 1-3 MUST name it>
+   - Tier: <A | B> — <one-sentence justification (erosion guard applied: presence vs decision)>
+   - Guard presence: <the gate or seam assertion proving every guard is reachable, or "n/a — no guard">
    - Contract test author: self — solo mode (plan: Test-author: solo)
    - Test file(s): <paths, or "none — Tier B">
    - RED proof: <command> → <1-3 line snippet showing BEHAVIORAL fail>
@@ -396,6 +423,9 @@ These thoughts mean you are about to skip a gate. Stop.
 | "Skipping the verbatim addendum saves a few lines" | The verbatim form is what closes the audit gap. Skipping it reverts to honor-system (`subphase-a-0of7`). |
 | "I see the fix for all three review findings, I'll bundle them" | One TDD cycle per finding, one systematic-debugging invocation per bug (`one-cycle-per-bug`). |
 | "Two-stage review is ceremony for a simple task" | The review loop catches what TDD doesn't. Do not skip it. |
+| "The budget tripwire HALTed — I'll trim the weakest tests and move on" | Deleting tests to satisfy a spend check is the worst available response, and the script says so. HALT means STOP AND REPORT: most often the honest answer is that the stakes line was too low. Raising it is a normal outcome; quietly cutting coverage is not. |
+| "Every task here touches a nonce or a sanitizer, so the whole feature is Tier A + split" | Those are framework primitives that decide nothing — they owe a presence proof, not a behavioural test each. Reserve Tier A for predicates encoding a rule this project chose. Doing otherwise is exactly `contact-page-8k`. |
+| "The plan says `Stakes: low`, but I think this deserves the full sweep" | Then say so and correct the plan — a stakes line is raised in a plan-correction commit, in the open. Silently verifying above the declared level is the same invariant break as silently verifying below it: the dial stops meaning anything the moment a run-time agent re-decides it. |
 | "I'll just finish the rest of the phase's tasks, then review the whole thing at the end" | That's the un-bisectable mega-diff (`teardown-cluster` / Step 2.8). HALT at the review-gate marker. A reviewer must hold one cluster, not a 7-task phase. |
 | "I'll classify the tier and record the deferral line after the commit, not before reporting" | Order is: verify-at-tier → full suite + static analysis → report with the tier + RED-first/Tier-B + deferral blocks. The blocks must be in the report. |
 | "This cluster only touches auth lightly — I'll run STANDARD to save time" | Touching a 1a surface AT ALL = TIER FULL. The trigger is binary on the surface, not a severity judgment — and under-calling FULL is the dangerous direction. |
@@ -423,8 +453,9 @@ This skill has succeeded when:
 4. Step 2.5 ground-truthing was performed per-task for every task integrating against other code.
 5. Execution HALTed at every `── REVIEW GATE ──` marker, with the review tier stated and the matching fan-out **dispatched to reviewer personas — never reviewed inline by the agent that wrote the cluster**; escalation, when triggered, was one-way to FULL.
 6. Every code-task close recorded a `Standards:` line; the `subagent-stop` backstop did not have to fire.
-7. Phase close ran the full Stage-3 ladder: integration → test-effectiveness → feature-acceptance drive → shake-out → finish → (spec-close) compounding.
-8. No flat task-list executor was used in place of this spine; no re-planning happened inside it.
+7. Phase close ran the full Stage-3 ladder: integration → test-effectiveness → feature-acceptance drive → shake-out → finish → (spec-close) compounding — each scaled to the plan's `Stakes:` level, which was READ and stated, never re-decided here.
+8. `verify-budget.py` ran at every cluster gate and once over the whole branch diff; any HALT reached the human with the three causes named, and was never resolved by deleting tests.
+9. No flat task-list executor was used in place of this spine; no re-planning happened inside it.
 
 If any gate that *should* have fired did not, the skill failed at its specific job — even if the code shipped correctly. This spine exists for *gate-coverage durability*; the upstream skills handle code correctness.
 

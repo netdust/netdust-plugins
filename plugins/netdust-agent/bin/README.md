@@ -20,13 +20,27 @@ bin/
 │                       (`Unit test:` / `Integration test:` — semantics in
 │                       testing-workflow; enforcement rules in the checker docstring),
 │                       review-cluster sizing, REVIEW GATE markers + provisional tiers,
-│                       FR-n/SC-n → task coverage. Exit 1 = blocked.
+│                       FR-n/SC-n → task coverage, the Stakes dial, Proven by: evidence
+│                       rungs. Exit 1 = blocked.
 ├── loop-check.py     ← the loop ledger: derives FINISHED from tasks.md boxes + gate-check,
 │                       never from an agent's assertion
 ├── run-trace.py      ← in-loop event trace (single-writer append; `show --durations`)
 ├── run-score.py      ← deterministic 5-dimension evaluator rubric over the trace
-└── run-cost.py       ← read-only transcript miner: per-dispatch / per-stage token tables
+├── run-cost.py       ← read-only transcript miner: per-dispatch / per-stage token tables
+└── verify-budget.py  ← THE TRIPWIRE. Added test lines vs added implementation lines over a
+                        git range, against the ceiling the plan's Stakes: level justifies.
+                        Exit 1 = HALT to the human. Fails OPEN on any git problem.
 ```
+
+**`verify-budget.py` is the odd one out and deliberately so.** Every other gate here answers
+*"is this verified?"*. That one answers *"is this verification worth what it cost?"* — the
+question nothing in the harness could ask until a contact page accumulated ~8000 lines of
+tests with every individual gate satisfied (calibration: `contact-page-8k`). It is not a
+quality measure and must never be read as one: a HALT means the spend outran the plan's
+declared stakes and a human should look, and the most common correct resolution is that the
+stakes line was too low. It cannot see effort that left no lines in the diff — dispatch
+round-trips, re-planning, a test-author/implementer pair ping-ponging on a fixture; that
+half of the picture is `run-cost.py`'s.
 
 **There are no artifact templates.** The scripts here are the only definition of what
 `spec.md` / `plan.md` / `tasks.md` must carry, and the authoring skills state that contract in

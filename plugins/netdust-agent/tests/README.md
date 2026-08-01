@@ -11,6 +11,18 @@ The 2026-05-17 audit found:
 
 Pattern: the harness has been optimized for "looks comprehensive" rather than "is verifiably doing something". This directory closes that gap.
 
+## The two calibration regressions
+
+Two assertions in here exist to stop a specific, expensive failure recurring. Read them
+before relaxing anything they touch:
+
+- **`test_spec_gate_check.py`** — *"Tier B on a boundary surface WITH a named presence proof
+  draws no warning."* If that warning comes back, every framework-primitive call in a
+  WordPress feature gets pushed to Tier A + `split` again, and the contact page repeats
+  itself (calibration: `contact-page-8k`).
+- **`test_verify_budget.py`** — *"an unresolvable git ref fails OPEN."* The tripwire's only
+  power is to interrupt a human. It must never spend that on its own tooling breaking.
+
 ## Run
 
 ```bash
