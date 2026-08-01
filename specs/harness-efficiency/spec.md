@@ -1,5 +1,7 @@
 # Feature Specification: Harness efficiency tuning (empirical adjustments from the 2026-07-04 runs)
 
+<!-- gate-check: legacy-artifact — authored 2026-07-04, before the `## Success criteria` contract existed; the feature shipped at agent 0.8.0 and its sign-off was the C5 integration gate, so criteria written now would be invented after the fact rather than signed off against -->
+
 > **netdust override template.** Overrides spec-kit's core `spec-template.md`. Produced by
 > `/speckit.specify` (wrapped by the `spec-authoring` skill, Stage 0.5). Describes **what**
 > and **why** — **no technology stack** (that is deferred to `plan.md`). All

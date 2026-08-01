@@ -18,6 +18,9 @@ CHECKER = Path(__file__).parent.parent / "bin" / "gate-check.py"
 
 SPEC_TRIGGERED = """# Feature Specification: Webhook receiver
 
+## Success criteria
+- **SC-1:** 0 requests reach an RFC1918 target
+
 ## Security-relevant surfaces
 - [x] User-controlled URLs / server-side outbound requests
 - [ ] Auth / session / token / capability surfaces
@@ -29,6 +32,9 @@ SPEC_TRIGGERED = """# Feature Specification: Webhook receiver
 
 SPEC_CLEAN_NOSEC = """# Feature Specification: Rename a label
 
+## Success criteria
+- **SC-1:** 1 label changed, 0 other copy touched
+
 ## Security-relevant surfaces
 - [ ] User-controlled URLs / server-side outbound requests
 - [x] None of the above
@@ -38,6 +44,9 @@ SPEC_CLEAN_NOSEC = """# Feature Specification: Rename a label
 """
 
 SPEC_WITH_UNRESOLVED = """# Feature Specification: Importer
+
+## Success criteria
+- **SC-1:** a 10 MB CSV imports in under 30 seconds
 
 ## Functional requirements
 - FR-1: import a CSV [NEEDS CLARIFICATION: max file size?]
@@ -97,10 +106,13 @@ SPEC_SC_TEMPLATE_UNTOUCHED = """# Feature Specification: [FEATURE NAME]
 - [x] None of the above
 """
 
-# A spec that predates the contract carrying this section at all → WARN, never FAIL.
-# Same retro-compat stance as test-author-mode's pre-0.8 WARN. The two live specs/ dirs
-# are the only reason it is not "fail" — flip gate-check.py's "warn" once they carry it.
+# A spec that predates the contract carrying this section at all. The silent WARN floor is
+# gone: total absence FAILs unless the artifact states a legacy waiver out loud — the waiver
+# downgrades ABSENCE ONLY to a WARN that names it, so a genuinely old spec stays green while
+# staying visible.
 SPEC_PRE_TEMPLATE_NO_SC = """# Feature Specification: Rename a label
+
+<!-- gate-check: legacy-artifact — authored 2026-05, before the Success criteria contract -->
 
 ## Problem / why
 
@@ -226,11 +238,17 @@ TASKS_COVERS_ALL_REQS = """# Tasks: Course publishing
 
 ### Cluster C1  (3 tasks \u00b7 provisional tier: STANDARD)
 - [ ] T01 [Tier A] publish a module (FR-1, SC-1)  (files: publish.ts)
+      Test-author: solo \u2014 A-lite, pure orchestration, no security-boundary category
       Unit test: publishes in one call; denial path: unauthorised editor rejected
 - [ ] T02 [Tier A] authorisation guard (FR-2)  (files: guard.ts)
+      Test-author: split
       Unit test: rejects a non-editor; allows an editor
 - [ ] T03 [Tier B] publish audit log (FR-3)  (files: log.ts)
+      Test-author: solo \u2014 Tier B
       Unit test: no unit test: Tier B, wiring over the existing logger
+
+**Integration gate (C1):** an editor publishes end to end and the log carries the entry; a
+non-editor's attempt is refused and logged.
 
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(STOP: commit C1 \u2014 tier STANDARD)*
 """
@@ -245,12 +263,17 @@ TASKS_COVERS_SOME_REQS = """# Tasks: Course publishing
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(STOP: commit C1 \u2014 tier STANDARD)*
 """
 
-# No id cited anywhere — the live-corpus shape. WARN, never FAIL.
+# No id cited anywhere — the live-corpus shape, now carrying the explicit waiver that
+# keeps it a WARN. Without the marker, total absence FAILs like everything else (10q-b).
 TASKS_CITES_NO_REQS = """# Tasks: Course publishing
+
+<!-- gate-check: legacy-artifact — task list predates the FR-n citation convention and the 0.8.0 Test-author field -->
 
 ### Cluster C1  (1 task \u00b7 provisional tier: STANDARD)
 - [ ] T01 [Tier A] publish a module  (files: publish.ts)
       Unit test: publishes in one call; denial path: unauthorised editor rejected
+
+**Integration gate (C1):** an editor publishes end to end; a non-editor is refused.
 
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(STOP: commit C1 \u2014 tier STANDARD)*
 """
@@ -265,6 +288,8 @@ TASKS_TIER_A_SOLO_ON_BOUNDARY = """# Tasks: x
       Test-author: solo \u2014 A-lite, pure transform, no security-boundary category
       Unit test: replays the migration on a seeded fixture
 
+**Integration gate (C1):** a token minted before the rewrite still authenticates after it.
+
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(tier FULL)*
 """
 
@@ -275,6 +300,8 @@ TASKS_TIER_A_SPLIT_ON_BOUNDARY = """# Tasks: x
 - [ ] T01 [Tier A] rewrite the token store  (files: db/tokens.sql)
       Test-author: split
       Unit test: replays the migration on a seeded fixture
+
+**Integration gate (C1):** a token minted before the rewrite still authenticates after it.
 
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(tier FULL)*
 """
@@ -288,6 +315,8 @@ TASKS_TIER_B_ON_BOUNDARY = """# Tasks: x
 - [ ] T01 [Tier B] tidy the session guard  (files: lib/session-guard.ts)
       Test-author: solo \u2014 Tier B
       Unit test: no unit test: Tier B, tidy-up only
+
+**Integration gate (C1):** an expired session is still refused after the tidy-up.
 
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(tier FULL)*
 """
@@ -304,6 +333,8 @@ TASKS_TIER_B_ON_BOUNDARY_PROVEN = """# Tasks: x
       Proven by: machine gate \u2014 the project gate asserts a nonce on every handler
       Unit test: no unit test: Tier B, direct call to a framework primitive
 
+**Integration gate (C1):** the contact handler refuses a request with no nonce end to end.
+
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(tier FULL)*
 """
 
@@ -316,6 +347,8 @@ TASKS_TIER_B_ON_BOUNDARY_CONTRADICTORY = """# Tasks: x
       Test-author: solo \u2014 Tier B
       Proven by: new test
       Unit test: no unit test: Tier B, tidy-up only
+
+**Integration gate (C1):** an expired session is still refused after the tidy-up.
 
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(tier FULL)*
 """
@@ -331,6 +364,8 @@ TASKS_TIER_B_BOUNDARY_INTEGRATION_NEW_TEST = """# Tasks: x
       Test-author: solo \u2014 Tier B
       Proven by: new test
       Integration test: the scheduled sweep fires once and expired rows are gone; denial: live rows survive
+
+**Integration gate (C1):** the sweep is scheduled exactly once and fires on the real cron chain.
 
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(tier FULL)*
 """
@@ -356,6 +391,8 @@ TASKS_MALFORMED_BULLET_LEAK = """# Tasks: x
       Proven by: framework \u2014 typed lib, presence via the suite
       Unit test: no unit test: Tier B, presentational
 
+**Integration gate (C1):** the refresh call and the badge render compose on a live route.
+
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(tier STANDARD)*
 """
 
@@ -372,10 +409,203 @@ TASKS_BOUNDARY_FALSE_FRIENDS = """# Tasks: x
       Test-author: solo \u2014 Tier B
       Unit test: no unit test: Tier B, agent-prose edit
 
+**Integration gate (C1):** the reviewer personas still load and dispatch unchanged.
+
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(tier LIGHT)*
 """
 
-PLAN_GATES_FULL = """# Implementation Plan: Webhook receiver
+# ── `files-segment` fixtures — the declared task-line grammar, and what it protects ──
+# THE demonstration case: a Tier-B task doing auth + payment work, with no `(files: …)`
+# segment. Before this check it drew NO security-boundary WARN at all — `auth` and `payment`
+# live in FILES_SECURITY (matched against the segment), not in the deliberately narrow
+# PROSE_SECURITY, so with no segment there was nothing to match them against. Omitting the
+# segment was a free way to blind the no-self-downgrade detector, which is why this FAILs
+# rather than shrugging.
+TASKS_NO_FILES_SEGMENT = """# Tasks: Invoice wizard
+
+### Cluster C1  (2 tasks · provisional tier: LIGHT)
+- [ ] T01 [Tier B] build the invoice wizard, auth, payment capture and email
+      Test-author: solo — Tier B
+      Unit test: no unit test: Tier B, glue
+- [ ] T02 [Tier B] wire it up
+      Test-author: solo — Tier B
+      Unit test: no unit test: Tier B, glue
+
+**Integration gate (C1):** the wizard issues an invoice end to end.
+
+── REVIEW GATE ──  *(tier LIGHT)*
+"""
+
+# A planned yield point (`planning`: "destructive-migration approval, credentials, deploy
+# confirmation") touches no files by nature. It is exempt, and the exemption is reported.
+TASKS_HUMAN_YIELD_NO_FILES = """# Tasks: x
+
+### Cluster C1  (2 tasks · provisional tier: FULL)
+- [ ] T01 [Tier A] write the teardown migration  (files: migrations/002.sql)
+      Test-author: split
+      Unit test: replays on a seeded fixture; denial path: refuses to run twice
+- [ ] T02 [HUMAN] [Tier B] approve the teardown migration
+      Test-author: solo — Tier B
+      Unit test: no unit test: Tier B, human approval step
+
+**Integration gate (C1):** the migration is applied only after the recorded approval.
+
+── REVIEW GATE ──  *(tier FULL)*
+"""
+
+# A `[HUMAN]` task ALSO marked `[P]` — the contradiction `planning` names explicitly ("a
+# planned yield point, never `[P]`"). `[P]` tells the controller it may dispatch this task in
+# parallel with its siblings, so a `[HUMAN]` task carrying it is a yield point an armed
+# `/loop` can run straight past — the exact failure the mark exists to prevent.
+# `check_clusters` already refuses `[P]` on an irreversible cluster; this is that rule one
+# level down, on the task.
+TASKS_HUMAN_PARALLEL = """# Tasks: x
+
+### Cluster C1  (2 tasks · provisional tier: FULL)
+- [ ] T01 [Tier A] write the teardown migration  (files: migrations/002.sql)
+      Test-author: split
+      Unit test: replays on a seeded fixture; denial path: refuses to run twice
+- [ ] T02 [HUMAN] [P] [Tier B] approve the destructive migration
+      Test-author: solo — Tier B
+      Unit test: no unit test: Tier B, human approval step
+
+**Integration gate (C1):** the migration is applied only after the recorded approval.
+
+── REVIEW GATE ──  *(tier FULL)*
+"""
+
+# ── `integration-gate` fixtures (1d) ─────────────────────────────────────────
+# A cluster with a STOP marker and a tier but nothing stated to verify ACROSS its tasks:
+# `building` Step 2.8 HALTs here and runs `/integration` against no contract, which is where
+# the review quietly degrades to reading the diff for style.
+TASKS_NO_INTEGRATION_GATE = """# Tasks: x
+
+### Cluster C1  (1 task · provisional tier: STANDARD)
+- [ ] T01 [Tier A] validate URL  (files: lib/url.ts)
+      Test-author: split
+      Unit test: rejects RFC1918; allows a public https URL
+
+── REVIEW GATE ──  *(tier STANDARD)*
+"""
+
+# The false-positive guard for the ANCHORED regex: a task's own prose mentions an integration
+# gate ("covered by the cluster integration gate") but no line DECLARES one. An unanchored
+# match would let a cluster satisfy this check by talking about it — the same
+# mention-is-not-an-answer failure the security-surfaces check exists to refuse.
+TASKS_INTEGRATION_GATE_ONLY_IN_PROSE = """# Tasks: x
+
+### Cluster C1  (1 task · provisional tier: STANDARD)
+- [ ] T01 [Tier B] wire route  (files: routes.ts)
+      Test-author: solo — Tier B
+      Unit test: no unit test: Tier B, wiring only — covered by the cluster integration gate
+
+── REVIEW GATE ──  *(tier STANDARD)*
+"""
+
+# The wp-manager corpus shape: a tasks.md whose clusters were authored before the per-cluster
+# `Integration gate:` line existed — NO cluster carries one, and the file says so with a
+# waiver. Total absence + waiver → WARN naming it; partial absence is never waived (the
+# convention is in use, so a bare cluster is a defect — same absence-only rule as the floors).
+TASKS_INTEGRATION_GATE_WAIVED = """# Tasks: x
+
+<!-- gate-check: legacy-artifact — clusters authored before the per-cluster Integration gate: line; cross-task verification ran at each review gate via /integration -->
+
+### Cluster C1  (1 task · provisional tier: STANDARD)
+- [ ] T01 [Tier A] validate URL  (files: lib/url.ts)
+      Test-author: split
+      Unit test: rejects RFC1918; allows a public https URL
+
+── REVIEW GATE ──  *(tier STANDARD)*
+
+### Cluster C2  (1 task · provisional tier: LIGHT)
+- [ ] T02 [Tier B] wire route  (files: routes.ts)
+      Test-author: solo — Tier B
+      Unit test: no unit test: Tier B, wiring only
+
+── REVIEW GATE ──  *(tier LIGHT)*
+"""
+
+# ── `loop-budget` fixtures (1d loop-auditability) ────────────────────────────
+# The bold form is what BOTH live plans actually write. run-score.py's regex did not match
+# it, so the budget read as absent on 100% of the corpus and every run graded
+# ungraded-by-default; this fixture pins the shape both readers must accept.
+PLAN_BOLD_LOOP_BUDGET = """# Implementation Plan: x
+
+## Constitution check
+- [x] ok
+
+## Threat model
+N/A — no surface flagged.
+
+## Architecture invariants touched
+N/A
+
+## Spec-premise ground-truth
+N/A
+
+## Phases & review clusters
+See tasks.md.
+
+## Stakes
+Stakes: standard — fixture
+
+## Technical context
+- **Loop budget:** ~20 iterations — 12 tasks + 5 clusters + slack
+"""
+
+PLAN_NO_LOOP_BUDGET = """# Implementation Plan: x
+
+## Constitution check
+- [x] ok
+
+## Threat model
+N/A — no surface flagged.
+
+## Architecture invariants touched
+N/A
+
+## Spec-premise ground-truth
+N/A
+
+## Phases & review clusters
+See tasks.md.
+
+## Stakes
+Stakes: standard — fixture
+"""
+
+# A plan whose ONLY budget line sits inside a fence (quoting the template) — strip_fenced
+# must run before the search, so this reads as ABSENT, not as a declared ~99 ceiling.
+PLAN_FENCED_LOOP_BUDGET_ONLY = PLAN_NO_LOOP_BUDGET + """
+## Technical context
+
+The budget line goes here, e.g.:
+
+```
+- **Loop budget:** ~99 iterations
+```
+"""
+
+# The run-observability shape: no `Test-author:` line anywhere, and an explicit waiver saying
+# why. The waiver downgrades ABSENCE to a WARN that names it — never partial presence, never
+# an invalid value, and never without a stated reason.
+TASKS_WAIVED_NO_TEST_AUTHOR = """# Tasks: x
+
+<!-- gate-check: legacy-artifact — predates the 0.8.0 Test-author field -->
+
+### Cluster C1
+- [ ] T01 [Tier A] validate URL  (files: lib/url.ts)
+      Unit test: rejects RFC1918
+- [ ] T02 [Tier B] wire route  (files: routes.ts)
+      Unit test: no unit test: Tier B, glue
+"""
+
+
+# The stakes-less base: every required heading and the loop budget, but NO `Stakes:` line.
+# The stakes fixtures below append their own `## Stakes` section to this; the reference
+# PLAN_GATES_FULL adds a `standard` dial so the compliant set stays compliant now that a
+# missing dial FAILs unless waived.
+PLAN_GATES_BASE = """# Implementation Plan: Webhook receiver
 
 ## Constitution check  [GATE]
 - [x] No RULES.md non-negotiable violated.
@@ -393,6 +623,14 @@ N/A — no reuse premise.
 
 ## Phases & review clusters  [GATE]
 See tasks.md.
+
+## Technical context
+- **Loop budget:** ~6 iterations — 3 tasks + 2 clusters + slack
+"""
+
+PLAN_GATES_FULL = PLAN_GATES_BASE + """
+## Stakes  [GATE]
+Stakes: standard — a failure breaks the webhook flow for real users, recoverably
 """
 
 # ── `stakes` fixtures — the consequence dial (1i) ─────────────────────────────
@@ -401,22 +639,22 @@ See tasks.md.
 # SPEC ITSELF flagged as security-relevant. `standard` there is fine — that is the honest
 # classification for most input-handling features, and presence-vs-decision keeps it cheap.
 
-PLAN_STAKES_LOW = PLAN_GATES_FULL + """
+PLAN_STAKES_LOW = PLAN_GATES_BASE + """
 ## Stakes  [GATE]
 Stakes: low \u2014 worst case is a broken-looking page
 """
 
-PLAN_STAKES_STANDARD = PLAN_GATES_FULL + """
+PLAN_STAKES_STANDARD = PLAN_GATES_BASE + """
 ## Stakes  [GATE]
 Stakes: standard \u2014 a failure breaks a working feature for real users, recoverably
 """
 
-PLAN_STAKES_UNREADABLE = PLAN_GATES_FULL + """
+PLAN_STAKES_UNREADABLE = PLAN_GATES_BASE + """
 ## Stakes  [GATE]
 Stakes: medium-ish \u2014 somewhere in between
 """
 
-PLAN_STAKES_HIGH_NO_REASON = PLAN_GATES_FULL + """
+PLAN_STAKES_HIGH_NO_REASON = PLAN_GATES_BASE + """
 ## Stakes  [GATE]
 Stakes: high
 """
@@ -425,19 +663,19 @@ Stakes: high
 # silently demoted to the no-line WARN because its reason used parentheses or a comma
 # instead of an em-dash: the WARN reads "fall back to standard", which is a silent
 # downgrade of a level somebody stated.
-PLAN_STAKES_HIGH_PAREN_REASON = PLAN_GATES_FULL + """
+PLAN_STAKES_HIGH_PAREN_REASON = PLAN_GATES_BASE + """
 ## Stakes  [GATE]
 Stakes: high (touches billing rows that cannot be replayed)
 """
 
-PLAN_STAKES_STANDARD_COMMA_REASON = PLAN_GATES_FULL + """
+PLAN_STAKES_STANDARD_COMMA_REASON = PLAN_GATES_BASE + """
 ## Stakes  [GATE]
 Stakes: standard, breaks a working feature recoverably
 """
 
 # F3 — a fenced `Stakes:` example (a plan quoting the template) is not a declared level.
 # The plan below carries ONLY the fenced sample, so the verdict must be the no-line WARN.
-PLAN_STAKES_FENCED_ONLY = PLAN_GATES_FULL + """
+PLAN_STAKES_FENCED_ONLY = PLAN_GATES_BASE + """
 ## Stakes  [GATE]
 
 The dial goes here, e.g.:
@@ -479,7 +717,7 @@ SPEC_MONEY_NO_BOX = """# Feature Specification: Refund flow
 Handles payment provider webhooks and refund amounts.
 """
 
-PLAN_STAKES_LOW_NO_REASON = PLAN_GATES_FULL + """
+PLAN_STAKES_LOW_NO_REASON = PLAN_GATES_BASE + """
 ## Stakes  [GATE]
 Stakes: low
 """
@@ -501,6 +739,8 @@ TASKS_PROVEN_BY_COMPLETE = """# Tasks: Contact page
       Proven by: new test
       Unit test: a 2001-character message is refused, a 2000-character one is accepted
 
+**Integration gate (C1):** the submit handler accepts a capped message end to end and refuses an over-cap one.
+
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(tier STANDARD)*
 """
 
@@ -515,6 +755,8 @@ TASKS_PROVEN_BY_PARTIAL = """# Tasks: x
       Test-author: solo \u2014 Tier B
       Unit test: no unit test: Tier B, presentational
 
+**Integration gate (C1):** the cap and the confirmation compose on a live submit.
+
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(tier STANDARD)*
 """
 
@@ -526,6 +768,8 @@ TASKS_PROVEN_BY_BAD_RUNG = """# Tasks: x
       Proven by: the suite covers it
       Unit test: no unit test: Tier B, presentational
 
+**Integration gate (C1):** the confirmation renders on a live submit.
+
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(tier STANDARD)*
 """
 
@@ -536,6 +780,8 @@ TASKS_PROVEN_BY_UNNAMED = """# Tasks: x
       Test-author: solo \u2014 Tier B
       Proven by: machine gate
       Unit test: no unit test: Tier B, presentational
+
+**Integration gate (C1):** the confirmation renders on a live submit.
 
 \u2500\u2500 REVIEW GATE \u2500\u2500  *(tier STANDARD)*
 """
@@ -556,6 +802,12 @@ N/A.
 
 ## Phases & review clusters  [GATE]
 See tasks.md.
+
+## Technical context
+- **Loop budget:** ~6 iterations — 3 tasks + 2 clusters + slack
+
+## Stakes  [GATE]
+Stakes: standard — a failure breaks the webhook flow for real users, recoverably
 """
 
 PLAN_MISSING_HEADING = """# Implementation Plan: Webhook receiver
@@ -571,6 +823,12 @@ N/A.
 
 ## Phases & review clusters  [GATE]
 See tasks.md.
+
+## Technical context
+- **Loop budget:** ~6 iterations — 3 tasks + 2 clusters + slack
+
+## Stakes  [GATE]
+Stakes: standard — a failure breaks the webhook flow for real users, recoverably
 """
 
 # The reference COMPLIANT tasks.md: sized clusters, a STOP marker closing each, a
@@ -582,16 +840,25 @@ TASKS_GOOD = """# Tasks: Webhook receiver
 ## Phase 1 — receiver
 
 ### Cluster C1  (2 tasks · provisional tier: FULL)
-- [ ] T01 [P] [Tier A] validate URL  (files: lib/url.ts)
+- [ ] T01 [P] [Tier A] validate URL (SC-1)  (files: lib/url.ts)
+      Test-author: split
       Unit test: rejects an RFC1918 target and an http:// downgrade; allows a public https URL
 - [ ] T02 [Tier B] wire route  (files: routes.ts)
+      Test-author: solo — Tier B
       Unit test: no unit test: Tier B, wiring only — covered by the cluster integration gate
+
+**Integration gate (C1):** a real request reaches the handler through the wired route and an
+RFC1918 target is refused end to end, not just at the validator.
 
 ── REVIEW GATE ──  *(STOP: commit C1, `/integration`, `/code-review` — tier FULL)*
 
 ### Cluster C2 — (irreversible: drop legacy table) — solo
 - [ ] T03 [Tier A] migration  (files: migrations/001.sql)
+      Test-author: split
       Unit test: replays the migration on a seeded fixture; denial path: refuses to run twice
+
+**Integration gate (C2):** the migration replays on a seeded copy and the receiver still serves
+after the drop.
 
 ── REVIEW GATE ──  *(STOP: commit C2, `/integration`, `/code-review`, `/security-review` — tier FULL)*
 """
@@ -817,10 +1084,25 @@ def run():
     results.append((rc == 1 and "success-criteria" in out and "placeholder" in out,
                     "bracketed placeholder body FAILs, digits in the example ignored"))
 
-    # 10d. retro-compat: no ## Success criteria section at all → WARN, gate stays PASS
+    # 10d. a spec with no ## Success criteria but an explicit legacy waiver → WARN that
+    # NAMES the waiver, gate stays PASS. The silent retro-compat floor is gone.
     rc, out = _run({"spec.md": SPEC_PRE_TEMPLATE_NO_SC})
-    results.append((rc == 0 and "! [success-criteria]" in out,
-                    "spec predating the contract, no ## Success criteria: WARNs, never FAILs"))
+    results.append((rc == 0 and "! [success-criteria]" in out
+                     and "legacy waiver exercised" in out,
+                    "no ## Success criteria + a stated legacy waiver WARNs, naming the waiver"))
+
+    # 10d-b. the same spec with NO waiver → FAIL, and the finding tells the author the
+    # waiver form exists (an old artifact says so out loud; a new one adds the section).
+    rc, out = _run({"spec.md": SPEC_PRE_TEMPLATE_NO_SC.replace(
+        "<!-- gate-check: legacy-artifact — authored 2026-05, before the Success criteria contract -->\n\n", "")})
+    results.append((rc == 1 and "success-criteria" in out and "legacy-artifact" in out,
+                    "no ## Success criteria and no waiver FAILs, naming the waiver form"))
+
+    # 10d-c. a waiver marker with NO reason is not a waiver — same rule as a bare Tier-A solo.
+    rc, out = _run({"spec.md": SPEC_PRE_TEMPLATE_NO_SC.replace(
+        "authored 2026-05, before the Success criteria contract", "")})
+    results.append((rc == 1 and "success-criteria" in out,
+                    "a reason-less success-criteria waiver marker does not waive anything"))
 
     # ── `security-surfaces` — the arming switch (spec side) ───────────────────
     # These four are the highest-value cases in this file: each one is a spec that
@@ -876,10 +1158,20 @@ def run():
     results.append((rc == 1 and "unit-test-contract" in out and "Tier A may not waive" in out,
                     "a Tier A task waiving its test with `no unit test:` FAILs"))
 
-    # 10n. retro-compat: zero `Unit test:` lines anywhere → WARN, never FAIL
+    # 10n. zero test-contract lines anywhere and NO waiver → FAIL, naming every bare task.
+    # This previously WARNed on pre-convention retro-compat grounds; that floor was
+    # unreachable on the live corpus and an all-or-nothing floor rewards writing ZERO
+    # contracts over writing some — the exact shape a hollow tasks.md walks through.
     rc, out = _run({"tasks.md": TASKS_NO_TEST_AUTHOR_LINES})
-    results.append(("! [unit-test-contract]" in out,
-                    "zero `Unit test:` lines WARNs as a pre-contract tasks.md, never FAILs"))
+    results.append((rc == 1 and "unit-test-contract" in out
+                     and "T01" in out and "T02" in out,
+                    "zero test-contract lines FAILs (no silent floor), naming T01 and T02"))
+
+    # 10n-b. the same file with an explicit legacy waiver → WARN naming the waiver.
+    rc, out = _run({"tasks.md": "<!-- gate-check: legacy-artifact — predates the Unit test: contract line -->\n"
+                    + TASKS_NO_TEST_AUTHOR_LINES})
+    results.append(("! [unit-test-contract]" in out and "legacy waiver exercised" in out,
+                    "zero test-contract lines + a stated waiver WARNs, naming the waiver"))
 
     # ── `security-boundary-mode` — the free-form `solo` reason, made visible ───
 
@@ -940,6 +1232,102 @@ def run():
     results.append((rc == 0 and "security-boundary-mode" not in out,
                     "`auth` in test-author.md and `acl` in performance-oracle.md do not match"))
 
+    # ── `files-segment` — declared grammar, and the detector it keeps alive ────
+
+    # 10w. tasks with no `(files: …)` segment → FAIL, naming them
+    rc, out = _run({"tasks.md": TASKS_NO_FILES_SEGMENT})
+    results.append((rc == 1 and "files-segment" in out and "T01" in out and "T02" in out,
+                    "task lines with no `(files: …)` segment FAIL, naming T01 and T02"))
+
+    # 10x. THE reason it FAILs: the same auth/payment task draws no security-boundary WARN
+    # without a segment to match FILES_SECURITY against. This pins the calibration — the
+    # files-segment check is what stops that silence being reachable.
+    results.append(("security-boundary-mode" not in out,
+                    "no files segment ⇒ the auth/payment task draws no boundary WARN "
+                    "(why files-segment FAILs rather than shrugs)"))
+
+    # 10y. the short `(f: …)` form counts — FILES_SEGMENT is the single reader of this grammar
+    rc, out = _run({"tasks.md": TASKS_NO_REVIEW_TIER})
+    results.append(("files-segment" in out and "✓ [files-segment]" in out,
+                    "the short `(f: …)` form satisfies files-segment"))
+
+    # 10ya. a `[HUMAN]` yield point needs no files segment — it is an approval, not a file
+    # edit, and demanding paths would invite inventing one. The exemption is REPORTED, not
+    # silent, so a planner cannot hide a code task behind a [HUMAN] marker unnoticed.
+    rc, out = _run({"tasks.md": TASKS_HUMAN_YIELD_NO_FILES})
+    results.append(("✓ [files-segment]" in out and "1 [HUMAN] yield point(s) exempt" in out,
+                    "a [HUMAN] task is exempt from files-segment, and the exemption is named"))
+
+    # ── `human-yield` (1d loop-auditability) — a yield point is never parallel ──
+
+    # 10yb. `[HUMAN]` + `[P]` on the same task → FAIL, naming it. `planning` states the rule
+    # outright ("a planned yield point, never `[P]`") and nothing enforced it: the mark
+    # exists so an armed /loop STOPS, and `[P]` tells the controller it may dispatch
+    # alongside its siblings. A task carrying both is a yield point the loop can run past.
+    rc, out = _run({"tasks.md": TASKS_HUMAN_PARALLEL})
+    results.append((rc == 1 and "human-yield" in out and "T02" in out,
+                    "a [HUMAN] task also marked [P] FAILs, naming it (T02)"))
+
+    # 10yc. the same yield point without `[P]` → clean
+    rc, out = _run({"tasks.md": TASKS_HUMAN_PARALLEL.replace("[HUMAN] [P]", "[HUMAN]")})
+    results.append((rc == 0 and "✓ [human-yield]" in out,
+                    "a [HUMAN] task that is not [P] PASSES"))
+
+    # 10yd. a plan with no [HUMAN] task at all is silent — most features have none, so there
+    # is nothing to require here, only a contradiction to refuse.
+    rc, out = _run({"tasks.md": TASKS_GOOD})
+    results.append(("human-yield" not in out,
+                    "a tasks.md with no [HUMAN] task says nothing about human-yield"))
+
+    # ── `integration-gate` (1d) — what the Step 2.8 HALT verifies against ─────
+
+    # 10z. a cluster with a marker and a tier but no integration gate → FAIL
+    rc, out = _run({"tasks.md": TASKS_NO_INTEGRATION_GATE})
+    results.append((rc == 1 and "integration-gate" in out,
+                    "a cluster stating no `Integration gate:` FAILs"))
+
+    # 10aa. mention ≠ declaration: the ANCHORED regex must not accept a task's own prose
+    rc, out = _run({"tasks.md": TASKS_INTEGRATION_GATE_ONLY_IN_PROSE})
+    results.append((rc == 1 and "integration-gate" in out,
+                    "a task mentioning 'the cluster integration gate' in prose does not "
+                    "satisfy the check — it must be DECLARED at line start"))
+
+    # 10aa-b. the wp-manager corpus shape: NO cluster carries the line and the file states a
+    # waiver → WARN naming the waiver (absence only, kept visible).
+    rc, out = _run({"tasks.md": TASKS_INTEGRATION_GATE_WAIVED})
+    results.append((rc == 0 and "! [integration-gate]" in out
+                     and "legacy waiver exercised" in out,
+                    "total integration-gate absence + a stated waiver WARNs, naming it"))
+
+    # 10aa-c. the waiver never excuses PARTIAL absence: give C1 a gate line, keep the
+    # waiver, and the bare C2 still FAILs — the convention is in use.
+    rc, out = _run({"tasks.md": TASKS_INTEGRATION_GATE_WAIVED.replace(
+        "── REVIEW GATE ──  *(tier STANDARD)*",
+        "**Integration gate (C1):** the validator refuses RFC1918 end to end.\n\n"
+        "── REVIEW GATE ──  *(tier STANDARD)*")})
+    results.append((rc == 1 and "integration-gate" in out,
+                    "the waiver does not excuse a bare cluster once any cluster states a "
+                    "gate — absence only"))
+
+    # ── `loop-budget` (1d loop-auditability) ─────────────────────────────────
+
+    # 10ab. the bold corpus form is accepted, and the number is echoed back
+    rc, out = _run({"plan.md": PLAN_BOLD_LOOP_BUDGET})
+    results.append((rc == 0 and "loop-budget" in out and "~20" in out,
+                    "the live corpus's `- **Loop budget:** ~20 iterations` form PASSES"))
+
+    # 10ac. no budget line at all → FAIL (an armed /loop has no ceiling; run-score cannot
+    # grade the run against one)
+    rc, out = _run({"plan.md": PLAN_NO_LOOP_BUDGET})
+    results.append((rc == 1 and "loop-budget" in out,
+                    "a plan with no `Loop budget:` line FAILs"))
+
+    # 10ac-b. a fenced budget sample never counts — strip_fenced runs before the search, so
+    # the plan reads as absent (and must not read as a declared ~99 ceiling).
+    rc, out = _run({"plan.md": PLAN_FENCED_LOOP_BUDGET_ONLY})
+    results.append((rc == 1 and "loop-budget" in out and "~99" not in out,
+                    "a fenced `Loop budget:` sample is ignored — the plan reads as absent"))
+
     # ── `requirement-coverage` — spec ids traced into the task list ───────────
 
     # 10o. every FR/SC cited by a task → PASS
@@ -953,13 +1341,24 @@ def run():
                      and "FR-2" in out and "FR-3" in out and "SC-1" in out,
                     "partial requirement coverage FAILs, naming only the untraced ids"))
 
-    # 10q. retro-compat (the live-corpus shape): no id cited at all → WARN, gate stays PASS
+    # 10q. the live-corpus shape WITH its waiver stated: no id cited at all → WARN that
+    # names the waiver, gate stays PASS.
     rc, out = _run({"spec.md": SPEC_WITH_REQS, "tasks.md": TASKS_CITES_NO_REQS})
-    results.append((rc == 0 and "! [requirement-coverage]" in out,
-                    "a task list citing no requirement id WARNs as pre-convention, never FAILs"))
+    results.append((rc == 0 and "! [requirement-coverage]" in out
+                     and "legacy waiver exercised" in out,
+                    "a task list citing no requirement id + a waiver WARNs, naming the waiver"))
 
-    # 10r. a spec with no numbered requirements at all → WARN (nothing is traceable)
-    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "tasks.md": TASKS_CITES_NO_REQS})
+    # 10q-b. the same task list with the waiver stripped → FAIL (absence is no longer
+    # silently pre-convention; the finding names the waiver form for a genuinely old list).
+    rc, out = _run({"spec.md": SPEC_WITH_REQS, "tasks.md": TASKS_CITES_NO_REQS.replace(
+        "<!-- gate-check: legacy-artifact — task list predates the FR-n citation convention and the 0.8.0 Test-author field -->\n\n", "")})
+    results.append((rc == 1 and "requirement-coverage" in out and "legacy-artifact" in out,
+                    "a task list citing no requirement id with NO waiver FAILs"))
+
+    # 10r. a spec with no numbered requirements at all → WARN (nothing is traceable).
+    # Reachable only on a legacy-waived spec now: any `## Success criteria` section declares
+    # SC-n by construction, so an id-less spec is one with no criteria section at all.
+    rc, out = _run({"spec.md": SPEC_PRE_TEMPLATE_NO_SC, "tasks.md": TASKS_CITES_NO_REQS})
     results.append(("! [requirement-coverage]" in out and "no FR-n" in out,
                     "a spec declaring no FR-n/SC-n ids WARNs — nothing is traceable"))
 
@@ -970,13 +1369,45 @@ def run():
     # the function is now wired into run_checks() (c8d5087, gate-check.py:376)
     # and these still hold as the unit-level half of the coverage.
 
-    # 11. retro-compat: zero Test-author: lines anywhere → WARN, GATE stays PASS
+    # 11. zero Test-author: lines with NO waiver → FAIL. D1's mode is a plan-time decision
+    # the controller only reads; total absence used to WARN on retro-compat grounds, which
+    # made a brand-new task list indistinguishable from a 2026-07 one.
     f = _gate_check.Findings()
     _gate_check.check_test_author_mode(TASKS_NO_TEST_AUTHOR_LINES, f)
     verdicts = [s for s, c, d in f.items if c == "test-author-mode"]
+    results.append((verdicts == ["fail"] and f.failed,
+                    "zero Test-author: lines FAILs when no legacy waiver is stated"))
+
+    # 11b. the same shape with an explicit waiver → WARN naming the waiver, gate stays PASS.
+    # This is the run-observability shape, and the WARN keeps it VISIBLE rather than silent.
+    f = _gate_check.Findings()
+    _gate_check.check_test_author_mode(TASKS_WAIVED_NO_TEST_AUTHOR, f)
+    verdicts = [s for s, c, d in f.items if c == "test-author-mode"]
     details = [d for s, c, d in f.items if c == "test-author-mode"]
-    results.append((verdicts == ["warn"] and not f.failed,
-                    "zero Test-author: lines (run-observability-shaped) WARNs, never FAILs"))
+    results.append((verdicts == ["warn"] and not f.failed
+                     and any("legacy waiver exercised" in d for d in details),
+                    "an explicit legacy waiver downgrades it to a WARN that names the waiver"))
+
+    # 11c. a waiver marker with no stated reason is not a waiver — same rule as a bare
+    # Tier-A `solo`. An empty escape hatch would be the whole mechanism defeated.
+    f = _gate_check.Findings()
+    _gate_check.check_test_author_mode(
+        TASKS_WAIVED_NO_TEST_AUTHOR.replace(
+            "<!-- gate-check: legacy-artifact — predates the 0.8.0 Test-author field -->",
+            "<!-- gate-check: legacy-artifact — -->"), f)
+    verdicts = [s for s, c, d in f.items if c == "test-author-mode"]
+    results.append((verdicts == ["fail"],
+                    "a waiver marker with no stated reason does not waive anything"))
+
+    # 11d. the waiver covers ABSENCE ONLY — it never excuses partial presence.
+    f = _gate_check.Findings()
+    _gate_check.check_test_author_mode(
+        TASKS_PARTIAL_TEST_AUTHOR.replace(
+            "# Tasks: x",
+            "# Tasks: x\n\n<!-- gate-check: legacy-artifact — old list -->"), f)
+    verdicts = [s for s, c, d in f.items if c == "test-author-mode"]
+    results.append((verdicts == ["fail"],
+                    "the waiver does not excuse PARTIAL Test-author: presence — absence only"))
 
     # 12. partial presence → FAIL, naming the bare task ids (T02 here)
     f = _gate_check.Findings()
@@ -1016,14 +1447,18 @@ def run():
                      and any(re.search(r"\ball\s+3\s+tasks\b", d) for d in details),
                     "all tasks carrying a coherent Test-author: mode PASSes"))
 
-    # 17. a FENCED Test-author: example must never count — same real tasks as #11
-    # (no real Test-author: lines outside the fence) must still WARN, not FAIL,
-    # and the fenced example's own line must not be double-counted as "present".
+    # 17. a FENCED Test-author: example must never count — the same real tasks as #11
+    # (no real Test-author: lines outside the fence, no waiver) now FAIL on total absence,
+    # and the count proves the fenced line was credited to neither task: exactly the 2 real
+    # tasks are reported. If the fence leaked, the verdict would be partial-presence naming
+    # one task instead.
     f = _gate_check.Findings()
     _gate_check.check_test_author_mode(TASKS_FENCED_EXAMPLE_IGNORED, f)
     verdicts = [s for s, c, d in f.items if c == "test-author-mode"]
-    results.append((verdicts == ["warn"] and not f.failed,
-                    "a fenced Test-author: example is stripped and never counted"))
+    details = [d for s, c, d in f.items if c == "test-author-mode"]
+    results.append((verdicts == ["fail"] and any("(2 tasks)" in d for d in details),
+                    "a fenced Test-author: example is stripped — exactly the 2 real tasks "
+                    "count, and the fenced line is credited to neither"))
 
     # 17b. a REAL-SHAPED fenced task line (T99, matches TASK_LINE, carrying its
     # own fenced Test-author: line) alongside 3 real unfenced tasks (all 3
@@ -1094,10 +1529,19 @@ def run():
     results.append((rc == 1 and "unreadable stakes level" in out,
                     "an unrecognised stakes level FAILS"))
 
-    # Retro-compat, same stance as test-author-mode: pre-0.16 plans predate the dial.
-    rc, out = _run({"plan.md": PLAN_GATES_FULL})
-    results.append((rc == 0 and "! [stakes]" in out and "pre-0.16 plan" in out,
-                    "a plan with no `Stakes:` line WARNs and falls back to standard"))
+    # The pre-0.16 floor joined the waiver regime: no `Stakes:` line and no waiver → FAIL.
+    # A silent fallback-to-standard made a brand-new plan indistinguishable from a pre-dial
+    # one — consistency with the other flipped floors beats a fourth silent floor.
+    rc, out = _run({"plan.md": PLAN_GATES_BASE})
+    results.append((rc == 1 and "[stakes]" in out and "legacy-artifact" in out,
+                    "a plan with no `Stakes:` line and no waiver FAILs, naming the waiver form"))
+
+    # The same plan with an explicit waiver → WARN naming it; downstream gates still fall
+    # back to `standard`, but the exercise stays visible instead of silent.
+    rc, out = _run({"plan.md": PLAN_GATES_BASE
+                    + "\n<!-- gate-check: legacy-artifact — plan authored before the 0.16 stakes dial -->\n"})
+    results.append((rc == 0 and "! [stakes]" in out and "legacy waiver exercised" in out,
+                    "a stakes-less plan with a stated waiver WARNs, naming the waiver"))
 
     # `high` and `low` are departures from the default and owe a reason — but a stated level
     # with a thin reason still beats no level, so this WARNs rather than FAILs.
@@ -1117,10 +1561,11 @@ def run():
     results.append((rc == 0 and "✓ [stakes]" in out and "Stakes: standard" in out,
                     "`Stakes: standard, reason` parses to level `standard`"))
 
-    # F3 — a fenced `Stakes:` example never counts as a declared level.
+    # F3 — a fenced `Stakes:` example never counts as a declared level: the plan reads as
+    # ABSENT, which (with no waiver) is now the loud FAIL, not a quiet fallback.
     rc, out = _run({"plan.md": PLAN_STAKES_FENCED_ONLY})
-    results.append((rc == 0 and "! [stakes]" in out and "pre-0.16" in out,
-                    "a fenced `Stakes:` sample is ignored — the plan reads as no-line WARN"))
+    results.append((rc == 1 and "[stakes]" in out and "high" not in out.split("[stakes]")[1][:120],
+                    "a fenced `Stakes:` sample is ignored — the plan reads as absent and FAILs"))
 
     # I8 — under-calling on a money/PII spec: `standard` while the spec talks payments →
     # WARN (visible question), never FAIL (the spec's words are weaker evidence than its

@@ -1,5 +1,7 @@
 # Implementation Plan: Harness efficiency tuning (empirical adjustments from the 2026-07-04 runs)
 
+<!-- gate-check: legacy-artifact — plan authored 2026-07-04 against agent 0.8.0, before the 0.16 stakes dial; downstream gates correctly fall back to `standard`, which is what this work ran under -->
+
 > **netdust override template.** This file overrides spec-kit's core `plan-template.md`
 > (resolves from `.specify/templates/overrides/`, highest priority). It is spec-kit's
 > plan skeleton with the netdust Stage-1 gates baked in, so `/speckit.plan` emits a plan

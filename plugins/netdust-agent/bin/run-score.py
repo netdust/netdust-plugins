@@ -49,7 +49,13 @@ GATE_CHECK = Path(__file__).resolve().parent / "gate-check.py"
 
 TASK_RE = re.compile(r"^- \[( |x|X)\]\s+(T\d+)\b(.*)$")
 CLUSTER_HEADING = re.compile(r"^###\s+Cluster\b\s*(\S+)", re.IGNORECASE)
-BUDGET_RE = re.compile(r"Loop budget:\s*~?\s*(\d+)", re.IGNORECASE)
+# Tolerates the bold `- **Loop budget:** ~20 iterations` form, which is what both live plans
+# actually write — the previous `Loop budget:\s*~?\s*(\d+)` matched neither, so the budget
+# read as absent on 100% of the corpus and every run graded ungraded-by-default. Same
+# grammar as gate-check.py's LOOP_BUDGET, which now FAILs a plan that omits the line; keep
+# the two in step (the bin/ scripts are deliberately standalone — no cross-imports — so the
+# FIELD is parsed in two places while the RULE lives in one, same posture as `Stakes:`).
+BUDGET_RE = re.compile(r"Loop budget:?\**\s*[:~]?\s*\**\s*~?\s*(\d+)", re.IGNORECASE)
 
 LOOP_EVENTS = {
     "loop-block", "loop-disarm-finished", "loop-disarm-budget",
@@ -111,10 +117,25 @@ def read_log(log_path: Path) -> list[dict]:
     return events
 
 
+def _strip_fenced(text: str) -> str:
+    """Drop fenced code blocks before searching — a plan quoting the template's
+    `Loop budget:` sample must not read as a declared ceiling. Mirrors gate-check.py's
+    strip_fenced (standalone-script rule: the field is parsed in two places, the rule in
+    one)."""
+    out, in_fence = [], False
+    for ln in text.splitlines():
+        if ln.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if not in_fence:
+            out.append(ln)
+    return "\n".join(out)
+
+
 def read_budget(plan_text: str | None) -> int | None:
     if not plan_text:
         return None
-    m = BUDGET_RE.search(plan_text)
+    m = BUDGET_RE.search(_strip_fenced(plan_text))
     return int(m.group(1)) if m else None
 
 

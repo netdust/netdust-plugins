@@ -1,5 +1,7 @@
 # Tasks: Harness efficiency tuning (empirical adjustments from the 2026-07-04 runs)
 
+<!-- gate-check: legacy-artifact — task list authored before the FR-n citation convention; the requirements were traced by hand at the C1/C5 review gates, and back-filling citations now would assert a task/requirement mapping nobody actually decided -->
+
 > **netdust override template.** Overrides spec-kit's core `tasks-template.md`. It is the
 > **handoff artifact — THE SEAM**: `building` Stage 2 executes from this file, and refuses to start until `gate-check.py` is green and the plan is approved. spec-kit's
 > `/speckit.implement` is **never** run — it would bypass the Stage-2 gates (threat-model

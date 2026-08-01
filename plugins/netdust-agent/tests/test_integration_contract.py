@@ -42,9 +42,13 @@ TASKS_TIER_A_INTEGRATION_ONLY = """# Tasks: x
 
 ### Cluster C1  (2 tasks · provisional tier: STANDARD)
 - [ ] T01 [Tier B] wire route  (files: routes.ts)
+      Test-author: solo — Tier B
       Unit test: no unit test: Tier B, wiring only
 - [ ] T02 [Tier A] persistence chain  (files: inc/save.php)
+      Test-author: solo — A-lite, WP persistence wiring, no security-boundary category
       Integration test: hooks fire and rows persist; denial: invalid payload persists nothing
+
+**Integration gate (C1):** the wired route persists a row end to end.
 
 ── REVIEW GATE ──  *(STOP: commit C1 — tier STANDARD)*
 """
@@ -145,9 +149,12 @@ TASKS_PARTIAL_WITH_INTEGRATION_SIBLING = """# Tasks: x
 """
 
 # A FENCED `Integration test:` example (a plan's per-task format block) must never count —
-# the two real tasks below carry no contract line at all, so the verdict must stay the
-# retro-compat WARN, exactly as if the fence were absent.
+# the two real tasks below carry no contract line at all, and the file states a legacy
+# waiver, so the verdict is the absence WARN that names the waiver, exactly as if the fence
+# were absent. (If the fenced line leaked, the verdict would flip to partial-presence FAIL.)
 TASKS_FENCED_INTEGRATION_IGNORED = """# Tasks: x
+
+<!-- gate-check: legacy-artifact — predates the per-task test-contract line -->
 
 ## Per-task format
 
@@ -239,10 +246,13 @@ def run():
                     "a bare task among Unit- and Integration-contracted siblings still "
                     "FAILs, naming only the bare one (T02)"))
 
-    # 9. a fenced `Integration test:` example never counts — real bare tasks still WARN.
+    # 9. a fenced `Integration test:` example never counts — the real bare tasks (waived)
+    # still land on the absence WARN naming the waiver, not on partial-presence FAIL.
     verdicts, details, failed = _contract(TASKS_FENCED_INTEGRATION_IGNORED)
-    results.append((verdicts == ["warn"] and not failed,
-                    "a fenced `Integration test:` example is stripped and never counted"))
+    results.append((verdicts == ["warn"] and not failed
+                     and any("legacy waiver exercised" in d for d in details),
+                    "a fenced `Integration test:` example is stripped and never counted "
+                    "(absence WARN names the waiver)"))
 
     # ── seam: the real checker over the real spec corpus (SC-1) ───────────────
     # An absent dir is a distinct `skip`, never a silent pass, and the module FAILs if

@@ -1,5 +1,7 @@
 # Tasks: Run observability (in-loop trace + evaluator rubric)
 
+<!-- gate-check: legacy-artifact — predates both the `Test-author:` field (introduced at 0.8.0, by the very plan in specs/harness-efficiency) and the FR-n citation convention; the field cannot be back-filled without inventing a plan-time decision, and building's controller correctly defaults a missing mode to `split` -->
+
 > **netdust override template.** Overrides spec-kit's core `tasks-template.md`. It is the
 > **handoff artifact — THE SEAM**: `building` Stage 2 executes from this file, and refuses to start until `gate-check.py` is green and the plan is approved. spec-kit's
 > `/speckit.implement` is **never** run — it would bypass the Stage-2 gates (threat-model

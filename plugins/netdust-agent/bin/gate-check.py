@@ -77,6 +77,51 @@ class Findings:
         return any(s == "fail" for s, _, _ in self.items)
 
 
+# ── the legacy waiver ─────────────────────────────────────────────────────────
+#
+# Several checks used to soften to WARN whenever a convention was WHOLLY absent from an
+# artifact: `success-criteria`, `test-author-mode`, `requirement-coverage`,
+# `unit-test-contract`, and (post-0.16) `stakes`. The reasoning was retro-compat — the live
+# specs/ dirs predate the conventions — but the mechanism was silence, and silence has two
+# costs. It rewards writing ZERO lines over writing some (partial presence FAILs, total
+# absence passed), and it is invisible: a brand-new spec with no success criteria read
+# exactly like a 2026-06 one.
+#
+# So absence now FAILs, and a genuinely older artifact says so out loud:
+#
+#     <!-- gate-check: legacy-artifact — <why this predates the convention> -->
+#
+# The reason is mandatory, exactly as `Test-author: solo — <reason>` requires one. The waiver
+# covers ABSENCE ONLY — it never excuses partial presence, an unmeasurable SC line, an
+# invalid mode, or a coverage gap once the convention is in use. It cannot make a bad
+# artifact pass; it can only mark an old one as old. And the finding it produces is a WARN
+# that names the waiver, so exercising it stays visible in gate output rather than reading
+# as a clean pass.
+#
+# The `stakes` pre-0.16 floor is deliberately INSIDE the regime (flipped to
+# FAIL-unless-waived like the others): a silent fallback-to-standard made a brand-new plan
+# indistinguishable from a pre-dial one, and consistency beats a fourth silent floor. The
+# one floor deliberately still OUTSIDE it is `proven-by`'s pre-0.16 WARN — the newest field,
+# not yet adopted by the corpus beyond this repo; flip it into the regime when it is.
+#
+# This is the same stance as `no unit test: Tier B, <reason>`: a stated waiver, not an
+# omission.
+LEGACY_WAIVER = re.compile(
+    r"<!--\s*gate-check:\s*legacy-artifact\s*[—–-]\s*(?P<reason>[^>]*?)\s*-->", re.IGNORECASE)
+
+
+def legacy_waiver(text: str | None) -> str | None:
+    """The stated reason this artifact predates a convention, or None. A marker with no
+    reason is not a waiver — same rule as a bare Tier-A `solo`."""
+    if not text:
+        return None
+    m = LEGACY_WAIVER.search(text)
+    if not m:
+        return None
+    reason = m.group("reason").strip()
+    return reason or None
+
+
 # real unresolved marker = [NEEDS CLARIFICATION: <substance>], not a heading, not backticked,
 # not the template's `…`/`...` placeholder example.
 CLAR_MARKER = re.compile(r"\[NEEDS CLARIFICATION:([^\]]*)\]")
@@ -119,10 +164,15 @@ def check_success_criteria(spec_text: str, f: Findings) -> None:
     """
     body = section_body(spec_text, "Success criteria")
     if body is None:
-        # Spec predates the contract (same retro-compat stance as test-author-mode). The two
-        # live specs/ dirs are the only reason this is not "fail" — flip it once they carry
-        # the section. The contract itself lives in the spec-authoring skill, not a template.
-        f.add("warn", "success-criteria", "no ## Success criteria section (spec predates the contract)")
+        waiver = legacy_waiver(spec_text)
+        if waiver:
+            f.add("warn", "success-criteria",
+                  f"no ## Success criteria section — legacy waiver exercised: {waiver}")
+        else:
+            f.add("fail", "success-criteria",
+                  "no ## Success criteria section — shake-out has nothing to sign off "
+                  "against. An artifact that genuinely predates the contract says so with a "
+                  "`<!-- gate-check: legacy-artifact — <reason> -->` marker")
         return
 
     real, unmeasurable = [], []
@@ -325,9 +375,14 @@ def check_stakes(plan_text: str, spec_text: str | None, f: Findings) -> None:
 
     Three findings, in the order they matter:
 
-      - **No line at all** → WARN. Pre-0.16 plans predate the dial; every downstream gate
-        falls back to `standard`, which is exactly what it did unconditionally before the
-        dial existed. Retro-compat, same stance as `test-author-mode`.
+      - **No line at all** → FAIL, unless the plan states a legacy waiver — then WARN
+        naming it, and every downstream gate falls back to `standard` (exactly what it did
+        unconditionally before the dial existed). This floor used to be a silent pre-0.16
+        WARN; it joined the waiver regime deliberately — a silent fallback made a brand-new
+        plan indistinguishable from a pre-dial one, and consistency with the other flipped
+        floors beats a fourth silent floor. (`bin/verify-budget.py`, which parses the same
+        field, keeps its own absent→standard fallback — it is a run-time reader, not a
+        plan-time gate, and never blocks.)
       - **An unrecognised level** → FAIL. A dial nobody can read is worse than no dial:
         each downstream gate would silently pick its own default and they would diverge.
       - **`low` on a spec that flagged a security surface** → FAIL. This is the erosion
@@ -344,8 +399,17 @@ def check_stakes(plan_text: str, spec_text: str | None, f: Findings) -> None:
     level, reason = plan_stakes(plan_text)
 
     if level is None:
-        f.add("warn", "stakes",
-              "no `Stakes:` line — pre-0.16 plan; verification gates fall back to `standard`")
+        waiver = legacy_waiver(plan_text)
+        if waiver:
+            f.add("warn", "stakes",
+                  "no `Stakes:` line — pre-0.16 plan; verification gates fall back to "
+                  f"`standard` — legacy waiver exercised: {waiver}")
+        else:
+            f.add("fail", "stakes",
+                  "no `Stakes:` line — every downstream verification gate reads this dial "
+                  "and nothing else re-decides it. A plan that genuinely predates the 0.16 "
+                  "dial says so with a `<!-- gate-check: legacy-artifact — <reason> -->` "
+                  "marker")
         return
 
     if level not in STAKES_LEVELS:
@@ -391,6 +455,7 @@ def check_stakes(plan_text: str, spec_text: str | None, f: Findings) -> None:
 
 
 HAS_P = re.compile(r"\[P\]")
+HAS_HUMAN = re.compile(r"\[HUMAN\]", re.IGNORECASE)
 
 
 def strip_fenced(text: str) -> str:
@@ -414,10 +479,17 @@ def strip_fenced(text: str) -> str:
 REVIEW_GATE_MARKER = re.compile(r"──\s*REVIEW GATE\s*──")
 REVIEW_TIER = re.compile(r"\b(FULL|STANDARD|LIGHT)\b")
 
+# ANCHORED at line start (bold markup tolerated, as `**Integration gate (C1):**` is what the
+# corpus writes). An unanchored match would be satisfied by a task's own prose — TASKS_GOOD's
+# `Unit test: … covered by the cluster integration gate` is exactly that false positive, and a
+# cluster must not be able to declare its integration gate by mentioning one.
+INTEGRATION_GATE_LINE = re.compile(r"^\s*[-*>]?\s*\**\s*Integration gate\b", re.IGNORECASE)
+
 
 def parse_clusters(tasks_text: str):
-    """Yield dicts {name, tasks:[(id, has_p)], irreversible:bool, gate:bool, tier:str|None}.
-    Tasks under a `### Cluster` heading until the next cluster or level-2 heading.
+    """Yield dicts {name, tasks:[(id, has_p)], irreversible:bool, gate:bool, tier:str|None,
+    integration_gate:bool}. Tasks under a `### Cluster` heading until the next cluster or
+    level-2 heading.
 
     `gate` is True when a `── REVIEW GATE ──` marker appears after the cluster's own lines
     and before the next cluster / level-2 heading. A marker in the file's prose legend sits
@@ -434,13 +506,17 @@ def parse_clusters(tasks_text: str):
             tier = REVIEW_TIER.search(label)
             cur = {"name": ln.strip(), "tasks": [],
                    "irreversible": bool(re.search(r"irreversible|solo", label, re.IGNORECASE)),
-                   "gate": False, "tier": tier.group(1) if tier else None}
+                   "gate": False, "tier": tier.group(1) if tier else None,
+                   "integration_gate": False}
             continue
         h = heading_text(ln)
         if h and h[0] <= 2:  # phase boundary or end-of-clusters section
             if cur:
                 clusters.append(cur)
                 cur = None
+            continue
+        if cur is not None and INTEGRATION_GATE_LINE.match(ln):
+            cur["integration_gate"] = True
             continue
         if cur is not None and REVIEW_GATE_MARKER.search(ln):
             cur["gate"] = True
@@ -567,7 +643,17 @@ def check_test_author_mode(tasks_text: str, f: Findings) -> None:
         return  # nothing to say here — check_task_tiers already reports "no task lines"
 
     if present == 0:
-        f.add("warn", "test-author-mode", "pre-0.8 tasks.md — no Test-author: lines")
+        waiver = legacy_waiver(tasks_text)
+        if waiver:
+            f.add("warn", "test-author-mode",
+                  f"no Test-author: lines — legacy waiver exercised: {waiver} "
+                  "(building's controller defaults every task to `split`)")
+        else:
+            f.add("fail", "test-author-mode",
+                  f"no task carries a Test-author: line ({total} tasks) — D1's mode is the "
+                  "planner's decision and the controller only reads it. An artifact that "
+                  "genuinely predates the field says so with a "
+                  "`<!-- gate-check: legacy-artifact — <reason> -->` marker")
         return
 
     if missing:
@@ -731,6 +817,158 @@ def check_security_boundary_mode(tasks_text: str, f: Findings) -> None:
               + ", ".join(contradictory[:6]))
 
 
+def check_files_segment(tasks_text: str, f: Findings) -> None:
+    """The task line's `(files: <paths>)` segment — declared grammar, and the thing that
+    keeps check_security_boundary_mode's high-confidence path alive.
+
+    `planning`'s output contract states the task-line shape as
+    `- [ ] T01 [P?] [Tier A|B] <description>  (files: <paths>)`, but nothing read the
+    segment, so it was contract-in-prose only. That mattered more than a formatting nit:
+    `_boundary_hit` deliberately trusts FILES over PROSE (the calibration above explains why
+    PROSE_SECURITY is narrow — "session"/"guard"/"token" flagged three doc tasks and a WARN
+    nobody trusts is a WARN nobody reads). With no files segment, only the narrow prose list
+    runs. A task reading `[Tier B] build the invoice wizard, auth, payment capture and
+    email` drew NO security-boundary warning at all: `auth` and `payment` live in
+    FILES_SECURITY, not in PROSE_SECURITY, and there was no segment to match them against.
+    Omitting `(files:)` was a free way to blind the no-self-downgrade detector.
+
+    FAIL, with no absent-floor: every task line across the live corpus carries the segment,
+    so there is no legacy shape to tolerate. The short `(f: …)` form counts — FILES_SEGMENT
+    is the single reader of this grammar and already accepts it. Walks the shared
+    `task_blocks()` boundary (the segment lives on the task line itself, `task_rest`).
+
+    **`[HUMAN]` tasks are exempt, and the exemption is reported rather than silent.** A
+    `[HUMAN]` step is a planned yield point — destructive-migration approval, credentials, a
+    deploy confirmation — an ACTION the agent may not take alone, not a file edit. Demanding
+    paths there would push a planner to invent one to satisfy the checker, which is the
+    back-filled-field defect this contract exists to prevent, and it would buy nothing: the
+    segment is read by the security-boundary check, which is about code tasks.
+    """
+    missing, total, exempt = [], 0, []
+    for task_id, task_rest, _cont in task_blocks(tasks_text):
+        total += 1
+        if HAS_HUMAN.search(task_rest):
+            exempt.append(task_id)
+            continue
+        seg = FILES_SEGMENT.search(task_rest)
+        if not seg or not seg.group(1).strip():
+            missing.append(task_id)
+    if total == 0:
+        return  # check_task_tiers already reports "no task lines"
+    note = f" ({len(exempt)} [HUMAN] yield point(s) exempt)" if exempt else ""
+    if missing:
+        f.add("fail", "files-segment",
+              f"{len(missing)}/{total} task(s) carry no `(files: <paths>)` segment — the "
+              "security-boundary check reads those paths, so an omission silently narrows it "
+              "to prose matching: " + ", ".join(missing[:8]) + note)
+    else:
+        f.add("pass", "files-segment", f"all {total} tasks name their files{note}")
+
+
+def check_human_yield(tasks_text: str, f: Findings) -> None:
+    """1d loop-auditability — a `[HUMAN]` step is a planned yield point, never `[P]`.
+
+    `planning` states the rule outright: mark any step no agent may take alone (destructive
+    migration approval, credentials, deploy confirmation) with `[HUMAN]` on its task line,
+    "a planned yield point, never `[P]`". The two markers contradict each other by
+    construction: `[P]` tells the controller it may dispatch this task alongside its
+    siblings, and the whole purpose of `[HUMAN]` is that execution STOPS and waits for a
+    person. A task carrying both is a yield point an armed `/loop` can run straight past —
+    the failure the mark exists to prevent, wearing the mark that was supposed to prevent
+    it.
+
+    This is `check_clusters`'s irreversible-and-`[P]` rule one level down, on the task
+    rather than the cluster (walked on the shared `task_blocks()` boundary), and it FAILs
+    for the same reason: nothing here is a heuristic. Both markers are literal, and their
+    combination is never correct.
+
+    Nothing is REQUIRED — most features have no `[HUMAN]` step at all (both live plans say
+    so explicitly), so this check is silent unless it finds the contradiction.
+    """
+    offenders, human_seen = [], False
+    for task_id, task_rest, _cont in task_blocks(tasks_text):
+        if not HAS_HUMAN.search(task_rest):
+            continue
+        human_seen = True
+        if HAS_P.search(task_rest):
+            offenders.append(task_id)
+    if offenders:
+        f.add("fail", "human-yield",
+              f"{len(offenders)} task(s) marked both [HUMAN] and [P] — a planned yield point "
+              "is never parallelizable, and [P] lets an armed /loop dispatch straight past it: "
+              + ", ".join(offenders[:8]))
+    elif human_seen:
+        f.add("pass", "human-yield", "every [HUMAN] yield point is non-[P]")
+
+
+def check_integration_gate(tasks_text: str, f: Findings) -> None:
+    """1d — every review cluster states what to verify ACROSS its tasks.
+
+    `planning`'s task-shaping gate: "Every phase gets an 'Integration gate: [what to verify
+    across tasks]' line. A plan without these is not ready to execute." The corpus writes it
+    per CLUSTER rather than per phase, which is the tighter reading and the one that matches
+    where execution actually stops — `building` Step 2.8 HALTs at the cluster marker and
+    runs `/integration` on that cluster's diff. A cluster with a `── REVIEW GATE ──` and no
+    stated integration gate sends the agent into that HALT with nothing to verify against,
+    which is where the review silently degrades to reading the diff for style.
+
+    A bare cluster FAILs, with one absence-shaped exception: when NO cluster in the file
+    carries the line AND the file states a legacy waiver, the finding is a WARN naming the
+    waiver — the wp-manager corpus predates the per-cluster line entirely, and the waiver
+    regime's absence-only rule covers exactly that shape. Once ANY cluster states a gate the
+    convention is in use, and a bare sibling is a defect no waiver excuses.
+    """
+    clusters = parse_clusters(tasks_text)
+    if not clusters:
+        return  # check_clusters already reports "no `### Cluster` headings"
+    missing = [c["name"].lstrip("# ").split("(")[0].strip()
+               for c in clusters if not c["integration_gate"]]
+    if not missing:
+        f.add("pass", "integration-gate",
+              f"all {len(clusters)} cluster(s) state an integration gate")
+        return
+    if len(missing) == len(clusters):
+        waiver = legacy_waiver(tasks_text)
+        if waiver:
+            f.add("warn", "integration-gate",
+                  f"no cluster states an `Integration gate:` ({len(clusters)} clusters) — "
+                  f"legacy waiver exercised: {waiver}")
+            return
+    f.add("fail", "integration-gate",
+          f"{len(missing)}/{len(clusters)} cluster(s) state no `Integration gate:` — "
+          "nothing for the Step 2.8 HALT to verify across the cluster: "
+          + ", ".join(missing[:5]))
+
+
+# The plan's loop-auditability line. `bin/run-score.py` reads the SAME line for the loop
+# budget it grades against — keep the two tolerant of the same shapes, including the bold
+# `- **Loop budget:** ~20 iterations` form the corpus actually writes. Searched over
+# strip_fenced(plan_text), so a fenced template sample never reads as a declared ceiling
+# (the same rule STAKES_LINE and the task walkers already follow).
+LOOP_BUDGET = re.compile(r"Loop budget:?\**\s*[:~]?\s*\**\s*~?\s*(\d+)", re.IGNORECASE)
+
+
+def check_loop_budget(plan_text: str, f: Findings) -> None:
+    """1d loop-auditability — the plan declares the iteration ceiling an armed `/loop` reads.
+
+    `planning`: "The plan is execution-mode-agnostic — you never know whether `building`
+    will run it under an armed `/loop`," which is why the line is unconditional rather than
+    something a planner decides is unnecessary. `run-score.py` grades the run against this
+    number and degrades to ungraded without it, so an absent line costs the evaluator
+    silently.
+
+    FAIL, no absent-floor: every live plan carries it (the wp-manager corpus in the plain
+    form, this repo's in the bold form — both parse).
+    """
+    m = LOOP_BUDGET.search(strip_fenced(plan_text))
+    if m:
+        f.add("pass", "loop-budget", f"loop budget declared: ~{m.group(1)} iterations")
+    else:
+        f.add("fail", "loop-budget",
+              "no `Loop budget: ~N iterations` line — an armed /loop has no ceiling to read "
+              "and run-score.py cannot grade the run against one")
+
+
 # ── the evidence ladder ───────────────────────────────────────────────────────
 #
 # Before authoring a test, name what ALREADY proves the property. The ladder, cheapest and
@@ -875,8 +1113,13 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
     - a task whose ONLY contract is `Integration test:` may not be marked `[P]` —
       integration-contract tasks are never parallel; serialize them.
 
-    Retro-compat matches test-author-mode: no task carrying either line at all is an older
-    tasks.md and WARNs; partial presence is a defect and FAILs.
+    **No silent retro-compat floor here any more.** This check once WARNed whenever NO task
+    carried either line, on the same pre-convention reasoning as its siblings. That branch
+    was unreachable on the live corpus (every dir carries a contract on every task) — while
+    an all-or-nothing floor rewards writing ZERO contracts over writing some, which is the
+    shape a hollow tasks.md walks through. Total absence now FAILs unless the file states a
+    legacy waiver, which downgrades ABSENCE ONLY to a WARN naming it; partial presence is a
+    defect and FAILs regardless.
     """
     total, missing, tier_a_waived, integration_parallel = 0, [], [], []
     for task_id, task_rest, cont in task_blocks(tasks_text):
@@ -906,9 +1149,18 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
         return  # check_task_tiers already reports "no task lines"
 
     if len(missing) == total:
-        f.add("warn", "unit-test-contract",
-              f"no task carries a `Unit test:` or `Integration test:` line ({total} tasks) "
-              "— pre-contract tasks.md")
+        waiver = legacy_waiver(tasks_text)
+        if waiver:
+            f.add("warn", "unit-test-contract",
+                  f"no task carries a `Unit test:` or `Integration test:` line "
+                  f"({total} tasks) — legacy waiver exercised: {waiver}")
+        else:
+            f.add("fail", "unit-test-contract",
+                  f"no task states a test contract ({total} tasks): "
+                  + ", ".join(missing[:8])
+                  + " — an all-or-nothing floor rewarded writing zero contracts over "
+                  "writing some. An artifact that genuinely predates the contract line "
+                  "says so with a `<!-- gate-check: legacy-artifact — <reason> -->` marker")
         return
     if missing:
         f.add("fail", "unit-test-contract",
@@ -969,9 +1221,18 @@ def check_requirement_coverage(spec_text: str, tasks_text: str, f: Findings) -> 
     uncovered = [r for r in ids if r not in cited]
 
     if not covered:
-        f.add("warn", "requirement-coverage",
-              f"no requirement id is cited in tasks.md — pre-convention task list, so all "
-              f"{len(ids)} ({ids[0]}…{ids[-1]}) are untraced and coverage is a human read")
+        waiver = legacy_waiver(tasks_text)
+        if waiver:
+            f.add("warn", "requirement-coverage",
+                  f"no requirement id cited in tasks.md, so all {len(ids)} "
+                  f"({ids[0]}…{ids[-1]}) are untraced and coverage is a human read — "
+                  f"legacy waiver exercised: {waiver}")
+        else:
+            f.add("fail", "requirement-coverage",
+                  f"no requirement id is cited in tasks.md, so all {len(ids)} "
+                  f"({ids[0]}…{ids[-1]}) are untraced — cite the id on the task that "
+                  "satisfies it, or mark a genuinely older list with a "
+                  "`<!-- gate-check: legacy-artifact — <reason> -->` marker")
         return
     if uncovered:
         f.add("fail", "requirement-coverage",
@@ -1031,8 +1292,11 @@ def run_checks(spec_dir: Path) -> Findings:
         check_plan_gates(plan_text, f)
         check_threat_model(plan_text, spec_text, f)
         check_stakes(plan_text, spec_text, f)
+        check_loop_budget(plan_text, f)
     if tasks_text is not None:
         check_task_tiers(tasks_text, f)
+        check_files_segment(tasks_text, f)
+        check_human_yield(tasks_text, f)
         check_test_author_mode(tasks_text, f)
         check_proven_by(tasks_text, f)
         check_security_boundary_mode(tasks_text, f)
@@ -1040,6 +1304,7 @@ def run_checks(spec_dir: Path) -> Findings:
         check_clusters(tasks_text, f)
         check_review_gates(tasks_text, f)
         check_review_tiers(tasks_text, f)
+        check_integration_gate(tasks_text, f)
     if spec_text is not None and tasks_text is not None:
         check_requirement_coverage(spec_text, tasks_text, f)  # the only cross-artifact check
     return f

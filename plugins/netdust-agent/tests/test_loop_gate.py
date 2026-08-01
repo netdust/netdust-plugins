@@ -12,14 +12,24 @@ RUN_TRACE = Path(__file__).resolve().parent.parent / "bin" / "run-trace.py"
 
 TASKS_ONE_OPEN = (
     "- [x] T01 [Tier A] done  (files: a.py)\n"
+    "      Test-author: solo — A-lite fixture task\n"
     "      Unit test: contract\n"
     "- [ ] T02 [Tier B] open  (files: b.py)\n"
+    "      Test-author: solo — Tier B\n"
     "      Unit test: no unit test: Tier B, glue\n"
 )
-TASKS_ALL_DONE = "- [x] T01 [Tier A] done  (files: a.py)\n"
+TASKS_ALL_DONE = (
+    "- [x] T01 [Tier A] done  (files: a.py)\n"
+    "      Test-author: solo — A-lite fixture task\n"
+    "      Unit test: contract\n"
+)
 TASKS_HUMAN_NEXT = (
     "- [x] T01 [Tier A] done  (files: a.py)\n"
+    "      Test-author: solo — A-lite fixture task\n"
+    "      Unit test: contract\n"
     "- [ ] T02 [HUMAN] [Tier B] approve the teardown migration\n"
+    "      Test-author: solo — Tier B\n"
+    "      Unit test: no unit test: Tier B, human approval step\n"
 )
 
 

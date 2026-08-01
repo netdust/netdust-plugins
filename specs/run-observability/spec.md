@@ -1,5 +1,7 @@
 # Feature Specification: Run observability (in-loop trace + evaluator rubric)
 
+<!-- gate-check: legacy-artifact — authored 2026-07-04, before the `## Success criteria` contract existed; shipped and signed off via its C2 integration gate -->
+
 > **netdust override template.** Overrides spec-kit's core `spec-template.md`. Produced by
 > `/speckit.specify` (wrapped by the `spec-authoring` skill, Stage 0.5). Describes **what**
 > and **why** — **no technology stack** (that is deferred to `plan.md`). All

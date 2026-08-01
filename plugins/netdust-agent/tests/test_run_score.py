@@ -37,6 +37,13 @@ import tempfile
 from pathlib import Path
 
 RUN_SCORE = Path(__file__).resolve().parent.parent / "bin" / "run-score.py"
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
+import importlib.util as _ilu
+
+_RS_SPEC = _ilu.spec_from_file_location("run_score_module", RUN_SCORE)
+_run_score_mod = _ilu.module_from_spec(_RS_SPEC)
+_RS_SPEC.loader.exec_module(_run_score_mod)
 
 
 def run_score(feature_dir: Path) -> tuple[int, str, str]:
@@ -83,6 +90,14 @@ def tasks_md(clusters: list[tuple[str, list[str]]]) -> str:
         for tl in task_lines:
             box, rest = tl[0], tl[1:].lstrip(" ")
             out.append(f"- [{box}] {rest}\n")
+            # Every task states its author mode (D1) and its behavioral contract (1d) —
+            # absence of either FAILs gate-check now that the all-or-nothing retro-compat
+            # floor is an explicit waiver rather than silence.
+            out.append("      Test-author: solo — A-lite fixture task\n")
+            out.append("      Unit test: contract\n")
+        # Each cluster also states what to verify ACROSS its tasks (1d integration-gate):
+        # `building` Step 2.8 HALTs at the marker below and runs `/integration` against it.
+        out.append("\n**Integration gate:** the cluster's tasks compose end to end.\n")
         out.append("\n── REVIEW GATE ──  *(tier STANDARD)*\n\n")
     return "".join(out)
 
@@ -134,6 +149,7 @@ PLAN_BUDGET_10 = "# Plan\n\nLoop budget: ~10 iterations — some tasks.\n"
 PLAN_GATES_CLEAN = (
     "# Plan\n\n"
     "Loop budget: ~10 iterations — some tasks.\n\n"
+    "Stakes: standard — fixture feature, recoverable breakage only.\n\n"
     "## Constitution check  [GATE]\n\n"
     "- [x] No non-negotiable violated.\n\n"
     "## Threat model  [GATE]\n\n"
@@ -558,6 +574,27 @@ def run() -> list[tuple[bool, str]]:
              all(dim in text for dim in (
                  "Seam integrity", "Cluster discipline", "Loop efficiency",
                  "Yield discipline", "Completion")))
+
+    # ── read_budget: the corpus-shape defect (found via gate-check's loop-budget) ──
+    # BUDGET_RE never matched the bold `- **Loop budget:** ~20 iterations` form BOTH live
+    # plans write, so the budget read as absent on 100% of the corpus and every run graded
+    # ungraded-by-default. These pin the corpus shape, the plain shape, and the fence rule.
+
+    case("read_budget parses the bold corpus form `- **Loop budget:** ~20 iterations`",
+         _run_score_mod.read_budget("- **Loop budget:** ~20 iterations — 12 tasks\n") == 20)
+    case("read_budget still parses the plain form `Loop budget: ~10 iterations`",
+         _run_score_mod.read_budget("Loop budget: ~10 iterations — some tasks.\n") == 10)
+    case("read_budget ignores a fenced budget sample (strip-fenced before search)",
+         _run_score_mod.read_budget(
+             "# Plan\n\n```\n- **Loop budget:** ~99 iterations\n```\n") is None)
+
+    # THE live-corpus proof: both in-repo plans' budgets must actually read. Pre-fix this
+    # was None on both — the run-observability evaluator graded every run ungraded.
+    for feature in ("harness-efficiency", "run-observability"):
+        plan = REPO_ROOT / "specs" / feature / "plan.md"
+        budget = _run_score_mod.read_budget(plan.read_text()) if plan.exists() else None
+        case(f"read_budget reads the live specs/{feature} plan's budget (not None)",
+             budget is not None)
 
     return results
 
