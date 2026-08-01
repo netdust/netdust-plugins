@@ -67,6 +67,22 @@ NON_CODE_SUFFIXES = (
     ".lock", ".log",
 )
 
+# Manifest/lockfile NAMES are exempt from the non-code carve-out (S6): they
+# end in non-code suffixes but are code-adjacent — a dependency or plugin
+# manifest change alters what the suite runs against, so it must invalidate
+# a prior green the same way a source edit does.
+MANIFEST_NAMES = {"package.json", "composer.json", "plugin.json",
+                  "marketplace.json"}
+
+
+def is_freshness_code_path(path: str) -> bool:
+    """True when a commit touching `path` invalidates green evidence: any
+    non-doc suffix, plus manifest/lockfile names (MANIFEST_NAMES, *.lock)."""
+    name = path.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1].lower()
+    if name in MANIFEST_NAMES or name.endswith(".lock"):
+        return True
+    return not name.endswith(NON_CODE_SUFFIXES)
+
 TASK_RE = re.compile(r"^- \[( |x|X)\] (T\d+)\b(.*)$")
 
 
@@ -133,9 +149,10 @@ def head_sha(feature_dir: Path) -> str | None:
 
 def code_touched_since(feature_dir: Path, sha: str) -> bool | None:
     """True when any commit AFTER `sha` (i.e. in sha..HEAD) touched a CODE
-    path — a path not ending in NON_CODE_SUFFIXES. False when every commit
-    since was docs/tasks/ledger-only, which leaves the green evidence valid
-    (the design-debt fix: the controller's own checkbox commits must not
+    path — a path not ending in NON_CODE_SUFFIXES, or a manifest/lockfile
+    name (is_freshness_code_path). False when every commit since was
+    docs/tasks/ledger-only, which leaves the green evidence valid (the
+    design-debt fix: the controller's own checkbox commits must not
     perpetually invalidate the green). None when the range is undeterminable
     (green sha unknown to this repo, git error) — the caller fails toward
     CONTINUE, never a false FINISHED."""
@@ -147,7 +164,7 @@ def code_touched_since(feature_dir: Path, sha: str) -> bool | None:
         )
         if p.returncode != 0:
             return None
-        return any(not ln.strip().lower().endswith(NON_CODE_SUFFIXES)
+        return any(is_freshness_code_path(ln.strip())
                    for ln in p.stdout.splitlines() if ln.strip())
     except Exception:
         return None
@@ -213,8 +230,13 @@ def main() -> int:
         # head is None → accept the green event (documented degradation:
         # never trap a loop on broken/absent git; dry-loop guardrail bounds it)
         if stale:
+            # The sanctioned fact-minting path (I2): run-trace runs the suite
+            # ITSELF and appends suite-green only on a real exit 0 — the
+            # controller never gets to assert the green into the ledger.
             print("LOOP: CONTINUE — next: re-run the suite and close out "
-                  "green (evidence stale/missing)")
+                  "green (evidence stale/missing) — sanctioned path: "
+                  f"bin/run-trace.py verify-suite {feature_dir} -- "
+                  "<suite command>")
             print(progress)
             return 1
         print("LOOP: FINISHED — all tasks complete; disarm and run Stage 3 "

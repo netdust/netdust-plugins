@@ -24,9 +24,12 @@ Purpose:
       HARNESS-EVIDENCE: role=<implementer|test-author> suite="<cmd>" exit=<int>
                         [lint=<int>] [mode=<split|solo>]
 
-  This hook owns the only parser. When the line is absent, it falls back to
-  scraping the last test-command tool_result from the transcript (scraped
-  evidence). Testimony fields may TIGHTEN a verdict, never loosen it:
+  This hook owns the only parser. The line is TESTIMONY: it contributes
+  exit/role/mode KNOWLEDGE that may TIGHTEN a verdict, and it NEVER
+  substitutes for the facts (C1 — facts beat testimony):
+    • "a test ran" requires an actual Bash tool-use matching
+      TEST_CMD_PATTERN — an evidence line alone, however well-formed, never
+      satisfies the tests gate (no run, no close).
     • role=test-author is honored iff every edited code path is a test path
       (RED is the author's job — run-only suffices); any production-path edit
       makes it an implementer regardless of the claim.
@@ -34,6 +37,10 @@ Purpose:
       recognizer is ignored (no "green" via echo-grade pseudo-tests). The
       recognizer is TEST_CMD_PATTERN below — composer gate / bin/gate.sh
       count, same as for a real run.
+    • when the evidence line and the scraped tool_result of the last test
+      run DISAGREE, the RED one wins (max severity) — a claimed exit=0
+      cannot overrule a scraped failure, and a confessed exit≠0 blocks even
+      over a scraped green.
     • an implementer whose suite exited non-zero is blocked, reason naming
       the command and exit code. Unknown exit (no line, no scrapeable
       result) degrades to the pre-P0 ran-only behavior.
@@ -41,7 +48,11 @@ Purpose:
   On an implementer GREEN close while a harness loop is armed
   (tasks/.harness-loop.json), it appends one `suite-green` event (sha + cmd)
   through bin/run-trace.py — the evidence bin/loop-check.py's FINISHED
-  verdict is keyed to. Emission is fail-open and never affects the decision.
+  verdict is keyed to. Emission fires ONLY when a SCRAPED green corroborates
+  (a matching Bash run whose tool_result is non-error, i.e. exit 0) — never
+  on the evidence line alone: this event mints the fact loop-check trusts,
+  so it may not itself rest on testimony. Emission is fail-open and never
+  affects the decision.
 
   It also enforces the sensitive-path routing floor (P1b): a SOLO
   implementer close that edited a production path matching the
@@ -52,7 +63,11 @@ Purpose:
   resolved from the current task's `Test-author:` line in tasks.md (machine
   artifact; feature dir from the loop marker or an edited specs/<feature>/
   path) — never from the subagent-echoed evidence line, which could only
-  loosen the floor. Unresolvable mode → fail-open, no block.
+  loosen the floor. Unresolvable mode → fail-open, no block. The
+  current-task heuristic assumes SERIALIZED dispatch (first unchecked task);
+  [P] siblings in flight can misresolve — a files-segment intersection
+  disambiguates when exactly one unchecked task names an edited file (see
+  resolve_task_mode for the fail direction).
 
   It catches the case where the parent dispatched a subagent without the
   required close-out instruction, or where the subagent ignored it.
@@ -506,7 +521,12 @@ def matches_sensitive(file_path: str, globs: list[str]) -> bool:
 
 _TASKS_TASK_LINE_RE = re.compile(r"^- \[( |x|X)\] T\d+\b")
 _TASKS_TEST_AUTHOR_RE = re.compile(r"^\s+Test-author:\s*(split|solo)\b")
+_TASKS_FILES_RE = re.compile(r"\(files:\s*([^)]*)\)")
 _SPECS_FEATURE_RE = re.compile(r"(?:^|/)specs/([^/]+)/")
+
+
+def _basename(path: str) -> str:
+    return (path or "").replace("\\", "/").rstrip("/").rsplit("/", 1)[-1].lower()
 
 
 def resolve_task_mode(cwd: str, edited_paths: list[str]) -> str | None:
@@ -516,10 +536,23 @@ def resolve_task_mode(cwd: str, edited_paths: list[str]) -> str | None:
     floor, and testimony never loosens a verdict).
 
     Feature dir: the loop marker's feature_dir when armed, else the first
-    edited path shaped specs/<feature>/…. Current task: the FIRST unchecked
-    task line (the loop/controller dispatch order — the controller checks the
-    box only after the close). Anything unresolvable — no marker and no specs
-    path, no tasks.md, no unchecked task, no Test-author line (pre-0.8
+    edited path shaped specs/<feature>/….
+
+    Current task — SERIALIZATION ASSUMPTION: the default heuristic is the
+    FIRST unchecked task line (the loop/controller dispatch order — the
+    controller checks the box only after the close). That assumes tasks are
+    dispatched and closed SERIALLY; when [P] siblings are in flight
+    simultaneously, the first unchecked line may be a SIBLING of the task
+    actually closing here, and the mode can misresolve in EITHER direction —
+    a sibling's `split` loosens the floor for a solo close (missed block), a
+    sibling's `solo` fails closed (spurious block; cost = one stop
+    round-trip). Disambiguation: when exactly one unchecked task's
+    `(files: …)` basenames intersect the paths this subagent actually
+    edited, that task's mode wins; zero or ambiguous intersection falls back
+    to first-unchecked (never worse than the bare heuristic).
+
+    Anything unresolvable — no marker and no specs path, no tasks.md, no
+    unchecked task, no Test-author line on the resolved task (pre-0.8
     artifacts default to split upstream) — returns None and the caller fails
     open (no block)."""
     try:
@@ -543,8 +576,10 @@ def resolve_task_mode(cwd: str, edited_paths: list[str]) -> str | None:
         if not tasks_path.exists():
             return None
 
+        # Collect every unchecked task: its (files: …) basenames + its mode.
+        unchecked: list[dict] = []
+        cur: dict | None = None
         in_fence = False
-        in_current = False
         for ln in tasks_path.read_text().splitlines():
             if ln.lstrip().startswith("```"):
                 in_fence = not in_fence
@@ -553,15 +588,26 @@ def resolve_task_mode(cwd: str, edited_paths: list[str]) -> str | None:
                 continue
             tm = _TASKS_TASK_LINE_RE.match(ln)
             if tm:
-                if in_current:
-                    return None  # first unchecked task carried no mode line
-                in_current = tm.group(1) == " "
+                cur = None
+                if tm.group(1) == " ":
+                    fm = _TASKS_FILES_RE.search(ln)
+                    files = {_basename(tok) for tok in
+                             (fm.group(1).split(",") if fm else [])
+                             if tok.strip()}
+                    cur = {"files": files, "mode": None}
+                    unchecked.append(cur)
                 continue
-            if in_current:
+            if cur is not None and cur["mode"] is None:
                 am = _TASKS_TEST_AUTHOR_RE.match(ln)
                 if am:
-                    return am.group(1)
-        return None
+                    cur["mode"] = am.group(1)
+        if not unchecked:
+            return None
+
+        edited_names = {_basename(p) for p in edited_paths if p}
+        hits = [t for t in unchecked if t["files"] & edited_names]
+        chosen = hits[0] if len(hits) == 1 else unchecked[0]
+        return chosen["mode"]
     except Exception as e:
         log(f"resolve-task-mode-failed err={e}")
         return None
@@ -835,24 +881,36 @@ def main() -> None:
     role = "test-author" if (all_test_paths and claimed_role != "implementer") \
         else "implementer"
 
-    # Resolve the SUITE status: evidence line (only when its suite command is
-    # recognized as a real test command — no echo-grade pseudo-tests; the
-    # recognizer is the SAME TEST_CMD_PATTERN a real run must match, so
-    # composer gate / bin/gate.sh claims count too), else scrape the last
-    # test-command tool_result. None → exit unknown.
-    suite = None
+    # Resolve the SUITE status from BOTH channels and reconcile (C1b): the
+    # evidence line (only when its suite command is recognized as a real test
+    # command — no echo-grade pseudo-tests; the recognizer is the SAME
+    # TEST_CMD_PATTERN a real run must match, so composer gate / bin/gate.sh
+    # claims count too) AND the scraped last test-command tool_result. When
+    # both are known and they disagree, the RED one wins (max severity —
+    # testimony can tighten a scraped fact, never loosen it). Neither known
+    # → exit unknown.
+    ev_suite = None
     if (evidence is not None and "exit" in evidence
             and TEST_CMD_PATTERN.search(evidence.get("suite") or "")):
-        suite = {"green": evidence["exit"] == 0,
-                 "exit": str(evidence["exit"]),
-                 "cmd": evidence["suite"], "source": "evidence"}
-    else:
-        scraped = scraped_run_status(activity["test_runs"], results)
-        if scraped is not None:
-            suite = {**scraped, "source": "scraped"}
+        ev_suite = {"green": evidence["exit"] == 0,
+                    "exit": str(evidence["exit"]),
+                    "cmd": evidence["suite"], "source": "evidence"}
+    scraped = scraped_run_status(activity["test_runs"], results)
+    sc_suite = {**scraped, "source": "scraped"} if scraped is not None else None
 
-    tests_ran = activity["ran_tests_via_bash"] or (
-        suite is not None and suite["source"] == "evidence")
+    if ev_suite is not None and sc_suite is not None:
+        if ev_suite["green"] != sc_suite["green"]:
+            suite = sc_suite if not sc_suite["green"] else ev_suite
+        else:
+            suite = ev_suite
+    else:
+        suite = ev_suite if ev_suite is not None else sc_suite
+
+    # C1a: testimony never substitutes for the run itself. The tests gate is
+    # satisfied ONLY by an actual Bash tool-use matching TEST_CMD_PATTERN —
+    # the evidence line contributes exit/role/mode knowledge above, nothing
+    # more.
+    tests_ran = activity["ran_tests_via_bash"]
 
     # Resolve the LINT status the same way (the standards backstop upgrade:
     # "lint ran" → "lint ran and exited 0"; unknown exit stays ran-only).
@@ -913,9 +971,13 @@ def main() -> None:
 
     # Record the green fact for the loop ledger (loop-check's FINISHED
     # consumes it): implementer suite verified green + loop armed → one
-    # suite-green trace event. Emitted on the fact, independent of other
-    # gates; never affects the decision.
-    if role == "implementer" and suite is not None and suite["green"]:
+    # suite-green trace event. C1c: this event MINTS the fact loop-check
+    # trusts, so it fires only when a SCRAPED green corroborates (matching
+    # Bash run, non-error tool_result = exit 0) — never on the evidence line
+    # alone. Emitted on the fact, independent of other gates; never affects
+    # the decision.
+    if (role == "implementer" and suite is not None and suite["green"]
+            and sc_suite is not None and sc_suite["green"]):
         emit_suite_green(cwd, suite["cmd"])
 
     if not missing:

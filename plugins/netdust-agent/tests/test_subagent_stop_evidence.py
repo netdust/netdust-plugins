@@ -238,6 +238,55 @@ def run():
     case("no line, test ran, exit unknown → passthrough (old ran-only behavior)",
          d == "passthrough")
 
+    # ── C1: facts beat testimony ────────────────────────────────────────────
+    # The evidence line contributes exit/role/mode KNOWLEDGE (tightening);
+    # it never substitutes for the run itself, and when it disagrees with a
+    # scraped result the RED one wins (max severity).
+
+    # (a) a recognized evidence claim with ZERO Bash test runs is testimony
+    # about a run that never happened → the "no test ran" block.
+    d, out = _run([
+        _msg(_write(BIG_CODE)),
+        _evidence('HARNESS-EVIDENCE: role=implementer suite="bun test" exit=0'),
+    ])
+    case("C1a: recognized evidence claim, zero Bash test runs → block (no run)",
+         d == "block")
+
+    # (b) evidence green vs scraped RED → the RED one wins.
+    d, out = _run([
+        _msg(_write(BIG_CODE)),
+        _msg(_bash("bun test", tool_id="tu1")),
+        _result("tu1", is_error=True, content="2 failed\nExit code: 1"),
+        _evidence('HARNESS-EVIDENCE: role=implementer suite="bun test" exit=0'),
+    ])
+    case("C1b: evidence exit=0 + scraped RED → block (RED wins on disagreement)",
+         d == "block")
+
+    # (b, tighten direction preserved) evidence RED vs scraped green → block.
+    d, out = _run([
+        _msg(_write(BIG_CODE)),
+        _msg(_bash("bun test", tool_id="tu1")),
+        _result("tu1", is_error=False, content="all green"),
+        _evidence('HARNESS-EVIDENCE: role=implementer suite="bun test" exit=1'),
+    ])
+    case("C1b: evidence exit=1 + scraped green → block (testimony tightens)",
+         d == "block")
+
+    # (c) suite-green emission requires a SCRAPED green corroboration
+    # (matching Bash run, non-error result) — never evidence alone.
+    with tempfile.TemporaryDirectory() as tmp:
+        tp = Path(tmp)
+        feature = _armed_fixture(tp)
+        d, out = _run([
+            _msg(_write(BIG_CODE)),
+            _msg(_bash("bun test")),  # ran, but NO tool_result → exit unknown
+            _evidence('HARNESS-EVIDENCE: role=implementer suite="bun test" exit=0'),
+        ], cwd=tp)
+        log = feature / "run-log.jsonl"
+        case("C1c: armed + evidence green without scraped corroboration → "
+             "passthrough but NO suite-green event",
+             d == "passthrough" and not log.exists())
+
     # ── fail-open ────────────────────────────────────────────────────────────
 
     d, out = _run([

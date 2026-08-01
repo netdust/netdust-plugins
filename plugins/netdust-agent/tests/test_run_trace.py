@@ -393,4 +393,46 @@ def run() -> list[tuple[bool, str]]:
              any("stage=execute" in ln and "stage=review" in ln and "0:02:05" in ln
                  for ln in out.splitlines()))
 
+    # --- verify-suite (I2): sanctioned fact-minting for the stale-evidence
+    #     CONTINUE — run-trace RUNS the suite itself and appends `suite-green`
+    #     ONLY on a real exit 0; a failing suite appends NOTHING and exits
+    #     non-zero. Never an append on testimony. ---
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = Path(tmp) / "specs" / "demo"
+        feature.mkdir(parents=True)
+        rc, out, err = run_trace("verify-suite", str(feature), "--",
+                                 sys.executable, "-c", "import sys; sys.exit(0)")
+        lines = read_lines(feature)
+        case("verify-suite: passing command -> exit 0", rc == 0)
+        case("verify-suite: passing command -> exactly one suite-green appended",
+             len(lines) == 1 and lines[0].get("event") == "suite-green")
+        case("verify-suite: green event carries the suite cmd",
+             len(lines) == 1 and "sys.exit(0)" in lines[0].get("data", {}).get("cmd", ""))
+        case("verify-suite: passing command prints a GREEN verdict",
+             "GREEN" in out)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = Path(tmp) / "specs" / "demo"
+        feature.mkdir(parents=True)
+        rc, out, err = run_trace("verify-suite", str(feature), "--",
+                                 sys.executable, "-c", "import sys; sys.exit(3)")
+        case("verify-suite: failing command -> non-zero exit", rc != 0)
+        case("verify-suite: failing command -> NOTHING appended",
+             read_lines(feature) == [])
+        case("verify-suite: failing command prints a RED verdict, never GREEN",
+             "GREEN" not in out and "RED" in (out + err))
+
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = Path(tmp) / "missing"  # never created
+        rc, out, err = run_trace("verify-suite", str(feature), "--", "true")
+        case("verify-suite: nonexistent feature dir -> rejected (exit 1), no file",
+             rc == 1 and not log_path(feature).exists())
+
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = Path(tmp) / "specs" / "demo"
+        feature.mkdir(parents=True)
+        rc, out, err = run_trace("verify-suite", str(feature))
+        case("verify-suite: missing suite command -> rejected (exit 1), no file",
+             rc == 1 and not log_path(feature).exists())
+
     return results

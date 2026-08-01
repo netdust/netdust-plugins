@@ -25,6 +25,7 @@ Defaults ship in bin/sensitive-globs.txt; a project's
 (floor off, logged) — never a crash, never a wrong block.
 """
 
+import importlib.util
 import json
 import subprocess
 import sys
@@ -64,6 +65,29 @@ TASKS_SOLO_SECOND = """# Tasks: demo
       Unit test: contract
 - [ ] T02 [Tier A] current task  (files: src/whatever.php)
       Test-author: solo — fixture
+      Unit test: contract
+"""
+
+# I4: [P] siblings both unchecked — the first-unchecked heuristic alone would
+# misresolve; the files-segment intersection disambiguates when exactly one
+# unchecked task names an edited file.
+TASKS_PARALLEL_SPLIT_SECOND = """# Tasks: demo
+### Cluster C1  (2 tasks · provisional tier: STANDARD)
+- [ ] T01 [P] [Tier B] plain sibling in flight  (files: src/plain.php)
+      Test-author: solo — Tier B glue
+      Unit test: no unit test: Tier B, glue
+- [ ] T02 [P] [Tier A] auth task  (files: src/auth/login.php)
+      Test-author: split — 1a surface
+      Unit test: contract
+"""
+
+TASKS_PARALLEL_SOLO_SECOND = """# Tasks: demo
+### Cluster C1  (2 tasks · provisional tier: STANDARD)
+- [ ] T01 [P] [Tier A] split sibling in flight  (files: src/auth/login.php)
+      Test-author: split — 1a surface
+      Unit test: contract
+- [ ] T02 [P] [Tier A] solo auth task  (files: src/auth/token-store.php)
+      Test-author: solo — fixture (misrouted on purpose)
       Unit test: contract
 """
 
@@ -248,6 +272,48 @@ def run():
         d, out = _run_hook(_green_close("src/rbac/capability-table.ts"), tp)
         case("false-positive negative: capability-table.ts → passthrough",
              d == "passthrough")
+
+    # ── I3: the fleet glob battery (shipped defaults, direct matcher) ───────
+    # HIT = a genuine security-surface shape; CLEAN = production files whose
+    # names merely contain a risky substring (the cry-wolf posture).
+
+    spec = importlib.util.spec_from_file_location("subagent_stop_mod", HOOK)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    default_globs = mod.load_sensitive_globs("")  # no cwd → shipped defaults
+
+    battery_hits = [
+        "config/auth.php", "config/session.php", "scripts/migrate-users.php",
+        "src/auth.ts", "crypto.ts", "payments.php",
+    ]
+    for path in battery_hits:
+        case(f"glob battery HIT: {path}",
+             mod.matches_sensitive(path, default_globs))
+
+    battery_clean = [
+        "src/lexer/tokenizer.ts", "src/rbac/capability-table.ts",
+        "src/cache/nonced-cache.ts", "src/admin/rolesheet.ts",
+        "src/passwordless-ui/copy.ts",
+    ]
+    for path in battery_clean:
+        case(f"glob battery CLEAN: {path}",
+             not mod.matches_sensitive(path, default_globs))
+
+    # ── I4: [P] siblings — files-segment intersection disambiguation ────────
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tp = Path(tmp)
+        _armed(tp, TASKS_PARALLEL_SPLIT_SECOND)
+        d, out = _run_hook(_green_close("src/auth/login.php"), tp)
+        case("I4: [P] siblings, edited file named by the SECOND (split) task → "
+             "passthrough (not the first-unchecked solo)", d == "passthrough")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tp = Path(tmp)
+        _armed(tp, TASKS_PARALLEL_SOLO_SECOND)
+        d, out = _run_hook(_green_close("src/auth/token-store.php"), tp)
+        case("I4: [P] siblings, edited file named by the SECOND (solo) task → "
+             "block (intersection resolves the real task)", d == "block")
 
     # ── fail-open: mode unresolvable → no block ─────────────────────────────
 

@@ -9,6 +9,7 @@ prose, and `/shakeout` all route through this file; nothing hand-rolls JSONL.
 
     usage: run-trace.py append <feature-dir> <event> [k=v ...]
            run-trace.py show <feature-dir>
+           run-trace.py verify-suite <feature-dir> -- <suite command...>
 
 `append` writes exactly one JSON line to `<feature-dir>/run-log.jsonl`
 (created if absent, appended if present) with the shape:
@@ -41,12 +42,26 @@ durations. Denial path: fewer than 2 parseable events -> exactly
 `durations: not derivable (<2 timestamped events)`, exit 0. Without the
 flag, output is unchanged.
 
-Exit codes: 0 success, 1 usage/validation/denial error.
+`verify-suite` is the SANCTIONED fact-minting path for a stale/missing
+`suite-green` (the loop-check stale-evidence CONTINUE names it): run-trace
+RUNS the given suite command ITSELF (argv after `--`, stdio inherited so
+the suite's own output is the evidence), and appends one `suite-green`
+event (sha of the feature dir's HEAD + the cmd) ONLY on a real exit 0. A
+failing or unrunnable suite appends NOTHING and exits non-zero (the
+suite's own exit code when it has one). The verdict is printed either way.
+An agent echoing "the suite is green" has no way through here — the only
+writer of the green fact observed the exit code itself. Denial paths:
+nonexistent feature dir or empty command -> exit 1, nothing run, nothing
+written.
+
+Exit codes: 0 success, 1 usage/validation/denial error (verify-suite
+propagates the suite's non-zero exit).
 """
 from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -93,6 +108,55 @@ def do_append(feature_dir: Path, event: str, kv_tokens: list[str]) -> int:
               file=sys.stderr)
         return 1
 
+    return 0
+
+
+def do_verify_suite(feature_dir: Path, cmd: list[str]) -> int:
+    """Run the suite command; append `suite-green` ONLY on a real exit 0.
+
+    The fact is minted by THIS process observing the exit code — never by
+    testimony. Failure (non-zero exit, or a command that cannot run) appends
+    nothing and returns non-zero. All rejections happen BEFORE the command
+    runs or anything is written."""
+    if not feature_dir.is_dir():
+        print(f"run-trace: verify-suite rejected — no such feature dir: "
+              f"{feature_dir}", file=sys.stderr)
+        return 1
+    if not cmd:
+        print("run-trace: verify-suite rejected — no suite command given "
+              "(usage: verify-suite <feature-dir> -- <suite command...>)",
+              file=sys.stderr)
+        return 1
+
+    cmd_str = " ".join(cmd)
+    try:
+        # stdio inherited on purpose: the suite's own output IS the evidence.
+        proc = subprocess.run(cmd)
+        exit_code = proc.returncode
+    except OSError as e:
+        print(f"run-trace: verify-suite RED — cannot run {cmd_str!r}: {e}",
+              file=sys.stderr)
+        return 1
+
+    if exit_code != 0:
+        print(f"run-trace: verify-suite RED (exit {exit_code}) — "
+              "no suite-green appended", file=sys.stderr)
+        return exit_code
+
+    try:
+        sha_proc = subprocess.run(
+            ["git", "-C", str(feature_dir), "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=10,
+        )
+        sha = sha_proc.stdout.strip() if sha_proc.returncode == 0 else "unknown"
+    except Exception:
+        sha = "unknown"
+
+    rc = do_append(feature_dir, "suite-green", [f"sha={sha}", f"cmd={cmd_str}"])
+    if rc != 0:
+        return rc
+    print(f"run-trace: verify-suite GREEN — suite-green appended "
+          f"(sha={sha} cmd={cmd_str})")
     return 0
 
 
@@ -196,6 +260,22 @@ def _format_event_label(event: str, data: dict) -> str:
 
 
 def main(argv: list[str]) -> int:
+    # verify-suite is handled BEFORE argparse: everything after `--` is the
+    # suite command verbatim (argparse's REMAINDER/`--` handling is lossy for
+    # commands whose own tokens start with `-`).
+    if argv and argv[0] == "verify-suite":
+        rest = argv[1:]
+        if "--" in rest:
+            sep = rest.index("--")
+            head, cmd = rest[:sep], rest[sep + 1:]
+        else:
+            head, cmd = rest[:1], rest[1:]
+        if len(head) != 1:
+            print("run-trace: usage: verify-suite <feature-dir> -- "
+                  "<suite command...>", file=sys.stderr)
+            return 1
+        return do_verify_suite(Path(head[0]), cmd)
+
     ap = argparse.ArgumentParser(
         description="run-trace.py — append/show the per-feature run log "
                      "(the single-writer trace convergence point)")

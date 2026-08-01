@@ -44,11 +44,20 @@
 # schema / migrations
 */migrations/*
 */schema/*
+*/migrate[._-]*
+*/migration[._-]*
 
 # money
 */billing/*
 */payments/*
 */payment/*
+# payment filename stems — same word-boundary tightening as password below
+# (the reviewer's `*/payment*.*` would cross `/` into unrelated dirs)
+*/payment.*
+*/payments.*
+*/payment[._-]*
+*/*[._-]payment.*
+*/*[._-]payments.*
 
 # secret / credential / crypto surfaces (directory segments)
 */secrets/*
@@ -60,6 +69,11 @@
 
 # filename stems — word-boundary shaped (`token-store.ts`, `tokens.sql`,
 # `refresh_token.php` gate; `tokenizer.ts` does not)
+*/auth.*
+*/auth[._-]*
+*/*[._-]auth.*
+*/session.*
+*/crypto.*
 */token.*
 */tokens.*
 */token[._-]*
@@ -72,8 +86,15 @@
 */*[._-]secrets.*
 */credential*
 */*[._-]credential*
-*/password*
-*/*[._-]password*
+# password: word-boundary shaped, NOT `*/password*` / `*/password*.*` — both
+# match `passwordless-ui/copy.ts` (fnmatch `*` crosses `/`), the exact
+# cry-wolf FP the calibration note above forbids.
+*/password.*
+*/passwords.*
+*/password[._-]*
+*/*[._-]password.*
+*/*[._-]passwords.*
+*/*[._-]password[._-]*
 */oauth.*
 */oauth[._-]*
 */*[._-]oauth.*

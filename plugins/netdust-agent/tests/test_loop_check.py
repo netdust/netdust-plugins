@@ -147,6 +147,9 @@ def run() -> list[tuple[bool, str]]:
              rc == 1 and "evidence stale/missing" in out and "re-run the suite" in out)
         case("re-verify CONTINUE still prints the progress line",
              "progress: done=3 total=3" in out)
+        case("I2: stale-evidence CONTINUE names the sanctioned verify path "
+             "(run-trace.py verify-suite)",
+             "run-trace.py verify-suite" in out)
 
     with tempfile.TemporaryDirectory() as tmp:
         # a CODE commit after the green invalidates it
@@ -175,6 +178,21 @@ def run() -> list[tuple[bool, str]]:
         rc, out = check(d)
         case("all checked, docs/tasks-only commit after green -> still FINISHED",
              rc == 0 and "FINISHED" in out)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        # S6: manifest/lockfile names are exempt from the non-code carve-out —
+        # they end in non-code suffixes but are code-adjacent (a dependency
+        # change must invalidate the green).
+        tasks = TIERED.format(t1="x", t2="x", t3="x", human="")
+        d = make_feature(tmp, tasks)
+        old_sha = git_repo(tmp)
+        green_event(d, old_sha)
+        (Path(tmp) / "composer.json").write_text(
+            '{"require": {"acme/lib": "^2.0"}}\n')
+        _commit(tmp, "chore: bump acme/lib")
+        rc, out = check(d)
+        case("S6: composer.json-only commit after green -> CONTINUE (1, stale)",
+             rc == 1 and "evidence stale/missing" in out)
 
     with tempfile.TemporaryDirectory() as tmp:
         tasks = TIERED.format(t1="x", t2="x", t3="x", human="")

@@ -106,6 +106,11 @@ class Findings:
 #
 # This is the same stance as `no unit test: Tier B, <reason>`: a stated waiver, not an
 # omission.
+#
+# The marker is FILE-scoped by design — one waiver marks the whole artifact as predating
+# the conventions, for every absence-check that consults it; a check-scoped syntax (waiving
+# one convention while enforcing another in the same file) is deferred until a real
+# artifact needs it.
 LEGACY_WAIVER = re.compile(
     r"<!--\s*gate-check:\s*legacy-artifact\s*[—–-]\s*(?P<reason>[^>]*?)\s*-->", re.IGNORECASE)
 
