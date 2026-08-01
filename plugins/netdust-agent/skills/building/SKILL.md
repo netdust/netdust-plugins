@@ -31,7 +31,7 @@ Everything in between — TDD red→green, dispatch shape, two-stage review, sta
 Be honest about enforcement strength — the gates are NOT equally hard:
 
 - **The seam precondition is MACHINE-CHECKED.** `gate-check.py` exits non-zero; you run it and read the exit code. It cannot be talked out of a finding.
-- **The per-task testing + standards gates are HOOK-ENFORCED.** `subagent-stop.py` (a real SubagentStop hook) blocks a subagent that edited code from stopping without a test command having actually run, and blocks a close that skipped a configured linter. It backstops BOTH halves of the split: the `test-author` must have run its RED test, the `implementer` must have run the suite. Even so, the *auditable* evidence is the structured blocks in the reports/commits — the hook is the backstop.
+- **The per-task testing + standards gates are HOOK-ENFORCED — including GREEN-ness for implementer closes (testimony-seams P0).** `subagent-stop.py` (a real SubagentStop hook) blocks a subagent that edited code from stopping without a test command having actually run, blocks an **implementer-class stop whose suite exited non-zero** (the `HARNESS-EVIDENCE:` close-out line is the designed evidence; the last test-command tool_result is the scraped fallback), and blocks a close whose configured linter was skipped **or exited non-zero**. It backstops BOTH halves of the split: the `test-author` must have run its RED test (run-only — RED is its job, honored only when every edited path is a test path), the `implementer` must have run the suite **to green**. Role/mode fields on the evidence line can tighten the hook's verdict, never loosen it, and a claimed suite command must match the hook's test-command recognizer (composer gate / bin/gate.sh count) or the claim is ignored. Even so, the *auditable* evidence is the structured blocks in the reports/commits — the hook is the backstop.
 - **The tier/mode boundary itself is MACHINE-CHECKED.** `gate-check.py`'s `test-author-mode` check (T01) verifies, at the seam, that every task carries a valid `Test-author:` line and that a `[Tier A]` task claiming `solo` states a reason — it FAILs a bare Tier-A solo and WARNs an over-ceremonious Tier-B split. This closes the loophole one layer up from dispatch: the *decision* of which tasks get which mode is checked before execution ever starts, not trusted to the controller's judgment mid-run.
 - **The controller reading that field is SEQUENCER-ENFORCED.** Given a machine-checked `tasks.md`, nothing hooks-enforces that the controller actually dispatches per the stated mode instead of improvising — that discipline is this skill's job (Step 2.1b).
 - **The test/dev split (authorship independence) is SEQUENCER-ENFORCED, not hook-enforced, for `split` tasks.** The hook can confirm a test *ran*; it cannot confirm the implementer didn't *write* the test it ran — a single SubagentStop invocation sees one subagent's transcript, not the pair. What guarantees independence on a `split` task is the DISPATCH ORDER this skill mandates (Step 2.1b): `test-author` first, RED_READY received, only then the `implementer` with that test already committed. The two separate commits (test predates code, different authors) are the audit trail. Do not collapse them into one dispatch to save a round-trip — that silently reverts to self-grading, and nothing will hard-stop you.
@@ -114,7 +114,7 @@ At Stage 3 the `/shakeout` command auto-dispatches `reviewer` + the specialists 
 
 **Handoff seam.** Execution starts from the approved `tasks.md` — that artifact, and nothing else, feeds THIS stage. `planning` owns spec→plan→tasks; this spine owns execute→verify→finish. **Never execute a task list flat**, by any route that skips the Stage-2 gates below (threat-model verify, per-task tiers, review-cluster HALT, the `subagent-stop.py` backstop) — a runner that walks `tasks.md` top to bottom is not this stage, whatever it is called.
 
-**Armed loop (optional, `/loop`).** When `tasks/.harness-loop.json` exists, the `loop-gate.py` Stop hook drives this stage: the session cannot stop while unchecked non-`[HUMAN]` tasks remain — the gate blocks the stop and names the next unit (`bin/loop-check.py` is the ledger; FINISHED is derived from `tasks.md`, never asserted). Two obligations while armed: (1) stay a THIN SCHEDULER — rebuild your working state from `tasks.md` + the plan on every re-entry, never from scrollback (compaction must not kill the loop); (2) the loop changes NOTHING below — review-gate HALTs, tiers, and the subagent-stop backstop apply exactly as written. The loop ends at Stage 2 complete; Stage 3 runs attended.
+**Armed loop (optional, `/loop`).** When `tasks/.harness-loop.json` exists, the `loop-gate.py` Stop hook drives this stage: the session cannot stop while unchecked non-`[HUMAN]` tasks remain — the gate blocks the stop and names the next unit (`bin/loop-check.py` is the ledger; FINISHED is derived from `tasks.md` **plus green evidence**, never asserted: the SubagentStop hook appends a `suite-green` trace event — sha + suite command — on every verified implementer-green close while armed, and the ledger declares FINISHED only when all boxes are checked AND no commit since the latest `suite-green` sha touched a code path. Checked boxes alone never end a loop; the controller's own checkbox/ledger/docs commits do NOT invalidate the green — only a code-touching commit does). Two obligations while armed: (1) stay a THIN SCHEDULER — rebuild your working state from `tasks.md` + the plan on every re-entry, never from scrollback (compaction must not kill the loop); (2) the loop changes NOTHING below — review-gate HALTs, tiers, and the subagent-stop backstop apply exactly as written. The loop ends at Stage 2 complete; Stage 3 runs attended.
 
 **Trace emission (honor-system, when the feature has a run-log seam).** If `specs/<feature>/run-log.jsonl` exists or the loop is armed for that feature, emit a trace event at two controller-level points: when Stage 2 execution begins (`python3 <plugin>/bin/run-trace.py append specs/<feature> stage-enter stage=2`), and at each `── REVIEW GATE ──` HALT (Step 2.8), with the stated tier (`python3 <plugin>/bin/run-trace.py append specs/<feature> review-gate cluster=<Cn> tier=<FULL|STANDARD|LIGHT>`). This is sequencer-enforced, not hook-enforced — same standing as every other prose discipline in this stage.
 
@@ -152,9 +152,11 @@ Invoke it via the Skill tool. Its content is your primary instruction set for ex
 
   Do **not** require either subagent to literally re-invoke `Skill("testing-workflow")` once per task: the gate skill itself states that *"Re-invoking the Skill tool once per task is **not** the discipline."* Each subagent reads testing-workflow **once per session** to internalize it; per-task re-invocation is the ghost ritual `subphase-a-0of7` retired.
 
-If any required block or line is missing for the task's mode, or a `split` task's two blocks don't reconcile, treat the task as DONE_WITH_CONCERNS or NEEDS_CONTEXT per the upstream skill's status handling. Do not mark complete without them. The `subagent-stop.py` hook (tests actually ran) is a backstop on both modes, not the primary mechanism — the recorded blocks are.
+  Every code-editing dispatch additionally ends with the ONE machine-parsed close-out line the addenda specify — `HARNESS-EVIDENCE: role=<…> [mode=<…>] suite="<cmd>" exit=<code> [lint=<code>]` (one format, one parser: `subagent-stop.py` owns it). This is the *designed evidence* the hook keys its green verdict to; the structured blocks above remain the human-auditable record. The role and mode fields are set by THIS controller's dispatch template, echoed verbatim by the subagent — they can tighten the hook's verdict, never loosen it.
 
-**Step 2.6b — Standards gate at every code-task close.** Alongside the testing gate, invoke `netdust-agent:standards-gate`: run the project's configured linter/formatter (eslint/prettier/biome, or phpcs/php-cs-fixer) on the touched files and record a `Standards: clean | <N fixed> | n/a — no linter` line in the Test-evidence block. The same `subagent-stop.py` hook backstops it: it blocks a code-editing subagent's close when a linter is configured for the project but was never run. If no linter is configured, the gate (and the backstop) no-op — do not impose a style of your own.
+If any required block or line is missing for the task's mode, or a `split` task's two blocks don't reconcile, treat the task as DONE_WITH_CONCERNS or NEEDS_CONTEXT per the upstream skill's status handling. Do not mark complete without them. The `subagent-stop.py` hook (suite actually ran, and — for an implementer close — actually exited 0) is a backstop on both modes, not the primary mechanism — the recorded blocks are.
+
+**Step 2.6b — Standards gate at every code-task close.** Alongside the testing gate, invoke `netdust-agent:standards-gate`: run the project's configured linter/formatter (eslint/prettier/biome, or phpcs/php-cs-fixer) on the touched files and record a `Standards: clean | <N fixed> | n/a — no linter` line in the Test-evidence block. The same `subagent-stop.py` hook backstops it: it blocks a code-editing subagent's close when a linter is configured for the project but was never run, **or ran and exited non-zero** (the evidence line's optional `lint=<code>` field or the scraped lint result carries the exit). If no linter is configured, the gate (and the backstop) no-op — do not impose a style of your own.
 
 **Step 2.7 — Bug-fix bundles (Class C) get one TDD cycle per finding; the D1 rule decides split vs solo per finding.** Each `/code-review` or `/security-review` finding is a behavior change → the Iron Law applies to its reproduction. A finding on a 1a trigger surface → **split reproduction**: the `test-author` writes the RED test that **reproduces** the bug (the failing case from the finding) independently, then the `implementer` invokes `superpowers:systematic-debugging` and fixes to green on that reproducing test without weakening it. Any other finding → **solo reproduction**: the implementer itself authors the reproducing RED test, then fixes to green — same `superpowers:systematic-debugging` discipline. Either way: one bug per cycle, one systematic-debugging invocation per bug, re-sweep between — that rule is unchanged by the mode. Authoring the reproduction independently on a 1a finding is what proves the fix addresses the reported defect and not a convenient near-miss. "I already see the fix, the phases are obvious here" is the exact rationalization the debugging skill's red-flags table names. (2026-05-30, Sub-phase F: bundling I2+I3 into one cycle drifted the process even though outcomes were sound. Slug: `one-cycle-per-bug`.)
 
@@ -256,8 +258,17 @@ You author the test; you do NOT implement the logic. Before reporting STATUS:
    COMMIT: <sha of the test/shell commit>
    FILES TOUCHED: <list>
 
+5. The very LAST line of your final message is the machine-parsed close-out
+   evidence line, verbatim in this format (the SubagentStop hook consumes it;
+   your RED run's non-zero exit is expected and correct for this role):
+
+   HARNESS-EVIDENCE: role=test-author suite="<the RED command you ran>" exit=<its exit code>
+
 Do NOT report RED_READY without a failing proof (or the Tier-B line). Do not
-implement the logic — that is the implementer's dispatch.
+implement the logic — that is the implementer's dispatch. The hook honors
+role=test-author only when every path you edited is a test path — touching a
+production file makes you an implementer in its eyes, and a red suite will
+block your stop.
 
 ---
 ```
@@ -318,6 +329,12 @@ reporting STATUS, you MUST:
    COMMIT: <sha>
    FILES TOUCHED: <list>
    DIVERGENCES FROM PLAN: <list, or "matched plan verbatim">
+
+5. The very LAST line of your final message is the machine-parsed close-out
+   evidence line, verbatim in this format (the SubagentStop hook consumes it
+   and BLOCKS an implementer stop whose suite exit isn't 0):
+
+   HARNESS-EVIDENCE: role=implementer mode=split suite="<the suite command you ran>" exit=<its exit code> lint=<linter exit code, omit if no linter>
 
 Missing any item in either block, or a `Weakened?` that isn't NO = task NOT
 done. Do not rationalize. Do not substitute prose for the structured form.
@@ -393,6 +410,12 @@ you MUST:
    COMMIT: <sha>
    FILES TOUCHED: <list>
    DIVERGENCES FROM PLAN: <list, or "matched plan verbatim">
+
+5. The very LAST line of your final message is the machine-parsed close-out
+   evidence line, verbatim in this format (the SubagentStop hook consumes it
+   and BLOCKS an implementer stop whose suite exit isn't 0):
+
+   HARNESS-EVIDENCE: role=implementer mode=solo suite="<the suite command you ran>" exit=<its exit code> lint=<linter exit code, omit if no linter>
 
 Missing any item, or a `Weakened?` line that isn't the solo-mode form above,
 = task NOT done. Do not rationalize. Do not substitute prose for the
@@ -482,7 +505,7 @@ If any gate that *should* have fired did not, the skill failed at its specific j
 | `superpowers:finishing-a-development-branch` | **STAGE 3.** After shake-out. |
 | `compounding` | **STAGE 3 closer (step 6, spec-close only).** Harvests spec knowledge into PROPOSALS; report-only. |
 | `/loop` + `loop-gate.py` + `bin/loop-check.py` | **STAGE 2 DRIVER (optional).** The armed loop that runs execution unattended through `tasks.md`; drives *through* the gates, never around them. This spine owns the loop protocol. |
-| `subagent-stop.py` hook | **BACKSTOP (both halves).** Blocks a code-editing subagent's close when no test command ran (test-author: the RED run; implementer: the suite) or when a configured linter was skipped. It cannot verify authorship independence (one invocation sees one transcript) — the dispatch order + two commits enforce that. Backstop, not primary — the reconciled blocks are. |
+| `subagent-stop.py` hook | **BACKSTOP (both halves).** Blocks a code-editing subagent's close when no test command ran (test-author: the RED run; implementer: the suite), when an implementer-class suite exited non-zero (the `HARNESS-EVIDENCE:` line is the designed evidence; the last test-command tool_result the scraped fallback), or when a configured linter was skipped or exited non-zero. On a verified implementer-green close while a loop is armed it appends the `suite-green` trace event `loop-check`'s FINISHED is keyed to. It cannot verify authorship independence (one invocation sees one transcript) — the dispatch order + two commits enforce that. Backstop, not primary — the reconciled blocks are. |
 | `ntdst-execute-with-tests` (historical) | **DELETED (2026-06-05) — absorbed into the god-skill, whose execution half is now THIS spine.** Its triggers ("execute the plan", "work the plan") resolve here. |
 
 **Calibration data behind these rules** (index: `skills/_shared/calibrations.md`):

@@ -107,6 +107,23 @@ def marker_of(cwd: Path) -> dict | None:
     return json.loads(p.read_text()) if p.exists() else None
 
 
+def finished_evidence(cwd: Path) -> None:
+    """Since testimony-seams P1a, FINISHED needs green evidence current with
+    the last code-touching commit, not just checked boxes — arm the fixture
+    with both."""
+    def git(*args):
+        return subprocess.run(["git", "-C", str(cwd), *args],
+                              capture_output=True, text=True, timeout=30).stdout.strip()
+    git("init", "-q")
+    git("-c", "user.email=t@t", "-c", "user.name=t",
+        "commit", "-q", "--allow-empty", "-m", "seed")
+    sha = git("rev-parse", "HEAD")
+    with (cwd / "specs" / "demo" / "run-log.jsonl").open("a") as f:
+        f.write(json.dumps({"ts": "2026-07-16T10:00:00+00:00",
+                            "event": "suite-green",
+                            "data": {"sha": sha, "cmd": "bun test"}}) + "\n")
+
+
 def trace_events(cwd: Path, feature_dir: str = "specs/demo") -> list[dict]:
     """Read run-log.jsonl directly (more robust than shelling out to `show`,
     which only renders human-readably)."""
@@ -154,9 +171,19 @@ def run() -> list[tuple[bool, str]]:
 
     with tempfile.TemporaryDirectory() as tmp:
         cwd = setup(tmp, TASKS_ALL_DONE, marker={"iteration": 3, "last_done": 1})
+        finished_evidence(cwd)
         rc, out = run_gate(cwd, {"cwd": str(cwd)}, Path(tmp))
         case("FINISHED -> disarm, allow stop",
              rc == 0 and out.strip() == "" and marker_of(cwd) is None)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        # boxes all checked but NO suite-green evidence → the loop must NOT
+        # finish: loop-check says CONTINUE (re-verify) and the gate blocks.
+        cwd = setup(tmp, TASKS_ALL_DONE, marker={"iteration": 3, "last_done": 1})
+        rc, out = run_gate(cwd, {"cwd": str(cwd)}, Path(tmp))
+        case("checked boxes without green evidence -> block (re-verify), stay armed",
+             rc == 0 and '"decision": "block"' in out
+             and "evidence stale/missing" in out and marker_of(cwd) is not None)
 
     with tempfile.TemporaryDirectory() as tmp:
         cwd = setup(tmp, TASKS_HUMAN_NEXT, marker={})
@@ -211,6 +238,7 @@ def run() -> list[tuple[bool, str]]:
 
     with tempfile.TemporaryDirectory() as tmp:
         cwd = setup(tmp, TASKS_ALL_DONE, marker={"iteration": 3, "last_done": 1})
+        finished_evidence(cwd)
         rc, out = run_gate(cwd, {"cwd": str(cwd)}, Path(tmp))
         events = trace_events(cwd)
         finished_events = [e for e in events if e.get("event") == "loop-disarm-finished"]

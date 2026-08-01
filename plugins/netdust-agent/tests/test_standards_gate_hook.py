@@ -105,6 +105,49 @@ def run():
     results.append((d == "passthrough",
                     "phpcs configured + phpunit + phpcs ran → passthrough"))
 
+    # ── testimony-seams P0 ride-along: "lint ran" upgraded to "lint ran and
+    # exited 0" where a linter is configured. Unknown exit stays ran-only. ──
+
+    def _bash_id(cmd, tool_id):
+        return {"type": "tool_use", "name": "Bash", "id": tool_id,
+                "input": {"command": cmd}}
+
+    def _result(tool_id, is_error, content=""):
+        return {"type": "user", "message": {"content": [{
+            "type": "tool_result", "tool_use_id": tool_id,
+            "is_error": is_error, "content": content}]}}
+
+    def _evidence(line):
+        return _msg({"type": "text", "text": line})
+
+    # scraped lint result red → block on standards (names the exit)
+    d, out = _run([_msg(_write(BIG)),
+                   _msg(_bash_id("npx vitest run", "t1")), _result("t1", False),
+                   _msg(_bash_id("npx eslint src/", "l1")),
+                   _result("l1", True, "2 problems\nExit code: 1")],
+                  cwd_files={"package.json": PKG_WITH_ESLINT})
+    results.append((d == "block" and "STANDARDS" in out and "RED" in out,
+                    "lint ran but exited non-zero (scraped) → block (standards red)"))
+
+    # evidence line lint=1 → block even with no scrapeable lint result
+    d, out = _run([_msg(_write(BIG)),
+                   _msg(_bash_id("npx vitest run", "t1")), _result("t1", False),
+                   _msg(_bash("npx eslint src/")),
+                   _evidence('HARNESS-EVIDENCE: role=implementer '
+                             'suite="npx vitest run" exit=0 lint=1')],
+                  cwd_files={"package.json": PKG_WITH_ESLINT})
+    results.append((d == "block" and "STANDARDS" in out,
+                    "evidence lint=1 → block (standards red)"))
+
+    # evidence line lint=0 → passthrough
+    d, out = _run([_msg(_write(BIG)),
+                   _msg(_bash_id("npx vitest run", "t1")), _result("t1", False),
+                   _msg(_bash("npx eslint src/")),
+                   _evidence('HARNESS-EVIDENCE: role=implementer '
+                             'suite="npx vitest run" exit=0 lint=0')],
+                  cwd_files={"package.json": PKG_WITH_ESLINT})
+    results.append((d == "passthrough", "evidence lint=0 → passthrough"))
+
     return results
 
 

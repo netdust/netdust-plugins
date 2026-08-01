@@ -17,6 +17,32 @@ Purpose:
       fail), and
     • the implementer, which edits production code and must have RUN the suite.
 
+  Since testimony-seams (P0) it also enforces GREEN-ness for implementer-class
+  closes — a verdict keyed to a machine-checked fact, never to actor testimony.
+  The building addenda specify ONE close-out evidence line (designed evidence):
+
+      HARNESS-EVIDENCE: role=<implementer|test-author> suite="<cmd>" exit=<int>
+                        [lint=<int>] [mode=<split|solo>]
+
+  This hook owns the only parser. When the line is absent, it falls back to
+  scraping the last test-command tool_result from the transcript (scraped
+  evidence). Testimony fields may TIGHTEN a verdict, never loosen it:
+    • role=test-author is honored iff every edited code path is a test path
+      (RED is the author's job — run-only suffices); any production-path edit
+      makes it an implementer regardless of the claim.
+    • an evidence suite command that does not match the test-command
+      recognizer is ignored (no "green" via echo-grade pseudo-tests). The
+      recognizer is TEST_CMD_PATTERN below — composer gate / bin/gate.sh
+      count, same as for a real run.
+    • an implementer whose suite exited non-zero is blocked, reason naming
+      the command and exit code. Unknown exit (no line, no scrapeable
+      result) degrades to the pre-P0 ran-only behavior.
+
+  On an implementer GREEN close while a harness loop is armed
+  (tasks/.harness-loop.json), it appends one `suite-green` event (sha + cmd)
+  through bin/run-trace.py — the evidence bin/loop-check.py's FINISHED
+  verdict is keyed to. Emission is fail-open and never affects the decision.
+
   It catches the case where the parent dispatched a subagent without the
   required close-out instruction, or where the subagent ignored it.
 
@@ -40,11 +66,14 @@ Logs to ~/.claude/logs/memory-hook.log (shared with session-stop.py).
 
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from datetime import datetime
 
 LOG_PATH = Path.home() / ".claude" / "logs" / "memory-hook.log"
+RUN_TRACE = Path(__file__).resolve().parent.parent / "bin" / "run-trace.py"
+MARKER_REL = Path("tasks") / ".harness-loop.json"
 
 # Tool names that indicate the subagent modified code.
 CODE_EDITING_TOOLS = {"Edit", "Write", "NotebookEdit", "MultiEdit"}
@@ -85,6 +114,27 @@ def _is_code_path(file_path: str) -> bool:
         return True
     lower = file_path.lower()
     return not lower.endswith(NON_CODE_SUFFIXES)
+
+
+# Directory segments / filename shapes that mark a TEST path. Sibling of
+# _is_code_path, used to cross-check a `role=test-author` claim against facts:
+# the claim is honored iff EVERY edited code path is a test path. Missing/empty
+# path → False (conservative: an unknown path is never a test path, so the
+# role resolves implementer and the green gate stays on).
+_TEST_DIR_SEGMENTS = {"tests", "test", "__tests__", "spec", "specs"}
+_TEST_FILE_RE = re.compile(
+    r"(^test_.*\.\w+$|[._-](test|spec)\.\w+$|(test|cest)s?\.php$)"
+)
+
+
+def _is_test_path(file_path: str) -> bool:
+    if not file_path:
+        return False
+    p = file_path.replace("\\", "/").lower()
+    parts = p.split("/")
+    if any(seg in _TEST_DIR_SEGMENTS for seg in parts[:-1]):
+        return True
+    return bool(_TEST_FILE_RE.search(parts[-1]))
 
 
 # Minimum added lines below which the gate is considered a no-op (auto-pass).
@@ -167,6 +217,9 @@ def _edit_line_counts(tool_name: str, tool_input: dict) -> tuple[int, int]:
 
 
 # Module-level so the tests assert the real compiled patterns (see tests/test_phpstan_standards.py).
+# The SAME recognizers validate a claimed suite/lint command on the
+# HARNESS-EVIDENCE line — a suite= value that doesn't look like a real test
+# command is ignored (a claim can tighten, never loosen).
 LINT_CMD_PATTERN = re.compile(
     r"\b("
     r"(npx |bunx )?(eslint|prettier|biome)\b|"
@@ -197,6 +250,12 @@ TEST_CMD_PATTERN = re.compile(
     r"bunx (vitest|playwright|jest)"
     r")\b"
 )
+
+# The ONE close-out evidence line (testimony-seams invariant: one format, one
+# parser — this hook owns the parser; the building addenda specify the format).
+EVIDENCE_LINE_RE = re.compile(r"^\s*HARNESS-EVIDENCE:\s*(.+?)\s*$", re.MULTILINE)
+EVIDENCE_FIELD_RE = re.compile(r'(\w+)=(?:"([^"]*)"|(\S+))')
+EXIT_CODE_RE = re.compile(r"exit code:?\s*(\d+)", re.IGNORECASE)
 
 
 def scan_subagent_activity(messages: list[dict]) -> dict:
@@ -232,6 +291,9 @@ def scan_subagent_activity(messages: list[dict]) -> dict:
     ran_lint_bash = False
     lines_added = 0
     lines_removed = 0
+    code_paths: list[str] = []
+    test_runs: list[dict] = []   # {"id": <tool_use id or "">, "cmd": <command>}
+    lint_runs: list[dict] = []
 
     for msg in messages:
         if msg.get("type") != "assistant":
@@ -258,6 +320,7 @@ def scan_subagent_activity(messages: list[dict]) -> dict:
                 if not _is_code_path(tool_input.get("file_path") or ""):
                     continue
                 edited = True
+                code_paths.append(tool_input.get("file_path") or "")
                 a, r = _edit_line_counts(tool_name, tool_input)
                 lines_added += a
                 lines_removed += r
@@ -272,8 +335,10 @@ def scan_subagent_activity(messages: list[dict]) -> dict:
                 cmd = tool_input.get("command", "") or ""
                 if TEST_CMD_PATTERN.search(cmd):
                     ran_tests_bash = True
+                    test_runs.append({"id": block.get("id") or "", "cmd": cmd})
                 if LINT_CMD_PATTERN.search(cmd):
                     ran_lint_bash = True
+                    lint_runs.append({"id": block.get("id") or "", "cmd": cmd})
 
     return {
         "edited_code": edited,
@@ -283,7 +348,129 @@ def scan_subagent_activity(messages: list[dict]) -> dict:
         "invoked_testing": invoked_testing,
         "ran_tests_via_bash": ran_tests_bash,
         "ran_lint_via_bash": ran_lint_bash,
+        "code_paths": code_paths,
+        "test_runs": test_runs,
+        "lint_runs": lint_runs,
     }
+
+
+def parse_evidence_line(messages: list[dict]) -> dict | None:
+    """Parse the LAST HARNESS-EVIDENCE line from the subagent's assistant text.
+
+    Returns {"role": ..., "suite": ..., "exit": int, "lint": int, "mode": ...}
+    with only the fields present, or None when the line is absent OR malformed
+    (bad role/mode value, non-integer exit/lint). Malformed → None is the
+    fail-open direction: absence falls back to transcript scraping, which a
+    testimony field can never loosen anyway.
+    """
+    raw = None
+    for msg in messages:
+        if msg.get("type") != "assistant":
+            continue
+        content = msg.get("message", {}).get("content", "")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                for m in EVIDENCE_LINE_RE.finditer(block.get("text") or ""):
+                    raw = m.group(1)
+    if raw is None:
+        return None
+
+    fields: dict = {}
+    for m in EVIDENCE_FIELD_RE.finditer(raw):
+        key = m.group(1)
+        fields[key] = m.group(2) if m.group(2) is not None else m.group(3)
+
+    try:
+        if "role" in fields and fields["role"] not in ("implementer", "test-author"):
+            raise ValueError(f"bad role {fields['role']!r}")
+        if "mode" in fields and fields["mode"] not in ("split", "solo"):
+            raise ValueError(f"bad mode {fields['mode']!r}")
+        for int_key in ("exit", "lint"):
+            if int_key in fields:
+                fields[int_key] = int(fields[int_key])
+    except ValueError as e:
+        log(f"evidence-line-malformed raw={raw!r} err={e}")
+        return None
+    return fields
+
+
+def collect_tool_results(messages: list[dict]) -> dict[str, tuple[bool, str]]:
+    """Map tool_use_id → (is_error, result text) from user-turn tool_result
+    blocks — the scraped half of the evidence contract."""
+    results: dict[str, tuple[bool, str]] = {}
+    for msg in messages:
+        if msg.get("type") != "user":
+            continue
+        content = msg.get("message", {}).get("content", "")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "tool_result":
+                continue
+            tid = block.get("tool_use_id") or ""
+            if not tid:
+                continue
+            raw = block.get("content")
+            if isinstance(raw, str):
+                text = raw
+            elif isinstance(raw, list):
+                text = "\n".join(b.get("text", "") for b in raw if isinstance(b, dict))
+            else:
+                text = ""
+            results[tid] = (bool(block.get("is_error")), text)
+    return results
+
+
+def scraped_run_status(runs: list[dict],
+                       results: dict[str, tuple[bool, str]]) -> dict | None:
+    """Status of the LAST run (test or lint) with a matched tool_result.
+
+    Returns {"green": bool, "exit": "<label>", "cmd": ...} or None when no run
+    has a scrapeable result (exit unknown → the pre-P0 ran-only behavior).
+    `is_error` on a Bash tool_result marks a non-zero exit; a printed
+    "exit code N" is extracted for the label when present. Runs without a
+    result (older transcripts, missing ids) are skipped — scraped evidence is
+    the heuristic fallback; the designed evidence line is primary.
+    """
+    for run in reversed(runs):
+        res = results.get(run["id"])
+        if res is None:
+            continue
+        is_err, text = res
+        if not is_err:
+            return {"green": True, "exit": "0", "cmd": run["cmd"]}
+        m = EXIT_CODE_RE.search(text)
+        return {"green": False, "exit": m.group(1) if m else "non-zero",
+                "cmd": run["cmd"]}
+    return None
+
+
+def emit_suite_green(cwd: str, cmd: str) -> None:
+    """Append one `suite-green` event (sha + cmd) through bin/run-trace.py when
+    a harness loop is armed for this cwd. Unarmed → skip silently. Fail-open:
+    any failure is swallowed — trace emission must NEVER affect the block
+    decision (mirrors loop-gate's trace() wrapper)."""
+    try:
+        marker_path = Path(cwd or ".") / MARKER_REL
+        if not marker_path.exists():
+            return
+        marker = json.loads(marker_path.read_text())
+        feature_dir = Path(cwd or ".") / (marker.get("feature_dir") or "")
+        sha_proc = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=10, cwd=cwd or ".",
+        )
+        sha = sha_proc.stdout.strip() if sha_proc.returncode == 0 else "unknown"
+        subprocess.run(
+            [sys.executable, str(RUN_TRACE), "append", str(feature_dir),
+             "suite-green", f"sha={sha}", f"cmd={cmd}"],
+            capture_output=True, timeout=10, cwd=cwd or ".",
+        )
+        log(f"suite-green-traced feature={feature_dir} sha={sha}")
+    except Exception as e:
+        log(f"suite-green-trace-failed err={e}")
 
 
 def project_has_linter(cwd: str) -> bool:
@@ -344,9 +531,13 @@ def project_has_linter(cwd: str) -> bool:
     return False
 
 
-def build_block_message(activity: dict, missing: list[str]) -> str:
-    """The message Claude (the subagent) sees when we block its stop. `missing` is
-    a subset of {"tests", "standards"} — the close-out gates not yet satisfied."""
+def build_block_message(activity: dict, missing: list[str],
+                        details: dict | None = None) -> str:
+    """The message Claude (the subagent) sees when we block its stop. `missing`
+    is a subset of {"tests", "suite-red", "standards", "standards-red"} — the
+    close-out gates not yet satisfied. `details` carries the facts the reason
+    must name (suite cmd/exit, lint exit)."""
+    details = details or {}
     parts = [
         "netdust-agent/SubagentStop: close-out gate not satisfied.\n\n",
         f"You added {activity['lines_added']} lines of code in this task. Per "
@@ -364,6 +555,27 @@ def build_block_message(activity: dict, missing: list[str]) -> str:
             "      vendor/bin/codecept run unit     (Codeception)\n"
             "      ddev exec phpunit                (WP under DDEV)\n"
             "      composer gate       (or run the full gate — satisfies tests AND standards)\n"
+        )
+
+    if "suite-red" in missing:
+        parts.append(
+            "\nMISSING — SUITE IS RED. An implementer-class task may not stop "
+            "on a failing suite (RED closes are the test-author's job, and "
+            "only on test-path-only edits):\n"
+            f"      suite: {details.get('suite_cmd', '<unknown>')}\n"
+            f"      exit:  {details.get('suite_exit', 'non-zero')}\n"
+            "Fix the failure (or escalate NEEDS_CONTEXT if the contract test "
+            "is wrong — never weaken it), re-run the suite to green, and end "
+            "with the updated HARNESS-EVIDENCE line.\n"
+        )
+
+    if "standards-red" in missing:
+        parts.append(
+            "\nMISSING — STANDARDS gate is RED. The linter ran and exited "
+            f"non-zero (exit: {details.get('lint_exit', 'non-zero')}). Fix the "
+            "violations (or justify narrowly inline), re-run to clean, and "
+            "update the `Standards:` evidence line (and the optional "
+            f"`lint=<code>` field). (See the {STANDARDS_SKILL} skill.)\n"
         )
 
     if "standards" in missing:
@@ -469,18 +681,85 @@ def main() -> None:
         )
         sys.exit(0)
 
+    # ── The evidence contract (testimony-seams P0) ────────────────────────
+    # Designed evidence (the HARNESS-EVIDENCE line) first, scraped evidence
+    # (tool_result of the last test/lint command) as fallback. Testimony can
+    # tighten a verdict, never loosen it.
+    evidence = parse_evidence_line(messages)
+    results = collect_tool_results(messages)
+
+    # Resolve the ROLE from facts. test-author (run-only gate; RED is its job)
+    # is honored iff every edited code path is a test path. A production-path
+    # edit makes it an implementer regardless of the claim; an explicit
+    # implementer claim on a test-only edit is honored (a claim can tighten).
+    claimed_role = (evidence or {}).get("role")
+    all_test_paths = bool(activity["code_paths"]) and all(
+        _is_test_path(p) for p in activity["code_paths"]
+    )
+    role = "test-author" if (all_test_paths and claimed_role != "implementer") \
+        else "implementer"
+
+    # Resolve the SUITE status: evidence line (only when its suite command is
+    # recognized as a real test command — no echo-grade pseudo-tests; the
+    # recognizer is the SAME TEST_CMD_PATTERN a real run must match, so
+    # composer gate / bin/gate.sh claims count too), else scrape the last
+    # test-command tool_result. None → exit unknown.
+    suite = None
+    if (evidence is not None and "exit" in evidence
+            and TEST_CMD_PATTERN.search(evidence.get("suite") or "")):
+        suite = {"green": evidence["exit"] == 0,
+                 "exit": str(evidence["exit"]),
+                 "cmd": evidence["suite"], "source": "evidence"}
+    else:
+        scraped = scraped_run_status(activity["test_runs"], results)
+        if scraped is not None:
+            suite = {**scraped, "source": "scraped"}
+
+    tests_ran = activity["ran_tests_via_bash"] or (
+        suite is not None and suite["source"] == "evidence")
+
+    # Resolve the LINT status the same way (the standards backstop upgrade:
+    # "lint ran" → "lint ran and exited 0"; unknown exit stays ran-only).
+    lint = None
+    if evidence is not None and "lint" in evidence:
+        lint = {"green": evidence["lint"] == 0, "exit": str(evidence["lint"])}
+    else:
+        scraped_lint = scraped_run_status(activity["lint_runs"], results)
+        if scraped_lint is not None:
+            lint = {"green": scraped_lint["green"], "exit": scraped_lint["exit"]}
+    lint_ran = activity["ran_lint_via_bash"] or lint is not None
+
     # Which close-out gates are unmet?
-    #  - TESTS: always required for a non-no-op code change.
+    #  - TESTS: always required for a non-no-op code change; an implementer's
+    #    suite must additionally be GREEN when its exit is known.
     #  - STANDARDS: required only when the project has a linter configured
     #    (enforce only where standards are defined — never block a project that
-    #    has no linter). Mirrors the testing gate; closes goal #2.
+    #    has no linter), and RED lint blocks when the exit is known.
     cwd = hook_input.get("cwd", "")
     has_linter = project_has_linter(cwd)
     missing = []
-    if not activity["ran_tests_via_bash"]:
+    details: dict = {}
+    if not tests_ran:
         missing.append("tests")
-    if has_linter and not activity["ran_lint_via_bash"]:
-        missing.append("standards")
+    elif role == "implementer" and suite is not None and not suite["green"]:
+        missing.append("suite-red")
+        details["suite_cmd"] = suite["cmd"]
+        details["suite_exit"] = suite["exit"]
+    if has_linter:
+        if not lint_ran:
+            missing.append("standards")
+        elif lint is not None and not lint["green"]:
+            missing.append("standards-red")
+            details["lint_exit"] = lint["exit"]
+
+    log(f"evidence role={role} claimed={claimed_role} suite={suite} lint={lint}")
+
+    # Record the green fact for the loop ledger (loop-check's FINISHED
+    # consumes it): implementer suite verified green + loop armed → one
+    # suite-green trace event. Emitted on the fact, independent of other
+    # gates; never affects the decision.
+    if role == "implementer" and suite is not None and suite["green"]:
+        emit_suite_green(cwd, suite["cmd"])
 
     if not missing:
         sys.exit(0)
@@ -488,7 +767,7 @@ def main() -> None:
     # Block the stop and feed the message back to the subagent.
     decision_payload = {
         "decision": "block",
-        "reason": build_block_message(activity, missing),
+        "reason": build_block_message(activity, missing, details),
     }
     log(f"blocked missing={','.join(missing)} has_linter={has_linter}")
     print(json.dumps(decision_payload))
