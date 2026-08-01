@@ -12,8 +12,8 @@ site:
 
 structure:
   type: {{STACK_TYPE}}               # bedrock | custom-app | custom-site
-  webroot: web                       # bedrock: web | custom-app: app | custom-site: .
-  wpcli_path: web/wp                 # bedrock: web/wp | custom-app: app/wp (matches wp-cli.yml --path)
+  webroot: {{WEBROOT}}                       # bedrock: web | custom-app: app | custom-site: .
+  wpcli_path: {{WPCLI_PATH}}                 # bedrock: web/wp | custom-app: app/wp (matches wp-cli.yml --path)
 
 hosting:
   provider: {{HOSTING_PROVIDER}}     # ploi | combell | other

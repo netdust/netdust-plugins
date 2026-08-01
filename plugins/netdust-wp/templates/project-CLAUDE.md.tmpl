@@ -27,7 +27,7 @@ For operational config (stack, hosting, deploy method, risk level), see `site.ym
 ## Conventions
 
 - **ntdst-core framework conventions apply to all new code** — Modules / Handlers / Admin / Integrations / Contracts / Domain / Infrastructure layering. See `ntdst-architecture` and `ntdst-patterns`.
-- **WP-specific rules** live in `~/.claude/plugins/netdust-wp/RULES.md` (sanitize/escape/nonce/cap, `$wpdb->prepare()` always, prefix everything, i18n, never edit WP core or `web/wp/`). Universal rules in `netdust-core/RULES.md`.
+- **WP-specific rules** live in `~/.claude/plugins/netdust-wp/RULES.md` (sanitize/escape/nonce/cap, `$wpdb->prepare()` always, prefix everything, i18n, never edit WP core or `{{WPCLI_PATH}}/`). Universal rules in `netdust-core/RULES.md`.
 - **Stack / hosting / deploy** — see `site.yml`. Deploy via `/deploy` (never to prod without explicit confirmation).
 
 ## Project memory
