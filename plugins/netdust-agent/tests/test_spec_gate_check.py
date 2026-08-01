@@ -280,7 +280,7 @@ TASKS_TIER_A_SPLIT_ON_BOUNDARY = """# Tasks: x
 """
 
 # Tier B on a security-boundary file with NOTHING proving it — a guard nobody checks.
-# Before 0.15 this WARNed on the TIER alone; it now WARNs on the ABSENT EVIDENCE, which is
+# Before 0.16 this WARNed on the TIER alone; it now WARNs on the ABSENT EVIDENCE, which is
 # what the finding was always reaching for.
 TASKS_TIER_B_ON_BOUNDARY = """# Tasks: x
 
@@ -461,6 +461,27 @@ SPEC_MONEY = """# Feature Specification: Refund flow
 
 ## Notes
 Handles payment provider webhooks and refund amounts.
+"""
+
+# S9 — a money spec with NO checked security box (so the `low` FAIL stays out of the way),
+# paired below with a reason-less `Stakes: low` plan: BOTH advisory WARNs (under-call +
+# missing-reason) must surface. An early return after the first WARN would suppress the
+# second — two independent questions, both owed to the reviewer.
+SPEC_MONEY_NO_BOX = """# Feature Specification: Refund flow
+
+## Success criteria
+- **SC-1:** a refund lands back on the customer's card within 5 days
+
+## Security-relevant surfaces
+- [x] None of the above
+
+## Notes
+Handles payment provider webhooks and refund amounts.
+"""
+
+PLAN_STAKES_LOW_NO_REASON = PLAN_GATES_FULL + """
+## Stakes  [GATE]
+Stakes: low
 """
 
 # ── `proven-by` fixtures — the evidence ladder (1d) ───────────────────────────
@@ -1107,6 +1128,16 @@ def run():
     rc, out = _run({"spec.md": SPEC_MONEY, "plan.md": PLAN_STAKES_STANDARD})
     results.append((rc == 0 and "! [stakes]" in out and "money/PII" in out,
                     "`Stakes: standard` on a spec mentioning payments WARNs as an under-call"))
+
+    # S9 — the two advisory WARNs are independent questions and BOTH must surface: a
+    # reason-less `Stakes: low` on a money spec (no checked security box) is an under-call
+    # question AND a missing-reason question. Early-returning after the first suppressed
+    # the second.
+    rc, out = _run({"spec.md": SPEC_MONEY_NO_BOX, "plan.md": PLAN_STAKES_LOW_NO_REASON})
+    results.append((rc == 0 and "money/PII" in out and "states no reason" in out
+                    and "✓ [stakes]" not in out,
+                    "S9: under-call + missing-reason WARNs both surface (no early-return "
+                    "suppression), and no pass line rides along"))
 
     # ── 22. `proven-by` — the evidence ladder (1d) ────────────────────────────
     rc, out = _run({"tasks.md": TASKS_PROVEN_BY_COMPLETE})

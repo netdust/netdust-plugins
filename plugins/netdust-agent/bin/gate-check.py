@@ -367,21 +367,27 @@ def check_stakes(plan_text: str, spec_text: str | None, f: Findings) -> None:
     # less than `high` deserves one visible question. WARN, never FAIL: prose keywords are
     # weaker evidence than the spec's checked security boxes (which drive the `low` FAIL
     # above), and a FAIL on a keyword would teach people to route around the dial.
+    # S9 — the two advisory WARNs are independent questions and BOTH surface: an early
+    # return after the first would suppress the second, and a reviewer owed two questions
+    # should see two.
+    warned = False
+
     if level != "high" and spec_text is not None:
         m = SPEC_HIGH_STAKES.search(strip_fenced(spec_text))
         if m:
             f.add("warn", "stakes",
                   f"`Stakes: {level}` while the spec mentions `{m.group(0)}` — money/PII "
                   "surfaces usually read `high`; confirm the under-call is deliberate")
-            return
+            warned = True
 
     if level in ("high", "low") and not reason:
         f.add("warn", "stakes",
               f"`Stakes: {level}` states no reason — both are departures from the default; "
               "say why in one line so a reviewer can challenge it")
-        return
+        warned = True
 
-    f.add("pass", "stakes", f"Stakes: {level}" + (f" — {reason[:60]}" if reason else ""))
+    if not warned:
+        f.add("pass", "stakes", f"Stakes: {level}" + (f" — {reason[:60]}" if reason else ""))
 
 
 HAS_P = re.compile(r"\[P\]")

@@ -98,7 +98,9 @@ TEST_PATH = re.compile(
     r"(^|/)(tests?|__tests__|spec|specs|e2e|cypress)(/|$)"
     r"|\.(test|spec)\.[jt]sx?$"
     r"|(^|/)test_[^/]+\.py$|_test\.py$"
-    r"|[^/]*(Test|Cest|TestCase)\.php$"
+    # S5: the php suffix is case-SENSITIVE (scoped (?-i:) inside the IGNORECASE pattern) —
+    # `latest.php` / `contest.php` are implementation, not a `*Test.php` suite.
+    r"|[^/]*(?-i:(Test|Cest|TestCase))\.php$"
     r"|\.feature$",
     re.IGNORECASE)
 
@@ -184,7 +186,17 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
-    rng = args.base if ".." in args.base else f"{args.base}...HEAD"
+    # C1: an EMPTY base (a caller's `$(git merge-base HEAD main)` on a repo with no `main`
+    # expands to nothing) is a cannot-measure, never a verdict. Before this guard, "" became
+    # the range `...HEAD` → empty diff → "BUDGET: PASS" — a false green on exactly the
+    # master-default repo shape the tripwire exists to catch.
+    base = (args.base or "").strip()
+    if not base:
+        print("verify-budget: cannot determine base ref — budget not measured",
+              file=sys.stderr)
+        return 0                      # fail-open, but with NO opinion: no PASS printed
+
+    rng = base if ".." in base else f"{base}...HEAD"
 
     if args.stakes:
         level, source = args.stakes, "--stakes override"

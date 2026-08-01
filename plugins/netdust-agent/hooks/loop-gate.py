@@ -70,6 +70,26 @@ def trace(feature_dir: Path, event: str, cwd: Path, **kv) -> None:
         pass  # fail-open: tracing must never affect the gate's decision
 
 
+def resolve_base(cwd: Path) -> str | None:
+    """C1: `main` is not universal. Resolve the integration base as main → master →
+    origin/HEAD (stripped), so the budget tripwire measures something on master-default
+    repos instead of silently measuring nothing. None → no base resolvable (not a git
+    repo, or an unborn default): the budget check is SKIPPED, never guessed."""
+    for ref in ("main", "master"):
+        p = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", ref],
+            capture_output=True, text=True, timeout=10, cwd=str(cwd))
+        if p.returncode == 0:
+            return ref
+    p = subprocess.run(
+        ["git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+        capture_output=True, text=True, timeout=10, cwd=str(cwd))
+    head = p.stdout.strip()
+    if p.returncode == 0 and head:
+        return head.removeprefix("origin/")
+    return None
+
+
 def read_progress(stdout: str) -> int | None:
     for line in stdout.splitlines():
         if line.startswith("progress: done="):
@@ -150,11 +170,17 @@ def main() -> None:
     # the exit-2 posture, but the agent must be told, because unlike a [HUMAN] task it
     # does not know. The stop_hook_active bypass bounds this to one block per cycle.
     try:
-        if VERIFY_BUDGET.exists():
+        base = resolve_base(cwd)
+        if base is None:
+            log(f"budget-skip reason=no-base-ref cwd={cwd}")
+        elif VERIFY_BUDGET.exists():
             budget = subprocess.run(
-                [sys.executable, str(VERIFY_BUDGET), str(feature_dir), "--base", "main"],
+                [sys.executable, str(VERIFY_BUDGET), str(feature_dir), "--base", base],
                 capture_output=True, text=True, timeout=60, cwd=str(cwd))
-            if budget.returncode == 1:
+            # I2: a HALT is exit 1 AND the marker in stdout. A bare exit 1 (crash,
+            # traceback, argparse error) is a tooling failure — fail-open, no opinion,
+            # never the stop-and-report block.
+            if budget.returncode == 1 and "BUDGET: HALT" in budget.stdout:
                 log(f"yield reason=budget-halt iter={iteration} cwd={cwd}")
                 trace(feature_dir, "loop-yield-budget", cwd=cwd, iteration=iteration)
                 print(json.dumps({

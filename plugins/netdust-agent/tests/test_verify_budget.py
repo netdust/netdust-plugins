@@ -36,12 +36,14 @@ def _git(repo: Path, *args: str) -> None:
                    capture_output=True, text=True, timeout=30)
 
 
-def _repo(test_lines: int, impl_lines: int, stakes: str = "low"):
-    """A throwaway repo with one commit on top of `main` adding N test / M impl lines."""
+def _repo(test_lines: int, impl_lines: int, stakes: str = "low",
+          default_branch: str = "main"):
+    """A throwaway repo with one commit on top of the default branch adding N test /
+    M impl lines."""
     tmp = tempfile.mkdtemp()
     atexit.register(shutil.rmtree, tmp, ignore_errors=True)  # S3: no leaked tmp dirs
     repo = Path(tmp)
-    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "init", "-q", "-b", default_branch)
     _git(repo, "config", "user.email", "t@t.t")
     _git(repo, "config", "user.name", "t")
 
@@ -173,13 +175,72 @@ def run():
                     "--stakes overrides the plan and works with no feature dir"))
 
     # 6. Fail OPEN on a bad range. The script's only power is to interrupt a human; it must
-    #    never spend that power on its own tooling failure.
+    #    never spend that power on its own tooling failure. C1: fail-open is "no opinion" —
+    #    an unknown revision must never READ as a verdict, so no "BUDGET: PASS" either.
     repo, spec = _repo(test_lines=2000, impl_lines=200, stakes="low")
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), str(spec), "--base", "no-such-ref", "--repo", str(repo)],
         capture_output=True, text=True, timeout=60)
-    results.append((proc.returncode == 0 and "cannot read the diff" in proc.stderr,
-                    "an unresolvable git ref fails OPEN (exit 0), never blocks on tooling"))
+    results.append((proc.returncode == 0 and "cannot read the diff" in proc.stderr
+                    and "BUDGET: PASS" not in proc.stdout,
+                    "an unresolvable git ref fails OPEN (exit 0), never blocks on tooling, "
+                    "never prints PASS"))
+
+    # 6b. C1 — an EMPTY --base (a caller's `$(git merge-base HEAD main)` on a repo with no
+    #     `main` expands to nothing) must be cannot-measure, NOT a verdict. Before the fix,
+    #     "" became the range `...HEAD` → empty diff → "BUDGET: PASS" — the tripwire
+    #     reporting green on the exact incident repo shape it exists to catch.
+    repo, spec = _repo(test_lines=2000, impl_lines=200, stakes="low")
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT), str(spec), "--base", "", "--repo", str(repo)],
+        capture_output=True, text=True, timeout=60)
+    results.append((proc.returncode == 0
+                    and "cannot determine base ref" in proc.stderr
+                    and "budget not measured" in proc.stderr
+                    and "BUDGET: PASS" not in proc.stdout,
+                    "C1: an empty --base exits 0 with a cannot-measure notice and NEVER "
+                    "prints PASS"))
+
+    # 6c. C1 — the call sites' base-resolution chain (main → master → origin/HEAD) on a
+    #     MASTER-default repo (the Daan incident shape). The snippet below is the one
+    #     integration.md / shakeout.md document verbatim; it must find `master`, and the
+    #     known over-ratio range must then HALT instead of being silently unmeasurable.
+    repo, spec = _repo(test_lines=2000, impl_lines=200, stakes="low",
+                       default_branch="master")
+    resolve = (
+        "if git rev-parse --verify -q main >/dev/null; then BASE=main\n"
+        "elif git rev-parse --verify -q master >/dev/null; then BASE=master\n"
+        "else BASE=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null"
+        " | sed 's|^origin/||'); fi\n"
+        'echo "$BASE"\n')
+    resolved = subprocess.run(
+        ["bash", "-c", resolve], cwd=repo, capture_output=True, text=True, timeout=30
+    ).stdout.strip()
+    rc, out = 1, ""
+    if resolved:  # only run the budget check with a real ref — that's the point
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT), str(spec), "--base", resolved,
+             "--repo", str(repo)], capture_output=True, text=True, timeout=60)
+        rc, out = proc.returncode, proc.stdout + proc.stderr
+    results.append((resolved == "master" and rc == 1 and "BUDGET: HALT" in out,
+                    "C1: on a master-default repo the documented resolution chain finds "
+                    "`master` and the over-ratio range HALTs"))
+
+    # 6d. S5 — the php test-suffix match is case-SENSITIVE: `latest.php` and `contest.php`
+    #     are implementation, not tests. Before the fix, IGNORECASE made `latest.php` end
+    #     in "test.php", inflating the test side and deflating impl.
+    repo, spec = _repo(test_lines=300, impl_lines=0, stakes="low")
+    (repo / "latest.php").write_text(
+        "\n".join(f"$latest{i} = {i};" for i in range(300)) + "\n")
+    (repo / "contest.php").write_text(
+        "\n".join(f"$contest{i} = {i};" for i in range(300)) + "\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "impl files with test-ish names")
+    rc, out = _run(repo, spec, "--json")
+    payload = json.loads(out)
+    results.append((payload["test_lines"] == 300 and payload["impl_lines"] == 600,
+                    "S5: latest.php / contest.php classify as implementation — the php "
+                    "suffix match is case-sensitive"))
 
     # 7. Docs and the feature's own paperwork move the ratio in no direction — otherwise
     #    writing the plan would count against the plan's own budget.

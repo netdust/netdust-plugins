@@ -30,8 +30,19 @@ If none match, stop and tell the user: "Couldn't detect project type. Run tests 
 
 The user runs `/integration` at the end of each task group. The "group" is `<last-integration-sha>..HEAD`.
 
+First resolve the integration base branch — **never hardcode `main`**; on a master-default repo a hardcoded `main` makes every downstream range empty or unresolvable, which silently disarms the budget tripwire (the exact incident shape it exists to catch):
+
+```bash
+if git rev-parse --verify -q main >/dev/null; then BASE=main
+elif git rev-parse --verify -q master >/dev/null; then BASE=master
+else BASE=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||'); fi
+echo "→ base branch: ${BASE:-NONE RESOLVED}"
+```
+
+If `BASE` resolved empty, say so and fall back to running the tests without a diff range — do not fabricate one.
+
 1. Read `.claude/.last-integration` from the repo root. It contains a single SHA (the HEAD after the previous `/integration`).
-2. If missing → group range = `$(git merge-base HEAD main)..HEAD` (since the branch diverged from main).
+2. If missing → group range = `$(git merge-base HEAD "$BASE")..HEAD` (since the branch diverged from the base branch).
 3. Capture `git rev-parse HEAD` into `NEW_SHA`. Save this for Step 4.
 4. Compute the range string: `RANGE="${LAST}..HEAD"` (or the merge-base form).
 5. Show the user: "Group diff: `<RANGE>` (N commits, M files changed)" via `git log --oneline RANGE` + `git diff --stat RANGE`.
@@ -58,9 +69,21 @@ Run the stakes-scaled test-vs-implementation budget check over the group range:
 
 ```bash
 VB_SCRIPT="<plugin>/bin/verify-budget.py"   # plugins/netdust-agent/bin/verify-budget.py
-SPEC_DIR=$(ls -d specs/*/ 2>/dev/null | head -1)  # the feature dir holding plan.md, if any
+# Pick the feature dir: loop marker → dirs the diff actually touched → ls fallback.
+if [[ -f tasks/.harness-loop.json ]]; then
+  SPEC_DIR=$(python3 -c "import json; print(json.load(open('tasks/.harness-loop.json')).get('feature_dir',''))")
+  echo "→ SPEC_DIR from loop marker: $SPEC_DIR"
+fi
+if [[ -z "${SPEC_DIR:-}" ]]; then
+  SPEC_DIR=$(git diff --name-only "$BASE...HEAD" -- specs/ | cut -d/ -f1-2 | sort -u | head -1)
+  [[ -n "$SPEC_DIR" ]] && echo "→ SPEC_DIR from the diff range: $SPEC_DIR"
+fi
+if [[ -z "${SPEC_DIR:-}" ]]; then
+  SPEC_DIR=$(ls -d specs/*/ 2>/dev/null | head -1)
+  [[ -n "$SPEC_DIR" ]] && echo "→ SPEC_DIR from ls fallback: $SPEC_DIR"
+fi
 if [[ -f "$VB_SCRIPT" ]]; then
-  python3 "$VB_SCRIPT" ${SPEC_DIR:+"$SPEC_DIR"} --base "${LAST:-$(git merge-base HEAD main)}" || {
+  python3 "$VB_SCRIPT" ${SPEC_DIR:+"$SPEC_DIR"} --base "${LAST:-$(git merge-base HEAD "$BASE")}" || {
     echo "BUDGET HALT — do not write the marker; report to the user (see the script's three causes)."
     exit 1
   }
@@ -106,7 +129,7 @@ When the whole spec is done, run /shakeout — it picks up where this gate left 
 - **Tests fail**: report, halt, don't update marker. User fixes, re-runs.
 - **Type-check fails**: same.
 - **Repo not a git repo**: skip Step 2 entirely, run tests only, print announcement without diff range.
-- **`.last-integration` exists but the SHA is unreachable** (rebase, force-push): warn the user, fall back to `merge-base HEAD main`.
+- **`.last-integration` exists but the SHA is unreachable** (rebase, force-push): warn the user, fall back to `merge-base HEAD "$BASE"`.
 - **Monorepo with selective workspaces**: don't try to be smart — run the root test command. Workspace-aware runs are the user's call.
 
 ## What this command does NOT do

@@ -23,13 +23,60 @@ TASKS_HUMAN_NEXT = (
 )
 
 
-def run_gate(cwd: Path, stdin_obj: dict, home: Path) -> tuple[int, str]:
+def run_gate(cwd: Path, stdin_obj: dict, home: Path,
+             gate: Path = LOOP_GATE) -> tuple[int, str]:
     p = subprocess.run(
-        [sys.executable, str(LOOP_GATE)],
+        [sys.executable, str(gate)],
         input=json.dumps(stdin_obj), capture_output=True, text=True,
         timeout=120, env={"HOME": str(home), "PATH": "/usr/bin:/bin:/usr/local/bin"},
     )
     return p.returncode, p.stdout
+
+
+# ── budget-seam stubs (I2 / C1) ──────────────────────────────────────────────
+# A scratch plugin tree with the REAL loop-gate + loop-check + run-trace but a STUBBED
+# verify-budget.py, so the budget seam can be driven without manufacturing a real diff.
+
+STUB_CRASH = """#!/usr/bin/env python3
+import sys
+open(__file__ + '.argv', 'w').write(' '.join(sys.argv[1:]))
+sys.stderr.write('Traceback (most recent call last):\\n  boom\\n')
+sys.exit(1)
+"""
+
+STUB_HALT = """#!/usr/bin/env python3
+import sys
+open(__file__ + '.argv', 'w').write(' '.join(sys.argv[1:]))
+print('BUDGET: HALT — stub says the spend outran the stakes')
+sys.exit(1)
+"""
+
+
+def setup_stub_plugin(tmp: str, stub_body: str) -> Path:
+    plug = Path(tmp) / "plug"
+    (plug / "hooks").mkdir(parents=True)
+    (plug / "bin").mkdir()
+    shutil.copy(LOOP_GATE, plug / "hooks" / "loop-gate.py")
+    shutil.copy(LOOP_GATE.parent.parent / "bin" / "loop-check.py",
+                plug / "bin" / "loop-check.py")
+    shutil.copy(RUN_TRACE, plug / "bin" / "run-trace.py")
+    (plug / "bin" / "verify-budget.py").write_text(stub_body)
+    return plug / "hooks" / "loop-gate.py"
+
+
+def git_master(cwd: Path) -> None:
+    """Make cwd a git repo whose only branch is `master` — the Daan incident shape."""
+    def g(*args):
+        subprocess.run(["git", *args], cwd=cwd, check=True,
+                       capture_output=True, text=True, timeout=30)
+    g("init", "-q", "-b", "master")
+    g("-c", "user.email=t@t.t", "-c", "user.name=t", "commit",
+      "-q", "--allow-empty", "-m", "base")
+
+
+def stub_argv(gate: Path) -> str:
+    p = gate.parent.parent / "bin" / "verify-budget.py.argv"
+    return p.read_text() if p.exists() else ""
 
 
 def setup(tmp: str, tasks: str, marker: dict | None) -> Path:
@@ -185,6 +232,35 @@ def run() -> list[tuple[bool, str]]:
         dry_events = [e for e in events if e.get("event") == "loop-disarm-dry"]
         case("dry-loop disarm -> run log gains a loop-disarm-dry event",
              rc2 == 0 and len(dry_events) == 1)
+
+    # --- I2 / C1: the budget seam — crash ≠ HALT, base resolved not hardcoded ----
+    # A verify-budget that CRASHES (exit 1, no "BUDGET: HALT" marker) is a tooling
+    # failure, not a verdict: the loop must proceed with the NORMAL next-unit block,
+    # never the stop-and-report budget block. And on a master-default repo the base
+    # must resolve to `master` — hardcoded `main` left the tripwire inert on the
+    # exact repo shape of the incident it exists to catch.
+
+    with tempfile.TemporaryDirectory() as tmp:
+        gate = setup_stub_plugin(tmp, STUB_CRASH)
+        cwd = setup(tmp, TASKS_ONE_OPEN, marker={})
+        git_master(cwd)
+        rc, out = run_gate(cwd, {"cwd": str(cwd)}, Path(tmp), gate=gate)
+        case("I2: budget CRASH (exit 1, no HALT marker) -> normal block, "
+             "not the budget block",
+             rc == 0 and '"decision": "block"' in out
+             and "verify-budget HALT" not in out and "T02" in out)
+        case("C1: loop-gate resolves --base to `master` on a master-default repo",
+             "--base master" in stub_argv(gate))
+
+    with tempfile.TemporaryDirectory() as tmp:
+        gate = setup_stub_plugin(tmp, STUB_HALT)
+        cwd = setup(tmp, TASKS_ONE_OPEN, marker={})
+        git_master(cwd)
+        rc, out = run_gate(cwd, {"cwd": str(cwd)}, Path(tmp), gate=gate)
+        case("I2: a real HALT (exit 1 + marker) still blocks with the budget reason",
+             rc == 0 and '"decision": "block"' in out and "verify-budget HALT" in out)
+        case("I2: the HALT block keeps the marker armed (exit-2 posture)",
+             marker_of(cwd) is not None)
 
     # --- T02: fail-open contract (FR-2) -----------------------------------
     # Tracing must NEVER change the gate's decision or stdout. Force

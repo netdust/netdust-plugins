@@ -54,7 +54,7 @@ These are what the harness **loads** at each step. Gerund-named.
 
 ## The two dials (what scales what)
 
-The harness has always scaled ceremony. Until 2026-08-01 it scaled it on one axis, and that
+The harness has always scaled ceremony. Until 2026-07-31 it scaled it on one axis, and that
 was the bug behind `contact-page-8k`:
 
 | Dial | Asks | Set by | Scales |

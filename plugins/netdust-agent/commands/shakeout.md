@@ -23,6 +23,17 @@ case "$BRANCH" in
 esac
 ```
 
+Then resolve the base branch — **never hardcode `main`**; on a master-default repo a hardcoded `main` empties every diff range below, which silently disarms the budget tripwire and blinds the diff-scoped steps:
+
+```bash
+if git rev-parse --verify -q main >/dev/null; then BASE=main
+elif git rev-parse --verify -q master >/dev/null; then BASE=master
+else BASE=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||'); fi
+echo "→ base branch: ${BASE:-NONE RESOLVED}"
+```
+
+If `BASE` resolved empty, stop and tell the user — every diff-scoped step below depends on it.
+
 ## Step 0 — Test-effectiveness audit (the suite *bites*, not just passes)
 
 Before anything else, audit whether the test suite would actually go RED if a dangerous path broke — a green suite that never exercises the denial branch, the second tenant, the un-mocked wire, or the unmounted guard ships bugs past every later gate. This is the cheapest place to catch a green-but-blind test, and its `covered`/`blind`/`fixed` manifest becomes the convergence target the Step 4 reviewers verify against (so they verify gaps instead of re-discovering them).
@@ -35,7 +46,7 @@ Use the Skill tool, pointed at the branch diff (Situation A — phase/spec-compl
 Skill("test-effectiveness")
 ```
 
-Hand it the diff range (`$(git merge-base HEAD main)..HEAD`) as the audit target. It will walk the seven failure modes (stale fixture, test-world≠real-world, wire-mock leak, unmounted guard, happy-path-only/missing-denial, no-coverage, concurrency) over every guard, fixture, wire, mount, and timer the diff introduced, and for each either name the test that goes RED or record it `blind` and author the test that closes it.
+Hand it the diff range (`$(git merge-base HEAD "$BASE")..HEAD`) as the audit target. It will walk the seven failure modes (stale fixture, test-world≠real-world, wire-mock leak, unmounted guard, happy-path-only/missing-denial, no-coverage, concurrency) over every guard, fixture, wire, mount, and timer the diff introduced, and for each either name the test that goes RED or record it `blind` and author the test that closes it.
 
 **Wait for the audit manifest before continuing.** If it surfaced `blind` paths, those tests are authored now (RED-first) and the unit suite below must include them. If the audit aborts or the suite can't be made to bite, stop and report — don't proceed to a review pass that would just re-discover the gap.
 
@@ -74,16 +85,31 @@ A per-cluster pass can stay under the ceiling at every `/integration` gate and s
 
 ```bash
 VB_SCRIPT="<plugin>/bin/verify-budget.py"   # plugins/netdust-agent/bin/verify-budget.py
-SPEC_DIR=$(ls -d specs/*/ 2>/dev/null | head -1)
+# Pick the feature dir: loop marker → dirs the diff actually touched → ls fallback.
+if [[ -f tasks/.harness-loop.json ]]; then
+  SPEC_DIR=$(python3 -c "import json; print(json.load(open('tasks/.harness-loop.json')).get('feature_dir',''))")
+  echo "→ SPEC_DIR from loop marker: $SPEC_DIR"
+fi
+if [[ -z "${SPEC_DIR:-}" ]]; then
+  SPEC_DIR=$(git diff --name-only "$BASE...HEAD" -- specs/ | cut -d/ -f1-2 | sort -u | head -1)
+  [[ -n "$SPEC_DIR" ]] && echo "→ SPEC_DIR from the diff range: $SPEC_DIR"
+fi
+if [[ -z "${SPEC_DIR:-}" ]]; then
+  SPEC_DIR=$(ls -d specs/*/ 2>/dev/null | head -1)
+  [[ -n "$SPEC_DIR" ]] && echo "→ SPEC_DIR from ls fallback: $SPEC_DIR"
+fi
+BUDGET_HALT=0
 if [[ -f "$VB_SCRIPT" ]]; then
-  python3 "$VB_SCRIPT" ${SPEC_DIR:+"$SPEC_DIR"} --base "$(git merge-base HEAD main)" \
-    || echo "BUDGET HALT — report it to the user with the branch summary before proceeding."
+  python3 "$VB_SCRIPT" ${SPEC_DIR:+"$SPEC_DIR"} --base "$(git merge-base HEAD "$BASE")" || {
+    BUDGET_HALT=1
+    echo "BUDGET HALT — carry on composing the report; STOP at Step 4 before the reviewer panel."
+  }
 else
   echo "→ verify-budget.py not found — skipping the budget check (fail-open)."
 fi
 ```
 
-It compares test lines added to implementation lines added against the ceiling the plan's `Stakes:` level justifies. **On a HALT: stop and put the script's report in front of the user** — the three causes it names (stakes line too low / evidence duplicated / drives committed as durable specs) are the user's triage, not yours, and deleting tests to silence it is forbidden. On PASS, fold the printed ratio into the final report — it is cheap observability either way. Missing script or git trouble fails OPEN.
+It compares test lines added to implementation lines added against the ceiling the plan's `Stakes:` level justifies. **On a HALT: do not abort here — carry the `BUDGET_HALT` flag, finish composing the report (Steps 2–3), then STOP at Step 4 before dispatching the reviewer panel** and put the script's report in front of the user with the branch summary. The three causes it names (stakes line too low / evidence duplicated / drives committed as durable specs) are the user's triage, not yours, and deleting tests to silence it is forbidden. On PASS, fold the printed ratio into the final report — it is cheap observability either way. Missing script or git trouble fails OPEN.
 
 ## Step 2 — Playwright e2e (if configured)
 
@@ -122,13 +148,15 @@ Hand off to the skill. It will:
 
 ## Step 4 — Auto-dispatch the multi-reviewer pass (panel sized by review tier)
 
-Once shake-out reports green, dispatch the reviewer agents **in parallel**. This means a single assistant turn containing multiple `Agent` tool calls in one message — not sequential calls. If Step 0 produced a `covered`/`blind`/`fixed` manifest (and/or Step 0b a `pass`/`fail`/`unverified-no-browser` acceptance manifest), include them in each agent's briefing as the convergence targets — reviewers verify the `blind→fixed` transitions, the driven flow outcomes, and flag any path still `blind` or any UI flow still `unverified-no-browser`, rather than re-discovering coverage/behavior gaps free-form.
+**Budget gate first:** if Step 1b set `BUDGET_HALT=1`, STOP HERE. Present everything composed so far (Steps 0–3 outcomes) together with the budget script's report to the user, and do NOT dispatch the reviewer panel — a branch whose verification spend has outrun its declared stakes gets a human decision before it buys a five-agent review pass.
+
+Once shake-out reports green (and no budget HALT is pending), dispatch the reviewer agents **in parallel**. This means a single assistant turn containing multiple `Agent` tool calls in one message — not sequential calls. If Step 0 produced a `covered`/`blind`/`fixed` manifest (and/or Step 0b a `pass`/`fail`/`unverified-no-browser` acceptance manifest), include them in each agent's briefing as the convergence targets — reviewers verify the `blind→fixed` transitions, the driven flow outcomes, and flag any path still `blind` or any UI flow still `unverified-no-browser`, rather than re-discovering coverage/behavior gaps free-form.
 
 Compute the diff range:
 
 ```bash
-BASE=$(git merge-base HEAD main)
-RANGE="${BASE}..HEAD"
+MB=$(git merge-base HEAD "$BASE")   # $BASE resolved in Pre-flight
+RANGE="${MB}..HEAD"
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 SPEC=$(ls docs/superpowers/specs/*.md 2>/dev/null | tail -1)  # most recent spec, if any
 ```
@@ -223,7 +251,7 @@ Next steps:
   2. SHOULD-FIX → triage with user; either fix or record in memory/STATE.md.
   3. NICE-TO-HAVE → ignore or open issues.
   4. When BLOCKERS == 0:
-       /code-review --base=main --effort=<high if tier FULL, else medium> --comment
+       /code-review --base=$BASE --effort=<high if tier FULL, else medium> --comment
      for one final inline pass.
   4b. If a `## Threat model` was authored for this work at plan time:
        /security-review        ← mandatory regardless of review tier.
