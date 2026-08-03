@@ -159,6 +159,14 @@ If any required block or line is missing for the task's mode, or a `split` task'
 
 **Step 2.6b — Standards gate at every code-task close.** Alongside the testing gate, invoke `netdust-agent:standards-gate`: run the project's configured linter/formatter (eslint/prettier/biome, or phpcs/php-cs-fixer) on the touched files and record a `Standards: clean | <N fixed> | n/a — no linter` line in the Test-evidence block. The same `subagent-stop.py` hook backstops it: it blocks a code-editing subagent's close when a linter is configured for the project but was never run, **or ran and exited non-zero** (the evidence line's optional `lint=<code>` field or the scraped lint result carries the exit). If no linter is configured, the gate (and the backstop) no-op — do not impose a style of your own.
 
+**Step 2.6c — One canonical statement per rule (the prose check).** Before closing a code task, check whether the file you just wrote restates a rule the codebase already states elsewhere. A decision-record — *why* a constraint exists, what the vendor source says, what breaks if it is violated — earns ONE canonical home: the plan, an ADR, or the single file that owns the rule. Everywhere else CITES it in a line. This is the same "told once, cited everywhere" discipline `_shared/calibrations.md` applies to war stories, applied to code comments.
+
+The failure it prevents is not messiness, it is *invisible cost*. Verbose implementation files also inflate `verify-budget.py`'s denominator (it counts added LINES, so a comment reads as implementation), which makes a bloated diff's ratio look BETTER — see that script's KNOWN BLIND SPOT block. So no gate catches this and no tripwire points at it; reviewers can only file it as a Suggestion, and a Suggestion has nothing behind it.
+
+Calibration (`docblock-supermajority`, 2026-08-03): 62% of a bridge's production lines were comments — one file 127 comment / 69 code — with a single vendor constraint restated verbatim in four places. Two independent reviewers flagged it; neither finding was actioned; roughly a third of the build's wall-clock was prose generation rather than verification.
+
+**What this is NOT:** a licence to strip explanation. Ground-truth citations (`vendor/pkg/File.php:220` says X), non-obvious constraints, and the reason a fail-closed branch exists are load-bearing and stay. The target is *repetition* — the fourth restatement of the same rule — not *explanation*. When in doubt, keep the statement where the rule is DECIDED and cite it where the rule is OBEYED.
+
 **Step 2.7 — Bug-fix bundles (Class C) get one TDD cycle per finding; the D1 rule decides split vs solo per finding.** Each `/code-review` or `/security-review` finding is a behavior change → the Iron Law applies to its reproduction. A finding on a 1a trigger surface → **split reproduction**: the `test-author` writes the RED test that **reproduces** the bug (the failing case from the finding) independently, then the `implementer` invokes `superpowers:systematic-debugging` and fixes to green on that reproducing test without weakening it. Any other finding → **solo reproduction**: the implementer itself authors the reproducing RED test, then fixes to green — same `superpowers:systematic-debugging` discipline. Either way: one bug per cycle, one systematic-debugging invocation per bug, re-sweep between — that rule is unchanged by the mode. Authoring the reproduction independently on a 1a finding is what proves the fix addresses the reported defect and not a convenient near-miss. "I already see the fix, the phases are obvious here" is the exact rationalization the debugging skill's red-flags table names. (2026-05-30, Sub-phase F: bundling I2+I3 into one cycle drifted the process even though outcomes were sound. Slug: `one-cycle-per-bug`.)
 
 **Step 2.8 — HALT at every review-gate marker (the cluster boundary is a hard stop).** When you reach a `── REVIEW GATE ──` / STOP marker in the plan (placed by `planning`'s task-shaping gate), OR the end of a phase's task group, you STOP. Commit the cluster's tasks, run `/integration` on that cluster's diff, then review — and do NOT begin the next task until that review is clear. The diff a reviewer holds must be one cluster (~3–4 tasks), never a whole long phase run flat. **The pull to "just keep going to the next task, I'll review at the end" is the exact failure the cluster rule exists to prevent** — it produces an un-bisectable mega-diff and lets the agent grade a large body of its own work in one pass. Treat the marker as non-negotiable as a failing test. If the plan you're executing is a long phase with NO such markers, that is a planning defect — add the markers (a plan-correction commit) before running past ~4 tasks. (Slug: `teardown-cluster`.)
@@ -273,6 +281,20 @@ You author the test; you do NOT implement the logic. Before reporting STATUS:
    your RED run's non-zero exit is expected and correct for this role):
 
    HARNESS-EVIDENCE: role=test-author suite="<the RED command you ran>" exit=<its exit code>
+
+Before reporting RED_READY, CHECK YOUR CONTRACT AGAINST ITSELF. Two assertions
+over the same fixture can be mutually exclusive, and a suite of individually-
+sensible tests can be jointly unsatisfiable. The cheap sweep: for every
+`assertSame`/exact-match on a COLLECTION (array keys, a full payload), ask
+whether another test asserts that same collection CONTAINS something the exact
+match excludes. If yes, one of them is wrong and only you can say which.
+(Calibration `contract-self-contradiction`, 2026-08-03: one test asserted
+`array_keys(buildTypes()) === ['Case','Team']` while another asserted
+`CaseImpactItem` was a key of that same array, over a fixture containing the
+repeater. The implementer reached 16/18, could not satisfy both, and correctly
+escalated NEEDS_CONTEXT rather than editing a test green — the escalation
+worked, but it cost ~25 min and a controller round-trip that a self-check
+before commit would have avoided.)
 
 Do NOT report RED_READY without a failing proof (or the Tier-B line). Do not
 implement the logic — that is the implementer's dispatch. The hook honors

@@ -59,7 +59,7 @@ Gerund-named. These are what the harness *loads* at each step. Superpowers = bas
 
 | Craft skill | Reached for at harness step | Base | Reinforced by (addy/sp) | Your authority folded in |
 |---|---|---|---|---|
-| `writing-tests` | `testing-workflow` gate | superpowers:TDD | addy `test-driven-development` (red-green, test-pyramid, DAMP, Real>Fakes>Stubs>Mocks, AAA) | your risk-tier A/B model is the spine; the seven green-but-blind failure modes from `test-effectiveness` |
+| `writing-tests` | `testing-workflow` gate | superpowers:TDD | addy `test-driven-development` (red-green, test-pyramid, DAMP, Real>Fakes>Stubs>Mocks, AAA) | your risk-tier A/B model is the spine; the eight green-but-blind failure modes from `test-effectiveness` |
 | `designing-apis` | plan stage, when brainstorm concludes "we need an API" | addy `api-and-interface-design` | Hyrum's Law, contract-first, additive-only, branded types, structured errors | your convergence-point vocabulary (errors converge in one place, validation at the boundary) |
 | `building-frontend` | execute stage, UI tasks | frontend-design plugin + addy `frontend-ui-engineering` | component architecture, state-tool ladder, a11y WCAG-AA, responsive breakpoints, anti-AI-aesthetic | — (genuinely new how-to your harness lacks; mostly faithful) |
 | `engineering-context` | session start / task switch | addy `context-engineering` | context hierarchy, packing strategies, surface-ambiguity-not-guess | **re-point at YOUR three-layer memory model** (atomic recall / fleet / per-project) — do NOT let it invent a parallel memory scheme |

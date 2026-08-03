@@ -46,7 +46,7 @@ Use the Skill tool, pointed at the branch diff (Situation A — phase/spec-compl
 Skill("test-effectiveness")
 ```
 
-Hand it the diff range (`$(git merge-base HEAD "$BASE")..HEAD`) as the audit target. It will walk the seven failure modes (stale fixture, test-world≠real-world, wire-mock leak, unmounted guard, happy-path-only/missing-denial, no-coverage, concurrency) over every guard, fixture, wire, mount, and timer the diff introduced, and for each either name the test that goes RED or record it `blind` and author the test that closes it.
+Hand it the diff range (`$(git merge-base HEAD "$BASE")..HEAD`) as the audit target. It will walk the eight failure modes (stale fixture, test-world≠real-world, wire-mock leak, unmounted guard, happy-path-only/missing-denial, no-coverage, concurrency, shape-not-invoked) over every guard, fixture, wire, mount, and timer the diff introduced, and for each either name the test that goes RED or record it `blind` and author the test that closes it.
 
 **Wait for the audit manifest before continuing.** If it surfaced `blind` paths, those tests are authored now (RED-first) and the unit suite below must include them. If the audit aborts or the suite can't be made to bite, stop and report — don't proceed to a review pass that would just re-discover the gap.
 

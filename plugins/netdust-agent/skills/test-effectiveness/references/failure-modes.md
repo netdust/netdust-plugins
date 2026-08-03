@@ -132,6 +132,65 @@ The modes are ordered by how silently they pass: 1–3 are "the test ran but aga
 
 ---
 
+## Mode 8 — Shape asserted, behaviour never invoked
+
+**Definition.** The task emits a REFERENCE to behaviour — a callable name, a hook
+registration, a route handler string, a serialised resolver, a job class name — and the
+suite asserts everything about that reference's *shape* while never once *invoking* it.
+Shape assertions can be rigorous and still prove nothing: the reference is a string, the
+named function exists, it is not a Closure, a vacuity guard confirms some were checked.
+All true, all green, and the thing the reference points at was never run.
+
+This is the sibling of Mode 4 (unmounted guard). Mode 4 asks *is it wired?*; Mode 8 asks
+*does the wired thing DO the right thing when called?* A suite can pass Mode 4 perfectly
+and be blind here.
+
+**Calibration bug (`shape-not-behaviour`, josworld YOOtheme bridge, 2026-08-03).** The
+integration emitted resolver references YOOtheme serialises to JSON, so the reference had
+to be a literal fully-qualified function name — a Closure would white-page the Customizer.
+The suite defended that rule *thoroughly*: 19 tests asserting `is_string()`,
+`function_exists()`, explicitly NOT `is_callable()` (because `[Class::class, 'method']` is
+callable and would pass while being the crashing form), plus an `assertGreaterThan` vacuity
+guard. One test stopped literally one line short of calling `$func($root, $args)`.
+
+Two Criticals lived in that one line:
+- the resolver took its `schema` and `prefix` from **caller-supplied args**, and that
+  schema *was* its allow-list — an allow-list the caller supplies is not an allow-list.
+  Forged args read an unrelated plugin's API key, WordPress's `_edit_lock`, and undeclared
+  meta. Reachable from a saved page-builder layout gated only by `edit_post`.
+- every repeater grid rendered blank: a repeater ROW is a plain array with no `ID`, so the
+  post-scoped resolver fell back to post `0` and each cell resolved empty — the exact
+  "fields visible, values empty" half-failure an earlier task's contract had been written
+  to make unshippable, recurring one level down.
+
+Both were found by *executing* the emitted reference at review, neither by the suite. The
+fix's own regression test is 362 lines against that suite's 1,090 — volume was never the
+missing ingredient; *invocation* was.
+
+**Classification questions.**
+- Does this task emit a NAME/REFERENCE that some other system will later call — a callable
+  string, a hook name, a class-string, a serialised handler?
+- Does any test call it, or do they all stop at "it exists and has the right type"?
+- If the referenced function returned a constant, or read the wrong key, or resolved the
+  wrong entity — would any test go RED?
+- Is the *caller* of that reference outside your codebase (a framework, a builder, a queue
+  runner)? Then no integration test covers it either; the unit tier is the only place it
+  can be invoked at all.
+
+**Audit move.** For every emitted callable reference in the diff, find the test that
+INVOKES it with the ARGS THE CODE ACTUALLY EMITS (not hand-written args — take them from
+the emitted config, so a change to the emission shape breaks the test too) against a
+realistic root/payload, and asserts the returned VALUE. Absent → `blind`. Also invoke it
+with an adversarial payload: a root of the wrong shape, forged args, a missing key. The
+denial half belongs to Mode 5, but the *invocation* is what makes either observable.
+
+**Sibling sweep.** Every other emitted reference in the same subsystem (parent vs. nested
+types, list vs. detail handlers — they are usually different code paths that got the same
+shape test); every place the framework will call your code by name rather than by direct
+reference.
+
+---
+
 ## Using this catalog
 
 - **Situation A (audit):** walk the diff, apply each mode's audit move to the dangerous paths it touches, record `covered`/`blind`/`fixed`.

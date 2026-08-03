@@ -1,6 +1,6 @@
 # Test-Effectiveness Patterns — PHP (PHPUnit / Codeception / wp-browser)
 
-Concrete forms of the author-fix for each failure mode, in WordPress idioms. Copy and adapt. Unit/wpunit via PHPUnit/Codeception; functional/acceptance via Codeception + wp-browser. The seven modes are identical to the TypeScript file; the dangerous paths here are WP-shaped: capability checks, nonces, `$wpdb` predicates, transients, WP-Cron, REST permission callbacks.
+Concrete forms of the author-fix for each failure mode, in WordPress idioms. Copy and adapt. Unit/wpunit via PHPUnit/Codeception; functional/acceptance via Codeception + wp-browser. The eight modes are identical to the TypeScript file; the dangerous paths here are WP-shaped: capability checks, nonces, `$wpdb` predicates, transients, WP-Cron, REST permission callbacks.
 
 The rule under all of them: **the test must execute the DANGEROUS path** — the user who lacks the cap, the second site/blog, the un-mocked DB read, the actually-registered hook, the forced cron re-entry — not the privileged happy path.
 

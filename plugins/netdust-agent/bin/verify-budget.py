@@ -88,6 +88,31 @@ def strip_fenced(text: str) -> str:
             out.append(ln)
     return "\n".join(out)
 
+# ── KNOWN BLIND SPOT: prose counts as code (calibration: `docblock-supermajority`) ──
+#
+# This tool counts ADDED LINES, not statements — so a comment line in an implementation
+# file is indistinguishable from logic, and it lands in the DENOMINATOR. A verbose
+# implementation therefore makes the ratio look BETTER, which is exactly backwards.
+#
+# Measured, josworld YOOtheme bridge (2026-08-03): 62% of the production diff was
+# comments — FieldResolver 127 comment / 69 code, YOOthemeSourcesService 337 / 208,
+# ntdst-cached-meta-accessor 46 / 11. The same rule (YOOtheme's white-page constraint)
+# was restated verbatim in four places. Two reviewers independently flagged the bloat as
+# a Suggestion; the controller actioned neither, because a Suggestion has no gate behind
+# it. Roughly 40-50 min of a ~1h53m build was prose volume rather than verification, and
+# this tripwire fired twice that session (3.94x, 2.85x) without ever pointing at it.
+#
+# NOT fixed by making this script strip comments. Two reasons: (1) the same generosity
+# argument as TEST_PATH below — a stripper that mis-parses a heredoc or an annotation
+# would silently move a real ratio in the unrecoverable direction; (2) the defect is not
+# "the number is wrong", it is that decision-record prose belongs in the plan or an ADR
+# rather than restated at every call site, and no ratio can express that. The lever is
+# authoring discipline at the task close, not arithmetic here.
+#
+# What this DOES mean for a reader of a HALT: a ratio near the ceiling on a comment-heavy
+# diff is worse than it looks, and the honest first question is "how much of the
+# denominator is prose?" before "are there too many tests?".
+
 # ── what counts as a test file ────────────────────────────────────────────────
 #
 # Path-shaped, across the stacks this harness runs on. Deliberately broad: a MISSED test

@@ -1,6 +1,6 @@
 ---
 name: test-effectiveness
-description: "Use to AUDIT whether a test suite would actually catch bugs (not just whether tests exist + pass), and to AUTHOR tests that close the gap — at phase-complete, at shake-out, or whenever a green suite shipped a bug. Risk-aware sibling to testing-workflow: testing-workflow gates 'does this task need a test, at what tier?' (write-time, per-task); this gates 'would my suite go RED if the dangerous path broke?' (audit-time, per-phase). Names the seven failure modes that ship bugs past a green suite — stale fixture, test-world≠real-world, wire-mock leak, unmounted guard, happy-path-only/missing-denial, no-coverage, concurrency/timing — each with an audit move and a per-stack author pattern. NOT for the per-task 'does THIS task need a test, at what tier, RED-first?' decision (e.g. closing a single task that adds an auth guard) — that's testing-workflow; this skill AUDITS an already-green SUITE across a phase for whether it would actually bite. Covers TypeScript (Vitest/Playwright) and PHP (PHPUnit/Codeception). Opt-in via the project's CLAUDE.md — not auto-invoked."
+description: "Use to AUDIT whether a test suite would actually catch bugs (not just whether tests exist + pass), and to AUTHOR tests that close the gap — at phase-complete, at shake-out, or whenever a green suite shipped a bug. Risk-aware sibling to testing-workflow: testing-workflow gates 'does this task need a test, at what tier?' (write-time, per-task); this gates 'would my suite go RED if the dangerous path broke?' (audit-time, per-phase). Names the eight failure modes that ship bugs past a green suite — stale fixture, test-world≠real-world, wire-mock leak, unmounted guard, happy-path-only/missing-denial, no-coverage, concurrency, shape-not-invoked/timing, shape-asserted-but-never-invoked — each with an audit move and a per-stack author pattern. NOT for the per-task 'does THIS task need a test, at what tier, RED-first?' decision (e.g. closing a single task that adds an auth guard) — that's testing-workflow; this skill AUDITS an already-green SUITE across a phase for whether it would actually bite. Covers TypeScript (Vitest/Playwright) and PHP (PHPUnit/Codeception). Opt-in via the project's CLAUDE.md — not auto-invoked."
 ---
 
 <objective>
@@ -11,9 +11,9 @@ A test that exists and passes is not the same as a test that would catch the bug
 
 A suite can be 100% green, 2000 tests, full tier discipline — and still ship a cross-tenant leak, a stale-fixture UI break, or a race. Every one of those passed a green per-task test and was caught one gate later (or by a customer). The reason is almost never "a test was missing on a clear acceptance line." It is that **the test exercised the safe path while the dangerous path had no assertion** — the fixture encoded the old contract, the guard's denial branch was never called, the wire was mocked so the leak couldn't show, the unit was green but never mounted, the race never raced.
 
-This skill names the **seven failure modes** that let a bug pass a green suite, gives each a concrete **audit move** (how to detect it in an existing suite) and a per-stack **author pattern** (the test that would have caught it). It is used as an audit lens at phase-close / shake-out, and as an authoring reference when a green suite has shipped a bug.
+This skill names the **eight failure modes** that let a bug pass a green suite, gives each a concrete **audit move** (how to detect it in an existing suite) and a per-stack **author pattern** (the test that would have caught it). It is used as an audit lens at phase-close / shake-out, and as an authoring reference when a green suite has shipped a bug.
 
-It is **stack-agnostic**: the seven modes are universal; the patterns files give the concrete TypeScript and PHP forms.
+It is **stack-agnostic**: the eight modes are universal; the patterns files give the concrete TypeScript and PHP forms.
 </objective>
 
 <core_idea>
@@ -21,7 +21,7 @@ It is **stack-agnostic**: the seven modes are universal; the patterns files give
 
 This matters for tool choice. "Weak assertion on tested code" is what mutation testing catches (break the code, see if a test goes red). But the escaped-bug history of a real project is dominated by the *other* failure: the dangerous path — the denial branch, the second tenant, the stale-fixture consumer, the refetch toggle, the concurrent re-entry — was **never run by any test**, so there was no assertion to be weak. Mutation testing reports "0 surviving mutants" on a line that has no test at all only if some test happens to execute it; on an unmounted guard it reports nothing useful.
 
-So this skill's spine is the **seven coverage-of-the-dangerous-path failure modes**, not mutation testing. Mutation testing is one *optional* tool (see `<optional_tools>`), aimed only at high-risk surfaces where the path IS tested and you want to know if the assertion bites. Reach for the spine first; reach for mutation only when the spine says "this path is covered — is the assertion real?"
+So this skill's spine is the **eight coverage-of-the-dangerous-path failure modes**, not mutation testing. Mutation testing is one *optional* tool (see `<optional_tools>`), aimed only at high-risk surfaces where the path IS tested and you want to know if the assertion bites. Reach for the spine first; reach for mutation only when the spine says "this path is covered — is the assertion real?"
 </core_idea>
 
 <when_to_use>
@@ -30,8 +30,8 @@ Invoke this skill in three situations:
 
 | Situation | Trigger |
 |---|---|
-| **A — Phase-complete / shake-out audit** | All tasks in a phase are green and you are about to sign off or merge. Run the seven-mode audit over the phase diff BEFORE `/shakeout` dispatches reviewers — it is the cheapest place to find a green-but-blind test. |
-| **B — A green suite shipped a bug** | Any time a defect reached review, QA, or a user while the unit suite was green. Classify the escape into one of the seven modes, then add the test that mode prescribes — and sweep for siblings of the same mode. |
+| **A — Phase-complete / shake-out audit** | All tasks in a phase are green and you are about to sign off or merge. Run the eight-mode audit over the phase diff BEFORE `/shakeout` dispatches reviewers — it is the cheapest place to find a green-but-blind test. |
+| **B — A green suite shipped a bug** | Any time a defect reached review, QA, or a user while the unit suite was green. Classify the escape into one of the eight modes, then add the test that mode prescribes — and sweep for siblings of the same mode. |
 | **C — Authoring tests on a high-risk surface** | While writing tests for auth/scope predicates, multi-tenancy reads, untrusted parsing, migrations, or any wiring task — use the per-stack author patterns so the dangerous path is asserted from the start, not retrofitted after the escape. |
 
 **Do not invoke for:** the per-task "does this need a test, at what tier" decision — that is `testing-workflow`. This skill assumes tests exist and asks whether they bite. Nor for pure test-tooling setup (a missing runner is `testing-workflow`'s "No Test Framework? Set It Up").
@@ -40,7 +40,7 @@ If you are unsure whether a green suite is trustworthy on a security-rich or cro
 
 </when_to_use>
 
-<the_seven_failure_modes>
+<the_eight_failure_modes>
 
 Each mode is: **the escape** (how a bug passes green) → **the audit move** (how to detect it in an existing suite) → **the author fix** (the test that catches it). The deep catalog with the real calibration bug behind each lives in `references/failure-modes.md`; the per-stack code is in `patterns-typescript.md` / `patterns-php.md`. This table is the always-loaded summary.
 
@@ -54,11 +54,13 @@ Each mode is: **the escape** (how a bug passes green) → **the audit move** (ho
 | **6** | **No coverage at all** | A real behavior has literally no test exercising it — a timing-dependent input path masked by the test helper, a rendered-DOM/CSS contract asserted only at the AST level, a transactional-rollback contract the test never forces to fail. | List the phase's user-facing behaviors and DOM/interaction contracts; map each to a test. The gaps are the bugs. Watch for helpers that mask the bug (`userEvent.type` clears-then-types, hiding an append-vs-replace defect). | Author the missing test at the layer where the behavior lives: an e2e for a keystroke-after-focus race, a rendered-DOM assertion (not AST) for a CSS/interaction contract, a forced-throw test for a rollback contract. |
 | **7** | **Concurrency / timing** | A single green run passes by scheduling luck. The race only manifests when callback A is slow and B re-enters, or when a data layer toggles a value on a schedule the test exits before seeing. One run ≠ determinism. | For any `setInterval`/`setTimeout`/poller/queue/`Date.now()`/refetch-toggle, find the test that forces the adverse interleaving — a slow first callback, a high-frequency tick, a refetch cycle. If the test runs once and asserts, it proves nothing about the race. | Re-run the new/changed test ≥3× and require green every run. Force the interleaving (inject a slow dependency, drive the timer) rather than hoping for it. This is `testing-workflow`'s "≥3× determinism" box — audit that it was actually done. |
 
+| **8** | **Shape asserted, behaviour never invoked** | The task emits a REFERENCE to behaviour — a callable string, a hook name, a class-string, a serialised resolver — and the suite asserts the reference's SHAPE (it is a string, the function exists, it is not a Closure) while never CALLING it. Rigorous, green, and blind to everything the reference points at. Sibling of mode 4: that one asks *is it wired?*, this asks *does the wired thing DO the right thing?* | For every emitted callable reference in the diff, find the test that INVOKES it — with the args the code actually EMITS, not hand-written ones — and asserts the returned VALUE. If every test stops at `function_exists()`/`is_string()`, the behaviour is untested. Especially load-bearing when the CALLER is a framework outside your codebase, because no integration test covers it either. | Add ≥1 test that calls the emitted reference with the emitted args against a realistic root/payload and asserts the value, plus one adversarial invocation (wrong-shaped root, forged args, missing key). Take the args FROM the emitted config so a change to the emission shape breaks the test too. |
+
 **The one-line litmus for an audit:** for each guard, fixture, wire, mount, and timer the phase touched — *name the test that would go RED if the dangerous path broke.* If you can't name it, that's the finding.
 
 **A machine gate is a legitimate answer to the litmus.** "Name the thing that goes red" does not mean "name a test." If the project runs a gate that would fail the build when this path breaks — a security scan that finds the missing nonce, a type-checker that catches the shape change, a render check that catches the fatal — that gate IS the answer, and it is a *better* one: it covers every call site rather than the one a test happens to touch. Record it as `covered — <gate>`. Manufacturing a test that duplicates a gate's finding adds a second copy of a proof you already have, and the copy is narrower (per `testing-workflow`'s evidence ladder).
 
-**How deep the audit goes — read the plan's `Stakes:` line.** The seven modes are always the lenses; what changes is the surface they sweep.
+**How deep the audit goes — read the plan's `Stakes:` line.** The eight modes are always the lenses; what changes is the surface they sweep.
 
 | Stakes | Sweep | Sibling sweep |
 |---|---|---|
@@ -68,13 +70,13 @@ Each mode is: **the escape** (how a bug passes green) → **the audit move** (ho
 
 At `low` stakes this audit should take minutes, not the ~20 the full sweep costs — and if a `low`-stakes phase keeps producing real `blind` findings, that is evidence the stakes line was wrong, not that the audit should have been longer. Say so and raise it in the plan.
 
-</the_seven_failure_modes>
+</the_eight_failure_modes>
 
 <process>
 
 **Situation A — phase-complete / shake-out audit.** Run this over the phase diff after the unit suite is green, before `/shakeout`:
 
-1. **Enumerate the dangerous paths the diff introduced.** From the diff, list every: guard/scope check, canonical-form change, client↔server wire, route mount, timer/poller/refetch, migration, and rendered-DOM/interaction contract. This is the surface; the seven modes are the lenses.
+1. **Enumerate the dangerous paths the diff introduced.** From the diff, list every: guard/scope check, canonical-form change, client↔server wire, route mount, timer/poller/refetch, migration, and rendered-DOM/interaction contract. This is the surface; the eight modes are the lenses.
 2. **For each, apply the litmus:** name the test that goes RED if that path breaks. Use the audit-move column. Record each path as `covered` (named a real RED-able test), `blind` (no such test — a finding), or `n/a`.
 3. **Sweep siblings.** Every `blind` finding on a cross-cutting concern (a guard with twins, a canonical form with many consumers, a predicate at N sites) gets a sibling-site sweep — modes 1, 4, and 5 almost always have ≥1 sibling the primary fix missed. *(Before promoting a `blind` to a real gap, verify it via `_shared/finding-verification.md` — rule 2 (test-only/dead code) and rule 16 (a ratified deferral) refute most false blinds, so you don't manufacture a test for a path that's intentionally untested.)*
 4. **Author the missing tests** at the right layer (per the author-fix column + the patterns file), RED-first where the mode is a guard/parse/transform (Tier A per `testing-workflow`).
@@ -82,7 +84,7 @@ At `low` stakes this audit should take minutes, not the ~20 the full sweep costs
 
 **Situation B — a green suite shipped a bug.** Classify → fix → sweep:
 
-1. **Classify** the escape into one of the seven modes (the `references/failure-modes.md` catalog has the decision questions). The mode tells you the author fix AND where to sweep.
+1. **Classify** the escape into one of the eight modes (the `references/failure-modes.md` catalog has the decision questions). The mode tells you the author fix AND where to sweep.
 2. **Write the RED-first test** that reproduces the escape (you must watch it fail against the shipped code), then fix, then green.
 3. **Sweep for siblings of the same mode** — the escape is rarely unique. A stale-fixture break has other consumers; a missing-denial has sibling guards; an unmounted guard has twin paths.
 4. **Record a lesson** (project `lessons.md`) naming the mode, so the audit (Situation A) inherits it next phase.
