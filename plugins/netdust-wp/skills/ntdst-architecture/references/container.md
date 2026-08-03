@@ -309,6 +309,88 @@ Two shapes, depending on layer:
 
 The structure of the array is the same. Use the file that matches where the bootstrap call lives — Stride (mu-plugin) uses `plugin-config.php`; smaller theme-only projects use `theme-config.php`. Mixing them in one project is fine when both a mu-plugin and a theme bootstrap.
 
+## ⚠ Two boot models — pick deliberately
+
+`NTDST_Bootstrap` is NOT the only supported path, and choosing it by default on a
+small site buys indirection that site will never use. Decide up front:
+
+| | **A. Bootstrap** (Stride) | **B. Direct container** (DAAN) |
+|---|---|---|
+| Wiring | `plugin-config.php` + `NTDST_Bootstrap` | explicit `require_once` + `ntdst_get()` |
+| Service shape | `extends AbstractService`, `metadata()`, `getConfigSlug()` | plain class, ctor takes its deps, ctor calls `init()` |
+| Buys you | sectors, auto-discovery, priorities, enable/disable toggles, conditional blocks | nothing extra — and nothing to learn |
+| Use when | one codebase serves multiple site TYPES (gallery **or** artist **or** musician), or services need config-level toggles | a single-purpose site: one client, one shape, no sector switching |
+
+**Model B is a first-class choice, not a shortcut.** DAAN's own entrypoint states
+it skips the sector/auto-discovery/Bootstrap machinery *because* that exists so one
+codebase can be gallery or artist or musician — indirection a single-purpose site
+never uses. Most client marketing sites are model B.
+
+### Model B wiring (the DAAN pattern)
+
+```php
+// mu-plugins/<project>-coreloader.php — thin; mu-plugins can't live in subdirs
+defined('ABSPATH') || exit;
+require_once __DIR__ . '/<project>-core/<project>-core.php';
+```
+
+```php
+// mu-plugins/<project>-core/<project>-core.php
+add_action('plugins_loaded', function (): void {
+    if (!function_exists('ntdst_get')) {
+        return; // Framework absent — fail quiet, never fatal.
+    }
+
+    // No PSR-4 in a <project>-core: require each service explicitly.
+    // This is what auto-discovery used to do implicitly.
+    $dir = __DIR__ . '/services';
+    require_once $dir . '/content/ThingService.php';
+    require_once $dir . '/admin/AdminUIService.php';
+
+    add_action('after_setup_theme', function (): void {
+        ntdst_get(\proj\services\content\ThingService::class);
+
+        if (is_admin()) {
+            ntdst_get(\proj\services\admin\AdminUIService::class);
+        }
+    }, 5);
+}, 5);
+```
+
+**⚠ The load-order trap this defers around.** `<project>-coreloader.php` sorts
+**before** `ntdst-coreloader.php` alphabetically for most project names, so the
+framework is NOT yet defined at include time. All framework-dependent wiring must
+therefore go inside `plugins_loaded` (which fires after every mu-plugin is
+included). Resolve on `after_setup_theme:5` to match the lifecycle point services
+expect — post theme setup, pre-`init` CPT registration.
+
+**⚠ A missing `require_once` fatals only in production.** With no autoloader, a
+service file that is never required fatals at request time on the live site while
+the test suite stays green — because each test requires its own file. Keep the
+require list and the resolve list in lockstep, and assert that in a test.
+
+Model-B service shape (no `NTDST_Service_Meta`, no `metadata()`):
+
+```php
+class ThingService
+{
+    public function __construct(protected NTDST_Data_Manager $dataManager)
+    {
+        $this->init();   // all work happens at construction
+    }
+
+    private function init(): void
+    {
+        $this->registerDataModel();
+        $this->registerTaxonomies();
+        $this->registerAdminColumns();
+    }
+}
+```
+
+Boot ORDER is array order (front services, then the `is_admin()` block) — it
+replaces model A's numeric `priority`, and `is_admin()` replaces its `admin_only`.
+
 ## Wiring in `<project>-coreloader.php` (mu-plugin)
 
 ```php

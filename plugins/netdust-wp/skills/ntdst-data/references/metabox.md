@@ -189,6 +189,18 @@ ntdst_data()->register('portfolio', [
 
 ## Conditional Fields
 
+> **⚠ NOT IMPLEMENTED IN ntdst-core (verified 2026-08-03).** `MetaboxGenerator.php`
+> contains **zero** references to `condition` in any deployed copy of the framework
+> (checked across five projects, 1572–1672 lines each), and the canonical
+> `metabox-fields.js` handles none either. The API below is the *intended* contract,
+> not working behaviour.
+>
+> If a project needs conditional fields, it must implement the JS layer itself —
+> and it should do so **under this exact key and shape**, so the work converges on
+> the framework's contract and can be upstreamed into ntdst-core later instead of
+> becoming per-project drift. Verify before relying on it:
+> `grep -c condition <project>/…/ntdst-core/api/MetaboxGenerator.php`
+
 Show/hide fields based on other field values:
 
 ```php

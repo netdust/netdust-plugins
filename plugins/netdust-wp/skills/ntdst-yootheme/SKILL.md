@@ -1,6 +1,13 @@
 # NTDST YOOtheme Integration — Domain Knowledge
 
-Use when creating YOOtheme Dynamic Content sources, working with YOOtheme Builder, or integrating custom post types with YOOtheme's content system.
+Use when creating YOOtheme Dynamic Content sources, working with YOOtheme Builder, or integrating custom post types with YOOtheme's content system — **and** when styling a YOOtheme site: making a theme a YOOtheme child, writing or debugging a `less/theme.<slug>.less` style, mapping design tokens onto UIkit variables, loading brand fonts, or converting a classic/Tailwind theme to a YOOtheme child.
+
+Two halves, two reference files:
+
+| You are… | Read |
+|---|---|
+| Feeding DATA into the builder (sources, resolvers, elements) | this file + `references/yootheme.md` |
+| Deciding how the site LOOKS (child theme, LESS, tokens, fonts) | `references/yootheme-less.md` + `templates/theme.child.less.md` |
 
 ## Essential Principles
 
@@ -240,4 +247,16 @@ For a complete, verified end-to-end source slice (service + resolver + `attach_p
 | File | Content |
 |------|---------|
 | `references/yootheme.md` | Full Dynamic Content guide, resolver patterns, field mapping |
+| `references/yootheme-less.md` | **Styling half** — child themes, the styler, LESS discovery + browser compile, design tokens → UIkit mapping, font loading, the classic→child conversion |
+| `templates/theme.child.less.md` | Copy-in skeleton for `less/theme.<slug>.less` (2-section shape + verification commands) |
 | `golden-paths/yootheme-integration.md` (in `ntdst-patterns`) | Worked source slice, verified against Rossi source |
+
+## Styling — the five traps that cost the most
+
+Full detail in `references/yootheme-less.md`; these are the ones that burn a day:
+
+1. **YOOtheme compiles LESS in the BROWSER.** No PHP compile step exists — prove a style compiles with a local `less@4` + `lessc`, and beware SIGPIPE (piping to `head` fakes exit 1).
+2. **A child theme must carry NO template files.** `header.php`/`page.php`/etc. override the parent and bypass the builder entirely.
+3. **Activating a child does not rewrite the `template` option.** If the theme was ever activated standalone, the parent is silently never used. Fix: activate parent, re-activate child.
+4. **Fonts belong to the Customizer's font selector**, which self-hosts them via `StyleFontLoader`. A `wp_enqueue_style` for the same family loads it twice, from Google's CDN.
+5. **The Customizer edits section 2, never section 1.** Project `@prj-*` tokens are invisible to it, so a Customizer colour edit silently diverges from the token it came from — and the DB copy wins.

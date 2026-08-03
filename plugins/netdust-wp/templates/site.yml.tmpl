@@ -14,6 +14,12 @@ structure:
   type: {{STACK_TYPE}}               # bedrock | custom-app | custom-site
   webroot: {{WEBROOT}}                       # bedrock: web | custom-app: app | custom-site: .
   wpcli_path: {{WPCLI_PATH}}                 # bedrock: web/wp | custom-app: app/wp (matches wp-cli.yml --path)
+  theme_flavour: {{THEME_FLAVOUR}}           # yootheme | custom | tbd
+  # yootheme = YOOtheme Pro parent + thin child; builder renders, styling lives in
+  #   less/theme.<slug>.less. The child carries NO template files, no CSS toolchain.
+  #   See netdust-wp:ntdst-yootheme → references/yootheme-less.md.
+  #   NOTE: the licensed parent is gitignored and must be installed per host.
+  # custom = self-rendering theme with its own templates (Tailwind/Alpine/Vite).
 
 hosting:
   provider: {{HOSTING_PROVIDER}}     # ploi | combell | other

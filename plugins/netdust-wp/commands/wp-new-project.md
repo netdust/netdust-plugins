@@ -52,6 +52,44 @@ Scaffold a new Netdust WordPress project in the current working directory using 
 
    For any "No Makefile" method, do NOT create a `Makefile`; instead make sure `site.yml` carries enough in `deploy.*` that a later session (or `/deploy`) knows what to do.
 
+5b. **Ask the theme flavour**, and record it in `site.yml` as `stack.theme_flavour`:
+
+   | Flavour | Meaning |
+   |---|---|
+   | `yootheme` | YOOtheme Pro parent + a thin child theme. The builder renders; styling lives in one LESS style. **Most Netdust marketing sites.** |
+   | `custom` | A self-rendering theme with its own templates (Tailwind/Alpine/Vite or similar). |
+   | `tbd` | Not decided yet — record it so the gap is explicit. |
+
+   **If `yootheme`, do NOT scaffold a classic/Tailwind theme and convert it later.**
+   That conversion is pure deletion — measured once at ~3,900 lines across 26 files
+   (10 template files, Tailwind + PostCSS + stylelint configs, `src/css/*`, lockfile
+   churn) — and it is entirely avoidable by starting in the right shape.
+
+   Load **`netdust-wp:ntdst-yootheme`** and follow `references/yootheme-less.md`
+   ("Converting a classic theme" in reverse — build it born-correct):
+
+   - Child theme with **NO** template files. No `header/footer/front-page/page/
+     single/index/404/searchform.php`, no `partials/`, no nav walker or fallback
+     menu — they override the parent and bypass the builder.
+   - `style.css` header carrying `Template: <parent-slug>` (this is what makes it
+     a child; WordPress also needs the file to see the theme at all).
+   - `less/theme.<slug>.less` from `templates/theme.child.less.md`.
+   - **No CSS toolchain.** No Tailwind, PostCSS or stylelint. Keep Vite + Alpine
+     for JS only, and set Vite's `base` to match the real content layout
+     (`/content/…` on stackedWP — the Bedrock default `/app/themes/…` is wrong there).
+   - `phpstan.neon` must **exclude the YOOtheme parent** (~41 MB of licensed vendor
+     code → 1000+ errors otherwise).
+   - `.gitignore` ignores `themes/*` and re-includes only the child — the parent is
+     licensed, updates in place, and must be installed separately per host.
+   - After activating: verify `get_template_directory()` points at the PARENT.
+     Activating a child does not rewrite the `template` option, so a theme that was
+     ever activated standalone silently never uses the parent.
+
+   Note the E2E/smoke consequence: YOOtheme renders no header until a menu is
+   assigned to one of ITS locations (`navbar`), not the theme's own `primary`.
+   A fresh install therefore fails a "page has a header/nav" smoke test until a
+   menu exists — seed one, or scope the test.
+
 6. Initialize git if `.git/` does not exist, then commit the scaffold:
    ```bash
    git init -q && git add . && git commit -q -m "scaffold: netdust-wp harness project"
