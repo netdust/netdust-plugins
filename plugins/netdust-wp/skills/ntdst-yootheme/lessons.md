@@ -94,6 +94,43 @@ instance before touching inlined SVGs from JS.
 * Emits `uk-parallax="x: …; easing: …; target: …"`. Attribute missing ⇒ the props
   were stripped ⇒ see trap 1.1.
 
+### A scroll-linked horizontal MARQUEE is a slider, not a grid
+
+For a logo wall that drifts sideways as the page scrolls, use **`panel-slider`
+with its OWN `slider_parallax`** — not a grid carrying the generic element
+parallax. Reference implementation: Glowbar's homepage service section.
+
+```json
+{"type":"panel-slider","props":{
+  "slider_width":"",                 // Auto — each slide is only as wide as its
+                                     // content, so far more logos fit on screen
+  "slider_gap":"large",
+  "slider_finite":false,             // loops; never runs out
+  "slider_parallax":true,
+  "slider_parallax_target":"!.uk-section",
+  "slider_parallax_easing":"0",
+  "nav":"", "slidenav":"",           // a logo wall has no controls
+  "panel_match":false,
+  "show_image":true,"show_title":false,"show_meta":false,
+  "show_content":false,"show_link":false}}
+```
+
+Why not a grid: a grid caps at 6 columns (see 1.4) and is exactly
+container-width, so translating it opens a visible gap at one edge. **A slider
+track overflows the viewport**, which is what produces the design's
+cut-at-both-edges marquee. A grid simply cannot express that.
+
+**Gotcha — do not copy Glowbar's offsets.** It sets
+`slider_parallax_start` / `_end` to `"100vh"`, which suits its full-height
+section. On a ~100px logo strip those offsets push the active range outside any
+reachable scroll position and the track NEVER moves: `transform` stays `none`
+while the component happily reports `parallax: true` with a correctly resolved
+target — so it looks like the feature is broken rather than mis-tuned. Omit
+start/end and let them default to 0.
+
+Probe a live slider with
+`UIkit.getComponent(el,'slider')` → `.parallax`, `.parallaxTarget`, `.length`.
+
 **Mine the official demos for real examples** — they are the only authoritative
 corpus, and `~/Sites/yootheme-template` holds all six:
 
@@ -128,6 +165,56 @@ image element, keeping YOOtheme's responsive srcset. No PHP, no HTML element.
 | Arbitrary column content pinned to the bottom | Column `class: "uk-flex uk-flex-column"` + the element's `margin_top: "auto"`. UIkit grid children already stretch to the tallest |
 | Full-bleed band at a fixed height | Section `width: expand`, `height: viewport` + `height_viewport: <n>` |
 | Exact NNvh across a multi-band block | Give EVERY band a `height: viewport` value. `uk-height-viewport` is a MIN-height, so wrapped text still grows on mobile |
+
+### Nesting: the `fragment` element is a SUBLAYOUT
+
+The builder spine reads `layout → section → row → column → element`, so it is easy
+to conclude a row cannot be nested. It can: the **`fragment`** element is titled
+**"Sublayout"** (`container: true, fragment: true`) and renders its `children` as a
+full layout, rows included.
+
+```
+column  (style: tile-muted, class: jw-tile-card)   <- ONE element = the card
+└ fragment (Sublayout)
+  └ row (1-2,1-2)
+    ├ column   <- imagery
+    └ column   <- text
+```
+
+Reach for it whenever **a background, border-radius or clip must span several
+columns**. The alternative — two collapsed `tile-*` columns — forces per-corner
+radii AND a media query to swap which corners round once the columns stack, plus a
+separate `overflow: hidden` to clip anything bleeding past the edge. With a
+Sublayout it is two declarations on one element and correct at every breakpoint:
+
+```less
+.jw-tile-card > .uk-tile { border-radius: @jw-r-lg; overflow: hidden; }
+```
+
+**Mind the selector.** A `class` prop lands on the column WRAPPER, which is
+transparent and wider than the styled box inside it (grid gutter). Rounding the
+wrapper clips nothing you can see — the visible panel is the inner `.uk-tile`, so
+the radius and the clip belong there. Symptom: computed `border-radius: 16px`
+with `overflow: hidden` on the element you classed, and square corners on screen.
+Check `getComputedStyle(el).backgroundColor` — if it is `rgba(0,0,0,0)` you are
+styling the wrong box.
+
+### An absolutely-positioned element WILL collide once columns stack
+
+Absolute elements reserve no space. A portrait card layered over a square
+decorative shape fits fine beside it on desktop, then prints straight over the
+next column's heading on mobile, because the shape (in flow) is what sets the
+column height. YOOtheme's own idiom fixes it with no CSS — pair two copies on
+complementary `visibility`:
+
+| copy | position | visibility |
+|---|---|---|
+| desktop | `absolute` (exact placement) | `m` — show from medium up |
+| mobile | in flow (reserves space) | `hidden-m` — hide from medium up |
+
+Related: to shift a decorative element that must ALSO drive its column's height,
+use `position: relative`, not `absolute` — it keeps its layout box so the column
+cannot collapse, while `position_left/top` nudge it visually.
 
 ### Full-bleed hero cropping
 
@@ -218,5 +305,16 @@ prove the delta is only what you intended.
   returns the identical frame, so an animated SVG looks reassuringly "stable"
   while you measure one frame repeatedly. Use `svg.pauseAnimations()` +
   `setCurrentTime(t)` across the period.
+* **Measure the design, don't eyeball it.** Colour-masking a design screenshot
+  gives exact numbers to build against — and catches things the eye slides over.
+  On this build it produced: card inset 7.7% of the container, tool height 75%,
+  and a tool rotation of **−5°** (top edge rising to the right) where I had baked
+  **+4°** the other way. A coarse ASCII map of the masks (`G`/`L`/`W` per cell)
+  is the fastest way to see which region is which before trusting any bbox:
+
+  ```python
+  grey  = lambda c: abs(c[0]-234)<7 and abs(c[1]-230)<7 and abs(c[2]-231)<7
+  # bbox of a single mask lies when two regions share a colour — map first.
+  ```
 * Assert on **rendered pixels or computed styles**, not on the fact that a prop
   was written — traps 1.1–1.5 all store fine and render wrong.
