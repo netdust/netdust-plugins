@@ -1,15 +1,89 @@
 # NTDST YOOtheme Integration — Domain Knowledge
 
-Use when creating YOOtheme Dynamic Content sources, working with YOOtheme Builder, or integrating custom post types with YOOtheme's content system — **and** when styling a YOOtheme site: making a theme a YOOtheme child, writing or debugging a `less/theme.<slug>.less` style, mapping design tokens onto UIkit variables, loading brand fonts, or converting a classic/Tailwind theme to a YOOtheme child.
+Use when building, styling, or extending a YOOtheme Pro site: composing pages,
+menus, headers and footers; wiring dynamic content and templates; writing a
+`less/theme.<slug>.less` style; or extending the builder with PHP sources and
+custom elements.
 
-Two halves, two reference files:
+Four halves, four reference files. **Pick the one that matches the question —
+most YOOtheme work needs no PHP at all.**
 
 | You are… | Read |
 |---|---|
-| Feeding DATA into the builder (sources, resolvers, elements) | this file + `references/yootheme.md` |
+| Asking WHERE something lives (pages, menus, header, footer, templates, a demo package) | `references/yootheme-site-model.md` |
+| Setting up SITE CHROME (header/mobile/top/bottom/sidebar layouts, post & blog defaults, Settings) | `references/yootheme-customizer.md` |
+| Composing or editing a PAGE (layout JSON, elements, props, responsive grid) | `references/yootheme-builder-json.md` |
+| Driving pages from DATA (ACF → sources → bindings → template routing) | `references/yootheme-content-binding.md` |
 | Deciding how the site LOOKS (child theme, LESS, tokens, fonts) | `references/yootheme-less.md` + `templates/theme.child.less.md` |
+| Extending the builder with PHP (custom sources, resolvers, elements) | this file + `references/yootheme.md` |
 
-## Essential Principles
+## Orientation — the five facts that reframe everything
+
+Learned from six official YOOtheme demo packages (theme 5.0.32) and verified
+against the parent theme's source. Detail in `yootheme-site-model.md`.
+
+1. **A YOOtheme site lives in the database, not in theme files.** Page layouts
+   are JSON in `wp_posts.post_content` (inside a trailing `<!-- {...} -->`
+   comment). Templates are in the `yootheme` option. Header, footer, menu
+   positions and style choice are in `theme_mods_<active-stylesheet>.config`
+   (read it with `get_theme_mod('config')` — the option name follows the CHILD
+   theme, not `yootheme`).
+2. **One layout grammar, four homes.** The same node JSON is a page, a template,
+   the footer (`config.footer.content`), *and* a Builder widget. Learn it once.
+3. **Site chrome is assembled from named positions** — `navbar`, `header`,
+   `dialog`, `top`, `bottom`, `builder-1…6`, each with a `*-mobile` twin.
+   **Mobile is a separate config, not a media query.** Five ways to fill a
+   header: built-in items (`"header:end"` strings), a WP menu, a per-item mega
+   menu, a **Builder widget**, or the `menu` element. All six demos use Builder
+   widgets for header CTAs and mobile panels — that is the answer to "how do I
+   put arbitrary content in the header without touching `header.php`".
+4. **The official demos register every CPT, taxonomy and field through ACF** —
+   no custom plugin code. YOOtheme auto-generates the queryable source from
+   ACF's location rules. Reach for PHP only when that runs out.
+5. **Templates scale, pages don't.** Oakville renders a whole municipal portal
+   from 5 pages + 35 templates; the brochure demo is 13 pages + 4 templates.
+   "A page for each X" usually means one CPT + two templates.
+
+`scripts/demo-mine.py` reads any demo package or YOOtheme dump and prints all of
+the above — run it before guessing.
+
+## Reading vs writing
+
+**Reading** is free — `scripts/demo-mine.py` on a dump, or `wp option get`.
+
+**Writing needs care for three verified reasons** (detail + the split of what is
+and isn't scriptable in `yootheme-site-model.md` → "Writing settings"):
+
+1. The Customizer's save runs `Event::emit('config.save|filter', …)`, whose
+   listeners derive `nav_menu_locations` from `menu.positions[*].menu` and
+   normalise footer / mega-menu layouts through the builder. A raw
+   `set_theme_mod` skips both.
+2. **There is no server-side LESS compiler** — less.js compiles in the browser
+   and uploads the CSS. `style` / `less` / `custom_less` can be *set* but not
+   *compiled* from CLI. Script the value, then a browser Customizer save.
+3. `config` is a JSON string inside a PHP-serialized theme_mod; a bad write
+   loses the site's whole configuration silently.
+
+Writing **pages and templates** adds two more, both found the hard way on a live
+install:
+
+4. **KSES destroys builder layouts.** Without `unfiltered_html`, a `<script>` or
+   `<iframe>` anywhere in the JSON makes WordPress entity-encode the *whole*
+   comment — the page becomes unparseable. Always `wp --user=<admin-id>`.
+5. **Decode layout JSON without `assoc`.** `json_decode($j, true)` turns `{}` into
+   `[]`, so re-encoding silently rewrites `"arguments":{}` as `"arguments":[]`
+   with no change in byte count.
+
+| Tool | Covers |
+|---|---|
+| `scripts/yoo-config.php` | the `config` theme_mod — get/set/unset/backup/restore |
+| `scripts/yoo-content.php` | pages (`page get/set/list`) and templates (`template list/get/set/reorder/delete/export`) |
+
+Both run the same builder/event pipeline the UI runs, back up before every write,
+and are verified byte-identical against a live YOOtheme 5.0.38 install. Prefer
+them over hand-rolled `wp option update` / `wp post update`.
+
+## Essential Principles (PHP extension)
 
 ### No Custom ObjectTypes
 Never create custom `objectType()` for content. Use existing auto-registered types from `YOOthemeDynamicContentService`. Types are auto-created from Data Manager models (PascalCase of post type slug).
@@ -246,10 +320,27 @@ For a complete, verified end-to-end source slice (service + resolver + `attach_p
 
 | File | Content |
 |------|---------|
-| `references/yootheme.md` | Full Dynamic Content guide, resolver patterns, field mapping |
-| `references/yootheme-less.md` | **Styling half** — child themes, the styler, LESS discovery + browser compile, design tokens → UIkit mapping, font loading, the classic→child conversion |
+| `references/yootheme-site-model.md` | **Where a site lives** — the four DB stores, the positions model, five ways into a header, the three header architectures, demo-package anatomy + how to mine one |
+| `references/yootheme-customizer.md` | **Every setting** — complete panel-by-panel vocabulary extracted from the theme's own config: Site, Header (12 layouts), Mobile, Top/Bottom, Sidebar, Post/Blog fallbacks, Settings |
+| `references/yootheme-builder-json.md` | **Page composition** — layout JSON grammar, 47-element catalogue, prop systems (spacing, responsive widths, parallax, visibility), card-family props |
+| `references/yootheme-content-binding.md` | **Data → pages, no PHP** — ACF field-type mapping, source naming rules, `#parent` repeats, `_condition`, filters, template routing |
+| `references/yootheme.md` | **PHP extension** — custom Dynamic Content sources, resolver patterns, field mapping |
+| `references/yootheme-less.md` | **Styling** — child themes, the styler, LESS discovery + browser compile, design tokens → UIkit mapping, font loading, the classic→child conversion |
 | `templates/theme.child.less.md` | Copy-in skeleton for `less/theme.<slug>.less` (2-section shape + verification commands) |
 | `golden-paths/yootheme-integration.md` (in `ntdst-patterns`) | Worked source slice, verified against Rossi source |
+
+### Before writing PHP, check it isn't already free
+
+| Requirement | Built-in answer |
+|---|---|
+| New content type with editable fields | ACF post type + field group (`yootheme-content-binding.md`) |
+| Listing of posts, filtered/sorted/paginated | Bind a `grid`/`list` container to a `custom<Type>s` query |
+| Sort or date-filter by a custom field | `order: "field:<name>"`, `date_column: "field:<name>"` |
+| Different layout per category | A second template of the same type, ordered before the catch-all |
+| Archive page size | `params.posts_per_page` on the template — not `pre_get_posts` |
+| Hide a block when a field is empty | `source.props._condition` with `condition: "!"` |
+| Format a date / truncate / prefix | `filters.date` / `limit` / `before` on the binding |
+| Mega menu | `config.menu.items.<id>.content` = a builder fragment |
 
 ## Styling — the five traps that cost the most
 
