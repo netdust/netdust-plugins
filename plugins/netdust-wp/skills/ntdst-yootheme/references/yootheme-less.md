@@ -74,6 +74,66 @@ foreach($s->getThemes() as $t) printf("id=%s name=%s\n",$t["id"],$t["name"]);'
 
 Absent a `Name:`, YOOtheme falls back to `namify(id)` (`ucwords`, dashes→spaces).
 
+### ⚠ `getMeta()` reads only the first 8 KB
+
+```php
+$content = str_replace("\r", "\n", fread($handle, 8192));
+```
+
+The metadata comment must be within the **first 8192 bytes** of the file. Put the
+header comment at the very top and keep it there — pushing it down past a long
+licence block or an import list silently loses the style's name and facets.
+
+### Variant blocks (`Style:`)
+
+After the base metadata, each `Style: <id>` line opens a **variant** and the keys
+under it attach to that variant (`$meta['styles'][<id>]`):
+
+```less
+/*
+Name: Glowbar
+Background: White
+Color: Black
+Type: Skeuomorphic
+Preview: https://yootheme.com/api/style/glowbar/default.jpg
+
+Style: light-brown
+Name: Light Brown
+Background: Light
+Color: Brown
+Preview: https://yootheme.com/api/style/glowbar/light-brown.jpg
+*/
+```
+
+`Background` / `Color` / `Type` are comma-splittable facets used to filter the
+style picker; `Preview` resolves relative to the LESS file. Glowbar ships a base
+plus five variants. All six official demos ship with the **base** style selected
+and **no** Customizer overrides (`config.less: []`, `config.custom_less: ""`) —
+so a shipped demo is a clean read of what the LESS alone produces.
+
+### The parent ships 49 production styles — read them
+
+`wp-content/themes/yootheme/less/theme.*.less` contains every official style
+(`balou`, `district`, `fjord`, `oakville`, `woolberry`, …), each paired with
+`vendor/assets/uikit-themes/master-<style>/`. A real shipped style is four
+imports and then variable overrides:
+
+```less
+@import "platform.less";
+@import "../vendor/assets/uikit/src/less/uikit.less";
+@import "../vendor/assets/uikit-themes/master/_import.less";
+@import "../vendor/assets/uikit-themes/master-glowbar/_import.less";   // per-style layer
+@import "theme.less";
+```
+
+These are the best available worked examples of the variable vocabulary — when
+you need to know which variable controls something, `grep` the 49 of them for the
+effect rather than guessing a name. (A child theme uses the same four imports via
+`../../yootheme/…`, minus the `master-<style>` layer unless you're extending one.)
+
+The site's selected style id is stored in `theme_mods_<active-stylesheet>` →
+`config.style`. See `yootheme-site-model.md`.
+
 ---
 
 ## ⚠ YOOtheme compiles LESS in the BROWSER, not in PHP

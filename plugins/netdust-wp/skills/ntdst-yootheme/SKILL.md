@@ -8,8 +8,15 @@ custom elements.
 Four halves, four reference files. **Pick the one that matches the question —
 most YOOtheme work needs no PHP at all.**
 
+**Read `lessons.md` before you build anything.** The reference files describe what
+the product CAN do; `lessons.md` is the list of things that silently do something
+else — props that write into the layout JSON and emit nothing, defaults that hide
+an element entirely, utilities that outrank your CSS. Every one of them was found
+by shipping, and every one reads as "this feature is broken" until you know it.
+
 | You are… | Read |
 |---|---|
+| **About to build / style / debug anything** | **`lessons.md` — traps first, then the file below** |
 | Asking WHERE something lives (pages, menus, header, footer, templates, a demo package) | `references/yootheme-site-model.md` |
 | Setting up SITE CHROME (header/mobile/top/bottom/sidebar layouts, post & blog defaults, Settings) | `references/yootheme-customizer.md` |
 | Composing or editing a PAGE (layout JSON, elements, props, responsive grid) | `references/yootheme-builder-json.md` |

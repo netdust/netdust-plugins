@@ -21,7 +21,7 @@ When you think "YOOtheme can't do X", you are usually wrong. Check
 
 ---
 
-## 1. Six traps that silently do the wrong thing
+## 1. Traps that silently do the wrong thing
 
 ### 1.1 Hand-authored layout JSON MUST carry a root `version`
 
@@ -73,6 +73,71 @@ the focal point and getting pixel-identical output is the tell.
 so ids collide and `mask="url(#i1)"` in the second copy resolves to the first
 copy's mask. It renders only because they are identical. Namespace ids per
 instance before touching inlined SVGs from JS.
+
+### 1.7 UIkit's margin utilities are `!important` — your override loses
+
+```less
+.uk-margin-top { margin-top: @margin-margin !important; }   // margin.less:44
+```
+
+The builder stamps `uk-margin-top` on `.el-title`, `.el-meta` AND `.el-content` of
+every panel. So a component class that sets `margin: 0` does nothing — at ANY
+specificity. Symptom: a name/role pair sitting a full `@global-margin` apart while
+your rule is visibly applied in DevTools and the computed value is still 24px.
+Fix: `margin: 0 !important`. That is not a shortcut, it is the only thing that
+beats an `!important` utility — assume it for every `.el-*` margin you override.
+
+### 1.8 `block_align` does nothing unless `maxwidth` is also set
+
+`'enable' => "position != 'absolute' && maxwidth"` (`config/builder.php`), and the
+description is precise: it aligns the element *"in case the container exceeds the
+element max-width"*. With no `maxwidth` the prop is still written into the layout
+JSON and emits no class. Symptom: `"block_align": "right"` sitting in the JSON,
+image still hard left in its column. Fix: set the COLUMN's `text_align` instead —
+the image is inline and follows it.
+
+### 1.9 `slidenav_breakpoint` defaults to `xl`
+
+`panel-slider`'s own defaults are `'slidenav_breakpoint' => 'xl'` and
+`'slidenav_outside_breakpoint' => 'xl'`, so the arrows are wrapped in
+`uk-visible@xl` and are simply absent below 1600px. Symptom: you set
+`slidenav: center-right`, the markup is in the DOM, nothing renders at 1440.
+Its sibling `nav_breakpoint` defaults to `s`, so the DOTNAV does show — which
+makes it read as "the slidenav specifically is broken". Fix: lower it to `m`.
+
+Related: `slider_finite: true` greys the prev arrow on slide 1 and collapses the
+dotnav to (items ÷ per-view) dots. For a testimonial carousel `false` is usually
+what the design shows.
+
+### 1.10 `grid_divider` is not a rule per item
+
+"Show a divider between grid columns" means literally that:
+`.uk-grid-divider > :not(.uk-first-column)::before` is a VERTICAL line BETWEEN
+columns, and it also doubles the gutter
+(`margin-left: -(@grid-gutter-horizontal * 2)`). A rule ABOVE each item — the
+classic stat-column look — is a `border-top` on `.el-item` and nothing else.
+
+### 1.11 A nested container silently breaks `width_expand`
+
+Row `width_expand: left|right` emits `uk-container-expand-{side}`, whose max-width
+is `calc(50% + (@container-max-width / 2) - @container-padding-horizontal-m)`.
+That `50%` is of the PARENT. Put the row inside a section that ALSO has a
+container and you get two nested containers: UIkit zeroes the inner one's padding,
+the `50%` resolves against the wrong box, and the row shifts ~70px toward the
+expanding side **without bleeding**. Symptom: "expand-right is broken" — the
+content moved sideways and still stops at the container edge.
+
+A real bleed needs all three, and they only work together:
+
+| where | setting |
+|---|---|
+| section | `width: ""` (None — no container at all) |
+| row | `width: "default"` + `width_expand: "right"` |
+| the element that bleeds | `container_padding_remove: true` |
+
+The last one emits `uk-container-item-padding-remove-right`; without it the
+element stops one container-padding short of the viewport edge.
+
 
 ---
 
@@ -156,7 +221,14 @@ image element, keeping YOOtheme's responsive srcset. No PHP, no HTML element.
 
 ---
 
-## 4. Layout recipes that need no CSS
+## 4. Layout recipes
+
+Everything down to the Sublayout note is a SETTING — reach for these before
+writing anything. The last two (`image_align: top` + CSS grid, and the rounded
+band) are the only two layouts in a full marketing site that genuinely needed a
+rule; they are here so the next session recognises the shape instead of
+rediscovering that the builder cannot express it.
+
 
 | Want | Setting |
 |---|---|
@@ -228,6 +300,70 @@ two. Tying height to width (`clamp()`/`max()` on `vw`) fixes framing but the her
 stops fitting the screen. The cheapest real fix is **a source pre-cropped to the
 band's aspect** (~3:1), plus `image_position` to choose what is lost.
 
+### Re-laying out a panel: `image_align: top` is the ENABLING setting
+
+A panel is either a flat stack or — with `image_align: left|right` — a `uk-grid`
+wrapper holding the image in one column and title + meta + content + link ALL in
+the other (`elements/panel/templates/template.php:106`). So the common review-card
+shape (avatar beside the name, quote BELOW at full card width) is not expressible
+as settings: `left` drags the quote into the right column with the name.
+
+The way through is to KEEP `image_align: top` — that is the setting which leaves
+the four parts as SIBLINGS of `.el-item` — and re-place them with CSS grid:
+
+```less
+.el-item          { display: grid; grid-template-columns: auto 1fr;
+                    grid-template-rows: auto auto 1fr; }
+.el-item > picture,
+.el-item > .el-image  { grid-column: 1; grid-row: 1 / span 2; align-self: center; }
+.el-item > .el-title  { grid-column: 2; grid-row: 1; align-self: end;   }
+.el-item > .el-meta   { grid-column: 2; grid-row: 2; align-self: start; }
+.el-item > .el-content{ grid-column: 1 / -1; grid-row: 3; }
+```
+
+Four things that are easy to get wrong:
+
+* **The image child is a `<picture>`, not the `<img>`.** YOOtheme wraps every
+  image for its webp source, so `.el-image` is on the INNER element and a
+  `> .el-image` child selector misses entirely. Match both.
+* **`end` + `start` either side of a shared row boundary centres the title/meta
+  pair as a UNIT.** The image spans both rows, grid splits its leftover height
+  equally between them, and the two lines park against the split. Setting both to
+  `center` spreads them to opposite ends of the image instead.
+* Their margins will fight you — see trap 1.7.
+* Make the content row `1fr` and turn on `panel_match` (`uk-grid-match`); then a
+  last child with `margin-top: auto` pins to the bottom of every equal-height
+  card instead of hanging under a short one.
+
+### Three settings people rebuild in CSS
+
+| Want | Setting |
+|---|---|
+| Centred title/image with LEFT-aligned body copy | `content_align` on the grid — it is labelled **"Force left alignment"** |
+| A big display number above a label | `meta` field at `meta_style: h3` (meta_style takes h1–h6) + `meta_align: above-title` |
+| A white panel with round corners and padding, without a card | a COLUMN with `background_color` set — it gains a `border` checkbox labelled **"Round corners"** (`uk-border-rounded`) and picks up `uk-tile` padding automatically |
+
+### A band that reads as "laid over" the next section
+
+Rounding only the BOTTOM of a section opens two corner notches that show whatever
+is behind the section — the page background, not the next section. One
+pseudo-element painted behind the section's own background fills them, with no
+extra element in the builder:
+
+```less
+.band  { position: relative;
+         border-bottom-left-radius: @r; border-bottom-right-radius: @r; }
+.band::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0;
+                height: @r; background-color: @next-section-colour; z-index: -1; }
+```
+
+`position: relative` with `z-index: auto` does NOT open a stacking context, so
+`z-index: -1` lands under the parent's own background but still above the page
+canvas. Take the colour from the same variable the next section uses
+(`@global-primary-background` for a `style: primary` footer) so it tracks it
+instead of drifting.
+
+
 ---
 
 ## 5. Styling: change values, don't write rules
@@ -249,6 +385,25 @@ band's aspect** (~3:1), plus `image_position` to choose what is lost.
     `@base-hr-border`, which drives `<hr>`.
   * `<mark>` is `@base-mark-background` / `@base-mark-color`; a highlight needs no
     CSS at all.
+* **Cards ship FLAT, and both fixes are variables.** The master theme exposes
+  `@card-border-radius` (`border-radius/card.less`) and `@card-default-box-shadow`
+  (`box-shadow/card.less`), defaulting to `0` and `none` — so a rounded, lifted
+  card is two values, not a rule. Roomy cards:
+  `@card-large-body-padding-{horizontal,vertical}-l`, behind `panel_padding: large`.
+* **`@border-rounded-border-radius` (5px) is the radius behind the column
+  "Round corners" checkbox** — a DIFFERENT variable from your card and tile radii,
+  so rounded columns come out visibly tighter than every other panel until you
+  pin all three to one token.
+* **`@slidenav-*` exists but cannot make a circle.** `@slidenav-background`,
+  `@slidenav-border-radius` and `@slidenav-padding-vertical|horizontal` are all
+  settable, but the padding pair works against a 14x24 icon, so no combination
+  yields width == height. A circular slidenav needs one rule.
+* **Check your `@line` token against your muted-background token before using it.**
+  They are commonly the same 10% tint — in which case every border on a
+  `uk-section-muted` band is invisible and reads as "the border never applied".
+  Un-blend the design's line (see section 7) rather than assuming it is the light
+  one; a 1px rule that looks grey on screen is often full ink.
+
 * Genuinely NOT settable so far: image grayscale (`blend` is a boolean "blend with
   page content", not a mode selector), image max-height, flex-centring in a card.
 
@@ -318,3 +473,23 @@ prove the delta is only what you intended.
   ```
 * Assert on **rendered pixels or computed styles**, not on the fact that a prop
   was written — traps 1.1–1.5 all store fine and render wrong.
+
+* **Derive a design screenshot's SCALE before measuring anything on it.** It
+  varies per export, even within one project and one day (0.669 and 1:1 on the
+  same afternoon). Two knowns pin it: the container gutter and the body
+  line-pitch — and they must AGREE, or the frame is not the width you assumed.
+  Measuring at the wrong scale gets radii, type and gutters all wrong in the same
+  direction, which reads as "the design system is off" rather than "the ruler is
+  off", and sends you editing tokens that were already right.
+* **Un-blend an antialiased 1px line to recover its true colour.** A 1px rule at a
+  fractional position paints across two rows; per channel,
+  `true = bg + SUM(row - bg)` over the covered rows. This turned what looked like
+  a grey hairline into `#35070c` — full ink. Eyedropping a screenshot is
+  unreliable in exactly this case, because no pixel ever holds the real value.
+* **CDP viewport screenshots go stale after a programmatic scroll.**
+  `getBoundingClientRect()` reports the new position while the captured frame is
+  still the old one, so you get a blank band and conclude the section did not
+  render. Take a FULLPAGE shot and crop by the measured `top + scrollY`. Check
+  the canvas first: a fullpage capture can come back 2x wide with 1x-scaled
+  content in the top-left — probe a pixel beyond the CSS width before trusting
+  any crop arithmetic.
