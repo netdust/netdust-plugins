@@ -1,0 +1,31 @@
+# netdust-react pre-commit / pre-push gate via lefthook.
+# RULES.md rule 17: "ESLint + Prettier on every commit."
+#
+# Install:
+#   npm i -D lefthook && npx lefthook install
+#
+# Manual run:
+#   npx lefthook run pre-commit
+
+pre-commit:
+  parallel: true
+  commands:
+    eslint:
+      glob: '*.{ts,tsx,js,jsx,mjs}'
+      run: npx eslint --fix {staged_files}
+      stage_fixed: true
+    prettier:
+      glob: '*.{ts,tsx,js,jsx,mjs,json,md,yml,yaml,css}'
+      run: npx prettier --write {staged_files}
+      stage_fixed: true
+    typecheck:
+      glob: '*.{ts,tsx}'
+      run: npx tsc --noEmit
+
+pre-push:
+  parallel: true
+  commands:
+    test:
+      run: npx vitest run
+    knip:
+      run: npx knip --no-progress

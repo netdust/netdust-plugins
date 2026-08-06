@@ -1,0 +1,116 @@
+// netdust-react ESLint flat config — single Vite + React app.
+//
+// Harvested from netdust-expo/templates/eslint.config.mjs.tmpl. The monorepo
+// `eslint-plugin-boundaries` package-graph rules are replaced by path-based
+// no-restricted-imports, which is what a single-app layout can actually enforce.
+//
+// Install:
+//   npm i -D eslint typescript-eslint eslint-plugin-react-hooks eslint-plugin-react-refresh globals
+
+import js from '@eslint/js'
+import globals from 'globals'
+import tseslint from 'typescript-eslint'
+import reactHooks from 'eslint-plugin-react-hooks'
+import reactRefresh from 'eslint-plugin-react-refresh'
+
+export default tseslint.config(
+  { ignores: ['dist', 'android', 'ios', 'playwright-report', 'coverage'] },
+
+  js.configs.recommended,
+  ...tseslint.configs.recommendedTypeChecked,
+
+  {
+    files: ['**/*.{ts,tsx}'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: globals.browser,
+      parserOptions: { project: ['./tsconfig.json'], tsconfigRootDir: import.meta.dirname },
+    },
+    plugins: {
+      'react-hooks': reactHooks,
+      'react-refresh': reactRefresh,
+    },
+    rules: {
+      ...reactHooks.configs.recommended.rules,
+      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+
+      // RULES.md rule 7 — `any` must be argued for, not reached for.
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      // Floating promises are the top source of silent failures in async
+      // Capacitor calls (Preferences.set, listener.remove, cap plugin methods).
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // Boundaries. RULES.md rules 10 + 12.
+  // ---------------------------------------------------------------------------
+
+  // Shared primitives must not know about features or domain logic.
+  {
+    files: ['src/components/ui/**'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          { group: ['@/features/*', '../../features/*'], message: 'src/components/ui is shared primitives only — a primitive that imports a feature is a feature component. Move it into that feature.' },
+        ],
+      }],
+    },
+  },
+
+  // src/lib must stay feature-free.
+  {
+    files: ['src/lib/**'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          { group: ['@/features/*'], message: 'src/lib is shared, feature-free helpers. If it needs a feature, it belongs in that feature.' },
+        ],
+      }],
+    },
+  },
+
+  // Features talk to each other through index.ts, never into internals.
+  {
+    files: ['src/features/**'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          { group: ['@/features/*/*'], message: 'Import a feature through its index.ts public surface, not its internals.' },
+        ],
+      }],
+    },
+  },
+
+  // Persistence converges on each feature's storage.ts (RULES.md rule 12).
+  // The storage modules themselves are the one place these APIs may appear.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/features/*/storage.ts', 'src/lib/storage/**'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        { name: 'localStorage', message: 'Persistence converges on the feature\'s storage.ts (netdust-react RULES.md rule 12). localStorage is also not durable on iOS — see react-architecture §3.' },
+        { name: 'sessionStorage', message: 'Persistence converges on the feature\'s storage.ts (netdust-react RULES.md rule 12).' },
+      ],
+      'no-restricted-imports': ['error', {
+        paths: [
+          { name: '@capacitor/preferences', message: 'Persistence converges on the feature\'s storage.ts (netdust-react RULES.md rule 12).' },
+        ],
+      }],
+    },
+  },
+
+  // Tests get a longer leash.
+  {
+    files: ['**/*.{test,spec}.{ts,tsx}', 'src/test/**', 'e2e/**'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      'no-restricted-globals': 'off',
+    },
+  },
+)
