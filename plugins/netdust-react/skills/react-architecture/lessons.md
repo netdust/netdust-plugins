@@ -73,13 +73,17 @@ A fixture enumerating deliberate bypasses is deliberately broken code. Committed
 
 Shape that works (`bin/gate-bite.sh` on Houvast, wired as the last step of `npm run check`): write the fixtures, run the **real** config against them, assert **one error per form**, remove them — with the cleanup on the failure path too, verified under `kill -INT`.
 
-Three traps found while writing it, all of which make a bite test pass while proving nothing:
+Five traps, all of which make a bite test pass while proving nothing. The first three were caught by the author writing it; **the last two survived into a green 23/23 board and were caught only at review, by deleting rule entries and re-running.** Assume your bite test has them until you have tried.
 
 1. **Attribution.** Count an error only when its `ruleId` is one of the restriction rules **and** its message names your seam. Otherwise a stray `no-unused-vars` greens a fixture.
 2. **`@ts-nocheck` in a fixture** trips `@typescript-eslint/ban-ts-comment` and hands every fixture a spare error to be mistaken for a catch.
 3. **One form per fixture.** A `Storage.prototype.getItem.call(localStorage, …)` probe reported CAUGHT — on the bare `localStorage` in its own arguments, not on `Storage`.
+4. **A type annotation is a second match.** The fix for (3) was written `(s: Storage) => Storage.prototype.getItem.call(s, …)` — and `Identifier[name='Storage']` matches the *annotation* too. Narrowing the rule to type-positions only left the bypass fully open with the board still green. **The tell was visible and ignored: that row reported `2 error(s)` where every other reported `1`.** If a fixture's count is not exactly 1, it is matching something you did not intend.
+5. **One fixture per CELL, not per mechanism.** The bypass space is *mechanism × receiver* — `{localStorage, sessionStorage, indexedDB, caches, cookie} × {bare, window., globalThis., self., alias}`. Covering every receiver for one mechanism and only the bare form for the rest means three `no-restricted-properties` entries can be **deleted** with the board still green, because the bare forms are caught by `no-restricted-globals` — a different rule entirely.
 
-And assert the **inverse**: one fixture that uses the seam correctly and must be **clean**. A rule that errors on everything satisfies every bypass assertion.
+And assert the **inverse**: a fixture that uses the seam correctly and must be **clean**. Note one allow-fixture is weak — a rule that errored on everything *except* files importing your seam would still pass it. A second allow-fixture of ordinary code touching no storage at all makes the discrimination check real.
+
+**The verification that actually proves a bite test: delete each rule entry in turn and confirm the corresponding row goes RED.** Not "does the board pass" — "does the board fail for the right reason". A green board is evidence about the fixtures, not about the rules.
 
 ### Zod in a persistence seam
 
