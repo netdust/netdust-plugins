@@ -62,13 +62,17 @@ ddev wp cli info                  # which WP-CLI version + WP path
 
 `ddev wp cache flush` clears the object cache. **On servers with LMS/Tin-Canny data (VAD, Stride), this destroys cached LMS state that has exclusions in `object-cache.php`**. Always check `object-cache.php` for excluded keys before flushing on prod. See GLOBAL.md cross-project rules.
 
-`wp cache flush` clears WP's general object-cache namespace. It does NOT clear the per-post-type versioned buckets used by `NTDST_Query_Cache` — those are namespaced (`ntdst_data_{post_type}_v{n}_…`) and survive a flush. If you've made bulk changes outside the normal CRUD flow (raw SQL writes, import scripts) and queries still look stale, run:
+**There is no ntdst-side cache left to flush.** `NTDST_Query_Cache` and its per-post-type
+versioned buckets (`ntdst_data_{post_type}_v{n}_…`) are **DELETED**, along with
+`ntdst_invalidate_post_type()`, `ntdst_clear_posts_cache()` and `ntdst_query_cache()` —
+`ddev wp eval "ntdst_invalidate_post_type(...)"` is now a fatal error, not a fix. The
+data layer keeps no cache of its own; WordPress's post, `post_meta`, `post-queries` and
+term caches are the caching, and core invalidates them on every write.
 
-```bash
-ddev wp eval "ntdst_invalidate_post_type('vad_edition');"
-# or, from PHP, the helper:
-ntdst_invalidate_post_type('vad_edition');
-```
+So after bulk changes outside the normal CRUD flow (raw SQL writes, import scripts) that
+bypassed WordPress entirely, `ddev wp cache flush` — subject to the LMS warning above —
+is the whole remedy. Anything written through `wp_insert_post()` / `update_post_meta()`
+needs no flush at all.
 
 ## Logs
 

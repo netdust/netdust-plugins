@@ -73,15 +73,26 @@ Soft caps. Treat as warnings, not hard rules — if exceeding the cap is the cle
 | DI (singleton) | `ntdst_get(Class::class)` | Cached instance |
 | DI (fresh) | `ntdst_make(Class::class)` | New instance |
 | DI (register) | `ntdst_set(Class::class)` | Container |
-| Data/ORM | `ntdst_data()->get('type')` | `NTDST_Data_Model` |
+| DI (container) | `ntdst_container()` | `NTDST_Container` |
+| Data/ORM | `ntdst_data()->get('type')` | `NTDST_Data_Model` (a fresh clone per call) |
+| Data (registry check) | `ntdst_data()->isRegistered('type')` | `bool`, no side effect |
+| Data (formatted query) | `ntdst_get_formatted_posts($args)` | `array` of formatted rows |
 | Router | `ntdst_router()` / `ntdst_route()` | `NTDST_Router` |
 | Response | `ntdst_response()` | `NTDST_Response` |
-| Logger | `ntdst_log()` | `NTDST_Logger` |
-| Mailer | `ntdst_mail()` | `NTDST_Mailer` |
+| Response (terminal) | `ntdst_redirect()` / `ntdst_download()` / `ntdst_inline()` | `never` |
+| Logger | `ntdst_log('channel')` | `NTDST_Logger` |
+| Mailer | `ntdst_mail()` / `ntdst_notify()` | `NTDST_Mailer` / `void` |
 | Sectors | `ntdst_sectors()` | `NTDST_SectorRegistry` |
-| Cache | `ntdst_query_cache()` | `NTDST_Query_Cache` |
 | Metabox | `ntdst_metabox()` | `NTDST_MetaboxGenerator` |
-| Endpoints | `ntdst_endpoints()` | `Endpoints` |
+| Endpoints | `ntdst_endpoints()` | `NTDST_Endpoints` (aliased as `Endpoints` for back-compat) |
+
+> **There is no cache helper.** `ntdst_query_cache()` and `NTDST_Query_Cache` are
+> **DELETED**, along with `$model->cache(N)`, `ntdst_clear_posts_cache()` and
+> `ntdst_invalidate_post_type()`. The data layer keeps no cache of its own; WordPress's
+> post / `post_meta` / `post-queries` / term caches are the caching, and core invalidates
+> them on every write — including writes that never went through the model. That is a
+> security property (a layer-owned cache is one core does not invalidate), not just a
+> simplification. See `data-layer.md` → Caching.
 
 ## Framework Tool Fit — Right Tool per Operation
 
@@ -94,7 +105,8 @@ A helper's name doesn't tell you when it's the wrong tool. Before refactoring "u
 | `template_include` callback (resolve template name → file path for WP) | `ntdst_router()->template('single', $cb, $post_type)` | Raw `add_filter('template_include', ...)` |
 | URL pattern → callback | `ntdst_router()->get('pattern/:param', $cb)` | Raw `add_action('parse_request', ...)` |
 | Pre-query interception (rewrite query vars BEFORE WP runs the query) | Raw `add_action('parse_request', ...)` — `ntdst_router()` fires too late | `ntdst_router()` |
-| AJAX/REST endpoint | `add_filter('ntdst/api_data/{action}', ...)` (nonce + rate-limit + CSRF handled) | `add_action('wp_ajax_*', ...)` |
+| Same-origin AJAX endpoint | `add_filter('ntdst/api_data/{action}', ...)` (nonce + rate-limit + origin check handled — **authorization is still yours**) | `add_action('wp_ajax_*', ...)` |
+| Cross-origin / headless REST | `ntdst_router()->rest()` + `NTDST_Cors_Policy` | `ntdst/api_data/*` — its nonce authenticates nothing for a cookie-less caller |
 | Send email | `ntdst_mail()->to()->template()->send()` | `wp_mail()` |
 | Log structured events | `ntdst_log('channel')->level(...)` | `error_log()`, swallowed `WP_Error` |
 | Read/write CPT | per-domain Repository | `ntdst_data()` direct, raw `wp_insert_post` / `get_post_meta` |

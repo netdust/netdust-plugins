@@ -2,11 +2,18 @@
 
 Auto-generates WordPress metaboxes from field definitions.
 
-**Location:** `app/content/mu-plugins/ntdst-core/api/MetaboxGenerator.php`
+**Location:** `mu-plugins/ntdst-core/api/MetaboxGenerator.php` (under the project's
+content dir — `web/app/` on Bedrock, `app/content/` elsewhere).
 
 ## Automatic Generation
 
-When you register a model with fields and a label, metaboxes are automatically generated:
+Metaboxes are generated when a model is registered with **both** a `label` and a
+non-empty `fields` map (a `label` is what makes `register()` call `register_post_type()`
+at all). Set `'auto_metabox' => false` to opt out.
+
+> The registration below is **private** — `register()` merges your config over
+> `['public' => false, 'has_archive' => false, …]`. Add `'public' => true` deliberately
+> if the type should be publicly queryable.
 
 ```php
 ntdst_data()->register('portfolio', [
@@ -22,35 +29,68 @@ ntdst_data()->register('portfolio', [
 
 ## Field Type Rendering
 
-Each field type renders appropriate admin UI:
+`render_field()` is a `switch` with a `default` arm. A type with no case falls through to
+a **plain text input** — it is not an error, just silently the wrong control.
 
 | Type | Admin UI |
 |------|----------|
-| `text` | Text input |
-| `textarea` | Textarea |
-| `email` | Email input with validation |
-| `url` | URL input |
-| `html` | WordPress editor (TinyMCE) |
-| `integer` | Number input |
-| `float` | Number input with decimals |
-| `boolean` | Checkbox |
-| `date` | Date picker |
-| `select` | Dropdown |
-| `relation` | Post selector |
-| `gallery` | Media gallery picker |
-| `repeater` | Repeatable rows |
+| `text` / `string` | Text input |
+| `textarea` / `longtext` | Textarea |
+| `email` | `<input type="email">` |
+| `url` | `<input type="url">` |
+| `wysiwyg` | **WordPress editor** (`wp_editor`, teeny mode, no media buttons) |
+| `integer` / `int` | Number input, `step="1"` |
+| `float` / `decimal` | Number input, `step="0.01"` |
+| `boolean` / `bool` | Checkbox |
+| `date` | `<input type="date">` |
+| `datetime` | `<input type="datetime-local">` |
+| `select` | Dropdown (needs `options`) |
+| `array` / `json` | JSON textarea |
+| `relation` | Autocomplete post/user selector |
+| `gallery` | Media library picker with drag-reorder |
+| `repeater` | Sortable rows |
+| `callback` | Your own callable renders everything |
+| **`html` / `content`** | **No case — falls to a plain text input.** Use `wysiwyg` for the editor. |
+| **`image`, `file`, `person`, `post_relation`** | **No case — plain text input.** They sanitize correctly, they just have no control. |
+
+### The two vocabularies are not the same set
+
+The **registerable** vocabulary is `NTDST_Data_Model::getDefaultSanitizer()`; the
+**renderable** one is this switch. They overlap but neither contains the other.
+
+`string`, `longtext`, `decimal`, `number`, `datetime` and `callback` render fine but are
+**not** in the sanitizer map — `register()` now **throws `InvalidArgumentException`** on
+an unknown type, so declaring one of them fails at registration unless the field config
+also supplies its own `'sanitizer' => fn($v) => …` (which short-circuits the lookup).
 
 ## Field Options
 
-### Labels and Descriptions
+### Labels, descriptions, placeholders — mostly NOT implemented
+
+> **The admin label is always derived from the field KEY**:
+> `ucwords(str_replace('_', ' ', $name))`. A `'label' => …` on a top-level field is read
+> by nothing. `client_name` renders as "Client Name" whatever you write.
+> (`label` **is** honoured for **repeater sub-fields**.)
+>
+> `'description'` is read only by the `relation`, `gallery` and `repeater` renderers.
+> `'placeholder'` is read only by `relation`. On a scalar field both are ignored.
+>
+> To change a scalar field's visible label today, rename the field key — or render the
+> group yourself with `'auto_metabox' => false`.
 
 ```php
 'fields' => [
+    // The label here is decorative; the UI shows "Client Name" from the key.
     'client_name' => [
         'type' => 'text',
-        'label' => 'Client Name',
-        'description' => 'Enter the client or company name',
-        'placeholder' => 'e.g., Acme Corporation',
+        'required' => true,
+    ],
+    // description/placeholder DO reach the renderer for these three types:
+    'related' => [
+        'type' => 'relation',
+        'post_type' => 'artist',
+        'description' => 'Pick the credited artist',
+        'placeholder' => 'Search artists…',
     ],
 ]
 ```
@@ -61,30 +101,26 @@ Each field type renders appropriate admin UI:
 'fields' => [
     'email' => [
         'type' => 'email',
-        'required' => true,  // Shows asterisk, validates on save
+        'required' => true,  // enforced by validateData() on create()
     ],
 ]
 ```
 
-### Default Values
+`required` is a **save-time validation rule**, not a UI affordance — it is checked in
+`NTDST_Data_Model::validateData()`, and only on `create()`. `update()` is a partial
+write, so a field absent from the payload keeps its existing value rather than failing.
 
-```php
-'fields' => [
-    // Custom meta field named 'status' (e.g., approval workflow)
-    // Note: This is different from WordPress post_status
-    'status' => [
-        'type' => 'select',
-        'options' => ['pending' => 'Pending', 'approved' => 'Approved'],
-        'default' => 'pending',
-    ],
-    'featured' => [
-        'type' => 'boolean',
-        'default' => false,
-    ],
-]
-```
+### Default Values — NOT IMPLEMENTED
 
-**Note:** When setting WordPress post status in `create()` or `update()`, use `'post_status'` key (not `'status'`) to avoid collision with custom meta fields.
+> **`'default' => …` is read by nothing** in `Data.php` or `MetaboxGenerator.php`
+> (verified against source). An unset field is simply empty; a `select` renders with its
+> first option selected because that is what a `<select>` does, not because a default was
+> applied. Apply defaults in your own code:
+> `$status = $model->getMeta($id, 'status') ?: 'pending';`
+
+**Note:** When setting WordPress post status in `create()` or `update()`, use the
+`'post_status'` key (not `'status'`) to avoid collision with a custom meta field named
+`status`.
 
 ### Select Options
 
@@ -127,21 +163,29 @@ Each field type renders appropriate admin UI:
     'images' => [
         'type' => 'gallery',
         'required' => true,
-        'min' => 1,   // Minimum images
-        'max' => 20,  // Maximum images
+        'min' => 1,   // save-time validation (item count), NOT a UI limit
+        'max' => 20,  // ditto — the picker will not stop the user at 20
     ],
 ]
 ```
 
 ### Repeater Fields
 
+The sub-field map key is **`sub_fields`**, not `fields`. Both `Data.php`
+(`setupSanitizers`, `sanitizeRepeater`) and `MetaboxGenerator` (`render_repeater_field`,
+save-side sanitization) read `sub_fields`. A repeater declared with `fields` gets an
+**empty** sub-field config: the admin renders no row inputs, and every sub-value falls
+back to `sanitize_text_field` on save — so an `image` sub-field stores an unverified
+number and a `wysiwyg` sub-field loses its markup.
+
 ```php
 'fields' => [
     'social_links' => [
         'type' => 'repeater',
-        'fields' => [
+        'sub_fields' => [
             'platform' => [
                 'type' => 'select',
+                'label' => 'Platform',   // labels ARE honoured on sub-fields
                 'options' => [
                     'instagram' => 'Instagram',
                     'twitter' => 'Twitter',
@@ -153,6 +197,11 @@ Each field type renders appropriate admin UI:
     ],
 ]
 ```
+
+Sub-field types are sanitized as their declared type on write. They are **not** filtered
+on read: `formatRepeaterField()` returns rows largely as stored, so a top-level
+allow-list projection does not filter sub-keys. Project repeater rows explicitly before
+sending them to an anonymous caller.
 
 ## Tabbed Interface
 
@@ -217,9 +266,7 @@ Show/hide fields based on other field values:
 ]
 ```
 
-## Validation Display
-
-Validation errors are shown inline:
+## Validation
 
 ```php
 'fields' => [
@@ -228,33 +275,41 @@ Validation errors are shown inline:
         'validate' => fn($v) => str_starts_with($v, 'https://') ?: 'Must be HTTPS URL',
     ],
 ]
-// If validation fails, error message appears below field
 ```
 
-## Metabox Position
+`validate` (and `required` / `min` / `max`) run in `NTDST_Data_Model::validateData()`,
+which is called from `create()` and `update()` and returns a
+`WP_Error('validation_failed')` carrying a per-field error map in its error data. **The
+metabox save path does not render those messages inline** — treat validation as a data
+contract enforced on write, and surface failures yourself if the editor needs to see
+them.
+
+## Metabox Placement and Title
+
+These are **flat top-level config keys**, not a nested `'metabox' => [...]` array:
 
 ```php
 ntdst_data()->register('portfolio', [
     'label' => 'Portfolio',
     'fields' => [...],
-    'metabox' => [
-        'context' => 'normal',   // 'normal', 'side', 'advanced'
-        'priority' => 'high',    // 'high', 'low', 'default'
-    ],
+
+    // Single (ungrouped) metabox:
+    'metabox_title'    => 'Project Details',  // default: "<Model Name> Fields"
+    'metabox_context'  => 'normal',           // 'normal' | 'side' | 'advanced'
+    'metabox_priority' => 'high',             // 'high' | 'low' | 'default'
+
+    // When use_tabs is on, the tabbed box uses these instead:
+    'tabs_context'  => 'normal',
+    'tabs_priority' => 'high',
 ]);
 ```
 
-## Custom Metabox Title
+With `field_groups` and **no** `use_tabs`, each group becomes its own metabox and takes
+`context` / `priority` / `title` from **that group's** config (defaults: `normal`,
+`default`, and the group key title-cased). Any field not named in a group lands in an
+automatic **"Other Fields"** box at `normal`/`low`.
 
-```php
-ntdst_data()->register('portfolio', [
-    'label' => 'Portfolio',
-    'fields' => [...],
-    'metabox' => [
-        'title' => 'Project Details',  // Custom title instead of "Portfolio Fields"
-    ],
-]);
-```
+`'auto_metabox' => false` skips generation entirely so a service can render its own.
 
 ## Accessing Field Values
 
@@ -273,23 +328,24 @@ foreach ($items as $item) {
 }
 ```
 
-## Field Type Reference
+## Other field options that ARE implemented
 
-| Type | Storage | Admin Input |
-|------|---------|-------------|
-| `text` | string | `<input type="text">` |
-| `textarea` | string | `<textarea>` |
-| `email` | string | `<input type="email">` |
-| `url` | string | `<input type="url">` |
-| `html` | string | WP Editor |
-| `integer` | int | `<input type="number">` |
-| `float` | float | `<input type="number" step="0.01">` |
-| `boolean` | bool | `<input type="checkbox">` |
-| `date` | string (Y-m-d) | Date picker |
-| `select` | string | `<select>` |
-| `relation` | int/array | Post search/select |
-| `gallery` | array | Media library picker |
-| `repeater` | array | Sortable rows |
+| Option | Applies to | Effect |
+|--------|-----------|--------|
+| `readonly` | scalar fields | Renders the value as static text plus a hidden input. On `select`: rendered `disabled` plus a hidden input. On `array`/`json`: **ignored** — the textarea stays editable |
+| `options` | `select` | The `value => label` map |
+| `post_type` | `relation` | Type to search. `'user'` switches the control to a user search |
+| `user_role` | `relation` with `post_type => 'user'` | Restricts the user lookup and the `data-user-role` attribute the JS searches with |
+| `multiple` | `relation` | Single vs multi select (default **true**) |
+| `callback` | `callback` | Called as `$callback($post, $fieldKey, $value)`; renders everything itself, including its own label |
+| `sanitizer` | any | Overrides the type's default sanitizer — and bypasses the unknown-type throw |
+| `sub_fields` | `repeater` | Sub-field type map (see above) |
+
+## Accessing values / field type reference
+
+See `data-orm.md` → **Field Types Reference** for the canonical write-sanitizer and
+read-cast per type. Do not maintain a second copy here; the two lists diverging is how
+`select`, `date` and `wysiwyg` came to be documented as sanitized while they were not.
 
 ## Rendering and save-time hardening
 

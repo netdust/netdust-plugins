@@ -1,18 +1,33 @@
 # Data Layer Reference
 
+The layer is a chain API over `WP_Query` plus the CPT/field vocabulary the metabox
+generator reads. **It holds no performance opinion** — no query flags of its own, no
+priming, no cache. See [Caching](#caching--wordpress-own-only) below.
+
 ## Model Registration
+
+> **PRIVATE BY DEFAULT — this was a security fix, do not "restore" the old defaults.**
+> `register()` merges your config over
+> `['public' => false, 'has_archive' => false, 'supports' => ['title','editor','thumbnail']]`.
+> It used to be the reverse, so a model registered without visibility flags was
+> published, archived and publicly queryable — which is why every non-public CPT on
+> every ntdst-core site had to state six denials by hand, and why forgetting one was a
+> disclosure. **Opt IN to public; never opt out of it.**
+>
+> `register()` returns `NTDST_Data_Model` **or `WP_Error`** when `register_post_type()`
+> refuses the name (INV-4: it no longer swallows the failure and builds a model whose
+> post type does not exist).
 
 ```php
 ntdst_data()->register('artwork', [
     // WordPress post type args
     'label'       => 'Artworks',
-    'public'      => true,
-    'has_archive' => true,
+    'public'      => true,        // explicit opt-in
+    'has_archive' => true,        // explicit opt-in
     'supports'    => ['title', 'editor', 'thumbnail'],
 
     // NTDST-specific
     'meta_prefix' => '_art_',     // prefixes all meta keys in DB
-    'cache_time'  => 3600,        // seconds (0 in WP_DEBUG)
 
     'fields' => [
         'medium'     => 'text',
@@ -52,25 +67,40 @@ ntdst_data()->register('artwork', [
 
 ### Field Types
 
-| Type | PHP Cast | Sanitizer |
-|------|----------|-----------|
-| `text` / `string` | `(string)` | `sanitize_text_field` |
-| `textarea` | `(string)` | `sanitize_textarea_field` |
-| `html` / `content` | `(string)` | `wp_kses_post` |
-| `int` / `integer` | `(int)` | `absint` |
-| `float` / `double` | `(float)` | `floatval` |
-| `bool` / `boolean` | `(bool)` | cast |
-| `email` | `(string)` | `sanitize_email` |
-| `url` | `(string)` | `esc_url_raw` |
-| `array` | `array` | `array_map('sanitize_text_field')` |
-| `json` | `array` | json decode |
-| `relation` | `int[]` | `array_map('absint')` |
-| `gallery` | `int[]` | `array_map('absint')` |
-| `repeater` | `array[]` | per sub-field sanitization |
-| `date` | input type=date | |
-| `datetime` | input type=datetime-local | |
-| `select` | string | options array required |
-| `callback` | — | custom render callback |
+Every type below is genuinely sanitized. `select`, `date` and `wysiwyg` used to be
+advertised but unimplemented — they fell through to `sanitize_text_field` silently. **An
+unknown type name now throws `InvalidArgumentException` at registration** rather than
+becoming text.
+
+| Type | Sanitizer (write) | Read cast |
+|------|-------------------|-----------|
+| `text` | `sanitize_text_field` | `(string)` |
+| `textarea` | `sanitize_textarea_field` | `(string)` |
+| `html` / `content` | `wp_kses_post` | `(string)` |
+| `wysiwyg` | `wp_kses_post` | `(string)` |
+| `int` / `integer` | `absint` | `(int)` |
+| `float` / `double` | `floatval` | `(float)` |
+| `bool` / `boolean` | `sanitizeBoolean()` (`wp_validate_boolean`) | `bool` |
+| `email` | `sanitize_email` | `(string)` |
+| `url` | `esc_url_raw` | `(string)` |
+| `select` | `sanitize_text_field` | `(string)` — `options` required for the UI |
+| `date` | `sanitizeDate()` → `Y-m-d`; junk → `''` | `(string)` |
+| `array` | `sanitizeNestedArray()` (recursive, structure-preserving) | `array` |
+| `json` | `sanitizeJson()` (invalid JSON → `[]`) | `array` |
+| `relation` / `post_relation` / `person` | `absint` per id, always an array | `int[]` |
+| `gallery` | `absint` per id, always an array | `int[]` |
+| `image` / `file` | `sanitizeAttachmentId()` — verifies the id IS an attachment, else `0` | `(int)` |
+| `repeater` | `sanitizeRepeater()` — per declared **`sub_fields`** type | `array[]` |
+
+**Metabox-only aliases are not registerable.** `string`, `longtext`, `decimal`, `number`,
+`datetime` and `callback` render in `MetaboxGenerator` but are absent from the sanitizer
+map, so `register()` throws on them unless the field config supplies its own
+`'sanitizer'`. Conversely `html`/`content`, `image`, `file`, `person` and
+`post_relation` sanitize correctly but have **no metabox control** — they fall to a plain
+text input. Use `wysiwyg` when you want the WP editor.
+
+The repeater sub-field key is **`sub_fields`**, not `fields`; a repeater declared with
+`fields` sanitizes every sub-value as text and renders no rows.
 
 ### Validation (in field config array)
 
@@ -100,8 +130,13 @@ $artwork = $model->create([
     'post_status' => 'publish',  // use 'post_status' not 'status'
 ]);
 
-// FIND — returns WP_Post with ->meta and ->fields, or WP_Error
-$artwork = $model->find(42);
+// FIND — find(int $id, string|array $status = 'publish')
+// Returns WP_Post with ->meta and ->fields, or WP_Error.
+$artwork = $model->find(42);                       // PUBLISH ONLY — the safe default
+$artwork = $model->find(42, 'any');                // every status (admin screens)
+$artwork = $model->find(42, ['publish','draft']);  // an explicit set
+// $model->find(42, true);                         // ✗ throws InvalidArgumentException
+
 $artwork->post_title;          // WP_Post property
 $artwork->fields['price'];     // typed, formatted meta value
 $artwork->fields['artist'];    // relation: int[]
@@ -121,12 +156,16 @@ $model->delete(42, true);      // force delete
 $price  = $model->getMeta(42, 'price');            // single field
 $all    = $model->getMeta(42);                     // all fields
 $model->updateMeta(42, 'price', 3500.00);          // single field
-$model->updateMetaBatch(42, [                      // multiple fields, one cache clear
-    'price'  => 3500.00,
+$model->updateMetaBatch(42, [                      // one existence check + one rollback
+    'price'  => 3500.00,                           // snapshot covering all fields
     'medium' => 'acrylic',
 ]);
 $model->deleteMeta(42, 'temporary_note');
 ```
+
+`getMeta()` internally calls `find($id, 'any')` — it is a **raw accessor, not a
+visibility decision**, and will happily read a draft's meta. Never let it be the only
+gate on a read path.
 
 ### Taxonomy Terms
 
@@ -147,10 +186,20 @@ $model->detachTerms(42, 'artwork_type', []);                // remove all
 | `get()` | `array` of associative arrays (not objects) |
 | `first()` | `WP_Post` object (same shape as `find()` — `->meta`, `->fields`) or `null` |
 | `all()` | `array` of associative arrays |
-| `count()` | `int` (cached via `NTDST_Query_Cache`) |
-| `paginate()` | `['data' => [...], 'pagination' => [...]]` (both halves cached) |
+| `count()` | `int` |
+| `paginate()` | `['data' => [...], 'pagination' => [...]]` |
 
 **Always check `is_wp_error()` on find/create/update.**
+
+`find()`'s not-found and wrong-status cases return the **same** `WP_Error`, deliberately:
+a caller who may not see this status learns nothing about whether the row exists. Don't
+branch on the error to tell them apart, and when writing a denial test, assert the row is
+REACHABLE first — otherwise the denial may be passing because the fixture never existed.
+
+`create()` and `update()` hydrate their return with `find($id, 'any')` on purpose: they
+return the row they just wrote, whatever status it was written with. Hydrating through
+the publish-only default would make `create(['post_status' => 'draft'])` write the row and
+then return `WP_Error`, orphaning it.
 
 `first()` returns the same shape as `find()`, not a `stdClass`. Access `$post->post_title`, `$post->fields['price']`, etc. — never `$post->title` / `$post->id`.
 
@@ -167,7 +216,20 @@ WordPress returns `false` from `update_post_meta` both on errors *and* on unchan
 
 ### Builder state reset
 
-`get()`, `count()`, and `paginate()` reset `$this->query_args = []` in a `finally` block. This matters because `ntdst_data()->get($name)` returns the same singleton instance — without the reset, a `where()` chain on one call would bleed into the next caller's query. `first()` and `all()` delegate to `get()`, so they inherit the reset.
+Two independent mechanisms:
+
+1. `get()`, `count()`, and `paginate()` reset `$this->query_args = []` in a `finally`
+   block. `first()` and `all()` delegate to `get()`, so they inherit it.
+2. `ntdst_data()->get($name)` returns a **fresh clone** per acquisition. The model
+   registry is `static`, so every caller used to share one mutable instance — an
+   *abandoned* `->where()` (never reaching a terminal method, so never hitting the
+   `finally`) stayed on it and silently narrowed the next query from anywhere in the
+   process. The clone makes that leak unrepresentable.
+
+`get()` also does **not** store a model for an unregistered name any more. It used to
+auto-register a phantom into that static array, so a caller-supplied type name on a
+public endpoint could register whatever it liked and `isRegistered()` could never tell a
+real model from something someone once mistyped.
 
 `whereNot()` on an unsupported core field throws `InvalidArgumentException` (instead of silently returning wrong results) and resets `query_args` before throwing, so the next call on the same model starts clean. Supported negations: `post_status`, `post_author`, `post_parent`.
 
@@ -224,10 +286,6 @@ $model->limit(20)->get();
 // Include meta/terms in results
 $model->withMeta()->withTerms()->get();
 
-// Custom cache time
-$model->cache(7200)->get();   // 2 hours
-$model->cache(0)->get();      // no cache
-
 // Pagination
 $result = $model->where('medium', 'oil')->paginate(page: 2, per_page: 12);
 // $result['data'] = [...], $result['pagination'] = [total, per_page, current_page, ...]
@@ -241,32 +299,59 @@ $total = $model->where('medium', 'oil')->count();
 
 ---
 
-## Query Cache (`NTDST_Query_Cache`)
+## Caching — WordPress' own, only
 
-- Deterministic keys: sorted args + md5 hash + version number
-- Version-based invalidation per post type (atomic increment via `wp_cache_incr`)
-- Auto-invalidation on `save_post`, `delete_post`, `trashed_post`, meta changes
-- **`count()` and `paginate()` now go through QueryCache too** — both halves of `paginate()` (total + data) hit the same versioned bucket. Older revisions of the data layer bypassed the cache for counts.
-- Meta-change invalidation respects each model's registered `meta_prefix`. Calling `update_post_meta($id, '_ntdst_foo', ...)` directly (outside the ORM) still busts the cache because the model registered `_ntdst_` (or its custom prefix) at construction time. `_thumbnail_id`, `_price`, `_stock`, and `_stock_status` are also always-invalidating. Filter `ntdst_should_invalidate_meta` to add others.
-- Dev mode: cache disabled when `WP_DEBUG` is true (unless `NTDST_ENABLE_CACHE_IN_DEBUG`)
+> **REMOVED. `NTDST_Query_Cache` is DELETED** — the class, its file, its invalidation
+> hooks, and with them `$model->cache(N)`, the `cache_time` config/query key,
+> `ntdst_query_cache()`, `ntdst_clear_posts_cache()`, `ntdst_invalidate_post_type()`,
+> `NTDST_Data_Manager::clearCache()` and the `ntdst_should_invalidate_meta` filter. Code
+> or docs using any of them are dead — **delete the call, do not port it.** There is
+> nothing left to invalidate.
+>
+> It was also inert wherever anyone could observe it: `resolveCacheTime()` returned `0`
+> on every `WP_DEBUG` environment, so the whole bespoke cache was off in development.
 
-```php
-// Manual invalidation
-ntdst_invalidate_post_type('artwork');
+What remains is core's own caching, which is the point:
 
-// Check if caching enabled
-ntdst_query_cache()->isCachingEnabled();
+- `NTDST_Data_Manager::getPostMeta()` prefers core's `post_meta` cache — primed by
+  `WP_Query` on any read and **invalidated by core on any write, whoever performs it** —
+  and falls back to one **prepared** SQL statement when cold.
+- `getPostTerms()` does the same with core's `{$taxonomy}_relationships` cache.
+- `find()` is `get_post()`; `get()` / `count()` / `paginate()` are `WP_Query`, served
+  from core's `post-queries` cache (salted on `$last_changed`).
+- `WP_Query`'s `update_post_meta_cache` / `update_post_term_cache` defaults are TRUE and
+  the layer stopped overriding them, so nothing is primed on top. The thumbnail prime and
+  the unconditional author prime (which ran `WHERE ID IN (0)` for `post_author = 0` rows)
+  are gone with it.
 
-// Extend the always-invalidate list
-add_filter('ntdst_should_invalidate_meta', function ($should, $meta_key) {
-    if ($meta_key === '_my_custom_volatile_key') return true;
-    return $should;
-}, 10, 2);
-```
+**This is a security property, not just a simplification.** A layer-owned cache is one
+core does not invalidate, so a write that bypassed the model — a raw
+`update_post_meta()` — could leave a stale value being served. For a revocation flag that
+means a revoked credential still reading as live. Using core's group means any writer's
+invalidation counts. **Do not reintroduce a bespoke cache over post meta** without
+solving that.
 
-### Stale-cache cleanup on external deletes
+There is likewise **no stale-cache cleanup on external deletes**: there is no
+layer-owned entry to clean. `find()` returns `WP_Error` when `get_post()` comes back
+empty, and that is the whole behaviour.
 
-`find()` and `hydratePostFromResult()` proactively call `NTDST_Data_Manager::clearCache($id)` when `get_post($id)` returns null — so a post deleted directly via SQL or `wp_delete_post()` outside the model doesn't leave a stale meta/terms cache entry behind.
+### Core's query cache is actor-blind — an authorization hazard that did NOT go away
+
+Core's `post-queries` cache keys on the query args and the generated SQL, **never on who
+asked**. Two callers with different privileges issuing the identical query share one
+entry, in both directions.
+
+So any handler taking caller-supplied query input must **refuse the request** when the
+caller may not query it, rather than querying first and filtering rows afterwards — a
+post-hoc filter runs after the answer is already cached. Put the restriction in the ARGS
+(a narrowed `post_type`, a `post_parent__not_in` exclusion list), so the two caller
+classes cannot share a key.
+
+### If you genuinely need an optimisation
+
+Ask WordPress for it directly, at the call site that can justify it, with a measurement
+attached: `update_post_thumbnail_cache()`, `wp_cache_*`, or a `no_found_rows` arg passed
+through this API. The layer will not decide it for you.
 
 ---
 
@@ -285,7 +370,7 @@ Saving uses Data.php ORM for registered models, falls back to `update_post_meta(
 
 Set `'auto_metabox' => false` in config to handle metabox rendering manually in your service.
 
-The "is this an ORM-backed model?" check now uses MetaboxGenerator's own registry instead of calling `ntdst_data()->get($name)` — that call had a side effect of auto-creating a phantom empty model, which would persist across the request and shadow later schema-bearing registrations. Iterate post types defensively with `NTDST_Data_Manager::isRegistered($name)`:
+The "is this an ORM-backed model?" check uses MetaboxGenerator's own registry instead of calling `ntdst_data()->get($name)` — that call used to auto-create a phantom empty model as a side effect, which persisted across the request and shadowed later schema-bearing registrations. `get()` no longer stores the phantom, but it still *returns* an empty model for an unknown name, so it can never answer "does this exist?". Iterate post types defensively with `ntdst_data()->isRegistered($name)` (an instance method on the manager, not static):
 
 ```php
 // Safe — does not auto-create a phantom model entry.

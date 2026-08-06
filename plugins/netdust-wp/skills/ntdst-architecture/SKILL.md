@@ -29,7 +29,7 @@ description: >
 | `references/architecture.md` | Core principles, PHP standards, size limits, design patterns, project structure |
 | `references/services.md` | Creating services — when to/not to, lifecycle, sectors, priorities, config, discovery |
 | `references/container.md` | DI container, autowiring, bootstrap lifecycle, functions.php wiring, `plugin-config.php` (mu-plugins) / `theme-config.php` (themes) |
-| `references/data-layer.md` | Model registration, fields, CRUD, query builder, metaboxes, caching |
+| `references/data-layer.md` | Model registration (**private by default**), field types, CRUD, `find()`'s status argument, query builder, metaboxes, and why the layer keeps no cache |
 | `references/router.md` | URL routes, template hooks, rewrite rules, return values |
 | `references/response.md` | Template rendering, JSON output, email HTML, template resolution |
 | `references/api-endpoints.md` | Same-origin AJAX actions (`ntdst/api_data`), nonce flow, JS client, rate limiting, security |
@@ -111,6 +111,12 @@ Dependencies are resolved via DI autowiring when a service injects them. They ne
 | Admin controller / dashboard widget / metabox as its own top-level service | Sub-component — instantiate inside the owning feature service's `init()` (stride pattern: see `TrajectoryService::init()` instantiating `TrajectoryAdminController`) |
 | `update_post_meta()` / `get_post_meta()` | `$model->update()` / `$model->find()->fields` |
 | Raw SQL queries | Data Manager query builder |
+| `$model->cache(N)`, `ntdst_query_cache()`, `ntdst_clear_posts_cache()`, `ntdst_invalidate_post_type()` | **Deleted.** Core's caching is the caching — just query |
+| `ntdst_get_posts_fast()` | `ntdst_get_formatted_posts()` (same function, honest name) |
+| `$model->find($id, true)` | Throws. The 2nd arg is a **post status** — pass `'any'` or a status array |
+| `register()` with no `public` key, assuming it's public | It is **private** now. Opt IN with `'public' => true` |
+| `current_user_can('edit_posts')` as a READ gate | Contributors hold it. Use `edit_others_posts`, resolved off the post-type object |
+| Returning a raw `WP_Post` from a public API handler | Project an allow-list built by iterating the declared schema — `WP_Post` serialises `post_password` and every `_`-prefixed meta key |
 | `echo` in a service | `ntdst_response()->render()` / `->json()` |
 | `add_action()` scattered across methods | Group in `registerHooks()` / `init()` |
 | `return false` on error | `return new WP_Error(...)` |
