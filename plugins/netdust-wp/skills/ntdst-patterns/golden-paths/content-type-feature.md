@@ -140,11 +140,17 @@ final class {Type}Repository extends AbstractRepository
             ->withMeta()
             ->get();
 
-        $prefixedKey = $this->getMetaPrefix() . 'course_id';   // <-- the rule: prefix from the repo, not a literal
+        // `->withMeta()` rows are SCHEMA-PROJECTED (2026-08-07): `meta` carries
+        // unprefixed, type-cast, declared fields only — the same set
+        // `find()->fields` reports. Read the declared name.
+        //
+        // This used to require `$this->getMetaPrefix() . 'course_id'`, and that
+        // form now returns null SILENTLY. If you are porting older code, grep
+        // `['meta'][` — a filter or sort built on a prefixed key fails OPEN.
         $map = [];
         foreach ($rows as $row) {
             $editionId = (int) ($row['id'] ?? $row['ID'] ?? 0);
-            $courseId  = (int) ($row['meta'][$prefixedKey] ?? 0);
+            $courseId  = (int) ($row['meta']['course_id'] ?? 0);
             if ($editionId > 0 && $courseId > 0) {
                 $map[$editionId] = $courseId;
             }

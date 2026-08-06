@@ -163,9 +163,16 @@ $model->updateMetaBatch(42, [                      // one existence check + one 
 $model->deleteMeta(42, 'temporary_note');
 ```
 
-`getMeta()` internally calls `find($id, 'any')` — it is a **raw accessor, not a
-visibility decision**, and will happily read a draft's meta. Never let it be the only
-gate on a read path.
+`getMeta(int $id, ?string $key = null, $default = null, $status = 'publish')` takes
+the SAME `$status` argument, with the SAME default, as `find()`. It used to hard-code
+`find($id, 'any')` and was documented as a "raw accessor, not a visibility decision" —
+so `find($id)` refused an unpublished row while `getMeta($id, 'x')` served its meta.
+One model, one row, two read paths, opposite answers; a service that gated with the
+first and read with the second had a bypass. Fixed 2026-08-07.
+
+One rule for the layer: **the default answer is the safe one.** Pass `'any'` (or an
+explicit status array) when an admin screen genuinely wants an unpublished row.
+Authorization is still the caller's job — this default is a floor, not a gate.
 
 ### Taxonomy Terms
 
@@ -284,7 +291,7 @@ $model->orderBy('price', 'DESC', numeric: true)->get();    // meta field
 $model->limit(20)->get();
 
 // Include meta/terms in results
-$model->withMeta()->withTerms()->get();
+$model->withMeta()->withTerms()->get();   // `meta` is SCHEMA-PROJECTED: unprefixed, type-cast, declared fields only
 
 // Pagination
 $result = $model->where('medium', 'oil')->paginate(page: 2, per_page: 12);

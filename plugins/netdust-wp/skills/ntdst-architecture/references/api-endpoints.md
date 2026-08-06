@@ -84,9 +84,10 @@ $theme->apiAction('delete_artwork', function($data, $params) {
 // NOT assume the caller is authenticated and must treat all input as
 // untrusted.
 //
-// Default public actions (out of the box): get_recent_posts, search_posts,
-// send_magic_link. NOTE: search_users is NOT public — it is cap-gated
-// in-handler (current_user_can('list_users')); see below.
+// The framework ships NO public actions and no data actions at all.
+// $public_actions is EMPTY: NTDST_Endpoints is a router (origin, rate limit,
+// nonce, auth gate, dispatch) with no opinion about anyone's data. Anonymous
+// exposure is a per-site decision, made only via this filter.
 
 // Add custom public action:
 add_filter('ntdst/api/public_actions', function($actions) {
@@ -95,9 +96,16 @@ add_filter('ntdst/api/public_actions', function($actions) {
 });
 ```
 
-### `search_users` requires `list_users` capability
+### `search_users`, `get_recent_posts`, `search_posts` — RETIRED 2026-08-07
 
-The default `search_users` handler enforces `current_user_can('list_users')` before returning results. Listing users by email/login is a PII leak; without the capability, an authenticated caller with a valid nonce would have been able to enumerate the user base. If your project needs broader access, override the action with a custom handler that applies your own capability check.
+`get_recent_posts` and `search_users` are **deleted**. `send_magic_link` was removed
+from the public list (it never had a handler in any tree — an allow-list entry naming
+nothing is a standing grant waiting for whoever later registers that action name).
+`search_posts` **moved** to `NTDST_RelationField` as the non-public `relation_search`.
+
+The framework provides exactly one data action now, `relation_search`, and it is not
+public. Everything else belongs to the service that knows what its rows mean. Older
+project copies may still carry the retired actions until ported.
 
 ## JavaScript Client
 
@@ -143,11 +151,12 @@ ntdstAPI.call('get_artworks', { medium: 'oil', per_page: 20 })
 Sensitive operations should be much stricter than the default 30/min. Use the `ntdst/api/rate_limit/{action}` and `ntdst/api/rate_window/{action}` filters. Setting the limit to `0` disables rate limiting for that action (use for trusted background workflows).
 
 ```php
-// Magic-link send: 3 per hour per user/IP. Closes a real abuse vector —
-// without this, an attacker can POST send_magic_link 30x/minute to spam
-// a victim's inbox and exhaust SMTP quota.
-add_filter('ntdst/api/rate_limit/send_magic_link', fn() => 3);
-add_filter('ntdst/api/rate_window/send_magic_link', fn() => 3600);
+// Any action that SENDS something on a caller's say-so: 3 per hour per
+// user/IP. Closes a real abuse vector — without this, an attacker POSTs it
+// 30x/minute to spam a victim's inbox and exhaust SMTP quota. (The action
+// name here is a site's own; the framework ships no such handler.)
+add_filter('ntdst/api/rate_limit/my_magic_link', fn() => 3);
+add_filter('ntdst/api/rate_window/my_magic_link', fn() => 3600);
 
 // Password reset: 5 per 15 minutes.
 add_filter('ntdst/api/rate_limit/password_reset', fn() => 5);
@@ -175,58 +184,54 @@ add_filter('netdust_trusted_proxies', function($proxies) {
 });
 ```
 
-### The post-type gate (`canQueryPostType`) — the convergence point
+### The post-type gate — DELETED 2026-08-07, with the surface it guarded
 
-`get_recent_posts` and `search_posts` are **public**, so the post type is named by an
-unauthenticated caller and the router builds its query straight from that string. No
-registry flag governs anything on this surface unless *this* gate reads it. It is the
-single place the question is decided; do not answer it a second way elsewhere.
+`canQueryPostType()`, `filterQueryablePostTypes()`, `canQueryUnpublishedMedia()`,
+`nonViewableMediaParentIds()` and `normalizePostTypes()` are **gone**. Do not
+reintroduce them, and do not write anything that needs them.
 
-What it reads, exhaustively:
+They existed to answer one question — *"an anonymous caller named a post type; may
+they query it?"* — for the framework's own `get_recent_posts` and `search_posts`.
+Answering it meant re-deriving WordPress's visibility semantics from the registry, a
+flag at a time, in a predicate whose own docblock had to list the flags it did NOT
+consult. Five consecutive generations of security review went into it: anonymous
+enumeration of every non-public type, then a fix gated on `edit_posts` (which
+Contributors hold), then draft-attached media, then `exclude_from_search` types, then
+an uncached full-attachment scan, then a latent fail-open in a `WP_Query` `elseif`
+chain.
 
-- **`public === true` AND `exclude_from_search === false`** → admitted outright. Not
-  `public` alone: `public => true, exclude_from_search => true` is WordPress's standard
-  "reachable by its own URL, never surfaced by search" idiom — an embargoed press kit —
-  and short-circuiting on `public` served every row of such a type to anonymous callers,
-  the precise opposite of the registration's meaning. Nothing upstream closes this:
-  `WP_Query` consults `exclude_from_search` only on the `post_type => 'any'` branch, and
-  this router always names the type. `is_post_type_viewable()` closes nothing either — it
-  reads `publicly_queryable ?? public`, neither of which is `exclude_from_search`.
-- **Otherwise: BOTH the type's own `cap->edit_posts` AND `cap->edit_others_posts`**, read
-  off the registered object, each validated as a non-empty string *before*
-  `current_user_can()` is called. An unregistered type, or a type whose map omits a
-  capability, denies.
-- `publicly_queryable` and `show_in_rest` are deliberately **not** consulted — they govern
-  the front-end query var and the wp-json controller, and this router goes through
-  neither. Honouring another flag means editing the predicate, never assuming.
-- Filterable: `ntdst/api/queryable_post_type`. Opening a non-public type here exposes
-  every row of it to anonymous callers.
+Ground truth killed it: `get_recent_posts` had **zero** consumers, `search_users` had
+zero, `send_magic_link` had no handler at all, and `search_posts` had exactly one —
+the admin relation autocomplete, authenticated by definition. The framework was
+defending a surface with no user.
 
-`edit_others_posts` is the load-bearing half. `edit_posts` means "may create and edit MY
-OWN posts" — Contributor and Author both hold it — and this handler returns EVERY row of
-the type. Requiring only the weaker one once shipped a fix for an anonymous read while
-simultaneously handing every non-public type, GDPR `user_request` rows included, to the
-lowest content role.
+**The lesson, which generalises past this file:** a question that cannot be answered
+safely is usually a sign the surface should not exist. The fix was not a better
+predicate; it was deleting the caller-parameterised query and moving the one real
+consumer somewhere the question is answerable.
 
-**Callers must refuse the request when the gate returns an empty list**, not query first
-and filter after. Core's `post-queries` cache keys on the args and the SQL, never on who
-asked, so a post-hoc filter lets one actor's answer be served to the other.
+### `relation_search` — what replaced it
 
-### Unpublished media
+`NTDST_RelationField::handleRelationSearch()`. **Not public**, so the router requires
+a logged-in caller before it runs. Two conditions, and they are the entire gate:
 
-`attachment` is a public type, so the gate admits it for everyone — correctly, since
-public media is public. But attachments are stored as `post_status = 'inherit'`, so
-`search_posts` widens the status when attachments are searched; and `inherit` is a
-*pointer* to the parent's status, not a status, so `WP_Query` matches the literal column
-and the widening reaches every attachment row, children of drafts included.
+1. **The type must be a declared relation TARGET.** The allow-list is DERIVED from the
+   registered schemas — every `post_type` named by a `relation`-typed field. A type
+   nobody points a relation field at is unreachable, and nobody has to remember to
+   exclude it. Derived, never maintained.
+2. **The caller must hold that type's own `edit_others_posts`**, read off the type
+   object so a CPT that remaps its capabilities narrows this with it. `edit_posts` is
+   deliberately not enough — it means "may edit MY OWN posts", Contributors and Authors
+   hold it, and this returns every row of the type.
 
-`canQueryUnpublishedMedia()` (same both-capabilities test, read off the attachment type's
-own map) decides who keeps the full widening. Everyone else gets non-viewable parents
-excluded via `post_parent__not_in` — **in the query args**, so the two caller classes can
-never share a cache entry and the key changes by itself when a parent's status changes.
-Viewability is delegated to `is_post_type_viewable() && is_post_status_viewable()`, not
-hand-rolled: a `post_status === 'publish'` test gets the orphan wrong, and the orphan
-(`post_parent = 0`, media uploaded straight to the library) is the common case.
+Empty or non-string capabilities deny. An unregistered type denies.
+
+Attachments keep the `post_status => ['publish', 'inherit']` widening (they are stored
+`inherit`, never `publish`, so without it a picker scoped to `attachment` renders and
+can never return a result) — but it now needs no media-specific gate of its own.
+Everyone who reaches this point may already edit others' posts of the type, which is
+the same claim the deleted gates were computing the hard way.
+
 
 ## Caching
 

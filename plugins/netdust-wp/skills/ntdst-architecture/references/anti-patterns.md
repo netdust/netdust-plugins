@@ -483,7 +483,7 @@ $open = $editions->findWithAvailability();
 
 **`AbstractRepository` already provides** `find`, `create`, `update`, `delete`, `all`, `count`, `getField`, `findFields`, `getMetaPrefix`. Don't reach for `ntdst_data()` if one of those fits.
 
-**Documented exception — prefix-aware batch reads:** when reading batch-loaded meta (`getPostsFast()` / `withMeta()` envelope), the meta arrives with raw prefixed keys (`_ntdst_*`). Use `$this->repository->getMetaPrefix()` to read the prefix; never hardcode `_ntdst_` as a string. Acceptable in perf-critical paths (catalog pages, exports). See `data-orm.md`.
+**Exception REMOVED 2026-08-07 — batch reads are projected now.** `->withMeta()` used to hand back raw **prefixed** keys, and callers compensated with `getMetaPrefix()`. `get()` / `all()` / `paginate()` now project each row's `meta` through the declared schema: **unprefixed**, type-cast, declared fields only. Read `$row['meta']['date']`. The prefixed form returns null SILENTLY — a filter or sort built on it fails OPEN, which is how a cancelled-gig filter and an exclude-from-catalogue flag were both found broken. Never hardcode `_ntdst_`. See `ntdst-data/lessons.md`.
 
 ### Wrong Data API Vocabulary
 

@@ -91,7 +91,7 @@ JSON Response
 **Request:**
 ```json
 {
-  "action": "get_recent_posts",
+  "action": "discography",
   "nonce": "abc123def456",
   "post_type": "portfolio",
   "per_page": 10
@@ -205,18 +205,21 @@ shipped once. `WP_Error` is the shape `handle_action` unwraps.
 
 ## Public vs Protected Actions
 
-### Default Public Actions
+### The framework ships NO public actions
 
 ```php
-private array $public_actions = [
-    'get_recent_posts',
-    'search_posts',
-    'send_magic_link',
-];
+private array $public_actions = [];
 ```
 
-**`search_users` is NOT public** — it is cap-gated in-handler with
-`current_user_can('list_users')`, because listing users by email/login is a PII leak.
+Empty, and the framework never adds to it. `NTDST_Endpoints` is a router —
+origin, rate limit, nonce, auth gate, dispatch — with no opinion about anyone's
+data. Anonymous exposure is a per-site decision made in exactly one place, the
+`ntdst/api/public_actions` filter.
+
+It used to ship `get_recent_posts`, `search_posts` and `send_magic_link`, which
+opted every site into an anonymous query surface parameterised by a
+caller-supplied post type. See "Built-in Actions" below for what happened to
+each.
 
 ### What "public" actually costs you
 
@@ -229,31 +232,25 @@ own login check is no longer an exposed surface merely because a nonce leaked.
 `Origin`, no `Referer` and no auth cookie. **It fails open.** Treat every public handler
 as internet-facing, with caller-supplied params.
 
-### The post-type gate — do not route around it
+### Never take the post type from the caller
 
-`canQueryPostType()` in `api/Endpoints.php` is the convergence point deciding whether a
-caller may query a type at all. `get_recent_posts` and `search_posts` take the type name
-straight from an unauthenticated request body, so no registry flag governs anything on
-this surface unless *this* gate reads it.
+The post-type gate (`canQueryPostType()` and friends) is **deleted**, along with
+the actions that needed it. Do not rebuild either.
 
-- Admits a type that is `public === true` **AND** `exclude_from_search === false`
-  outright. Not `public` alone: `public => true, exclude_from_search => true` is
-  WordPress's standard "reachable by its own URL, never surfaced by search" idiom — an
-  embargoed press kit — and short-circuiting on `public` served every row of such a type
-  to anonymous callers.
-- Otherwise requires **both** the type's own `edit_posts` **and** `edit_others_posts`,
-  read off the type object, failing closed on an empty or non-string capability.
-- Anonymous callers therefore get zero rows from non-public types.
-- Attachments whose parent is not publicly viewable are excluded from the query args, so
-  draft-attached media is not enumerable.
-- Filterable via `ntdst/api/queryable_post_type` — opening a non-public type here exposes
-  every row of it to anonymous callers.
-- **Refuse the request when the allowed list is empty**; never query first and filter
-  after. Core's `post-queries` cache keys on the args and the SQL, never on who asked, so
-  a post-hoc filter hands the next anonymous caller an editor's cached rows.
+A public action that accepts a caller-named post type has to decide, per type,
+whether that actor may query it — and answering that means re-deriving
+WordPress's visibility semantics from the registry, flag by flag. That predicate
+took five generations of security review and was still wrong: anonymous
+enumeration of every non-public type, then a fix gated on `edit_posts` (which
+Contributors hold), then draft-attached media, then `exclude_from_search` types,
+then an uncached full-attachment scan, then a fail-open `WP_Query` `elseif`.
 
-`publicly_queryable` and `show_in_rest` are deliberately **not** consulted — they govern
-the front-end query var and the wp-json controller, and this router goes through neither.
+**A question that cannot be answered safely usually means the surface should not
+exist.** Write a handler that knows its own type, states its own status rule, and
+projects its own output. If you need a picker over several types, derive the
+allow-list from something declared — as `relation_search` derives it from the
+relation fields in the registered schemas — rather than accepting a name.
+
 
 ### Making an Action Public
 
@@ -322,9 +319,8 @@ await ntdstAPI.upload(action, formData);    // multipart/form-data; files reach 
                                             // handler as $params['_files']
 await ntdstAPI.download(action, params);    // returns a Blob; throws on !response.ok
 
-// The built-in actions, called by name:
-const { posts }   = await ntdstAPI.call('get_recent_posts', { post_type: 'portfolio', per_page: 10 });
-const { results } = await ntdstAPI.call('search_posts', { search: 'query', post_types: ['post', 'page'] });
+// The one built-in action (admin only, requires login + capability):
+const { results } = await ntdstAPI.call('relation_search', { post_types: ['release'], search: 'query' });
 ```
 
 The client requires `window.ntdstAPIConfig.restNonce` (a `wp_rest` cookie nonce),
@@ -360,7 +356,7 @@ function liveSearch(input) {
     searchTimeout = setTimeout(async () => {
         if (input.value.length < 3) return;
 
-        const { results } = await ntdstAPI.call('search_posts', { search: input.value });
+        const { results } = await ntdstAPI.call('relation_search', { post_types: ['release'], search: input.value });
         displayResults(results);
     }, 300); // 300ms debounce
 }
@@ -373,7 +369,8 @@ document.getElementById('search')
 
 ```javascript
 async function loadPosts() {
-    const { posts } = await ntdstAPI.call('get_recent_posts', { post_type: 'post', per_page: 10 });
+    // `discography` here is a SITE-registered action, not a framework one.
+    const { posts } = await ntdstAPI.call('discography', { per_page: 10 });
 
     // NOTE: `thumbnail` is an object ({id, url, full}) or null — not a URL string.
     const html = posts.map(post => `
@@ -408,8 +405,8 @@ async function loadPosts() {
 ```php
 // Magic-link send: 3 per hour. Without this an attacker POSTs it 30x/minute
 // to spam a victim's inbox and exhaust the SMTP quota.
-add_filter('ntdst/api/rate_limit/send_magic_link', fn() => 3);
-add_filter('ntdst/api/rate_window/send_magic_link', fn() => 3600);
+add_filter('ntdst/api/rate_limit/my_magic_link', fn() => 3);
+add_filter('ntdst/api/rate_window/my_magic_link', fn() => 3600);
 ```
 
 ### CSRF Protection — and where it fails open
@@ -603,99 +600,48 @@ return new WP_Error('validation_failed', 'Invalid email', ['field' => 'email']);
 
 ## Built-in Actions
 
-All three run their caller-supplied post-type / user input through the gates described in
-[Public vs Protected Actions](#public-vs-protected-actions) before querying.
+**The framework ships exactly one, and it is not public.**
 
-### get_recent_posts
+### `relation_search` (NOT public — requires login + capability)
 
-Fetch recent posts of any type. **Public.**
+Resolves the admin relation-field autocomplete. Registered by
+`NTDST_RelationField`, not by the router.
 
-**Parameters:**
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `post_type` | string or array | `'post'` | Post type slug(s). Non-string elements are dropped, not coerced. |
-| `per_page` | int | `10` | Number of posts (floored at 1) |
-
-Returns `WP_Error('forbidden_post_type')` when **none** of the requested types is
-queryable by this caller. There is no `use_cache` parameter — there is no cache.
-
-**Response** — every row is the standard formatted shape:
-```json
-{
-  "posts": [
-    {
-      "id": 123,
-      "title": "Post Title",
-      "slug": "post-slug",
-      "content": "…",
-      "excerpt": "Post excerpt…",
-      "permalink": "https://site.com/post-slug/",
-      "date": "2024-01-15T10:30:00+00:00",
-      "modified": "2024-01-16T09:00:00+00:00",
-      "author": { "id": 1, "name": "Jane" },
-      "thumbnail": { "id": 45, "url": "…-300x200.jpg", "full": "….jpg" }
-    }
-  ]
-}
+```javascript
+// Admin context only. The caller must be logged in AND hold the target type's
+// own edit_others_posts.
+const { results } = await ntdstAPI.call('relation_search', {
+    post_types: ['release'],
+    search: 'query',
+});
 ```
 
-`date` / `modified` are **ISO 8601**, not raw MySQL datetimes. `thumbnail` is an object
-or `null`. `meta` / `terms` appear only when the handler passes `include_meta` /
-`include_terms` — the built-in handler does not.
+Gate, in full: the requested type must be a **declared relation target** (an
+allow-list derived from the registered schemas — every `post_type` named by a
+`relation`-typed field), and the caller must hold that type's own
+`edit_others_posts`, read off the type object. Anything else is refused,
+including to an administrator: the gate is the schema, not the actor.
 
-### search_posts
+### Retired 2026-08-07 — do not write these
 
-Search posts by keyword. **Public.**
+| Action | Status |
+|---|---|
+| `get_recent_posts` | **DELETED.** Had zero consumers anywhere. |
+| `search_users` | **DELETED.** Had zero consumers; also carried a double-envelope bug where a denial read as `success: true`. |
+| `search_posts` | **MOVED** to `relation_search` above, and made non-public. |
+| `send_magic_link` | **REMOVED** from the public list. It never had a handler in any tree. |
 
-**Parameters:**
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `search` | string | required | Search term; empty returns `WP_Error('empty_search')` |
-| `post_types` | array | `['post', 'page']` | Post types to search |
+These were "example" actions that shipped anonymous by default, handing every
+site a generic query surface parameterised by a caller-supplied post type.
+Defending it cost five generations of security review; retiring it let the whole
+gate stack be deleted rather than fixed.
 
-A **mixed** list keeps its allowed half rather than erroring out — refusing the whole
-request because one named type is non-public would turn an authorization gate into an
-availability regression on a public endpoint. Only an entirely-disallowed list returns
-`forbidden_post_type`.
+**Do not reintroduce a generic, caller-parameterised query action.** If a site
+needs public data, it registers its own handler that knows what its rows mean,
+projects its output to an explicit allow-list, and states its own status and
+capability rules. Older project copies may still carry the retired actions until
+ported — check that project's `api/Endpoints.php`.
 
-When `attachment` is among the allowed types, `post_status` widens to
-`['publish', 'inherit']` (attachments are never `publish`, so an attachment-scoped
-relation autocomplete would otherwise always return nothing). For callers without both
-attachment `edit_posts` and `edit_others_posts`, non-viewable parents are excluded via
-`post_parent__not_in` — in the **query args**, so the two caller classes can never share
-a cache entry.
-
-**Response:** `{ "results": [ …same formatted rows as above… ] }`
-
-### search_users
-
-Search users by name/email. **NOT public** — requires
-`current_user_can('list_users')`, because listing users by email/login is a PII leak.
-
-**Parameters:**
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `search` | string | required | Search term (wrapped in `*…*`) |
-| `role` | string | `''` | Filter by role |
-| `per_page` | int | `20` | Number of results |
-
-**Response** — note each row carries both casings, for legacy callers:
-```json
-{
-  "results": [
-    {
-      "ID": 1,
-      "id": 1,
-      "post_title": "Display Name",
-      "title": "Display Name",
-      "user_email": "user@example.com",
-      "user_login": "username"
-    }
-  ]
-}
-```
-
----
 
 ## Anti-Patterns
 

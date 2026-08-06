@@ -13,6 +13,30 @@ description: >
 
 Use when creating data models, custom post types, field definitions, metaboxes, API endpoints, database queries, or CRUD operations in the NTDST framework.
 
+> ## Reference implementation: daan's `ntdst-core` (as of 2026-08-07)
+>
+> There is ONE ntdst-core. Copies of it live in each project and they are at
+> different versions — **daan's is the most current, and this skill describes
+> it.** Other projects (stride, stride-output-reshape) are behind and will be
+> brought up; until a project is ported, its copy may still carry the older
+> behaviour listed under "was" below.
+>
+> **What changed on 2026-08-07** — if you are reading older code, this is what
+> you are looking at, and each change is a narrowing you should not undo:
+>
+> | | now | was |
+> |---|---|---|
+> | `->withMeta()` row meta | schema-projected: **unprefixed**, type-cast, declared fields only | raw bag: **prefixed**, every meta row |
+> | `getMeta($id, …)` | publish-only by default; 4th arg `$status`, same as `find()` | `find($id, 'any')` — read drafts silently |
+> | public actions shipped by the framework | **none** — `$public_actions` is empty | `get_recent_posts`, `search_posts`, `send_magic_link` |
+> | `search_posts` | retired → `relation_search` on `NTDST_RelationField`, non-public | present, and public |
+> | `getFormattedPosts()` on a protected post | withholds `content`/`excerpt`, sets `protected` | served the body a post password withholds |
+>
+> **Still verify against the project's own `api/Data.php` and `api/Endpoints.php`
+> before writing.** This skill is a map, not the territory — it drifted from the
+> code for six weeks (2026-06-23 → 2026-08-06) describing a deleted API, and the
+> fix is always to read the source.
+
 ## Essential Principles
 
 ### Zero Raw SQL
@@ -43,8 +67,9 @@ $result = $model->delete($id);          // Soft delete (trash)
 $result = $model->delete($id, true);    // Force delete
 
 // Meta operations
-$value = $model->getMeta($id, 'field');           // Single field
-$all   = $model->getMeta($id);                    // All meta
+$value = $model->getMeta($id, 'field');           // PUBLISH-ONLY, like find()
+$all   = $model->getMeta($id);                    // All declared fields
+$value = $model->getMeta($id, 'field', null, 'any');  // Explicit status to read a draft
 $model->updateMeta($id, 'field', $value);         // Single field
 $model->updateMetaBatch($id, ['a' => 1, 'b' => 2]); // Batch update (single cache clear)
 $model->deleteMeta($id, 'field');
@@ -102,7 +127,7 @@ you genuinely want unpublished rows (an admin screen does; a public read does no
 |--------|---------|--------|
 | `find($id)` | `WP_Post` (with `->meta`, `->fields`) or `WP_Error` | `$post->post_title`, `$post->fields['key']` |
 | `first()` | `WP_Post` (same shape as `find()`) or `null` | `$post->post_title`, `$post->fields['key']` |
-| `get()` | Array of associative arrays | `$posts[0]['title']`, `$posts[0]['meta']['key']` |
+| `get()` | Array of associative arrays; `meta` is **schema-projected** | `$posts[0]['title']`, `$posts[0]['meta']['declared_field']` |
 | `count()` | `int` | — |
 | `paginate()` | `['data' => [...], 'pagination' => [...]]` | — |
 
@@ -270,17 +295,34 @@ anyone, with caller-supplied params, and `verifyOrigin()` does **not** save you 
 returns true when there is no Origin, no Referer and no auth cookie. It fails open.
 Treat every public handler as internet-facing.
 
-Default public actions: `get_recent_posts`, `search_posts`, `search_users`, `send_magic_link`.
-Add: `add_filter('ntdst/api/public_actions', fn($a) => [...$a, 'my_action'])`.
-Protected actions require login to get a nonce.
+**The framework ships NO public actions and no data actions at all.**
+`$public_actions` is empty; `NTDST_Endpoints` is a router — origin, rate limit,
+nonce, auth gate, dispatch — with no opinion about anyone's data. Anonymous
+exposure is a per-site decision made in exactly one place:
 
-**The post-type gate (do not route around it).** `canQueryPostType()` in
-`api/Endpoints.php` is the convergence point deciding whether a caller may query a
-type at all. It admits a type that is `public && !exclude_from_search` outright;
-otherwise it requires BOTH the type's own `edit_posts` AND `edit_others_posts`, read
-off the type object, failing closed on an empty or non-string capability. Anonymous
-callers get zero rows from non-public types. Attachments whose parent is unpublished
-are excluded, so draft-attached media is not enumerable.
+```php
+add_filter('ntdst/api/public_actions', fn($a) => [...$a, 'my_action']);
+```
+
+Everything not listed there requires a logged-in caller before the handler runs.
+
+> **Retired 2026-08-07 — do not write these, they no longer exist.**
+> `get_recent_posts` and `search_users` are DELETED. `send_magic_link` was
+> removed from the public list (it never had a handler). `search_posts` MOVED to
+> `NTDST_RelationField::handleRelationSearch()` as the non-public
+> `relation_search`. Older projects may still carry them until ported.
+>
+> These were "example" actions that made every site's data anonymously queryable
+> by a caller-supplied post type. Defending that surface took five generations of
+> security review; retiring it let the whole gate stack be deleted rather than
+> fixed. **Do not reintroduce a generic, caller-parameterised query action.**
+
+**The relation autocomplete.** `relation_search` is the one framework-provided
+data action, and it is not public. Its gate is two questions, both cheap: is the
+requested type a **declared relation target** (an allow-list DERIVED from the
+registered schemas — every `post_type` named by a `relation` field), and does the
+caller hold that type's own `edit_others_posts`? A type nobody points a relation
+field at is unreachable, and nobody has to remember to exclude it.
 
 ### Authorization idiom — three rules, each learned the hard way
 
@@ -354,7 +396,6 @@ were documented for years and never existed. Call the action by name.
 
 ```javascript
 await ntdstAPI.call('my_action', params);
-await ntdstAPI.call('get_recent_posts', { post_type: 'portfolio', limit: 10 });
 await ntdstAPI.upload('import_csv', formData);
 await ntdstAPI.download('export_zip', { id: 12 });
 

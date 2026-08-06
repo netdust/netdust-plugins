@@ -162,7 +162,8 @@ ntdst_data()->register('portfolio', [
 ]);
 
 // Access fields using unprefixed names (prefix applied automatically)
-$model->getMeta($id, 'client_name');  // Reads 'pf_client_name'
+$model->getMeta($id, 'client_name');  // Reads 'pf_client_name'. PUBLISH-ONLY by default;
+                                      // 4th arg is $status, same as find().
 $model->where('client_name', 'Acme')->get();  // Queries 'pf_client_name'
 ```
 

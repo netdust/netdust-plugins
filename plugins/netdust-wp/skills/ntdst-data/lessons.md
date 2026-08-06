@@ -66,31 +66,49 @@ Full canonical list: `NTDST_Data_Model::WP_COLUMNS` in `api/Data.php`. 16 column
 
 ---
 
-## Prefix awareness is a documented trade-off, not drift
+## Batch-read prefix awareness — RESOLVED 2026-08-07, the exception is gone
 
-**Problem (Stride, 2026-05-19):** Formatters and sort callbacks hardcoded `_ntdst_*` meta key names. A future config change would silently break them.
+> **This lesson has INVERTED. Read the new rule; the old one now breaks silently.**
 
-**Context:** Normally callers never see the prefix — `getField('date')` uses unprefixed names. But there's one case where you DO see it: batch query results from `getPostsFast()` / `->withMeta()` return meta nested under a `meta` key, with raw prefixed keys. That's the framework's design — single-query meta load. The alternative is N+1.
+**What it used to say (correct until 2026-08-07):** batch query results from
+`getPostsFast()` / `->withMeta()` returned meta under a `meta` key with **raw
+prefixed** keys, so callers had to compensate with
+`$row['meta'][$this->repository->getMetaPrefix() . 'date']`. It was framed as a
+documented performance trade-off — the alternative was N+1.
 
-**Rule:** When you have to read from a batch-loaded `meta` envelope:
+**What is true now.** `get()` / `all()` / `paginate()` project each row's `meta`
+through the model's declared schema, so it carries **unprefixed, type-cast,
+declared fields only** — the same set `find()->fields` reports. The prefix is a
+storage detail again and never reaches a caller.
 
 ```php
-// ❌ Don't hardcode the prefix string
-$date = $row['meta']['_ntdst_date'] ?? '';
-
-// ✅ Pull the prefix from the model so a config change can't break this
+// ❌ WRONG NOW — returns null. There is no prefixed key in the projected bag.
 $prefix = $this->repository->getMetaPrefix();
 $date   = $row['meta'][$prefix . 'date'] ?? '';
+
+// ✅ Read the declared field name, exactly as you would off find()->fields
+$date = $row['meta']['date'] ?? '';
 ```
 
-**When prefix awareness is OK to keep:**
-- Path is performance-critical (catalog pages, completion math, batch exports)
-- Alternative is N+1 — per-row `getField()` would multiply queries
-- Magic string is replaced by `getMetaPrefix()` — no hardcoded `_ntdst_`
+**Why it changed, because the reason is the lesson.** The "documented trade-off"
+was a missing API wearing a justification. The query builder had NO projected
+form at all — only `find()` did — so a list handler could not get a safe shape
+from `get()`. That is not a discipline problem, and the codebase proved it: the
+one correct list handler paid an N+1 to re-fetch every row through `find()`,
+while four others returned the raw rows and shipped **every undeclared meta key
+to anonymous callers**. The obvious path was the unsafe one and the safe path
+needed a workaround. Both are now the same path.
 
-**When it IS drift** (refactor it away):
-- Single-record paths — use `getField()` / `findFields()`
-- Sites that touch only 1-2 fields — `getField` is fine, no batch needed
+**Migration.** Any surviving `$row['meta'][$prefix . 'x']` read is a silent
+null — it will not throw, and a filter or sort built on it fails OPEN (two such
+sites were found: a cancelled-gig filter and an exclude-from-catalogue flag).
+Grep `\['meta'\]\[` and drop the prefix. Projects still on an older `ntdst-core`
+copy keep the old behaviour until ported — check that project's `api/Data.php`.
+
+**Still true:** never hardcode `_ntdst_` as a literal anywhere. If you genuinely
+need the raw bag, `NTDST_Data_Manager::getPostMeta($id)` is the explicit door,
+and `find()->meta` still carries every row unfiltered — which is exactly why a
+public handler must project before returning.
 - ANY hardcoded `_ntdst_` string literal — replace with `getMetaPrefix()` even if you keep the prefix-aware shape
 
 ---

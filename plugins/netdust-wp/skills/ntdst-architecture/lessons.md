@@ -85,7 +85,7 @@ If NO framework helper fits, explicitly defend the raw-WP idiom. Not every opera
 
 **Domain repos add only their business-logic queries** (`findUpcoming`, `findByCourse`, `findActiveIdsByCourse`, `updateStatus(StatusEnum)`).
 
-**Documented prefix-awareness exception:** when callers read batch-loaded meta (`getPostsFast` / `withMeta` envelope), the meta arrives with raw prefixed keys (`_ntdst_*`). That's the framework's design — single-query meta load. Use `$this->repository->getMetaPrefix()` to read the prefix; never hardcode `_ntdst_` as a string literal. Acceptable trade-off in perf-critical batch paths (catalog pages, exports, completion math). NOT acceptable in single-record code paths.
+**Prefix-awareness exception — REMOVED 2026-08-07.** Batch-loaded meta (`->withMeta()` envelope) used to arrive with raw prefixed keys (`_ntdst_*`), and callers compensated with `getMetaPrefix()`. `get()` / `all()` / `paginate()` now project each row's `meta` through the declared schema, so it carries **unprefixed, type-cast, declared fields only** — the same set `find()->fields` reports. Read `$row['meta']['date']`, not `$row['meta'][$prefix . 'date']`; the prefixed form now returns null SILENTLY, and a filter built on it fails open. Never hardcode `_ntdst_` either way. Projects on an older ntdst-core copy keep the old behaviour until ported — check that project's `api/Data.php`. Full story: `ntdst-data/lessons.md`.
 
 ---
 
