@@ -1,0 +1,11 @@
+{
+  "name": "netdust-react",
+  "version": "0.1.0",
+  "description": "Netdust React plugin — Vite + React 18 + TypeScript + Tailwind app development, packaged to iOS/Android with Capacitor. Skills: react-architecture (project shape, the mechanical gate wiring netdust-agent reads, storage durability rules), capacitor-react (native feature access from React — lifted from capawesome-team/skills, MIT). Templates for the thin mechanical layer: strict tsconfig, eslint, prettier, lefthook, knip. Deliberately thin — grows from real project use, not ahead of it. Layers on netdust-core (memory, ops) and netdust-agent (the harness).",
+  "author": {
+    "name": "Stefan Vermeulen",
+    "email": "stefan@netdust.be",
+    "url": "https://netdust.be"
+  },
+  "license": "UNLICENSED"
+}

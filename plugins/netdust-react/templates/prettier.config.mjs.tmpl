@@ -1,0 +1,22 @@
+/**
+ * netdust-react Prettier config. Harvested unchanged from netdust-expo.
+ *
+ * Install:
+ *   npm i -D prettier prettier-plugin-tailwindcss
+ *
+ * @type {import('prettier').Config}
+ */
+export default {
+  semi: false,
+  singleQuote: true,
+  trailingComma: 'all',
+  printWidth: 100,
+  tabWidth: 2,
+  arrowParens: 'always',
+  bracketSpacing: true,
+  endOfLine: 'lf',
+  // v4-aware since 3.0. Sorts Tailwind classes; do NOT add
+  // eslint-plugin-tailwindcss alongside it — that plugin tracks Tailwind v3 only.
+  plugins: ['prettier-plugin-tailwindcss'],
+  tailwindFunctions: ['cn', 'clsx', 'twMerge', 'cva'],
+}

@@ -36,6 +36,13 @@
       "description": "Netdust Statamic plugin — Statamic 6 + Peak skills, build playbook, shake-out, scaffolding commands. Layers on netdust-core.",
       "version": "0.1.1",
       "strict": false
+    },
+    {
+      "name": "netdust-react",
+      "source": "./plugins/netdust-react",
+      "description": "Netdust React plugin — Vite + React 18 + TypeScript + Tailwind, packaged to iOS/Android with Capacitor. Skills: react-architecture (project shape, the gate wiring standards-gate/testing-workflow read, storage-durability rules — localStorage is not durable on iOS — and the web/native seam), capacitor-react (native feature access from React; vendored from capawesome-team/skills, MIT). Templates for the thin mechanical layer only: strict tsconfig, eslint with feature-boundary + persistence-convergence rules, prettier, lefthook, knip. Deliberately thin and grown from real builds rather than authored ahead of them. Layers on netdust-core and netdust-agent.",
+      "version": "0.1.0",
+      "strict": false
     }
   ]
 }
