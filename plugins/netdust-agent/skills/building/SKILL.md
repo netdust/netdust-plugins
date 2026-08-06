@@ -171,11 +171,15 @@ Calibration (`docblock-supermajority`, 2026-08-03): 62% of a bridge's production
 
 **Step 2.8 — HALT at every review-gate marker (the cluster boundary is a hard stop).** When you reach a `── REVIEW GATE ──` / STOP marker in the plan (placed by `planning`'s task-shaping gate), OR the end of a phase's task group, you STOP. Commit the cluster's tasks, run `/integration` on that cluster's diff, then review — and do NOT begin the next task until that review is clear. The diff a reviewer holds must be one cluster (~3–4 tasks), never a whole long phase run flat. **The pull to "just keep going to the next task, I'll review at the end" is the exact failure the cluster rule exists to prevent** — it produces an un-bisectable mega-diff and lets the agent grade a large body of its own work in one pass. Treat the marker as non-negotiable as a failing test. If the plan you're executing is a long phase with NO such markers, that is a planning defect — add the markers (a plan-correction commit) before running past ~4 tasks. (Slug: `teardown-cluster`.)
 
+  **Resolve the cluster's EFFECTIVE stakes first.** If the plan carries a `### Per-cluster stakes` table (the 1i refinement), THIS cluster's row — including any per-task exception it names — is the effective dial for every stakes-scaled decision at this gate: the review tier's severity handling, the Important-findings ledger rule, `test-effectiveness` sweep depth, and the budget tripwire below. No table → the spec-level `Stakes:` line is the effective stakes everywhere. State it with the review tier: `Effective stakes: <level> (cluster <X> | spec-level)`. Applying the spec-level worst case to every cluster when a table exists is a re-decision of the dial — the exact drift the table was authored to stop.
+
   **Run the verification-effort tripwire before you dispatch the review.** At each cluster gate:
 
   ```bash
-  python3 <plugin>/bin/verify-budget.py specs/<feature> --base <base_ref>
+  python3 <plugin>/bin/verify-budget.py specs/<feature> --base <base_ref> --stakes <effective level>
   ```
+
+  (Omit `--stakes` only when no per-cluster table exists — the script then reads the spec-level line itself.)
 
   It compares added test lines against added implementation lines and HALTs when the spend exceeds what the plan's `Stakes:` level justifies. This is the only thing in the harness that can notice verification effort compounding — every other gate asks "is this verified?", none asked "is this verification worth what it cost?", and that gap let a contact page accumulate ~8000 lines of tests with every individual gate satisfied (calibration: `contact-page-8k`).
 
@@ -195,7 +199,7 @@ Calibration (`docblock-supermajority`, 2026-08-03): 62% of a bridge's production
 
   **Escalation is one-way.** If ANY finder/reviewer surfaces a finding on a 1a surface, the cluster is immediately promoted to **FULL** — dispatch the FULL-tier reviewers you skipped, on this same cluster, before proceeding. Never de-escalate mid-review. And regardless of tier, `/security-review` still fires if a plan-time `## Threat model` exists for this work — tier governs finder/persona fan-out; it never cancels the security-review obligation.
 
-  **Findings close by ledger arithmetic, never by prose (the finding-closure contract, testimony-seams P2) — and the ledger takes CRITICAL findings only.** Before the cluster proceeds, append every open **Critical** finding to `tasks.md` as an unchecked task line, so `bin/loop-check.py` counts it and FINISHED is arithmetically impossible while a Critical is open. At `Stakes: high`, Important findings enter the ledger too; at `standard`/`low` they do not — they are triaged (next paragraph):
+  **Findings close by ledger arithmetic, never by prose (the finding-closure contract, testimony-seams P2) — and the ledger takes CRITICAL findings only.** Before the cluster proceeds, append every open **Critical** finding to `tasks.md` as an unchecked task line, so `bin/loop-check.py` counts it and FINISHED is arithmetically impossible while a Critical is open. At effective stakes `high`, Important findings enter the ledger too; at `standard`/`low` they do not — they are triaged (next paragraph):
 
   ```
   - [ ] Tnn [Tier A|B] fix: <one-line finding> — closes when <check id> green  (files: <paths>)
@@ -206,13 +210,17 @@ Calibration (`docblock-supermajority`, 2026-08-03): 62% of a bridge's production
 
   **Important findings get a TRIAGE line, not automatic ledger entry.** For each Important, record one line in the review doc: **fix now** (it enters the ledger like a Critical — reserve this for actual defects in the current code), **park** (an unchecked line under a `## Parked` heading in the review doc — re-read ONCE by the branch-closing panel, never a merge blocker, never a `tasks.md` task), or **reject** (one sentence why). The default for an Important that is not a live defect is **park**, not fix — an Important is by definition not merge-blocking, and fixing it now costs a TDD cycle plus a re-review that will itself find more Importants. Suggestions stay out of everything — explicitly optional.
 
+  **A finding in SHARED code gets a ledger line only if this feature ships it (the scope fence).** When a reviewer's finding lives outside the feature's own module — framework code, a shared mu-plugin, another site's surface — ask one question before it enters the ledger: **is the defect reachable through a surface this feature adds or uses?** Yes (the feature would ship the hole) → it enters the ledger like any Critical. No (a pre-existing fleet-wide defect this feature merely walked past) → it is **parked as a fleet item**: record it with its evidence in the review doc under `## Fleet findings`, note it in the project's `memory/STATE.md`, and move on — it becomes its own spec/branch, and its fix does NOT ride inside this feature's diff. The pull to "fix it now while we're here" is real and must be resisted: a framework defect discovered mid-feature spawns a fix, whose review finds an adjacent defect, whose fix spawns another — a fleet-hardening quest inside a feature branch, while the feature's own tasks sit still. (Calibration: the daan press-kit ledger grew from 15 planned feature tasks to 39, and 9 of the 24 additions edited the shared framework; a three-commit framework visibility quest then consumed the following session while the feature's gate, ZIP, and bio sheet went unbuilt. Slug: `press-kit-fleet-bleed`.)
+
+  **Ratchets, pins, and prose corrections never get task slots.** A regression pin, a CI ratchet asserting an absence, a fixture pin, or a docblock/comment correction is a RIDER on the task whose fix motivated it — authored inside that task's cycle and named in its evidence block — never a `Tnn` line of its own. A task slot costs a dispatch cycle, a close-out ritual, and a docs commit; spending that on a test-only or prose-only artifact is how a 15-task feature becomes a 39-line ledger. If no open task motivates it, it goes to the parked list with one line of rationale.
+
   **Review closes on falling severity, not on an empty report (the stop rule).** A review round that surfaces ZERO new Critical findings CLOSES review for this cluster — triage the Importants, then proceed to the next cluster; do not dispatch another round to confirm the fixes, and do not let a fix's re-review re-open general hunting (verify the fix's named check went green; that is the whole re-review). Hard cap: **two review rounds per cluster**, lifted only if round two produced a NEW Critical. A reviewer that reports nothing reads as a reviewer that failed, so adversarial review has no natural stopping point — the signal that returns went to zero is finding SEVERITY falling, and it must be acted on the round it fires. (Calibration: daan press-kit, 2026-08-06 — five generations of review held a feature with ZERO implementation; of the six findings closed the final day, not one was a live hole. The stop signal had fired two generations earlier. Slug: `press-kit-five-generations`.)
 
 ## Stage 3 — Phase close, shake-out, finish
 
 After all tasks in a phase complete and the upstream skill's final-review step is done:
 
-0. **Read the plan's `Stakes:` line and state it** before running the gates below — steps 2 and 3 both scale against it, and neither may re-decide it (the no-self-downgrade invariant, same as `Test-author:`). A plan predating the dial reads as `standard`.
+0. **Read the plan's `Stakes:` line and state it** before running the gates below — steps 2 and 3 both scale against it, and neither may re-decide it (the no-self-downgrade invariant, same as `Test-author:`). A plan predating the dial reads as `standard`. These are BRANCH-level gates, so the spec-level line governs here even when a per-cluster stakes table exists — the table refines cluster gates only.
 1. **Phase-complete integration gate** — `testing-workflow` phase-complete (integration + acceptance), or run `/integration`.
 2. **Test-effectiveness audit** — invoke `test-effectiveness` (Situation A) over the phase diff. The integration gate proved the tests *pass*; this proves they would *bite*. Walk the seven failure modes over the surface the stakes level sets — every dangerous path at `high`, the paths the plan already named at `standard`, the machine floor + un-mocked wires at `low`; a machine gate that would fail the build is a legitimate answer to the litmus, not a gap — for each guard, fixture, wire, mount, and timer, name the test that goes RED if it breaks, or record it `blind` and fix it. The resulting `covered`/`blind`/`fixed` manifest is the convergence target for the next step's reviewers. (Especially load-bearing on security-rich / multi-tenancy phases — see `traverse-clause`.)
 3. **Feature-acceptance verification** — if the phase added/changed a user-facing feature, invoke `feature-acceptance` (Situation B) to *drive* the `## Acceptance flows` matrix `planning` authored at 1g. Drive each flow + edge through its faithful layer — UI flows through the real browser (Playwright spec → else `superpowers-chrome` `use_browser` against the running dev server), backend flows through the un-mocked wire — and emit a `pass`/`fail`/`not-reachable`/`unverified-no-browser` manifest. (`/shakeout` runs this for you.) No UI flow is `pass` without a browser driving it.
@@ -243,7 +251,9 @@ You author the test; you do NOT implement the logic. Before reporting STATUS:
    line count. A direct call to a hardened framework primitive that decides
    nothing (wp_verify_nonce, current_user_can, sanitize_*, schema.parse)
    owes a PRESENCE proof, not a behavioural test — name it on the
-   `Proven by:` line. Read the plan's `Stakes:` line; you do NOT re-decide
+   `Proven by:` line. Read the EFFECTIVE stakes your dispatch prompt states
+   (the cluster's per-cluster-table line when one exists, else the plan's
+   spec-level `Stakes:` line); you do NOT re-decide
    it.
 
 2. Derive the contract from the criteria / threat-model mitigation, never
@@ -396,8 +406,9 @@ you MUST:
    literally: a guard/parser/state-machine that encodes a rule THIS PROJECT
    chose = Tier A regardless of line count. A direct call to a hardened
    framework primitive that decides nothing owes a PRESENCE proof, not a
-   behavioural test — name it on the `Proven by:` line. Read the plan's
-   `Stakes:` line; you do NOT re-decide it.
+   behavioural test — name it on the `Proven by:` line. Read the EFFECTIVE
+   stakes your dispatch prompt states (cluster table line, else spec-level
+   `Stakes:`); you do NOT re-decide it.
    You do NOT get to re-decide `solo` vs `split` — that mode arrived from
    the plan via the controller; if you believe this task should have been
    `split` (a security-boundary Tier-A task marked solo by mistake), escalate

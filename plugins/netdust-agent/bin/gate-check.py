@@ -580,6 +580,59 @@ def check_stakes(plan_text: str, spec_text: str | None, f: Findings) -> None:
         f.add("pass", "stakes", f"Stakes: {level}" + (f" — {reason[:60]}" if reason else ""))
 
 
+# ── per-cluster stakes (the 1i refinement) ────────────────────────────────────
+#
+# A multi-cluster plan MAY refine the spec-level dial with a `### Per-cluster stakes`
+# table; the cluster's level is then the EFFECTIVE dial at that cluster's gates (the
+# spec-level line stays the branch-level worst case, and is what the checks above parse).
+# This check makes the table a first-class validated artifact instead of a prose
+# deviation the controller has to remember: it fires only when the heading exists, and
+# FAILs any row whose level token is unreadable — a dial nobody can parse silently
+# reverts every gate to the spec-level maximum, which is the exact failure the table
+# exists to prevent (calibration: `press-kit-uniform-high` — twelve clusters ran at a
+# uniform spec-level `high`, which is what made a press kit cost what an auth
+# subsystem costs).
+CLUSTER_STAKES_HEADING = re.compile(
+    r"^#{2,5}\s+Per-cluster stakes\b.*$", re.IGNORECASE | re.MULTILINE)
+
+
+def check_cluster_stakes(plan_text: str, f: Findings) -> None:
+    """1i refinement — the optional per-cluster stakes table parses when present."""
+    text = strip_fenced(plan_text)
+    m = CLUSTER_STAKES_HEADING.search(text)
+    if not m:
+        return  # no table, no obligation — the spec-level line governs everywhere
+    rows, bad = 0, []
+    for ln in text[m.end():].splitlines():
+        stripped = ln.strip()
+        if stripped.startswith("#"):
+            break  # next heading ends the table's section
+        if not stripped.startswith("|"):
+            continue
+        cells = [c.strip().strip("*").strip() for c in stripped.strip("|").split("|")]
+        if len(cells) < 2 or set(cells[1]) <= set("-: "):
+            continue  # divider row
+        tok = STAKES_TOKEN.match(cells[1])
+        if not tok:
+            continue
+        level = tok.group(0).lower()
+        if level in ("cluster", "clusters", "stakes"):
+            continue  # header row
+        rows += 1
+        if level not in STAKES_LEVELS:
+            bad.append(f"`{cells[0][:30]}` → `{level}`")
+    if bad:
+        f.add("fail", "stakes",
+              "per-cluster stakes table has unreadable level(s): " + "; ".join(bad[:3])
+              + " — each row's level must be one of: " + ", ".join(STAKES_LEVELS))
+    elif rows == 0:
+        f.add("warn", "stakes",
+              "`Per-cluster stakes` heading present but no parseable table rows — "
+              "the effective dial falls back to the spec-level line everywhere")
+    else:
+        f.add("pass", "stakes", f"per-cluster stakes table: {rows} readable row(s)")
+
+
 HAS_P = re.compile(r"\[P\]")
 HAS_HUMAN = re.compile(r"\[HUMAN\]", re.IGNORECASE)
 
@@ -859,8 +912,11 @@ def check_security_boundary_mode(tasks_text: str, f: Findings) -> None:
     WARNs close the visibility gap:
 
       - **Tier A + solo + a security-boundary signal** — D1 says a Tier-A task in one of those
-        categories is ALWAYS `split`. Either the mode is wrong, or the stated reason is
-        describing a different task than the one in front of you.
+        categories is `split` at effective-`high` stakes. A solo whose reason cites the
+        cluster's demoted dial (`solo — standard stakes, …`) is D1's sanctioned path and is
+        not flagged — the per-cluster stakes table in the plan is where to verify the claim.
+        Otherwise: either the mode is wrong, or the stated reason is describing a different
+        task than the one in front of you.
       - **Tier B + a security-boundary signal AND no presence proof** — a guard classified
         Tier B with nothing at all proving it. Note the second half of that condition: it is
         new, and it is the fix for `contact-page-8k`.
@@ -899,14 +955,21 @@ def check_security_boundary_mode(tasks_text: str, f: Findings) -> None:
             continue
         is_tier_a = bool(TIER_A.search(task_rest))
 
-        mode = None
+        mode, mode_reason = None, ""
         for ln in cont:
             m = TEST_AUTHOR_LINE.match(ln)
             if m:
-                mode = m.group(1)
+                mode, mode_reason = m.group(1), (m.group(2) or "")
                 break
 
         if is_tier_a and mode == "solo":
+            # D1's stakes clause: the split is owed at effective-`high` stakes. A solo
+            # reason citing the cluster's demoted dial is the sanctioned demotion, not a
+            # self-downgrade — the plan's per-cluster stakes table backs (or refutes) it.
+            if re.search(r"\b(?:standard|low)\b[^.\n]*\bstakes\b"
+                         r"|\bstakes\b[^.\n]*\b(?:standard|low)\b",
+                         mode_reason, re.IGNORECASE):
+                continue
             downgraded.append(f"{task_id} ({term})")
         elif not is_tier_a and TIER.search(task_rest):
             value = task_proven_by(cont)
@@ -930,7 +993,8 @@ def check_security_boundary_mode(tasks_text: str, f: Findings) -> None:
     if downgraded:
         f.add("warn", "security-boundary-mode",
               "Tier A + `solo` on what reads like a security-boundary category — D1 says "
-              "ALWAYS split; confirm the mode or correct it: " + ", ".join(downgraded[:6]))
+              "split at effective-`high` stakes (a solo citing the cluster's demoted "
+              "stakes is fine); confirm the mode or correct it: " + ", ".join(downgraded[:6]))
     if unproven:
         f.add("warn", "security-boundary-mode",
               "Tier B on a security-boundary surface with NOTHING proving it — name the "
@@ -1420,6 +1484,7 @@ def run_checks(spec_dir: Path) -> Findings:
         check_threat_model(plan_text, spec_text, f)
         check_acceptance_flows(plan_text, spec_text, f)
         check_stakes(plan_text, spec_text, f)
+        check_cluster_stakes(plan_text, f)
         check_loop_budget(plan_text, f)
     if tasks_text is not None:
         check_task_tiers(tasks_text, f)

@@ -60,7 +60,7 @@ Each mode is: **the escape** (how a bug passes green) → **the audit move** (ho
 
 **A machine gate is a legitimate answer to the litmus.** "Name the thing that goes red" does not mean "name a test." If the project runs a gate that would fail the build when this path breaks — a security scan that finds the missing nonce, a type-checker that catches the shape change, a render check that catches the fatal — that gate IS the answer, and it is a *better* one: it covers every call site rather than the one a test happens to touch. Record it as `covered — <gate>`. Manufacturing a test that duplicates a gate's finding adds a second copy of a proof you already have, and the copy is narrower (per `testing-workflow`'s evidence ladder).
 
-**How deep the audit goes — read the plan's `Stakes:` line.** The eight modes are always the lenses; what changes is the surface they sweep.
+**How deep the audit goes — read the EFFECTIVE stakes** (the cluster's row in the plan's `### Per-cluster stakes` table when auditing a cluster diff and a table exists; the spec-level `Stakes:` line otherwise, and always at branch level). The eight modes are always the lenses; what changes is the surface they sweep.
 
 | Stakes | Sweep | Sibling sweep |
 |---|---|---|

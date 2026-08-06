@@ -58,8 +58,10 @@ Purpose:
   implementer close that edited a production path matching the
   sensitive-glob list (bin/sensitive-globs.txt, overridable by
   .claude/sensitive-globs.txt) is blocked with an escalation instruction —
-  the machine floor under the planner's "a Tier-A task on a
-  security-boundary surface is ALWAYS split" rule (D1). The MODE is
+  the machine floor under the planner's "a Tier-A boundary task at
+  effective-high stakes is ALWAYS split" rule (D1); a solo whose tasks.md
+  reason cites its cluster's demoted standard/low stakes resolves as
+  "solo-demoted" and passes the floor (D1's stakes clause). The MODE is
   resolved from the current task's `Test-author:` line in tasks.md (machine
   artifact; feature dir from the loop marker or an edited specs/<feature>/
   path) — never from the subagent-echoed evidence line, which could only
@@ -520,7 +522,16 @@ def matches_sensitive(file_path: str, globs: list[str]) -> bool:
 
 
 _TASKS_TASK_LINE_RE = re.compile(r"^- \[( |x|X)\] T\d+\b")
-_TASKS_TEST_AUTHOR_RE = re.compile(r"^\s+Test-author:\s*(split|solo)\b")
+_TASKS_TEST_AUTHOR_RE = re.compile(
+    r"^\s+Test-author:\s*(split|solo)\b\s*(?:[—-]\s*(.*))?$")
+# D1's stakes clause: a solo whose reason cites the cluster's demoted dial
+# (`solo — standard stakes, …`) is the plan-sanctioned mode on a boundary task,
+# not a self-downgrade. The citation lives in tasks.md — a machine artifact the
+# planner wrote and gate-check's security-boundary-mode WARN vets — so honoring
+# it here keeps the floor testimony-free. Mirrors gate-check.py's pattern.
+_SOLO_STAKES_RE = re.compile(
+    r"\b(?:standard|low)\b[^.\n]*\bstakes\b|\bstakes\b[^.\n]*\b(?:standard|low)\b",
+    re.IGNORECASE)
 _TASKS_FILES_RE = re.compile(r"\(files:\s*([^)]*)\)")
 _SPECS_FEATURE_RE = re.compile(r"(?:^|/)specs/([^/]+)/")
 
@@ -600,7 +611,11 @@ def resolve_task_mode(cwd: str, edited_paths: list[str]) -> str | None:
             if cur is not None and cur["mode"] is None:
                 am = _TASKS_TEST_AUTHOR_RE.match(ln)
                 if am:
-                    cur["mode"] = am.group(1)
+                    mode = am.group(1)
+                    if (mode == "solo" and am.group(2)
+                            and _SOLO_STAKES_RE.search(am.group(2))):
+                        mode = "solo-demoted"  # D1 stakes clause — floor stands down
+                    cur["mode"] = mode
         if not unchecked:
             return None
 
@@ -947,12 +962,14 @@ def main() -> None:
             details["lint_exit"] = lint["exit"]
 
     # ── The sensitive-path routing floor (testimony-seams P1b) ────────────
-    # D1's hard rule — a Tier-A task on a security-boundary surface is ALWAYS
-    # split — gets a machine floor here, keyed to the paths ACTUALLY edited.
-    # The mode comes from tasks.md (machine artifact), NEVER from the
+    # D1's hard rule — a Tier-A boundary task at effective-`high` stakes is
+    # ALWAYS split — gets a machine floor here, keyed to the paths ACTUALLY
+    # edited. The mode comes from tasks.md (machine artifact), NEVER from the
     # subagent-echoed evidence line: an echoed mode could only loosen the
-    # floor, and testimony never loosens a verdict. Unresolvable mode →
-    # fail-open (no block).
+    # floor, and testimony never loosens a verdict. A "solo-demoted" mode
+    # (the task's solo reason cites its cluster's standard/low stakes — D1's
+    # sanctioned demotion, also read from tasks.md) passes the floor.
+    # Unresolvable mode → fail-open (no block).
     sensitive_hits: list[str] = []
     globs = load_sensitive_globs(cwd)
     if role == "implementer" and globs:

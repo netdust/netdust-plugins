@@ -24,7 +24,7 @@ Tiering answered one question well and left two unasked. Ask all three, in order
 
 | # | Question | Where the answer comes from |
 |---|---|---|
-| **1** | **What does a failure here cost?** | The plan's `Stakes:` line — **read, never re-decided** |
+| **1** | **What does a failure here cost?** | The task's EFFECTIVE stakes — the cluster's row in the plan's per-cluster stakes table when one exists, else the spec-level `Stakes:` line — **read, never re-decided** |
 | **2** | **What already proves this?** | The evidence ladder below — answered per task, recorded as `Proven by:` |
 | **3** | **Does this task need a test, at what tier?** | The tier table below — the question this skill always asked |
 
