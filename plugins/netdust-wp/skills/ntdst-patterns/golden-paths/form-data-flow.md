@@ -19,7 +19,7 @@ The single most important thing this golden path teaches: **the nonce and login 
 | `themes/{theme}/src/main.js` (`ntdstAPI`) | Frontend driver | `ntdstAPI.call('{action}', params)` — fetches nonce, posts to the REST edge |
 | `ntdst-core/api/Endpoints.php` | **Framework edge (do not copy — reference)** | Verifies nonce + login + origin + rate-limit, then dispatches the `ntdst/api_data/{action}` filter |
 
-Governing reference: **`netdust-wp:wp-security`** (the four pillars + exact sanitize/escape/authorize functions), **`ntdst-architecture/references/api-endpoints.md`** (the `ntdst/api_data` contract). This doc does not restate the pillar tables — it shows where each pillar lands.
+Governing reference: **`netdust-wp:wp-security`** (the four pillars + exact sanitize/escape/authorize functions), **`ntdst-data`** (the API-action contract: `ntdst_api_action()`, the public allow-list, the capability floor). This doc does not restate the pillar tables — it shows where each pillar lands.
 
 ---
 
@@ -227,7 +227,7 @@ async save() {
 
 ## Cross-references
 
-- Governing references: `netdust-wp:wp-security` (four pillars + functions), `ntdst-architecture/references/api-endpoints.md` (the `ntdst/api_data` contract), `references/response.md`.
+- Governing references: `netdust-wp:wp-security` (four pillars + functions), `ntdst-data` (the API-action contract), `ntdst-architecture/references/framework-map.md` (output surfaces).
 - Anti-patterns this slice satisfies: `anti-patterns.md` → *Unsanitized Input*, *Missing Capability Checks*, *Unescaped Output*, *Manual fetch() in JavaScript*, *Returning false/null on Error*.
 - Drift categories satisfied (per `ntdst-drift-reviewer`): **3** (no raw `wp_ajax_*`), **5** (no swallowed `WP_Error`). The four security pillars map to `wp-plan-requirements` Block 1.
-- For a REST (not AJAX) flow with `permission_callback`, the shape is the same minus the nonce edge. **Register through `ntdst_router()->rest()` (`NTDST_Rest_Registrar`), not a raw `register_rest_route()`** — the registrar makes `permission` a required option and absorbs the WP-core dispatch quirks (see `ntdst-architecture/references/rest-cors.md`). For a **cross-origin** REST endpoint (headless SPA, third-party integration), add a `NTDST_Cors_Policy` as the route's `cors` option — that is the sanctioned pattern, not a hand-rolled CORS filter. (Stride's `Modules/PartnerAPI/PartnerAPIController.php` calls `register_rest_route` directly, but it *predates* the registrar and is accepted baseline — read it for the role/company-scoping idea, not as the registration pattern to copy for new work.)
+- For a REST (not AJAX) flow with `permission_callback`, the shape is the same minus the nonce edge. **Register through `ntdst_router()->rest()` (`NTDST_Rest_Registrar`), not a raw `register_rest_route()`** — the registrar makes `permission` a required option and absorbs the WP-core dispatch quirks (see `ntdst-architecture/references/framework-map.md` → *Cross-origin REST*). For a **cross-origin** REST endpoint (headless SPA, third-party integration), add a `NTDST_Cors_Policy` as the route's `cors` option — that is the sanctioned pattern, not a hand-rolled CORS filter. **Check first that this project's `ntdst-core` copy actually has the registrar** — it exists in one site's copy only and was never ported; everywhere else there is no `rest()` and no `NTDST_Cors_Policy`, and the decisions in `framework-map.md` are what you build to instead. (Stride's `Modules/PartnerAPI/PartnerAPIController.php` calls `register_rest_route` directly, but it *predates* the registrar and is accepted baseline — read it for the role/company-scoping idea, not as the registration pattern to copy for new work.)

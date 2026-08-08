@@ -1,6 +1,23 @@
 # NTDST Anti-Patterns
 
-Common mistakes to avoid when working with the NTDST framework.
+The rule book the `ntdst-drift-reviewer` agent cites. Common mistakes to avoid when working with the
+NTDST framework.
+
+> **Most of what follows is now MECHANICALLY ENFORCED — don't re-argue it, run it.**
+>
+> ```bash
+> python3 "$CLAUDE_PLUGIN_ROOT/bin/drift-check.py" --since HEAD~1
+> ```
+>
+> Gated categories: raw SQL without `prepare()`, direct meta access, repository bypass, raw
+> `wp_ajax_*`, raw `ntdst/api_data` filter registration, `ob_start()` rendering, manual
+> `template_include`, direct `register_post_type()`/`register_taxonomy()`, hardcoded meta prefix,
+> wrong Data API vocabulary, `permission_callback => __return_true`.
+>
+> This file keeps the **reasoning** behind those (what the fix looks like, why the rule exists, what
+> the documented exception is) plus the categories a grep cannot decide: pass-through methods, fat
+> services, service-vs-dependency classification, wrong priority, N+1 shapes, and the YOOtheme rules.
+> A finding from the gate is a fact; a finding from this file is a judgement you must argue.
 
 ## Critical Anti-Patterns
 
@@ -42,9 +59,13 @@ $post = $model->find($id);
 $title = $post->post_title;
 
 // OR use get() for array format
-$posts = $model->where('id', $id)->get();
+$posts = $model->where('post_status', 'publish')->limit(10)->get();
 $title = $posts[0]['title'];
 ```
+
+`find()` and `first()` return a `WP_Post`-shaped object (`->post_title`, `->fields['x']`).
+`get()`, `all()` and `paginate()['data']` return arrays of associative arrays (`['title']`,
+`['meta']['x']`). This is the most common source of bugs in the data layer.
 
 ### Returning false/null on Error
 
@@ -194,23 +215,33 @@ $content = wp_kses_post($params['content'] ?? '');
 
 ### Missing Capability Checks
 
-```php
-// WRONG - anyone can call
-add_filter('ntdst/api_data/delete', function ($data, $params) {
-    $model->delete($params['id']);
-});
+Register through `ntdst_api_action()` and declare a capability floor. The floor is enforced at
+dispatch, ahead of the handler, so it holds even if the handler is later edited badly — and the
+handler still does its own per-row check, because the floor is defense in depth, not a replacement.
 
-// CORRECT - check permissions
-add_filter('ntdst/api_data/delete', function ($data, $params) {
-    $id = absint($params['id']);
+```php
+// CORRECT - declared floor (type-derived, fail-closed) + per-row check
+ntdst_api_action('delete_venue', function ($data, $params) {
+    $id = absint($params['id'] ?? 0);
 
     if (!current_user_can('delete_post', $id)) {
-        return new WP_Error('forbidden', 'Permission denied');
+        return new WP_Error('forbidden', 'Permission denied', ['status' => 403]);
     }
 
-    return $model->delete($id);
-});
+    return ntdst_data()->get('venue')->delete($id);
+}, ['cap_type' => 'venue']);
+
+// WRONG - a raw add_filter() on the underlying hook works, and forfeits the
+// declared floor, the public-allowlist entry, and the dispatch-time gate,
+// putting the entire burden on a handler that here does no check at all.
+add_filter('ntdst/api_data/delete_venue', function ($data, $params) {
+    $model->delete($params['id']);
+}, 10, 2);
 ```
+
+`cap_type` derives the capability from the post type and is **fail-closed** — an unresolvable or
+empty capability denies everyone, administrators included. Use a literal `capability` only when you
+must; it is fail-**open** on empty. Marking an action `public` never floors it.
 
 ### Unescaped Output
 
@@ -381,14 +412,23 @@ private function getConfig(): array {
     return ['option' => 'value'];
 }
 
-// CORRECT — use the project's own prefix, not 'netdust_'
+// CORRECT — read the filter Bootstrap actually fires, so that config overrides
+// declared in the bootstrap config array reach this service.
+// Slug is derived from the CLASS NAME: MyService -> `my`. Not from metadata().
 private function getDefaultConfig(): array {
-    // {project} = the project slug (e.g. stride_myservice_config, vad_myservice_config).
-    return apply_filters('{project}_myservice_config', [
+    return apply_filters('ntdst_service_my_config', [
         'option' => 'value',
     ]);
 }
 ```
+
+**Two config surfaces exist and do not meet.** Bootstrap fires `ntdst_service_{slug}_config` and
+feeds it from `config['services']['overrides'][$slug]`; it checks `ntdst_service_{slug}_enabled` and
+the DB option `ntdst_service_{slug}` for enablement. Services also conventionally apply a
+project-prefixed filter of their own (`stride_edition_config`). A service reading only the
+project-prefixed one is invisible to the framework's override mechanism, and
+`add_filter('{project}_{slug}_enabled', '__return_false')` **does not disable it**. Pick
+deliberately and say which one the service honors in its docblock.
 
 ### Pure Pass-Through Method (Service → Repository)
 
@@ -483,7 +523,7 @@ $open = $editions->findWithAvailability();
 
 **`AbstractRepository` already provides** `find`, `create`, `update`, `delete`, `all`, `count`, `getField`, `findFields`, `getMetaPrefix`. Don't reach for `ntdst_data()` if one of those fits.
 
-**Documented exception — prefix-aware batch reads:** when reading batch-loaded meta (`getPostsFast()` / `withMeta()` envelope), the meta arrives with raw prefixed keys (`_ntdst_*`). Use `$this->repository->getMetaPrefix()` to read the prefix; never hardcode `_ntdst_` as a string. Acceptable in perf-critical paths (catalog pages, exports). See `data-orm.md`.
+**Documented exception — prefix-aware batch reads:** when reading batch-loaded meta (the `withMeta()` envelope), the meta arrives with raw prefixed keys (`_ntdst_*`). Use `$this->repository->getMetaPrefix()` to read the prefix; never hardcode `_ntdst_` as a string. Acceptable in perf-critical paths (catalog pages, exports). See `ntdst-data`.
 
 ### Wrong Data API Vocabulary
 
@@ -511,7 +551,7 @@ $repository->create([
 | `content` | ~~`post_content`~~ |
 | `excerpt` | ~~`post_excerpt`~~ |
 
-The full list (16 accepted keys) lives at `NTDST_Data_Model::WP_COLUMNS`. `post_status`, `post_author`, `post_parent`, `post_date`, `post_name`, `menu_order` etc. pass through unchanged.
+The canonical accepted set lives at `NTDST_Data_Model::WP_COLUMNS` in `api/Data.php` — read it there. `post_status`, `post_author`, `post_parent`, `post_date`, `post_name`, `menu_order` etc. pass through unchanged.
 
 **Safety net:** the framework now logs unregistered keys via `ntdst_log('data')->warning()` and drops them. Watch `logs/data-YYYY-MM-DD.log` after refactors. Zero warnings = clean.
 

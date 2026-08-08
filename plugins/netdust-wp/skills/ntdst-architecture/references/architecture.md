@@ -66,22 +66,24 @@ Soft caps. Treat as warnings, not hard rules — if exceeding the cap is the cle
 - **Observer/Event** for loose coupling between modules
 - **DTOs** for data transfer between layers
 
-## Global Helper Index
+## Global Helper Index — one door per layer
 
-| Layer | Helper | Returns |
-|-------|--------|---------|
-| DI (singleton) | `ntdst_get(Class::class)` | Cached instance |
-| DI (fresh) | `ntdst_make(Class::class)` | New instance |
-| DI (register) | `ntdst_set(Class::class)` | Container |
-| Data/ORM | `ntdst_data()->get('type')` | `NTDST_Data_Model` |
-| Router | `ntdst_router()` / `ntdst_route()` | `NTDST_Router` |
-| Response | `ntdst_response()` | `NTDST_Response` |
-| Logger | `ntdst_log()` | `NTDST_Logger` |
-| Mailer | `ntdst_mail()` | `NTDST_Mailer` |
-| Sectors | `ntdst_sectors()` | `NTDST_SectorRegistry` |
-| Cache | `ntdst_query_cache()` | `NTDST_Query_Cache` |
-| Metabox | `ntdst_metabox()` | `NTDST_MetaboxGenerator` |
-| Endpoints | `ntdst_endpoints()` | `Endpoints` |
+| Layer | Helper |
+|-------|--------|
+| DI — resolve singleton / fresh / register | `ntdst_get()` · `ntdst_make()` · `ntdst_set()` |
+| Data + CPT registration | `ntdst_data()` |
+| API actions | `ntdst_api_action()` |
+| Routing | `ntdst_router()` · `ntdst_route()` |
+| Output (JSON, 404, redirect, file, HTML string) | `ntdst_response()` |
+| Template resolution + page data | `NTDST_Template_Loader` · `ntdst_page_data()` |
+| Logging | `ntdst_log()` |
+| Mail | `ntdst_mail()` |
+| Sectors | `ntdst_sectors()` |
+| Metabox generator | `ntdst_metabox()` |
+
+Return types and signatures live in source — confirm against **this project's** `ntdst-core`, which
+is a fork (see `SKILL.md`). Notably, a query-cache helper exists in most copies and **not** in the
+most-evolved one; do not assume it.
 
 ## Framework Tool Fit — Right Tool per Operation
 
@@ -94,7 +96,8 @@ A helper's name doesn't tell you when it's the wrong tool. Before refactoring "u
 | `template_include` callback (resolve template name → file path for WP) | `ntdst_router()->template('single', $cb, $post_type)` | Raw `add_filter('template_include', ...)` |
 | URL pattern → callback | `ntdst_router()->get('pattern/:param', $cb)` | Raw `add_action('parse_request', ...)` |
 | Pre-query interception (rewrite query vars BEFORE WP runs the query) | Raw `add_action('parse_request', ...)` — `ntdst_router()` fires too late | `ntdst_router()` |
-| AJAX/REST endpoint | `add_filter('ntdst/api_data/{action}', ...)` (nonce + rate-limit + CSRF handled) | `add_action('wp_ajax_*', ...)` |
+| AJAX endpoint / API action | `ntdst_api_action($action, $handler, $opts)` (nonce + origin + rate-limit + capability floor handled) | `add_action('wp_ajax_*', ...)`, or a raw `add_filter()` on the underlying hook |
+| Register a CPT or taxonomy | `ntdst_data()->register()` — taxonomies via its `taxonomies` key | raw `register_post_type()` / `register_taxonomy()` |
 | Send email | `ntdst_mail()->to()->template()->send()` | `wp_mail()` |
 | Log structured events | `ntdst_log('channel')->level(...)` | `error_log()`, swallowed `WP_Error` |
 | Read/write CPT | per-domain Repository | `ntdst_data()` direct, raw `wp_insert_post` / `get_post_meta` |
@@ -125,35 +128,63 @@ Two distinct namespaces — don't mix them:
 // FRAMEWORK hooks (ntdst-core's own events — leave the prefix alone)
 do_action('ntdst/services_registered', $bootstrap);
 apply_filters('ntdst/{post_type}/fields', $fields);
-add_filter('ntdst/api_data/{action}', $handler);  // ntdst_api router
+apply_filters('ntdst/api/public_actions', $actions);
 
-// PROJECT-level service hooks (use the project's own prefix, NOT netdust_/ntdst_)
-// Replace {project} with the project slug: stride, vad, atelier296, etc.
-apply_filters('{project}_{slug}_config', $defaults);     // e.g. stride_edition_config
-apply_filters('{project}_{slug}_enabled', true);         // e.g. stride_edition_enabled
+// SERVICE LIFECYCLE — the names Bootstrap actually fires and reads.
+// {slug} is derived from the CLASS NAME (MyService -> `my`), NOT metadata()['name'].
+apply_filters("ntdst_service_{$slug}_config", $defaults);   // fed by config['services']['overrides'][$slug]
+apply_filters("ntdst_service_{$slug}_enabled", true);       // runtime enable/disable
+get_option("ntdst_service_{$slug}", '1');                   // DB enable/disable
 
-// PROJECT-level domain events
-do_action('{project}/{domain}/{action}', $array_payload);  // e.g. stride/registration/created
+// PROJECT-level domain events (use the project's own slug)
+do_action('{project}/{domain}/{action}', $array_payload);    // e.g. stride/registration/created
 ```
 
-The `netdust_` prefix is **not** a framework reservation — it was an old placeholder. Real projects use their own slug: Stride uses `stride_*` / `stride/*`, VAD Vormingen uses `vad_*` / `vad/*`, etc. Use whatever the project's `mu-plugins/<project>-core/` directory implies.
+**Register a service's own config filter as `ntdst_service_{slug}_config`** so that overrides
+declared in the bootstrap config array reach it. A project-prefixed filter a service applies to
+itself (`stride_edition_config`) is a **second surface the framework knows nothing about** — the
+override array will not reach it, and `add_filter('{project}_{slug}_enabled', '__return_false')`
+will not disable it. Both patterns exist in the corpus; pick deliberately and document which one the
+service honors.
+
+The `netdust_` prefix is **not** a framework reservation — it was an old placeholder that has since
+been renamed to `ntdst_service_*`. Domain events use the project's own slug: Stride uses `stride/*`,
+VAD Vormingen `vad/*`. Use whatever the project's `mu-plugins/<project>-core/` directory implies.
 
 Domain event payloads are **plain associative arrays**, not event-object classes — `do_action('stride/registration/created', ['user_id' => $uid, 'edition_id' => $eid])`, not `do_action(..., new RegistrationCreated($uid, $eid))`.
 
-## Project Structure
+## Consumer structure
 
 ```
-theme-root/
-├── config/theme-config.php       ← services, modules, assets config
-├── services/                     ← auto-discovered
+theme-root/  (or mu-plugins/<project>-core/)
+├── config/theme-config.php       ← services, overrides, assets  (plugin-config.php in a mu-plugin)
+├── services/                     ← auto-discovered: *Service.php at THIS level only
 │   ├── SecurityService.php       ← root = sector-independent
-│   ├── gallery/                  ← sector-specific (auto-discovered when enabled)
+│   ├── gallery/                  ← sector dir — discovered when that sector is enabled
 │   │   └── ExhibitionService.php
 │   └── printshop/
-├── templates/                    ← Response templates
+├── templates/                    ← templates, registered via NTDST_Template_Loader::addPath()
 ├── views/emails/                 ← Mailer templates
-├── helpers/                      ← Stateless functions
+├── helpers/                      ← stateless functions
 ├── assets/src/ + dist/           ← Vite
-├── functions.php                 ← Bootstrap wiring
-└── vendor/ntdst-core/            ← Framework (don't edit)
+└── functions.php                 ← Bootstrap wiring  (or <project>-core.php)
 ```
+
+A namespaced service in any *other* subdirectory is **not** discovered — list it in the bootstrap
+config or it silently never loads.
+
+## ntdst-core's own structure — what each directory decides
+
+The framework ships as its own mu-plugin (`mu-plugins/ntdst-core/`, loaded by an explicit
+`require_once` list, not a directory scan). Don't edit it as part of feature work.
+
+| dir | decides |
+|---|---|
+| `core/` | boot, DI, routing, theme wiring — `Bootstrap`, `Container`, `Router`, `Theme`, `SectorRegistry` |
+| `api/` | the data layer and transport — `Data`, `Endpoints`, `Response` |
+| `admin/` | admin UI, and the metabox **write-authorization gate** — `MetaboxGenerator`, `RelationField` |
+| `services/` | infrastructure — `Logger`, `Mailer` |
+
+`api/` is data and transport; `services/` is infrastructure; admin UI is neither, which is why it has
+its own home. Note that one file there declares **two** classes — grep for the symbol, not the
+filename.

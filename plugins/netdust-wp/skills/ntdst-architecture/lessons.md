@@ -129,3 +129,73 @@ The full canonical list is `NTDST_Data_Model::WP_COLUMNS` in `api/Data.php` — 
 ---
 
 For project-specific incidents (e.g. "this LearnDash integration quirk", "this Stride business rule"), see the originating project's `memory/` directory — not this file.
+
+---
+
+## A method belongs on `Theme` iff its subject dies when you switch themes
+
+**Problem (daan, 2026-08-08):** `NTDST_Theme` had grown into a facade over five unrelated
+subsystems — it registered post types, registered taxonomies, registered API actions, and carried a
+whole module DSL, alongside its actual job of wiring hooks, template paths and assets. Nothing about
+a CPT or an API action dies when you switch themes, so none of it belonged there.
+
+**Rule:** *a method belongs on `Theme` iff its subject dies when you switch themes.* A hook binding,
+a template path, a template helper — yes. A post type, a taxonomy, an API action — no; those have
+owners elsewhere and outlive the theme.
+
+**The correction that matters more than the rule.** The first draft of this refactor deleted the
+whole surface, having diagnosed *chainability* as the god-object smell. That was wrong, and it was
+caught at the seam: the defect was **incoherence**, not chaining. The fluent wiring surface was
+retained deliberately. When something feels like a god object, name which property is actually
+offensive before you delete on the strength of the feeling.
+
+---
+
+## A forwarder is a second surface, and it drifts
+
+**Problem (daan, 2026-08-08):** Two methods kept "for compatibility" did nothing but call the real
+implementation on another class. Both drifted from their targets **twice in a single week** — once
+in signature, once in null-handling — because nothing forced them to move together.
+
+**Rule:** a pass-through kept for compatibility is not a courtesy, it is a second equally-correct
+path that the codebase will drift between. **Delete as you move.** If a forwarder must survive a
+migration window, give it an explicit removal date and a test that asserts it agrees with its target.
+
+**Corollary for docs:** the same is true of documentation. A reference file restating an API is a
+forwarder for that API, and it drifts exactly the way code forwarders do. That is why this skill's
+references were collapsed — see the note at the end of this file.
+
+---
+
+## A grep bounded by a hypothesis finds what the hypothesis predicts
+
+**Problem (daan, 2026-08-08):** This error recurred **three times in one refactor**, each time in a
+different disguise:
+
+1. *"Does daan call `->module()`?"* — grep says no, so the DSL looked dead. It was alive across the
+   corpus; the question scoped the evidence to one site.
+2. *"Is `ntdst_page_data()` dead?"* — grep over `*Service.php` said yes. A **template** called it on
+   every render. The file-type filter encoded the hypothesis.
+3. *"Do these CPTs derive their own capabilities?"* — an auth-surface map asserted they did. Source
+   said three of them register `capability_type => 'post'` and inherit generic caps.
+
+**Rule:** a grep is a test of a hypothesis, not a survey. Before trusting a negative result, ask
+**what would this search miss if I were wrong** — which paths, which file types, which callers, which
+*other repositories* — and widen it until the answer is "nothing material". Confirm a linchpin claim
+against source, not against a previous agent's summary.
+
+**Specifically for framework work:** derive seams from the **corpus across all consumer sites**, not
+from one site's tree. "Does *this* site use it?" answers what this site uses, never what the
+framework owes its consumers.
+
+---
+
+## Note on this skill's structure (2026-08-08)
+
+The `references/` tree was **94% API inventory** (4,442 of 4,714 lines) and carried five files whose
+claims were false. Inventory was collapsed into `references/framework-map.md` (decisions + traps) and
+`golden-paths/feature-service.md` (a worked slice); `anti-patterns.md` and `architecture.md` were
+kept and corrected. The retired files were `services.md`, `container.md`, `router.md`, `response.md`,
+`logger.md`, `mailer.md`, `data-layer.md`, `theme-api.md`, `api-endpoints.md`, `rest-cors.md`,
+`plugin-scaffold.md`, and both `templates/*.php.md`. Where a lesson above points at one of them, read
+`framework-map.md` instead — and read **source** for any signature.

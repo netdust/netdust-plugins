@@ -115,3 +115,66 @@ if (is_wp_error($result)) {
 ```
 
 **When to skip logging:** when the `WP_Error` is a normal flow state (e.g. `not_complete` fires on every attendance mark for not-yet-finished users — that's not an error worth logging every time). Log at call sites where the error means a real anomaly. Don't log inside business-logic classes that return `WP_Error` for routine outcomes.
+
+---
+
+## `find($id, true)` no longer means "skip the cache" — it throws
+
+**Problem (daan, 2026-08-08):** The record lookup's second parameter used to be a `$skipCache`
+boolean. The cache it served was deleted, and a `$status` parameter took that position. A leftover
+`find($id, true)` would then have quietly meant "accept the post status `true`" — matching nothing,
+and denying every row.
+
+**Rule:** the framework now **throws** on a boolean there rather than failing invisibly.
+*Fail-closed but invisible is the worst shape available* — worse than failing open, because nobody
+goes looking. When you remove a parameter, do not let the next one silently inherit its position:
+either keep the slot reserved or make the old call shape raise.
+
+**Fork warning:** most other `ntdst-core` copies still have the cache and still honour the boolean.
+The same line of code means two different things depending on the site.
+
+---
+
+## Registration must fail loudly, and privately by default
+
+**Problem (daan, 2026-08-08):** Two defects in one call. Model registration merged the caller's
+config *over* `public => true, has_archive => true`, so any model registered without explicit
+visibility flags was published, archived and queryable — which is why every non-public CPT carried
+six hand-written denials, and why forgetting one was a disclosure. Separately, a `WP_Error` from
+`register_post_type()` was discarded and the model built anyway, leaving a half-registered phantom:
+`isRegistered()` true while `post_type_exists()` was false.
+
+**Rule:** **opt in to public, never out of it.** And never swallow a registration failure — a thing
+that reports healthy while being broken costs more than a thing that refuses to start.
+
+---
+
+## A custom `capability_type` grants nothing — WordPress only *maps*, it never *invents*
+
+**Problem (daan, 2026-08-08):** A CPT was given its own `capability_type` to narrow access. Probed
+live afterwards: **administrator `can('edit_access_grants')` = DENY.** `map_meta_cap` maps *meta*
+capabilities onto primitives; it never creates primitive ones, so the new capability names were held
+by no role at all.
+
+**Rule:** giving a type its own `capability_type` does not narrow access — it denies everyone until
+something calls `add_cap()`. Grant the caps explicitly, **reading the capability list off the
+registered post-type object** rather than hardcoding it (WordPress has grown that set across
+releases, and a hardcoded copy silently stops covering one — with a denied administrator and no
+obvious cause as the failure mode). Stamp the grant with a version option so it doesn't write on
+every request.
+
+**Related:** `edit_post` is a *meta* capability. A CPT gets `map_meta_cap` only via WordPress's
+back-compat rule for `capability_type` in `('post','page')`. Adding an explicit `capabilities` array
+turns that off, and an `edit_post` gate then denies everyone.
+
+---
+
+## Note on this skill's structure (2026-08-08)
+
+`references/` and `templates/` were **86% API inventory** (2,451 of 2,837 lines) with three files
+carrying false claims, and the two API references had drifted into contradicting each other on
+whether an empty result is a success and whether a user-search action was public. All of it was
+collapsed into `SKILL.md` (decisions + traps) and `golden-paths/model-and-api-action.md` (a worked
+slice, with a `Verified against source:` date). Retired: `references/{api,data-orm,metabox}.md` and
+both `templates/*.php.md`. Read the golden path for how, `SKILL.md` for why, and **source** for any
+signature.
