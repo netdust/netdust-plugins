@@ -87,7 +87,7 @@ is promoted one-way to FULL — `security-sentinel` runs on the post-fix cluster
   Unit test: no unit test: Tier B, dead-branch removal; the re-contracted loop-gate test asserts the gate no longer reads budget output at all.
   (FR-10, FR-11)
 
-- [ ] T13 [Tier A] fix I-A (security-sentinel, FULL round): the `RED until:` disk rung confines to the repo and to test-shaped paths — an absolute path, a `../` traversal, or an in-repo non-test file (`README.md`) must all read as dangling — closes when the three named cases go green  (files: plugins/netdust-agent/bin/gate-check.py, plugins/netdust-agent/tests/test_spec_gate_check.py)
+- [x] T13 [Tier A] fix I-A (security-sentinel, FULL round): the `RED until:` disk rung confines to the repo and to test-shaped paths — an absolute path, a `../` traversal, or an in-repo non-test file (`README.md`) must all read as dangling — closes when the three named cases go green  (files: plugins/netdust-agent/bin/gate-check.py, plugins/netdust-agent/tests/test_spec_gate_check.py)
   Test-author: solo — standard stakes, checker validation logic, not a security-boundary category.
   Proven by: new test — the three confinement cases in case block 25.
   Unit test: RED-first. (a) `RED until: /etc/hostname::x` → dangling FAIL; (b) `RED until: ../<outside>::x` → dangling FAIL; (c) `RED until: README.md::x` (in-repo, non-test) → dangling FAIL; (d) the legitimate corpus path still validates. Resolve the joined path, require it under `repo_root`, and require a test-shaped path on the disk rung. S-B is folded in by construction; S-A parked (see review-A.md).
