@@ -1283,7 +1283,8 @@ CONTRACT_LINE = re.compile(r"^\s+(Unit|Integration) test:\s*(\S.*)$")
 NO_UNIT_TEST = re.compile(r"^no unit test\b", re.IGNORECASE)
 
 
-def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
+def check_unit_test_contract(tasks_text: str, f: Findings,
+                             repo_root: Path | None = None) -> None:
     """1d — every task states the behavioral contract its test asserts.
 
     `Test-author:` says WHO writes the test; this says WHAT it must prove. Either line
@@ -1291,6 +1292,14 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
     both on one task is belt+braces. Tier B may opt out explicitly with
     `Unit test: no unit test: Tier B, <reason>` — a stated waiver, not an omission.
     Text after `Integration test:` is NEVER a waiver; it always reads as a contract.
+
+    A third form (FR-7): `Unit test: covered by cluster behaviour`. VALID — the task is a
+    member of a cluster carrying the full behaviour block whose `RED until:` test
+    resolves (see check_behaviour_clusters) — it counts as a stated contract for ANY
+    tier, Tier A included: the cluster's RED is the behavioural proof, which is the
+    grammar's whole point (per-task RED moves up to the behaviour level). INVALID — no
+    such cluster/block — it reads as a waiver, so a Tier A task leaning on it trips the
+    Tier-A-waiver FAIL below; never a silent pass.
 
     The task's WHOLE continuation block (per the shared `task_blocks()` walker) is
     scanned and every contract/waiver line collected before deciding, so line order
@@ -1312,6 +1321,7 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
     defect and FAILs regardless.
     """
     total, missing, tier_a_waived, integration_parallel = 0, [], [], []
+    covered_ok: set[str] | None = None  # computed lazily — only when the form appears
     for task_id, task_rest, cont in task_blocks(tasks_text):
         total += 1
         is_tier_a = bool(TIER_A.search(task_rest))
@@ -1321,10 +1331,18 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
             m = CONTRACT_LINE.match(ln)
             if m:
                 is_unit_form = m.group(1) == "Unit"
+                value = m.group(2).strip()
                 if not is_unit_form:
                     has_integration = True
-                elif NO_UNIT_TEST.match(m.group(2).strip()):
+                elif NO_UNIT_TEST.match(value):
                     has_unit_waiver = True
+                elif CLUSTER_COVERED.match(value):
+                    if covered_ok is None:
+                        covered_ok = behaviour_covered_task_ids(tasks_text, repo_root)
+                    if task_id in covered_ok:
+                        has_unit_contract = True   # the cluster's RED is the contract
+                    else:
+                        has_unit_waiver = True     # invalid waiver — Tier A trips below
                 else:
                     has_unit_contract = True
 
@@ -1358,7 +1376,8 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
               "(`Unit test:` / `Integration test:`): " + ", ".join(missing[:8]))
     if tier_a_waived:
         f.add("fail", "unit-test-contract",
-              "Tier A may not waive its test with `no unit test:` — "
+              "Tier A may not waive its test with `no unit test:` (nor lean on "
+              "`covered by cluster behaviour` outside a valid behaviour block) — "
               + ", ".join(tier_a_waived[:8]))
     if integration_parallel:
         f.add("fail", "unit-test-contract",
@@ -1366,6 +1385,213 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
               "never parallel, serialize: " + ", ".join(integration_parallel[:8]))
     if not (missing or tier_a_waived or integration_parallel):
         f.add("pass", "unit-test-contract", f"all {total} tasks state a test contract")
+
+
+# ── behaviour-cluster (FR-6/FR-7) — one RED per behaviour, observable from outside ───
+#
+# A `### Cluster` heading may carry, between itself and the cluster's first task line, up
+# to three prose lines (order free, each at line start, bold/bullet tolerated like the
+# other line matchers here): `Behaviour:` (one sentence), `Observable:` (how it is
+# verified from OUTSIDE the file), and `RED until: <path>::<method>` naming the one
+# failing test that belongs to the BEHAVIOUR rather than to any task. "Full block" = all
+# three present. Inside such a cluster a member task may satisfy its `Unit test:` line
+# with `covered by cluster behaviour` — per-task proof moves up to the behaviour level
+# (FR-7: "Tasks below a behaviour boundary don't need their own proof, they need to not
+# break the proof that's already running"). Opt-in: members may equally keep ordinary
+# unit-test lines under the same block.
+
+BEHAVIOUR_BLOCK_LINES = {
+    "behaviour": re.compile(
+        r"^\s*(?:[-*]\s+)?(?:\*\*)?Behaviour(?:\*\*)?:\s*(\S.*?)\s*$", re.IGNORECASE),
+    "observable": re.compile(
+        r"^\s*(?:[-*]\s+)?(?:\*\*)?Observable(?:\*\*)?:\s*(\S.*?)\s*$", re.IGNORECASE),
+    "red_until": re.compile(
+        r"^\s*(?:[-*]\s+)?(?:\*\*)?RED until(?:\*\*)?:\s*(\S.*?)\s*$", re.IGNORECASE),
+}
+_BLOCK_KEYS = ("behaviour", "observable", "red_until")
+BEHAVIOUR_LABEL = {"behaviour": "`Behaviour:`", "observable": "`Observable:`",
+                   "red_until": "`RED until:`"}
+CLUSTER_COVERED = re.compile(r"^covered by cluster behaviour\b", re.IGNORECASE)
+
+
+def _covered_by_cluster(cont: list[str]) -> bool:
+    """True when a continuation block's `Unit test:` value is the FR-7 waiver form."""
+    for ln in cont:
+        m = CONTRACT_LINE.match(ln)
+        if m and m.group(1) == "Unit" and CLUSTER_COVERED.match(m.group(2).strip()):
+            return True
+    return False
+
+
+def parse_behaviour_clusters(tasks_text: str) -> list[dict]:
+    """Per `### Cluster`: the behaviour-block values (read ONLY between the heading and
+    the cluster's first task line — a `Behaviour:` inside a task's continuation is that
+    task's prose, never the cluster's block) and the members as
+    {id, files, covered}. Fences are stripped first, so a fenced block sample is
+    invisible — same rule as every other parser here."""
+    lines = strip_fenced(tasks_text).splitlines()
+    n, i = len(lines), 0
+    clusters: list[dict] = []
+    cur: dict | None = None
+    while i < n:
+        ln = lines[i]
+        if CLUSTER_HEADING.match(ln):
+            if cur is not None:
+                clusters.append(cur)
+            cur = {"name": ln.lstrip("# ").split("(")[0].strip(),
+                   "behaviour": None, "observable": None, "red_until": None,
+                   "members": []}
+            i += 1
+            continue
+        h = heading_text(ln)
+        if h and h[0] <= 2:  # phase boundary — same rule as parse_clusters
+            if cur is not None:
+                clusters.append(cur)
+                cur = None
+            i += 1
+            continue
+        tm = TASK_LINE.match(ln)
+        if tm and cur is not None:
+            cont = []  # the task_blocks() boundary: next column-0 bullet or heading
+            j = i + 1
+            while j < n and not lines[j].startswith("- ") and not heading_text(lines[j]):
+                cont.append(lines[j])
+                j += 1
+            seg = FILES_SEGMENT.search(tm.group(2))
+            cur["members"].append({"id": tm.group(1),
+                                   "files": seg.group(1) if seg else "",
+                                   "covered": _covered_by_cluster(cont)})
+            i = j
+            continue
+        if cur is not None and not cur["members"]:
+            for key, rx in BEHAVIOUR_BLOCK_LINES.items():
+                m = rx.match(ln)
+                if m:
+                    cur[key] = m.group(1).strip()
+                    break
+        i += 1
+    if cur is not None:
+        clusters.append(cur)
+    return clusters
+
+
+def _red_until_path(value: str) -> str:
+    """The machine-checked PATH half of `RED until: <path>::<method>` (backtick quoting
+    tolerated). The `::method` half is contract prose — presence, not truth; whether that
+    method exists and bites is the review gate's and the T05 hook's business."""
+    return value.strip().strip("`").split("::", 1)[0].strip()
+
+
+def repo_root_for(spec_dir: Path) -> Path | None:
+    """The git toplevel containing the feature dir — what RED-until paths resolve
+    against on disk. None when no `.git` is found walking up (tmp fixture dirs), which
+    limits resolution to the member-files fallback."""
+    try:
+        d = spec_dir.resolve()
+    except OSError:
+        return None
+    for p in (d, *d.parents):
+        if (p / ".git").exists():
+            return p
+    return None
+
+
+def _block_status(c: dict, repo_root: Path | None) -> str:
+    """none | partial | dangling | valid. A full block is VALID when its RED-until path
+    exists on disk under the repo root, or appears in a member task's `(files:)` segment
+    (the test is CREATED by a task in the cluster)."""
+    present = [k for k in _BLOCK_KEYS if c[k]]
+    if not present:
+        return "none"
+    if len(present) < len(_BLOCK_KEYS):
+        return "partial"
+    path = _red_until_path(c["red_until"])
+    if not path:
+        return "partial"
+    if repo_root is not None and (repo_root / path).exists():
+        return "valid"
+    if any(path in m["files"] for m in c["members"]):
+        return "valid"
+    return "dangling"
+
+
+def behaviour_covered_task_ids(tasks_text: str, repo_root: Path | None) -> set[str]:
+    """Task ids whose `covered by cluster behaviour` would be VALID — members of a
+    cluster carrying the full block whose RED-until test resolves."""
+    ids: set[str] = set()
+    for c in parse_behaviour_clusters(tasks_text):
+        if _block_status(c, repo_root) == "valid":
+            ids.update(m["id"] for m in c["members"])
+    return ids
+
+
+def check_behaviour_clusters(tasks_text: str, f: Findings,
+                             repo_root: Path | None = None) -> None:
+    """FR-6/FR-7 — the behaviour-block grammar: one RED per behaviour.
+
+    The failing test moves up one level — it belongs to the behaviour, not to the task —
+    and the machine checks PRESENCE plus the named test, per the 1a honesty convention:
+
+      - a full block whose `RED until:` path neither exists on disk (under the feature
+        dir's git toplevel) nor appears in any member task's `(files:)` segment → FAIL —
+        the behaviour RED binds to nothing;
+      - `covered by cluster behaviour` on a task outside any cluster, in a cluster with
+        no block, or in one whose block is partial → FAIL naming task and cluster — the
+        waiver is accepted only against the FULL block (a Tier A task doing this also
+        trips check_unit_test_contract's Tier-A-waiver FAIL; never a silent pass);
+      - at least one valid block → a ✓ naming the cluster(s).
+
+    NOT machine-judged, stated deliberately: the `::method` half of `RED until:` is
+    contract prose (presence, not truth — whether the method exists and goes RED is the
+    T05 hook's and the review gate's business), observable ADMISSIBILITY (config/array
+    shapes are inadmissible as a cluster observable) is FR-9's sequencer rule in the
+    planning skill, and a partial block nobody leans on is silent — the grammar is
+    opt-in, and an unfinished block with no waiver riding on it gates nothing.
+
+    Artifacts with no behaviour blocks and no waiver forms produce ZERO findings — the
+    AC-3 back-compat lock."""
+    clusters = parse_behaviour_clusters(tasks_text)
+    by_task = {m["id"]: c for c in clusters for m in c["members"]}
+    valid_names = []
+
+    for c in clusters:
+        c["status"] = _block_status(c, repo_root)
+        if c["status"] == "valid":
+            valid_names.append(c["name"])
+        elif c["status"] == "dangling":
+            users = [m["id"] for m in c["members"] if m["covered"]]
+            suffix = (" — relied on by " + ", ".join(users[:4])) if users else ""
+            f.add("fail", "behaviour-cluster",
+                  f"{c['name']}: `RED until:` names `{_red_until_path(c['red_until'])}` "
+                  "— a test file neither on disk under the repo root nor in any member "
+                  f"task's `(files:)` segment; the behaviour RED binds to nothing{suffix}")
+
+    for task_id, _rest, cont in task_blocks(tasks_text):
+        if not _covered_by_cluster(cont):
+            continue
+        c = by_task.get(task_id)
+        if c is None:
+            f.add("fail", "behaviour-cluster",
+                  f"{task_id} states `covered by cluster behaviour` outside any "
+                  "`### Cluster` heading — the form is legal only inside a cluster "
+                  "carrying the full behaviour block")
+        elif c["status"] == "none":
+            f.add("fail", "behaviour-cluster",
+                  f"{task_id} states `covered by cluster behaviour` but {c['name']} "
+                  "carries no behaviour block (`Behaviour:` + `Observable:` + "
+                  "`RED until:`) — the waiver binds to nothing")
+        elif c["status"] == "partial":
+            missing = ", ".join(BEHAVIOUR_LABEL[k] for k in _BLOCK_KEYS if not c[k])
+            f.add("fail", "behaviour-cluster",
+                  f"{task_id} states `covered by cluster behaviour` but {c['name']}'s "
+                  f"behaviour block is missing {missing} — the FULL block is what the "
+                  "waiver is accepted against")
+        # valid → the member is covered; dangling → already reported at cluster level
+
+    if valid_names:
+        f.add("pass", "behaviour-cluster",
+              f"{len(valid_names)} cluster(s) carry a valid behaviour block "
+              "(one RED per behaviour): " + ", ".join(valid_names[:4]))
 
 
 REQ_ID = re.compile(r"\b(FR|SC)-(\d+)\b")
@@ -1715,13 +1941,15 @@ def run_checks(spec_dir: Path) -> Findings:
         check_loop_budget(plan_text, f)
         check_deliverable_first(plan_text, spec_text, tasks_text, f)  # 1j — cross-artifact
     if tasks_text is not None:
+        root = repo_root_for(spec_dir)  # RED-until paths resolve against the git toplevel
         check_task_tiers(tasks_text, f)
         check_files_segment(tasks_text, f)
         check_human_yield(tasks_text, f)
         check_test_author_mode(tasks_text, f)
         check_proven_by(tasks_text, f)
         check_security_boundary_mode(tasks_text, f)
-        check_unit_test_contract(tasks_text, f)
+        check_unit_test_contract(tasks_text, f, repo_root=root)
+        check_behaviour_clusters(tasks_text, f, repo_root=root)  # FR-6/FR-7
         check_clusters(tasks_text, f)
         check_review_gates(tasks_text, f)
         check_review_tiers(tasks_text, f)
