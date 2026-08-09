@@ -1345,6 +1345,27 @@ SPEC_FR_NONE_WAIVED = (
     "<!-- gate-check: legacy-artifact — spec authored before the Source: convention -->\n"
     + SPEC_FR_NONE)
 
+# I-2 probe: a colon-less FR def (`- **FR-2** …`, colon missing) is not an FR_DEF_LINE,
+# so under the old walker it CONTINUED FR-1's block and donated its `Source:` upward —
+# FR-1 read sourced while FR-2 escaped the check entirely. The block must flush at any
+# column-0 bullet that is not an FR def: FR-1 reads bare, the donation never happens.
+SPEC_FR_COLONLESS = """# Feature Specification: Payload archive
+
+## Functional requirements
+- **FR-1:** Every payload is archived.
+- **FR-2** Archives expire after 90 days. Source: the human, 2026-08-09: "90 days".
+- **FR-3:** Expiry runs nightly. Source: invented — approved by Stefan (intake Q2).
+"""
+
+# S-4 rider: a `Source:` whose value carries no word character (`Source: —`) is
+# contentless — it must read as unsourced, never as a source.
+SPEC_FR_DASH_SOURCE = """# Feature Specification: Payload archive
+
+## Functional requirements
+- **FR-1:** Every payload is archived. Source: —
+- **FR-2:** Expiry runs nightly. Source: the human, 2026-08-09: "nightly".
+"""
+
 # A fenced example carrying `Source:` never sources the FR above it — fence-stripped
 # like every parser in the checker.
 SPEC_FR_FENCED_SOURCE = """# Feature Specification: Payload archive
@@ -2304,6 +2325,23 @@ def run():
     results.append((verdicts == ["fail"]
                      and any("legacy-artifact" in d for d in details),
                     "FRs with zero sources and no waiver FAILs, naming the waiver form"))
+
+    # 24g. I-2: a colon-less FR def carrying the only `Source:` — the block flushes at
+    # the column-0 bullet, so the apparently-sourced FR-1 FAILs as bare instead of
+    # absorbing the donated source (never a vacuous all-sourced pass).
+    verdicts, details = _frs(SPEC_FR_COLONLESS)
+    results.append((verdicts == ["fail"]
+                     and any("FR-1" in x for x in details)
+                     and not any("FR-3" in x for x in details),
+                    "(I-2) a colon-less FR def's Source: no longer donates upward — "
+                    "the apparently-sourced FR-1 FAILs as bare"))
+
+    # 24h. S-4: `Source: —` carries no word character — contentless, reads as bare.
+    verdicts, details = _frs(SPEC_FR_DASH_SOURCE)
+    results.append((verdicts == ["fail"]
+                     and any("FR-1" in x for x in details)
+                     and not any("FR-2" in x for x in details),
+                    "(S-4) a Source: with no word character (`—`) FAILs as bare"))
 
     # 24-fence. a fenced `Source:` example never sources the FR above it
     verdicts, details = _frs(SPEC_FR_FENCED_SOURCE)

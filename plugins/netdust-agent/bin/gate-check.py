@@ -1675,6 +1675,13 @@ FR_DEF_LINE = re.compile(r"^\s*(?:[-*+]\s+)?\**(FR-\d+)(?::\**|\**:)")
 # convention, not a source — the live corpus's own FR-1/FR-2 mention the marker in
 # backticks before stating their real source.
 SOURCE_MARK = re.compile(r"(?<!`)\bSource:")
+# A column-0 bullet ENDS the current FR's block (I-2): only indented lines continue a
+# block, so a colon-less FR def (`- **FR-2** …`, not an FR_DEF_LINE) can no longer
+# donate its `Source:` to the FR above it while itself escaping the check.
+COL0_BULLET = re.compile(r"^[-*+]\s")
+# A source must SAY something: at least one word character (S-4 — `Source: —` is
+# contentless punctuation, not a source).
+SOURCE_WORD = re.compile(r"\w")
 # An invention passes only with an approval: `approved` followed by something date-like,
 # or an explicit approver reference (`approved by <who>`).
 INVENTED_SOURCE = re.compile(r"invented\b", re.IGNORECASE)
@@ -1688,11 +1695,14 @@ def check_fr_sources(spec_text: str, f: Findings) -> None:
     The post-mortem's link 1: a requirement invented at spec time reads exactly like one
     the human asked for, and the build then serves the invention. So every FR-defining
     line (`- **FR-1:** …`, the same id convention check_requirement_coverage parses) must
-    carry a `Source:` — on the def line or a continuation line before the next FR /
-    heading; everything from `Source:` to the end of that FR's block is the source text.
-    A source whose first word is `invented` (case-insensitive) additionally needs an
-    approval; any other non-empty source text (a quotation, a document reference, "the
-    human, <date>: …") passes.
+    carry a `Source:` — on the def line or an INDENTED continuation line; the block ends
+    at the next FR def, a heading, or ANY column-0 bullet (I-2 — a colon-less FR def is
+    a column-0 bullet, and its `Source:` must never donate upward to the FR above).
+    Everything from `Source:` to the end of that FR's block is the source text. A source
+    whose first word is `invented` (case-insensitive) additionally needs an approval;
+    any other source text carrying at least one word character (a quotation, a document
+    reference, "the human, <date>: …") passes — bare punctuation like `Source: —` is
+    contentless and reads as unsourced (S-4).
 
     PRESENCE, not truthfulness: a fabricated quotation passes the machine — challenging
     what a `Source:` says is the review gate's job, the same honesty convention every
@@ -1712,7 +1722,7 @@ def check_fr_sources(spec_text: str, f: Findings) -> None:
             if cur_id:
                 blocks.append((cur_id, " ".join(cur_lines)))
             cur_id, cur_lines = m.group(1), [ln]
-        elif heading_text(ln):
+        elif heading_text(ln) or COL0_BULLET.match(ln):
             if cur_id:
                 blocks.append((cur_id, " ".join(cur_lines)))
             cur_id, cur_lines = None, []
@@ -1728,7 +1738,7 @@ def check_fr_sources(spec_text: str, f: Findings) -> None:
     for fr_id, text in blocks:
         m = SOURCE_MARK.search(text)
         src = text[m.end():].strip() if m else ""
-        if not src:
+        if not SOURCE_WORD.search(src):
             unsourced.append(fr_id)
         elif INVENTED_SOURCE.match(src) and not SOURCE_APPROVAL.search(src):
             unapproved.append(fr_id)
