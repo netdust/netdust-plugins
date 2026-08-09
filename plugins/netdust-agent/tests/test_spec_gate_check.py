@@ -1406,7 +1406,7 @@ def run():
     # 10s. Tier A + solo on a token/migration file → WARN (gate still PASSes: heuristic)
     rc, out = _run({"tasks.md": TASKS_TIER_A_SOLO_ON_BOUNDARY})
     results.append((rc == 0 and "! [security-boundary-mode]" in out
-                     and "T01" in out and "ALWAYS split" in out,
+                     and "T01" in out and "split at effective-`high` stakes" in out,
                     "Tier A + solo on a security-boundary file WARNs, never FAILs"))
 
     # 10t. same task, correct `split` mode → silent
