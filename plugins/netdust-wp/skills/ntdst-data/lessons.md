@@ -133,3 +133,19 @@ if (is_wp_error($result)) {
 ```
 
 **When to skip logging:** when the `WP_Error` is a normal flow state (e.g. `not_complete` fires on every attendance mark for not-yet-finished users — that's not an error worth logging every time). Log at call sites where the error means a real anomaly. Don't log inside business-logic classes that return `WP_Error` for routine outcomes.
+
+---
+
+## `required` was enforced only on CREATE — and validation runs BEFORE sanitization
+
+**Problem (daan, 2026-08-09):** `'required' => true` on a field declaration reads like an invariant. It was not one. `validateData()` gated the check behind `!$isUpdate`, with a comment rationalising it — *"For updates, missing fields keep existing values."* That reasoning is correct for an **omitted** field and wrong for an **explicitly empty** one, and the code could not tell them apart. So `$model->update($id, ['venue_city' => ''])` was accepted and blanked a field the schema declared un-emptyable. On every NTDST site, on every CPT, silently. Compounding it: `MetaboxGenerator` read the `required` key **zero** times — no HTML attribute, no `aria-required`, no visual marker — so an editor got no indication either.
+
+**Rule (fixed in ntdst-core 2026-08-09; older copies still carry the hole):** a required field that is **omitted** from an update keeps its existing value; a required field **supplied** as `''`/`null`/`[]` is refused, on create and update alike. The discriminator is `array_key_exists`, not `isset` — `isset` reports false for an explicit `null` and would misclassify it as omitted.
+
+**Do NOT "simplify" the guard by deleting `!$isUpdate`.** That enforces `required` on every partial update and breaks every code path that writes one field to a post that has required fields — far more damage than the bug. The regression lock for this is `DataModelRequiredOnUpdateTest::testUpdateThatOmitsARequiredFieldStillSucceedsAndPreservesIt`.
+
+**`required` is still not a layer-wide invariant.** `updateMeta()` and `updateMetaBatch()` write meta with type sanitization and **no** `validateData()` call at all, so `$model->updateMeta($id, 'venue_city', '')` still blanks a required field. Do not read "required is enforced on update" as a guarantee the layer makes everywhere.
+
+**Second, separate trap in the same method: `validateData()` runs BEFORE `sanitizeData()`.** So a required field whose raw value is non-empty but *sanitizes away* still lands empty — an unparseable `date` (`sanitizeDate` → `''`), invalid `json` (`sanitizeJson` → `[]`), a `relation` given `['']` (`array_filter` → `[]`). The metabox path is protected, because its own `sanitize_field` collapses these before `update()` sees them; a programmatic caller or crafted POST is not.
+
+**What is NOT empty, and this matters:** `false`, `0`, `0.0` and `'0'` all pass. A required boolean may be `false` and a required integer may be `0`. The metabox posts a hidden `value="0"` ahead of each checkbox, which sanitizes to PHP `false` rather than `''`, so an unticked required checkbox validates correctly.
