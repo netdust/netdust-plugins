@@ -45,7 +45,7 @@ RED until: `tests/test_spec_gate_check.py::test_deliverable_first_missing_sectio
   Notes: observable ADMISSIBILITY (no config/array shapes) is deliberately NOT machine-judged — that is FR-9's sequencer rule, landed in T06. The machine checks presence + the named test.
   (FR-6, FR-7, FR-9, SC-2)
 
-- [ ] T04 [Tier A] Demote `verify-budget.py` to telemetry: exit 0 on every input, print the one-line ratio report (`ratio=<r> ceiling=<c> stakes=<s>` shape), delete the HALT path; re-contract `test_verify_budget.py` accordingly — the one permitted existing-test edit (SC-6).  (files: plugins/netdust-agent/bin/verify-budget.py, plugins/netdust-agent/tests/test_verify_budget.py)
+- [x] T04 [Tier A] Demote `verify-budget.py` to telemetry: exit 0 on every input, print the one-line ratio report (`ratio=<r> ceiling=<c> stakes=<s>` shape), delete the HALT path; re-contract `test_verify_budget.py` accordingly — the one permitted existing-test edit (SC-6).  (files: plugins/netdust-agent/bin/verify-budget.py, plugins/netdust-agent/tests/test_verify_budget.py)
   Test-author: solo — standard stakes, reporting-only change, not a security-boundary category.
   Proven by: new test — the re-contracted exit-code cases in `test_verify_budget.py`.
   Unit test: RED-first. (a) above-ceiling ratio → exit 0 AND report line printed; (b) under-ceiling → exit 0, same report shape; (c) `--json` output keeps its fields so any consumer parsing it is unbroken; (d) the string `HALT` absent from the script's stdout in both cases.
