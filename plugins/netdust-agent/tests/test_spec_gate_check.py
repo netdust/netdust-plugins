@@ -1483,6 +1483,34 @@ TASKS_BEHAVIOUR_SUBSTRING = (_BEHAVIOUR_TASKS_HEAD
                                  "(files: src/notify.php, tests/NotifyTest.php)",
                                  "(files: src/notify.php)"))
 
+# I-A probes (disk-rung confinement): the rung must accept ONLY a test-shaped path
+# resolving to a file STRICTLY UNDER the repo root. `.is_file()` alone accepts three
+# escapes — an absolute path (`repo_root / "/etc/hostname"` discards the left operand),
+# a `../` traversal (os.stat resolves it right past the root), and any in-repo non-test
+# file (README.md) — each of which vacuously validates the block and unlocks the Tier-A
+# `covered by cluster behaviour` waiver. The member files drop the tests/ entry so
+# validity could only come from the disk rung.
+def _bhv_disk_tasks(red_path: str) -> str:
+    return (_BEHAVIOUR_TASKS_HEAD
+            + "Behaviour: one mail per event, never a duplicate.\n"
+            + "Observable: `php bin/replay.php fixtures/events.json` prints `sent=1`.\n"
+            + f"RED until: {red_path}::test_one_mail\n\n"
+            + _BEHAVIOUR_TASKS_BODY.replace(
+                "(files: src/notify.php, tests/NotifyTest.php)",
+                "(files: src/notify.php)"))
+
+
+# I-A (e): the files rung is SHAPE-BLIND by design — a member-declared RED-until path
+# of any shape (spec/checks.php: not test-shaped, not on disk) stays valid, because the
+# member task is creating it.
+TASKS_BEHAVIOUR_FILES_NONTEST = (_BEHAVIOUR_TASKS_HEAD
+                                 + "Behaviour: one mail per event, never a duplicate.\n"
+                                 + "Observable: `php bin/replay.php fixtures/events.json` prints `sent=1`.\n"
+                                 + "RED until: spec/checks.php::test_one_mail\n\n"
+                                 + _BEHAVIOUR_TASKS_BODY.replace(
+                                     "(files: src/notify.php, tests/NotifyTest.php)",
+                                     "(files: src/notify.php, spec/checks.php)"))
+
 # S-2 rider: backtick quoting on the PATH half alone (`path`::method) must resolve
 # exactly like the fully-quoted form — no false dangle from a trailing backtick
 # surviving the `::` split.
@@ -2466,6 +2494,54 @@ def run():
     results.append((verdicts == ["fail"] and any("`src`" in x for x in details),
                     "(I-1) a RED-until path that is only a SUBSTRING of a member file "
                     "FAILs as dangling — exact match against comma-split paths"))
+
+    # 25j. I-A (disk-rung confinement): the docstring claims "a FILE on disk under the
+    # repo root"; the code must enforce it. Repo root is `outer/repo`; the escapes live
+    # in `outer` (the root's parent). Four probes, each dangling:
+    #   (a)  `/etc/hostname` — absolute, not test-shaped (both rungs reject);
+    #   (a2) an absolute path to a REAL test-shaped file — only resolution can reject;
+    #   (b)  `../tests/test_escape.py` — test-shaped `../` traversal to a real file in
+    #        the root's parent — only the under-root resolution can reject;
+    #   (c)  `README.md` — real file under the root but not test-shaped — only the
+    #        shape rung can reject.
+    # Then (d) the legitimate shape (`tests/test_x.py` under the root) still validates,
+    # and (e) the shape-blind files rung still validates a member-declared non-test
+    # path even when the disk rung rejects it.
+    with tempfile.TemporaryDirectory() as d:
+        outer = Path(d)
+        ia_root = outer / "repo"
+        (ia_root / "tests").mkdir(parents=True)
+        (ia_root / "README.md").write_text("# not a test")
+        (ia_root / "tests" / "test_x.py").write_text("# legitimate")
+        (outer / "tests").mkdir()
+        (outer / "tests" / "test_escape.py").write_text("# outside the root")
+        ia = {label: _bhv(_bhv_disk_tasks(red), repo_root=ia_root)[0]
+              for red, label in [
+                  ("/etc/hostname", "absolute"),
+                  (str(outer / "tests" / "test_escape.py"), "absolute-test-shaped"),
+                  ("../tests/test_escape.py", "traversal"),
+                  ("README.md", "in-repo-non-test")]}
+        v_legit, _ = _bhv(_bhv_disk_tasks("tests/test_x.py"), repo_root=ia_root)
+        v_files, _ = _bhv(TASKS_BEHAVIOUR_FILES_NONTEST, repo_root=ia_root)
+    results.append((ia["absolute"] == ["fail"] and ia["absolute-test-shaped"] == ["fail"],
+                    "(I-A a) an absolute RED-until path reads dangling — plain "
+                    "(/etc/hostname) and test-shaped alike; pathlib's discarded left "
+                    "operand no longer validates the block"))
+    results.append((ia["traversal"] == ["fail"],
+                    "(I-A b) a test-shaped ../ traversal to a real file in the root's "
+                    "parent reads dangling — the resolved path must sit strictly under "
+                    "the resolved repo root"))
+    results.append((ia["in-repo-non-test"] == ["fail"],
+                    "(I-A c) an in-repo non-test file (README.md) reads dangling — the "
+                    "disk rung confines to test-shaped paths (FWV_TEST_PATH, the one "
+                    "dialect)"))
+    results.append((v_legit == ["pass"],
+                    "(I-A d) the legitimate shape — tests/test_x.py existing under the "
+                    "root — still validates the disk rung (no regression)"))
+    results.append((v_files == ["pass"],
+                    "(I-A e) the files rung stays shape-blind — a member-declared "
+                    "non-test path (spec/checks.php) validates even though the disk "
+                    "rung rejects it"))
 
     # 25i. S-2: backticks on the path half alone (`path`::method) must not false-dangle
     # — the path resolves exactly like the fully-quoted corpus form.

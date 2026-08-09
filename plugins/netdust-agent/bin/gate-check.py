@@ -1500,10 +1500,13 @@ def repo_root_for(spec_dir: Path) -> Path | None:
 
 def _block_status(c: dict, repo_root: Path | None) -> str:
     """none | partial | dangling | valid. A full block is VALID when its RED-until path
-    is a FILE on disk under the repo root (`.is_file()` — a directory named `tests/`
-    is not a test, I-1), or exactly matches one of a member task's comma-split
-    `(files:)` paths (the test is CREATED by a task in the cluster; a substring hit
-    like `src` inside `src/notify.php` binds to nothing, I-1)."""
+    is test-shaped (a `tests/` path — FWV_TEST_PATH, the one dialect, I-A) AND resolves
+    to a FILE strictly under the resolved repo root (an absolute path, which
+    `repo_root / path` would otherwise adopt wholesale, or a `../` traversal escapes
+    the root and reads dangling, I-A; a directory named `tests/` is not a test, I-1),
+    or exactly matches one of a member task's comma-split `(files:)` paths (the test
+    is CREATED by a task in the cluster, so that rung is shape-blind by design; a
+    substring hit like `src` inside `src/notify.php` binds to nothing, I-1)."""
     present = [k for k in _BLOCK_KEYS if c[k]]
     if not present:
         return "none"
@@ -1512,8 +1515,14 @@ def _block_status(c: dict, repo_root: Path | None) -> str:
     path = _red_until_path(c["red_until"])
     if not path:
         return "partial"
-    if repo_root is not None and (repo_root / path).is_file():
-        return "valid"
+    if repo_root is not None and FWV_TEST_PATH.search(path):
+        try:
+            root = repo_root.resolve()
+            p = (repo_root / path).resolve()
+        except OSError:
+            root = p = None
+        if p is not None and root in p.parents and p.is_file():
+            return "valid"
     if any(path == p.strip() for m in c["members"]
            for p in m["files"].split(",")):
         return "valid"
@@ -1781,6 +1790,8 @@ FWV_TASK_LINE = re.compile(
     r"^\s*(?:[-*]\s+)?(?:\*\*)?Task(?:\*\*)?:\s*\**\s*(T\d+)\b", re.IGNORECASE)
 # A path under any `test/` / `tests/` directory, at the root or nested. The 1j draft's
 # assertion 4: a task producing ONLY such paths cannot be a first working version.
+# Also the ONE test-shaped dialect `_block_status`'s disk rung confines to (I-A) —
+# do not grow a second definition of "test-shaped" beside this one.
 FWV_TEST_PATH = re.compile(r"(^|/)tests?/", re.IGNORECASE)
 
 
