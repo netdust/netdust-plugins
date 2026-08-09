@@ -34,6 +34,7 @@ money, data, access, or irreversible operation anywhere in the diff.
 | Cluster | Stakes | Why |
 |---|---|---|
 | A — the checker | **standard** | a wrong check blocks or admits plans loudly; caught at first use, reverted in one commit |
+| A-fix — review findings | **standard** | same surface as A; three fix cycles from the Cluster A review |
 | B — the hook | **high** | `subagent-stop.py` is the enforcement boundary itself — a bug here silently un-gates every implementer close on every project; failure mode is invisible, not loud |
 | C — the skill texts | **standard** | prose guidance; wrong words misroute sessions but every mechanical gate beneath them still holds |
 

@@ -62,6 +62,39 @@ findings on any existing-corpus fixture (AC-3).
 
 ---
 
+### Cluster A-fix — review findings (3 tasks · effective stakes: standard · provisional tier: STANDARD)
+
+*Triage record (2026-08-09, generalist + simplicity reviews, both independent): 0 Critical.
+I-1/I-2/I-3 → fix now (below). Parked: S-1, S-3, S-5 + 9 simplicity items — see
+`specs/deliverable-first/review-A.md`. Escalation: I-1 touched the waiver path, so Cluster A
+is promoted one-way to FULL — `security-sentinel` runs on the post-fix cluster diff.*
+
+- [ ] T10 [Tier A] fix I-1: behaviour-block validity is vacuously satisfiable — `RED until:` accepts a directory (`.exists()`) and a substring files-segment match — closes when the two named dangling tests go green  (files: plugins/netdust-agent/bin/gate-check.py, plugins/netdust-agent/tests/test_spec_gate_check.py)
+  Test-author: solo — standard stakes, checker validation logic, not a security-boundary category.
+  Proven by: new test — the two dangling cases in case block 25.
+  Unit test: RED-first. (a) `RED until: tests/::x` where `tests/` is a directory → dangling FAIL; (b) `RED until: src::x` beside a member whose files list `src/notify.php` → dangling FAIL (exact comma-split path match required). Rider S-2: backticked path half no longer false-dangles. Rider S-5b: one comment in the checker noting the deliberate FAIL+WARN dual-fire (test 23h).
+  (FR-6, FR-7)
+
+- [ ] T11 [Tier A] fix I-2: `check_fr_sources` block boundary — a colon-less FR def escapes the check and donates its `Source:` to the previous FR — closes when the leak test goes green  (files: plugins/netdust-agent/bin/gate-check.py, plugins/netdust-agent/tests/test_spec_gate_check.py)
+  Test-author: solo — standard stakes, checker validation logic, not a security-boundary category.
+  Proven by: new test — the leak case in case block 24.
+  Unit test: RED-first. A spec whose colon-less FR def carries the only `Source:` must FAIL naming the sourced-in-appearance FR as bare (block flushes at any column-0 bullet that is not an FR def). Rider S-4: a `Source:` must contain at least one word character.
+  (FR-1, FR-2)
+
+- [ ] T12 [Tier B] fix I-3 (code half): retire the HALT consumer branch in `hooks/loop-gate.py` and re-contract its stub-pinned test — the branch is unreachable with the shipped verify-budget (dead code; fails toward the new behaviour), so this is a non-behavioural removal closing on the suite green  (files: plugins/netdust-agent/hooks/loop-gate.py, plugins/netdust-agent/tests/test_loop_gate.py)
+  Test-author: solo — Tier B.
+  Proven by: existing suite — `bash plugins/netdust-agent/tests/run.sh` green over the removal; the stub re-contract is declared (the stub printed a contract no real input can produce — green-but-blind).
+  Unit test: no unit test: Tier B, dead-branch removal; the re-contracted loop-gate test asserts the gate no longer reads budget output at all.
+  (FR-10, FR-11)
+
+**Integration gate (Cluster A-fix):** the two probe inputs from the review (dir-only and
+substring `RED until:`, colon-less FR def) now FAIL through the live CLI; full suite green;
+self-host and daan replays unchanged from the Cluster A gate.
+
+── REVIEW GATE ── (tier: FULL — the escalation landed here: `security-sentinel` on the whole Cluster A + A-fix diff; verify-only for the three named closing checks, no new general hunting round.)
+
+---
+
 ### Cluster B — the enforcement boundary (1 task · effective stakes: high · provisional tier: FULL)
 
 - [ ] T05 [Tier A] Teach `hooks/subagent-stop.py` the behaviour-cluster transition tolerance  (files: plugins/netdust-agent/hooks/subagent-stop.py, plugins/netdust-agent/tests/test_subagent_stop_evidence.py)
@@ -100,7 +133,7 @@ assertion weakened; the test diff outside `test_verify_budget.py` is additive-on
   Unit test: no unit test: Tier B, skill prose whose mechanical halves landed in T01–T03.
   (FR-1, FR-3, FR-9)
 
-- [ ] T07 [Tier B] Building text — Artifact-load rule, ledger events, verify-budget telemetry  (files: plugins/netdust-agent/skills/building/SKILL.md)
+- [ ] T07 [Tier B] Building text — Artifact-load rule, ledger events, verify-budget telemetry  (files: plugins/netdust-agent/skills/building/SKILL.md, plugins/netdust-agent/commands/integration.md, plugins/netdust-agent/commands/shakeout.md, plugins/netdust-agent/bin/README.md)
   Contract: add the `Artifact-load:` requirement to the review-gate step — before
   reviewer dispatch on a cluster whose diff touches a user-facing surface, the controller
   loads the artifact once and records `Artifact-load: <cmd/URL> → <observed>` in the
@@ -108,7 +141,9 @@ assertion weakened; the test diff outside `test_verify_budget.py` is additive-on
   red-flag row added). Define the `cluster-open` / `cluster-close` ledger events the T05
   hook reads, and who writes them (the controller, at the behaviour cluster's
   boundaries). Replace verify-budget's HALT step with the telemetry line (record and
-  continue; the human is never asked).
+  continue; the human is never asked). I-3 extension: retire the HALT contract wherever
+  the plugin still states it outside skills/ — `commands/integration.md`,
+  `commands/shakeout.md`, `bin/README.md` (the doc half; the loop-gate code half is T12).
   Test-author: solo — Tier B.
   Proven by: machine gate — T04's exit-0 contract and T05's ledger tests; the text cites
   both; SC-3's grep at the cluster gate proves no HALT semantics remain.
@@ -139,9 +174,10 @@ assertion weakened; the test diff outside `test_verify_budget.py` is additive-on
   Unit test: no unit test: Tier B, documentation and version metadata.
   (FR-5, SC-5, SC-6)
 
-**Integration gate (Cluster C):** coherence grep across `plugins/netdust-agent/skills/**`:
-0 verify-budget HALT semantics remain (SC-3); every new skill claim cites its mechanical
-check by exact name (standing line); `gate-check.py` re-run on `specs/deliverable-first`
-still exits 0 after all text edits (the self-hosting property survives).
+**Integration gate (Cluster C):** coherence grep across `plugins/netdust-agent/**`
+(calibration history and this spec's own record excepted): 0 verify-budget HALT semantics
+remain anywhere in the plugin (SC-3, widened per review finding I-3); every new skill
+claim cites its mechanical check by exact name (standing line); `gate-check.py` re-run on
+`specs/deliverable-first` still exits 0 after all text edits (self-hosting survives).
 
 ── REVIEW GATE ── (tier: LIGHT — skill-body/doc only. Escalates one-way if any finding shows a text promising enforcement the machine doesn't perform.)
