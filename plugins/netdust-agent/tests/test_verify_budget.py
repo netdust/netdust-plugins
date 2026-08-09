@@ -1,18 +1,21 @@
 """
-test_verify_budget.py — the verification-effort tripwire (bin/verify-budget.py).
+test_verify_budget.py — the verification-effort telemetry line (bin/verify-budget.py).
 
-The load-bearing cases, in the order they matter:
+Re-contracted 2026-08-09 (deliverable-first FR-10, the one permitted existing-test edit
+per SC-6): the script REPORTS, it never halts. The load-bearing cases, in the order they
+matter:
 
-  1. A `low`-stakes feature carrying an auth subsystem's worth of tests HALTs. That is
-     `contact-page-8k` reproduced in miniature, and it is the whole reason this script
-     exists — before it, nothing in the machine could notice.
-  2. The SAME diff at `high` stakes passes. The tripwire measures spend against declared
-     consequence; it has no opinion about testing in the abstract, and if it grew one it
-     would start firing on work that deserves its tests.
-  3. Small diffs stay quiet. A tripwire that fires on ordinary work gets routed around,
-     and a routed-around gate still costs a run while no longer informing.
-  4. It fails OPEN on any git/tooling problem. Its only power is to interrupt a human;
-     that power must never be exercised by accident.
+  1. It exits 0 on EVERY input — above ceiling, below ceiling, unmeasurable. The HALT
+     mechanic was removed by human decision ("am i supposed to say stop coding?"); the
+     structural controls on runaway verification are the deliverable-first gate and the
+     behaviour clusters in gate-check.py, not an interrupt from this script.
+  2. It still MEASURES exactly as before — same ratio, same ceilings, same stakes
+     resolution, same exclusions. An over-ceiling range is marked `[over-ceiling]` on the
+     one-line report; the dial changes what is REPORTED, never whether the run continues.
+  3. Small diffs stay under the measurement floor and draw no `[over-ceiling]` marker.
+  4. It fails OPEN on any git/tooling problem — with NO opinion: no report line, no PASS,
+     just a cannot-measure notice. A tooling failure must never read as a verdict
+     (calibration: the C1 false-green on the master-default repo shape).
 """
 import atexit
 import json
@@ -29,6 +32,11 @@ PLAN = """# Implementation Plan: Contact page
 ## Stakes  [GATE]
 Stakes: {level} — {reason}
 """
+
+# Every field the JSON payload carried before the FR-10 demotion. Consumers parse these;
+# the demotion changed the exit code and the human line, never the JSON shape.
+JSON_FIELDS = {"range", "stakes", "stakes_source", "ceiling", "test_lines",
+               "impl_lines", "ratio", "below_measurement_floor", "halt"}
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -87,45 +95,70 @@ def _run(repo: Path, spec_dir: Path | None, *extra: str):
 def run():
     results = []
 
-    # 1. THE CALIBRATION CASE. 2000 test lines over 200 implementation lines is 10×, on a
-    #    feature the plan itself calls `low`. HALT, and say what to do about it.
+    # 1. THE DEMOTION CONTRACT (FR-10 / AC-6). 2000 test lines over 200 implementation
+    #    lines is 10×, on a feature the plan itself calls `low` — the contact-page-8k
+    #    shape. The script REPORTS it and exits 0: one line, `[over-ceiling]` marked,
+    #    nothing halted, no human summoned.
     repo, spec = _repo(test_lines=2000, impl_lines=200, stakes="low")
     rc, out = _run(repo, spec)
-    results.append((rc == 1 and "BUDGET: HALT" in out and "10.00×" in out,
-                    "a low-stakes feature at 10× test:impl HALTs"))
+    results.append((rc == 0
+                    and "verify-ratio: ratio=10.00" in out
+                    and "ceiling=1.0" in out and "stakes=low" in out
+                    and "impl=+200" in out and "test=+2000" in out
+                    and "[over-ceiling]" in out,
+                    "an above-ceiling range exits 0 and prints the one-line report "
+                    "with [over-ceiling]"))
 
-    # The HALT must route the human to a decision, not just complain. In particular it must
-    # offer "the stakes line was wrong" FIRST — deleting tests is the wrong instinct and the
-    # script must not leave room for it.
-    results.append((("stakes line is wrong" in out
-                     and "Do NOT resolve it by deleting" in out),
-                    "the HALT names the three causes and forbids deleting tests"))
+    # ...and the interrupt mechanic is GONE: no HALT string in any output (contract
+    # case d), no three-causes lecture, no stop instruction.
+    results.append(("HALT" not in out and "STOP" not in out,
+                    "the HALT mechanic is deleted — no HALT/STOP in over-ceiling output"))
 
-    # 2. The same diff at `high` stakes passes. Consequence is the measure, not volume.
+    # 2. Under the ceiling: same exit code, same report shape, no marker. The ratio
+    #    computation and the stakes dial are unchanged — 3.5× is inside `high`'s 4.0×.
     repo, spec = _repo(test_lines=700, impl_lines=200, stakes="high")
     rc, out = _run(repo, spec)
-    results.append((rc == 0 and "BUDGET: PASS" in out,
-                    "3.5× passes at `high` stakes — consequence is the measure, not volume"))
+    results.append((rc == 0
+                    and "verify-ratio: ratio=3.50" in out
+                    and "ceiling=4.0" in out and "stakes=high" in out
+                    and "[over-ceiling]" not in out and "HALT" not in out,
+                    "an under-ceiling range exits 0 with the same report shape, "
+                    "no marker, no HALT"))
 
-    # ...and the SAME 3.5× fails at `low`, which is the dial doing its only job.
+    # ...and the SAME 3.5× at `low` is marked over-ceiling — the dial still does its
+    # only job, it just reports instead of interrupting.
     repo, spec = _repo(test_lines=700, impl_lines=200, stakes="low")
     rc, out = _run(repo, spec)
-    results.append((rc == 1 and "BUDGET: HALT" in out,
-                    "the same 3.5× HALTs at `low` — the dial is what changed, nothing else"))
+    results.append((rc == 0 and "[over-ceiling]" in out and "stakes=low" in out,
+                    "the same 3.5× at `low` is marked [over-ceiling] — and still exits 0"))
 
-    # 3. Below the measurement floor, stay quiet. A 20-line test over a 2-line fix is 10×
-    #    and is not a runaway; firing here is how a tripwire loses its audience.
+    # 2b. The --json payload keeps every pre-demotion field (contract case c) — including
+    #     the legacy `halt` boolean, which still computes but no longer exits non-zero.
+    repo, spec = _repo(test_lines=2000, impl_lines=200, stakes="low")
+    rc, out = _run(repo, spec, "--json")
+    payload = json.loads(out)
+    results.append((rc == 0 and set(payload) == JSON_FIELDS
+                    and payload["halt"] is True and payload["ratio"] == 10.0,
+                    "--json keeps all pre-demotion fields (incl. `halt`) and exits 0 "
+                    "even when over ceiling"))
+
+    # 3. Below the measurement floor, no marker. A 20-line test over a 2-line fix is 10×
+    #    and is not a runaway; the floor keeps the telemetry honest about tiny diffs.
     repo, spec = _repo(test_lines=20, impl_lines=2, stakes="low")
-    rc, out = _run(repo, spec)
-    results.append((rc == 0 and "measurement floor" in out,
-                    "a tiny diff at 10× stays quiet — under the measurement floor"))
+    rc, out = _run(repo, spec, "--json")
+    payload = json.loads(out)
+    results.append((rc == 0 and payload["below_measurement_floor"] is True
+                    and payload["halt"] is False,
+                    "a tiny diff at 10× stays under the measurement floor — no marker"))
 
-    # 4. Missing `Stakes:` line → fall back to standard, and SAY so. A silent default is how
-    #    two gates end up disagreeing about what a feature is.
+    # 4. Missing `Stakes:` line → fall back to standard, and SAY so in the JSON source
+    #    field. A silent default is how two gates end up disagreeing about a feature.
     repo, spec = _repo(test_lines=1000, impl_lines=200, stakes="low")
     (spec / "plan.md").write_text("# Implementation Plan: Contact page\n\nNo dial here.\n")
-    rc, out = _run(repo, spec)
-    results.append((rc == 1 and "stakes    standard" in out and "pre-0.16" in out,
+    rc, out = _run(repo, spec, "--json")
+    payload = json.loads(out)
+    results.append((rc == 0 and payload["stakes"] == "standard"
+                    and "pre-0.16" in payload["stakes_source"],
                     "a plan with no `Stakes:` line falls back to standard, visibly"))
 
     # 4b. F3 — a punctuated reason parses to the DECLARED level, same as gate-check.py's
@@ -135,7 +168,7 @@ def run():
         "# Implementation Plan: Contact page\n\n## Stakes  [GATE]\n"
         "Stakes: low (a lost lead, no money or data at risk)\n")
     rc, out = _run(repo, spec)
-    results.append((rc == 1 and "stakes    low" in out and "BUDGET: HALT" in out,
+    results.append((rc == 0 and "stakes=low" in out and "[over-ceiling]" in out,
                     "F3: `Stakes: low (reason)` parses to level `low` in verify-budget too"))
 
     # 4c. F3 — ...and a mangled token never silently READS as a level. `low-ish` is
@@ -143,53 +176,60 @@ def run():
     repo, spec = _repo(test_lines=700, impl_lines=200, stakes="low")
     (spec / "plan.md").write_text(
         "# Implementation Plan: Contact page\n\n## Stakes  [GATE]\nStakes: low-ish — eh\n")
-    rc, out = _run(repo, spec)
-    results.append(("stakes    standard" in out and "unreadable level `low-ish`" in out,
+    rc, out = _run(repo, spec, "--json")
+    payload = json.loads(out)
+    results.append((payload["stakes"] == "standard"
+                    and "unreadable level `low-ish`" in payload["stakes_source"],
                     "F3: an unreadable token falls back to standard visibly, never "
                     "parses as its prefix"))
 
-    # 4d. F3 — a FENCED `Stakes:` example (the plan quoting the template) is not a declared
-    #     level. The real line below the fence must win: this plan is `low`, so 3.5× HALTs.
-    #     Without fence-stripping the fenced `high` is read first and the tripwire sleeps.
+    # 4d. F3 — a FENCED `Stakes:` example (the plan quoting the template) is not a
+    #     declared level. The real line below the fence must win: this plan is `low`, so
+    #     3.5× is marked over-ceiling. Without fence-stripping the fenced `high` is read
+    #     first and the marker never appears.
     repo, spec = _repo(test_lines=700, impl_lines=200, stakes="low")
     (spec / "plan.md").write_text(
         "# Implementation Plan: Contact page\n\nThe template, quoted:\n\n"
         "```\nStakes: high — money on the line\n```\n\n"
         "## Stakes  [GATE]\nStakes: low — a lost lead at worst\n")
     rc, out = _run(repo, spec)
-    results.append((rc == 1 and "stakes    low" in out and "BUDGET: HALT" in out,
+    results.append((rc == 0 and "stakes=low" in out and "[over-ceiling]" in out,
                     "F3: a fenced `Stakes:` sample is ignored — the real level is read"))
 
-    # 4e. I7 — a test-only range (zero implementation lines) has no ratio to judge and is
-    #     a runaway shape by definition: still exit 1, with a DISTINCT message instead of
-    #     a meaningless ∞-ratio comparison.
+    # 4e. I7 — a test-only range (zero implementation lines) has no finite ratio; it
+    #     reports `ratio=inf`, marked over-ceiling once past the floor, and STILL exits 0.
     repo, spec = _repo(test_lines=300, impl_lines=0, stakes="low")
     rc, out = _run(repo, spec)
-    results.append((rc == 1 and "test-only range" in out and "BUDGET: HALT" in out,
-                    "I7: a test-only diff HALTs with its own message, not an ∞ ratio"))
+    results.append((rc == 0 and "ratio=inf" in out and "[over-ceiling]" in out
+                    and "HALT" not in out,
+                    "I7: a test-only diff reports ratio=inf with [over-ceiling], exit 0"))
 
-    # 5. --stakes overrides the plan without editing it (Class C/D/E work has no plan at all).
+    # 5. --stakes overrides the plan without editing it (Class C/D/E work has no plan at
+    #    all) — visible in the JSON source field.
     repo, spec = _repo(test_lines=700, impl_lines=200, stakes="low")
-    rc, out = _run(repo, None, "--stakes", "high")
-    results.append((rc == 0 and "--stakes override" in out,
+    rc, out = _run(repo, None, "--stakes", "high", "--json")
+    payload = json.loads(out)
+    results.append((rc == 0 and payload["stakes"] == "high"
+                    and payload["stakes_source"] == "--stakes override",
                     "--stakes overrides the plan and works with no feature dir"))
 
-    # 6. Fail OPEN on a bad range. The script's only power is to interrupt a human; it must
-    #    never spend that power on its own tooling failure. C1: fail-open is "no opinion" —
-    #    an unknown revision must never READ as a verdict, so no "BUDGET: PASS" either.
+    # 6. Fail OPEN on a bad range, with NO opinion: an unknown revision must never READ
+    #    as a verdict — no PASS, and no telemetry line either (a measurement that did
+    #    not happen must not report a number).
     repo, spec = _repo(test_lines=2000, impl_lines=200, stakes="low")
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), str(spec), "--base", "no-such-ref", "--repo", str(repo)],
         capture_output=True, text=True, timeout=60)
     results.append((proc.returncode == 0 and "cannot read the diff" in proc.stderr
-                    and "BUDGET: PASS" not in proc.stdout,
+                    and "BUDGET: PASS" not in proc.stdout
+                    and "verify-ratio:" not in proc.stdout,
                     "an unresolvable git ref fails OPEN (exit 0), never blocks on tooling, "
-                    "never prints PASS"))
+                    "never prints PASS or a ratio line"))
 
     # 6b. C1 — an EMPTY --base (a caller's `$(git merge-base HEAD main)` on a repo with no
     #     `main` expands to nothing) must be cannot-measure, NOT a verdict. Before the fix,
-    #     "" became the range `...HEAD` → empty diff → "BUDGET: PASS" — the tripwire
-    #     reporting green on the exact incident repo shape it exists to catch.
+    #     "" became the range `...HEAD` → empty diff → a false green on the exact
+    #     master-default repo shape this telemetry exists to catch.
     repo, spec = _repo(test_lines=2000, impl_lines=200, stakes="low")
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), str(spec), "--base", "", "--repo", str(repo)],
@@ -197,14 +237,16 @@ def run():
     results.append((proc.returncode == 0
                     and "cannot determine base ref" in proc.stderr
                     and "budget not measured" in proc.stderr
-                    and "BUDGET: PASS" not in proc.stdout,
+                    and "BUDGET: PASS" not in proc.stdout
+                    and "verify-ratio:" not in proc.stdout,
                     "C1: an empty --base exits 0 with a cannot-measure notice and NEVER "
-                    "prints PASS"))
+                    "prints PASS or a ratio line"))
 
     # 6c. C1 — the call sites' base-resolution chain (main → master → origin/HEAD) on a
     #     MASTER-default repo (the Daan incident shape). The snippet below is the one
     #     integration.md / shakeout.md document verbatim; it must find `master`, and the
-    #     known over-ratio range must then HALT instead of being silently unmeasurable.
+    #     known over-ratio range must then be MEASURED and marked, never silently
+    #     unmeasurable.
     repo, spec = _repo(test_lines=2000, impl_lines=200, stakes="low",
                        default_branch="master")
     resolve = (
@@ -222,9 +264,9 @@ def run():
             [sys.executable, str(SCRIPT), str(spec), "--base", resolved,
              "--repo", str(repo)], capture_output=True, text=True, timeout=60)
         rc, out = proc.returncode, proc.stdout + proc.stderr
-    results.append((resolved == "master" and rc == 1 and "BUDGET: HALT" in out,
+    results.append((resolved == "master" and rc == 0 and "[over-ceiling]" in out,
                     "C1: on a master-default repo the documented resolution chain finds "
-                    "`master` and the over-ratio range HALTs"))
+                    "`master` and the over-ratio range is measured and marked"))
 
     # 6d. S5 — the php test-suffix match is case-SENSITIVE: `latest.php` and `contest.php`
     #     are implementation, not tests. Before the fix, IGNORECASE made `latest.php` end

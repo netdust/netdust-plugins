@@ -20,8 +20,10 @@ before relaxing anything they touch:
   draws no warning."* If that warning comes back, every framework-primitive call in a
   WordPress feature gets pushed to Tier A + `split` again, and the contact page repeats
   itself (calibration: `contact-page-8k`).
-- **`test_verify_budget.py`** — *"an unresolvable git ref fails OPEN."* The tripwire's only
-  power is to interrupt a human. It must never spend that on its own tooling breaking.
+- **`test_verify_budget.py`** — *"an unresolvable git ref fails OPEN."* The budget line is
+  telemetry (exit 0 on every input since 2026-08-09, FR-10 `deliverable-first`); a tooling
+  failure must yield no verdict at all — the regression to prevent is a false green on an
+  unmeasurable range.
 
 ## Run
 

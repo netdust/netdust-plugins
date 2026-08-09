@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""verify-budget.py — the verification-effort tripwire.
+"""verify-budget.py — the verification-effort telemetry line.
 
 Every gate in this harness answers "is this verified?" None of them asked "is this
 verification worth what it cost?" — so effort could compound, gate by gate, each step
@@ -8,17 +8,22 @@ page bought ~8000 lines of tests that way; the human found out hours later, beca
 human was the only thing in the loop capable of noticing (calibration: `contact-page-8k`).
 
 This script is that missing sense. It compares test lines added against implementation
-lines added over a git range, and HALTs when the ratio exceeds what the feature's declared
-stakes justify.
+lines added over a git range and REPORTS the ratio against what the feature's declared
+stakes justify — one line, every run, recorded in cluster evidence as telemetry. It never
+interrupts the run and never summons a human: the interrupt mechanic was removed on
+2026-08-09 by human decision (FR-10, `deliverable-first` — "am i supposed to say stop
+coding? … shoud not be difficult"). The structural controls on runaway verification are
+the deliverable-first gate and the behaviour clusters (`check_deliverable_first` and the
+behaviour-cluster grammar in `gate-check.py`), not an interrupt from this script.
 
 WHAT IT IS NOT
 --------------
 It is not a quality measure and it must never be read as one. A high ratio is not "too many
 tests" — a security-critical parser legitimately carries several times its own weight in
-tests. A HALT means exactly one thing: **the spend has outrun the plan's declared stakes,
-and a human should look before more is spent.** The right response is often "the stakes
-line was wrong, raise it and continue", which is a perfectly good outcome — the dial gets
-corrected while the work is still cheap to redirect.
+tests. An `[over-ceiling]` marker means exactly one thing: **the spend has outrun the
+plan's declared stakes.** The right response, at the next natural boundary, is often "the
+stakes line was wrong, raise it and continue" — the dial gets corrected while the work is
+still cheap to redirect. It is never "delete tests".
 
 It also cannot see effort that produced no lines: dispatch round-trips, re-planning, a
 test-author/implementer pair ping-ponging on a fixture. For that, read `run-cost.py`'s
@@ -29,7 +34,10 @@ Usage:
     verify-budget.py <feature-spec-dir> --base main --json
     verify-budget.py --stakes standard --base main       # no feature dir (Class C/D/E)
 
-Exit code: 0 under the ceiling (or not enough diff to judge), 1 on HALT.
+Report line (always printed on a measurable range, over or under the ceiling):
+    verify-ratio: ratio=<r> ceiling=<c> stakes=<level> impl=+<n> test=+<m> [over-ceiling]
+
+Exit code: 0 on every input, measurable or not (argparse usage errors excepted).
 """
 from __future__ import annotations
 
@@ -109,9 +117,9 @@ def strip_fenced(text: str) -> str:
 # rather than restated at every call site, and no ratio can express that. The lever is
 # authoring discipline at the task close, not arithmetic here.
 #
-# What this DOES mean for a reader of a HALT: a ratio near the ceiling on a comment-heavy
-# diff is worse than it looks, and the honest first question is "how much of the
-# denominator is prose?" before "are there too many tests?".
+# What this DOES mean for a reader of an `[over-ceiling]` line: a ratio near the ceiling
+# on a comment-heavy diff is worse than it looks, and the honest first question is "how
+# much of the denominator is prose?" before "are there too many tests?".
 
 # ── what counts as a test file ────────────────────────────────────────────────
 #
@@ -230,73 +238,34 @@ def main(argv: list[str]) -> int:
     ceiling = CEILINGS[level]
 
     try:
-        test_lines, impl_lines, per_file = measure(rng, args.repo)
+        test_lines, impl_lines, _per_file = measure(rng, args.repo)
     except (RuntimeError, subprocess.SubprocessError) as exc:
         print(f"verify-budget: cannot read the diff — {exc}", file=sys.stderr)
         return 0                      # fail-open: never block work on a tooling problem
 
     ratio = (test_lines / impl_lines) if impl_lines else (float("inf") if test_lines else 0.0)
     quiet = test_lines < MIN_TEST_LINES
-    halt = (not quiet) and ratio > ceiling
+    over = (not quiet) and ratio > ceiling
 
     if args.json:
         print(json.dumps({
             "range": rng, "stakes": level, "stakes_source": source,
             "ceiling": ceiling, "test_lines": test_lines, "impl_lines": impl_lines,
             "ratio": None if ratio == float("inf") else round(ratio, 2),
-            "below_measurement_floor": quiet, "halt": halt,
+            "below_measurement_floor": quiet,
+            # Legacy field name kept for JSON consumers (FR-10: rename nothing); it means
+            # "over ceiling and past the floor" and no longer moves the exit code.
+            "halt": over,
         }, indent=2))
-        return 1 if halt else 0
-
-    shown = "∞" if ratio == float("inf") else f"{ratio:.2f}"
-    print(f"  range     {rng}")
-    print(f"  stakes    {level}  (from: {source})")
-    print(f"  added     {test_lines} test / {impl_lines} implementation")
-    print(f"  ratio     {shown}×   ceiling {ceiling}×")
-
-    if quiet:
-        print()
-        print(f"BUDGET: PASS — under the {MIN_TEST_LINES}-line measurement floor, "
-              "too little to judge")
         return 0
 
-    if not halt:
-        print()
-        print("BUDGET: PASS")
-        return 0
-
-    heaviest = sorted((r for r in per_file if r[0] == "test"),
-                      key=lambda r: -r[1])[:5]
-    print()
-    if impl_lines == 0:
-        # I7 — a test-only range has no ratio to judge, and that shape is a runaway by
-        # definition once it clears the measurement floor: say what it is instead of
-        # comparing ∞ against a ceiling.
-        print(f"BUDGET: HALT — test-only range: {test_lines} test lines added against "
-              f"ZERO implementation lines; there is no ratio to judge here, and a "
-              f"test-only accumulation past the {MIN_TEST_LINES}-line floor is the "
-              "runaway shape itself.")
-    else:
-        print(f"BUDGET: HALT — {shown}× exceeds the {ceiling}× a `{level}`-stakes feature buys.")
-    print()
-    print("  Heaviest test files in this range:")
-    for _kind, added, path in heaviest:
-        print(f"    {added:>6}  {path}")
-    print()
-    print("  STOP and put this in front of your human partner. Do NOT resolve it by deleting")
-    print("  tests, and do NOT quietly continue. Report: what was verified, what it cost, and")
-    print("  which of these is true —")
-    print()
-    print(f"    1. The stakes line is wrong. This work is riskier than `{level}` says.")
-    print("       Raise it in the plan (a plan-correction commit) and carry on. This is a")
-    print("       normal outcome, not a failure.")
-    print("    2. Evidence is being duplicated. Something on the ladder's cheaper rungs — a")
-    print("       machine gate, a framework guarantee — already proves what these tests")
-    print("       re-prove by hand. See testing-workflow's evidence ladder.")
-    print("    3. Edges are being driven as durable specs that should have been driven once.")
-    print("       See feature-acceptance: a drive becomes a committed spec only on a")
-    print("       money/data path or where the edge reproduced a real bug.")
-    return 1
+    shown = "inf" if ratio == float("inf") else f"{ratio:.2f}"
+    line = (f"verify-ratio: ratio={shown} ceiling={ceiling} stakes={level} "
+            f"impl=+{impl_lines} test=+{test_lines}")
+    if over:
+        line += " [over-ceiling]"
+    print(line)
+    return 0
 
 
 if __name__ == "__main__":
