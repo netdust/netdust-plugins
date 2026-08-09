@@ -552,6 +552,12 @@ PLAN_FLOWS_EMPTY_TABLE = PLAN_FLOWS_NA.replace(
 """,
 )
 
+# Carries the 1j `## First working version` section since the deliverable-first gate
+# landed — the same fixture amendment SPEC_TRIGGERED et al. received when the 1g
+# user-facing sections and the Stakes: dial became mandatory grammar (the paired case's
+# assertions are unchanged and unweakened; a user-facing plan simply must now name its
+# first demoable slice to be a green fixture). Names TASKS_GOOD's T01: position 1,
+# non-test file (lib/url.ts).
 PLAN_FLOWS_FILLED = PLAN_FLOWS_NA.replace(
     "## Acceptance flows\nN/A — small feature.",
     """## Acceptance flows
@@ -560,6 +566,12 @@ PLAN_FLOWS_FILLED = PLAN_FLOWS_NA.replace(
 |---|---|---|
 | issue an invoice | PDF stored, editor sees it listed | empty: no line items → blocked with a message; denied: viewer role refused; re-entry: back-then-submit does not double-issue; concurrent: double-submit issues one; boundary: 0.00 total refused; mid-flow failure: storage error rolls the record back |
 | email the invoice | recipient receives it once | empty: no recipient → blocked; denied: viewer cannot send; re-entry: resend is idempotent per invoice; concurrent: two sends deliver one; boundary: 500-char subject truncated; mid-flow failure: SMTP error leaves it queued, not sent |
+
+## First working version
+
+**Task:** T01
+**Demonstrates:** a wired validator an editor can exercise from the first cluster
+**Verify by:** drive the wizard's first screen and watch an RFC1918 target refused
 """,
 )
 
@@ -1178,6 +1190,96 @@ TASKS_FENCED_REALSHAPED_TASK_LINE = """# Tasks: x
       Test-author: solo — Tier B
 - [ ] T03 [Tier A] pure threshold logic  (files: calc.ts)
       Test-author: solo — A-lite, pure transform, no security-boundary category
+"""
+
+
+# ── `deliverable-first` fixtures — the 1j gate (first demoable slice first) ──
+# The 2026-08-03 post-mortem's gate, decided 2026-08-09 (FR-3/4/5): a plan must carry
+# `## First working version` naming a task among the FIRST 3 whose `(files:)` produces at
+# least one non-test file; `N/A` only when the spec flags no user-facing surface; a legacy
+# plan states the `legacy-artifact` waiver and degrades ABSENCE to WARN. The two worked
+# examples in the 1j draft become fixture shapes here: josworld-core's first seeable task
+# fifth (position FAIL) and yootheme-baseline's test-only T03 (files FAIL).
+
+# Five tasks, deliberately post-mortem-shaped: T01 non-test scaffold, T02 test-only,
+# T03 mixed (impl + test), T04 the first admin-visible surface — too late.
+TASKS_FWV = """# Tasks: Case model
+
+### Cluster C1
+- [ ] T01 [Tier B] scaffold the loader pair  (files: src/loader.php)
+- [ ] T02 [Tier A] boot-order proof  (files: tests/Integration/BootOrderTest.php)
+- [ ] T03 [Tier A] register the case model  (files: src/model.php, tests/model.spec.php)
+- [ ] T04 [Tier A] case admin screen  (files: src/admin.php)
+- [ ] T05 [Tier B] docs  (files: README.md)
+"""
+
+# Same list with a [HUMAN] yield point among the preceding tasks — it still counts toward
+# position (the deliverable waits on it all the same), so T04 stays fourth.
+TASKS_FWV_HUMAN_PRECEDING = TASKS_FWV.replace(
+    "- [ ] T02 [Tier A] boot-order proof  (files: tests/Integration/BootOrderTest.php)",
+    "- [ ] T02 [HUMAN] approve the destructive rename")
+
+_PLAN_FWV_BASE = """# Implementation Plan: Case model
+
+## Constitution check
+- [x] ok
+
+## Threat model
+N/A — no surface flagged.
+
+## Acceptance flows
+N/A — fixture.
+
+## Architecture invariants touched
+N/A
+
+## Spec-premise ground-truth
+N/A
+
+## Phases & review clusters
+See tasks.md.
+
+## Stakes
+Stakes: standard — fixture
+
+## Technical context
+- **Loop budget:** ~6 iterations
+"""
+
+def _plan_fwv(task_id: str) -> str:
+    return _PLAN_FWV_BASE + f"""
+## First working version
+
+**Task:** {task_id}
+**Demonstrates:** an editor sees the case model in wp-admin
+**Verify by:** open wp-admin and create one case
+"""
+
+# The section marked N/A, threat-model style — legitimate ONLY on a non-user-facing spec.
+PLAN_FWV_NA = _PLAN_FWV_BASE + """
+## First working version
+N/A — docs-only deliverable, nothing runnable lands.
+"""
+
+# The section present ONLY inside a fenced example (the planning template's own format
+# block) — must read as ABSENT, exactly as fenced task lines and Stakes: samples do.
+PLAN_FWV_FENCED_ONLY = _PLAN_FWV_BASE + """
+## Per-section format
+
+```markdown
+## First working version
+
+**Task:** T01
+**Demonstrates:** <what a human can SEE or RUN>
+**Verify by:** <command / URL / screen>
+```
+"""
+
+# The section present but naming nothing — a section that points at nothing orders nothing.
+PLAN_FWV_NO_TASK_NAMED = _PLAN_FWV_BASE + """
+## First working version
+
+The checker itself is the demo; run it and watch it fail.
 """
 
 
@@ -1837,6 +1939,112 @@ def run():
     rc, out = _run({"tasks.md": TASKS_GOOD})
     results.append((rc == 0 and "! [proven-by]" in out and "pre-0.16" in out,
                     "zero `Proven by:` lines WARNs as a pre-0.16 tasks.md, never FAILs"))
+
+    # ── 23. `deliverable-first` — the 1j gate (FR-3/4/5) ──────────────────────
+    # Unit-level direct calls first (the function's own branch logic, D1-test style),
+    # then the seam cases through the live CLI proving the check is wired into
+    # run_checks(). Letters (a)–(h) are T01's contract in tasks.md.
+
+    def _fwv(plan, spec, tasks):
+        f = _gate_check.Findings()
+        _gate_check.check_deliverable_first(plan, spec, tasks, f)
+        verdicts = [s for s, c, d in f.items if c == "deliverable-first"]
+        details = [d for s, c, d in f.items if c == "deliverable-first"]
+        return verdicts, details
+
+    # 23a. plan WITHOUT the section + spec flagging a user-facing surface → FAIL
+    verdicts, details = _fwv(_PLAN_FWV_BASE, SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["fail"]
+                     and any("First working version" in d for d in details),
+                    "no ## First working version on a user-facing spec FAILs (1j)"))
+
+    # 23b. section naming a task absent from tasks.md → FAIL naming it
+    verdicts, details = _fwv(_plan_fwv("T99"), SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["fail"] and any("T99" in d for d in details),
+                    "## First working version naming a nonexistent task FAILs"))
+
+    # 23c. named task in position 4 → FAIL (not among the first 3; the josworld shape)
+    verdicts, details = _fwv(_plan_fwv("T04"), SPEC_USER_FACING, TASKS_FWV)
+    results.append(("fail" in verdicts
+                     and any("position 4" in d for d in details),
+                    "first-working-version task at position 4 FAILs — not among the first 3"))
+
+    # 23h. the same shape carries the >2-preceding WARN — 3 tasks precede T04. The WARN
+    # is belt+braces beside the FAIL: it survives even if a human later relaxes the
+    # first-3 threshold (the 1j draft's open question 1).
+    results.append(("warn" in verdicts
+                     and any("3 task(s) precede" in d for d in details),
+                    "3 tasks preceding the named one WARNs (independent of the FAIL)"))
+
+    # 23d. named task whose `(files:)` lists ONLY tests/ paths → FAIL (the yootheme shape)
+    verdicts, details = _fwv(_plan_fwv("T02"), SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["fail"]
+                     and any("only test paths" in d for d in details),
+                    "first-working-version task with test-only files FAILs"))
+
+    # 23e. valid section, task in first 3, non-test file → pass
+    verdicts, details = _fwv(_plan_fwv("T01"), SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["pass"],
+                    "named task first with a non-test file PASSes"))
+
+    # 23e-b. boundary: position 3 is INSIDE "among the first 3" (inclusive), and mixed
+    # impl+test files are not "only tests/" — pass with no WARN riding along.
+    verdicts, details = _fwv(_plan_fwv("T03"), SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["pass"],
+                    "position 3 (inclusive boundary) with mixed files PASSes, no WARN"))
+
+    # 23f. `N/A — docs-only` on a spec with NO user-facing surface → pass (threat-model
+    # N/A convention: legitimate only for a genuinely non-runnable deliverable)
+    verdicts, details = _fwv(PLAN_FWV_NA, SPEC_CLEAN_NOSEC, TASKS_FWV)
+    results.append((verdicts == ["pass"],
+                    "N/A first-working-version on a non-user-facing spec PASSes"))
+
+    # 23f-b. the same N/A on a spec that DOES flag a user-facing surface → FAIL
+    verdicts, details = _fwv(PLAN_FWV_NA, SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["fail"] and any("N/A" in d for d in details),
+                    "N/A first-working-version on a user-facing spec FAILs"))
+
+    # 23g. absence + a stated `legacy-artifact` waiver → WARN naming the waiver (FR-5:
+    # never a silent pass), gate does not fail
+    verdicts, details = _fwv(
+        "<!-- gate-check: legacy-artifact — plan authored before the 1j gate -->\n"
+        + _PLAN_FWV_BASE, SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["warn"]
+                     and any("legacy waiver exercised" in d for d in details),
+                    "absent section + legacy waiver WARNs, naming the waiver"))
+
+    # 23i. a fenced `## First working version` example never counts — the plan reads as
+    # ABSENT and FAILs, exactly as fenced Stakes:/task-line samples are stripped
+    verdicts, details = _fwv(PLAN_FWV_FENCED_ONLY, SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["fail"]
+                     and any("First working version" in d for d in details),
+                    "a fenced-only ## First working version reads as absent and FAILs"))
+
+    # 23j. a [HUMAN] yield point preceding the named task still counts toward position —
+    # T04 stays fourth even when T02 is a [HUMAN] approval step
+    verdicts, details = _fwv(_plan_fwv("T04"), SPEC_USER_FACING, TASKS_FWV_HUMAN_PRECEDING)
+    results.append(("fail" in verdicts and any("position 4" in d for d in details),
+                    "a [HUMAN] task preceding the named one still counts toward position"))
+
+    # 23k. the section present but naming NO task → FAIL (points at nothing, orders nothing)
+    verdicts, details = _fwv(PLAN_FWV_NO_TASK_NAMED, SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["fail"] and any("names no task" in d for d in details),
+                    "a ## First working version naming no task FAILs"))
+
+    # 23L. seam: the check is WIRED into run_checks() — an armed user-facing spec whose
+    # plan lacks the section exits 1 through the live CLI naming `deliverable-first`
+    rc, out = _run({"spec.md": SPEC_USER_FACING, "plan.md": PLAN_FLOWS_NA,
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "deliverable-first" in out,
+                    "seam: armed spec + section-less plan exits 1 naming deliverable-first"))
+
+    # 23m. seam GREEN floor: the same armed spec with a compliant plan (section naming
+    # TASKS_GOOD's T01, non-test files, position 1) exits 0 with the pass finding — this
+    # is also existing case 10ae's shape kept green under the new grammar
+    rc, out = _run({"spec.md": SPEC_USER_FACING, "plan.md": PLAN_FLOWS_FILLED,
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "✓ [deliverable-first]" in out,
+                    "seam: armed spec + compliant first-working-version plan exits 0"))
 
     return results
 

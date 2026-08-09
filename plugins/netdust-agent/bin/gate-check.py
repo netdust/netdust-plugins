@@ -1433,6 +1433,135 @@ def check_requirement_coverage(spec_text: str, tasks_text: str, f: Findings) -> 
           f"all {len(ids)} requirement(s) cited in tasks.md: " + ", ".join(ids[:8]))
 
 
+# ── deliverable-first (1j) — the first demoable slice comes before scaffolding ─
+
+FWV_SECTION = "First working version"
+# The section's `**Task:** T0n` line — same punctuation tolerance as STAKES_LINE (bold
+# markup, list bullet, either colon placement), because a demoted-by-formatting task name
+# would silently disarm the ordering assertions that are this gate's whole point.
+FWV_TASK_LINE = re.compile(
+    r"^\s*(?:[-*]\s+)?(?:\*\*)?Task(?:\*\*)?:\s*\**\s*(T\d+)\b", re.IGNORECASE)
+# A path under any `test/` / `tests/` directory, at the root or nested. The 1j draft's
+# assertion 4: a task producing ONLY such paths cannot be a first working version.
+FWV_TEST_PATH = re.compile(r"(^|/)tests?/", re.IGNORECASE)
+
+
+def check_deliverable_first(plan_text: str, spec_text: str | None,
+                            tasks_text: str | None, f: Findings) -> None:
+    """1j — the plan names its first demoable slice and schedules it early.
+
+    The gate the 2026-08-03 post-mortem proposed and 2026-08-09 decided (reference:
+    skills/planning/references/gate-1j-deliverable-first.md): every gate in the spine asks
+    "is this verified?"; this is the one place that asks "is this useful yet?". Enforced
+    per FR-3/4/5 with the decided parameters:
+
+      - section absent while the spec flags a user-facing surface → FAIL (a legacy plan
+        stating the `legacy-artifact` waiver degrades ABSENCE to a WARN naming it);
+      - `N/A` is legitimate ONLY when no user-facing surface is flagged (a genuinely
+        non-runnable deliverable) — N/A on a user-facing spec → FAIL;
+      - the named task must exist in tasks.md → FAIL when it doesn't;
+      - the named task must sit among the FIRST 3 tasks (inclusive of position 3) → FAIL
+        otherwise — ordering is the whole point, a first-working-version task scheduled
+        eighth changes nothing;
+      - a named task whose `(files:)` segment lists ONLY test paths → FAIL — a task
+        producing no non-test file cannot be a first working version (the assertion that
+        catches both of the post-mortem's plans);
+      - more than 2 tasks preceding the named one → WARN, worth a human look.
+
+    Parses over strip_fenced text like every task walker, so the planning template's own
+    fenced `## First working version` example never counts as a real section. Position
+    counts EVERY task in document order — [HUMAN] yield points included, because the
+    deliverable waits on them all the same.
+    """
+    triggered = spec_user_facing_triggered(spec_text) if spec_text else []
+    body = section_body(strip_fenced(plan_text), FWV_SECTION)
+
+    if body is None:
+        if not triggered:
+            f.add("pass", "deliverable-first",
+                  "no ## First working version and no user-facing surface flagged — "
+                  "nothing runnable owes an ordering")
+            return
+        waiver = legacy_waiver(plan_text)
+        if waiver:
+            f.add("warn", "deliverable-first",
+                  "no ## First working version on a user-facing plan — legacy waiver "
+                  f"exercised: {waiver}")
+            return
+        f.add("fail", "deliverable-first",
+              "spec flags user-facing surface(s) "
+              f"[{', '.join(triggered[:3])}] but the plan carries no ## First working "
+              "version — nothing names the first demoable slice, so the gradient points "
+              "at proofs and scaffolding instead of the thing that was asked for")
+        return
+
+    author_lines = [ln for ln in body.strip().splitlines()
+                    if not ln.lstrip().startswith(">")]
+    author = "\n".join(author_lines).strip()
+    if re.match(r"^N/?A\b", author, re.IGNORECASE):
+        if triggered:
+            f.add("fail", "deliverable-first",
+                  "## First working version is N/A but the spec flags user-facing "
+                  f"surface(s) [{', '.join(triggered[:3])}] — N/A is legitimate only for "
+                  "a genuinely non-runnable deliverable (docs-only, pure test infra)")
+        else:
+            f.add("pass", "deliverable-first",
+                  "## First working version marked N/A and no user-facing surface "
+                  "flagged — a non-runnable deliverable is legitimate")
+        return
+
+    named = next((m.group(1).upper() for m in
+                  (FWV_TASK_LINE.match(ln) for ln in author_lines) if m), None)
+    if named is None:
+        f.add("fail", "deliverable-first",
+              "## First working version names no task (`**Task:** T0n`) — a section "
+              "that points at nothing orders nothing")
+        return
+
+    if tasks_text is None:
+        return  # plan-only stage: nothing to verify ordering / files against yet
+
+    order, files_by_task = [], {}
+    for task_id, task_rest, _cont in task_blocks(tasks_text):
+        order.append(task_id)
+        seg = FILES_SEGMENT.search(task_rest)
+        files_by_task[task_id] = seg.group(1).strip() if seg else ""
+    if not order:
+        return  # check_task_tiers already reports "no task lines"
+
+    if named not in order:
+        f.add("fail", "deliverable-first",
+              f"## First working version names {named}, which does not exist in "
+              "tasks.md — the ordering gate cannot bind to a phantom task")
+        return
+
+    position = order.index(named) + 1
+    ok = True
+    if position > 3:
+        ok = False
+        f.add("fail", "deliverable-first",
+              f"the first-working-version task {named} sits at position {position} — "
+              "not among the first 3. Ordering is the whole point: naming a "
+              "first-working-version task and scheduling it late changes nothing")
+    if position - 1 > 2:
+        f.add("warn", "deliverable-first",
+              f"{position - 1} task(s) precede the first-working-version task {named} — "
+              "legal, but worth a human look at what the deliverable is waiting on")
+
+    paths = [p.strip() for p in files_by_task.get(named, "").split(",") if p.strip()]
+    if paths and all(FWV_TEST_PATH.search(p) for p in paths):
+        ok = False
+        f.add("fail", "deliverable-first",
+              f"the first-working-version task {named} lists only test paths in its "
+              "`(files:)` segment — a task producing no non-test file cannot be a "
+              "first working version")
+
+    if ok:
+        f.add("pass", "deliverable-first",
+              f"## First working version names {named} (position {position}) with "
+              "non-test deliverable files")
+
+
 def check_clusters(tasks_text: str, f: Findings) -> None:
     clusters = parse_clusters(tasks_text)
     if not clusters:
@@ -1486,6 +1615,7 @@ def run_checks(spec_dir: Path) -> Findings:
         check_stakes(plan_text, spec_text, f)
         check_cluster_stakes(plan_text, f)
         check_loop_budget(plan_text, f)
+        check_deliverable_first(plan_text, spec_text, tasks_text, f)  # 1j — cross-artifact
     if tasks_text is not None:
         check_task_tiers(tasks_text, f)
         check_files_segment(tasks_text, f)
