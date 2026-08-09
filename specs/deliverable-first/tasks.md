@@ -83,7 +83,7 @@ is promoted one-way to FULL — `security-sentinel` runs on the post-fix cluster
 
 - [ ] T12 [Tier B] fix I-3 (code half): retire the HALT consumer branch in `hooks/loop-gate.py` and re-contract its stub-pinned test — the branch is unreachable with the shipped verify-budget (dead code; fails toward the new behaviour), so this is a non-behavioural removal closing on the suite green  (files: plugins/netdust-agent/hooks/loop-gate.py, plugins/netdust-agent/tests/test_loop_gate.py)
   Test-author: solo — Tier B.
-  Proven by: existing suite — `bash plugins/netdust-agent/tests/run.sh` green over the removal; the stub re-contract is declared (the stub printed a contract no real input can produce — green-but-blind).
+  Proven by: existing test — the loop-gate module in `bash plugins/netdust-agent/tests/run.sh`, green over the removal; the stub re-contract is declared (the stub printed a contract no real input can produce — green-but-blind).
   Unit test: no unit test: Tier B, dead-branch removal; the re-contracted loop-gate test asserts the gate no longer reads budget output at all.
   (FR-10, FR-11)
 
