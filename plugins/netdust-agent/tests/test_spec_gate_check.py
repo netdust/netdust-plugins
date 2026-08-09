@@ -271,9 +271,10 @@ SPEC_WITH_REQS = """# Feature Specification: Course publishing
 - **SC-1:** an editor publishes a module in under 3 minutes
 
 ## Functional requirements
-- **FR-1:** system MUST publish a module
-- **FR-2:** system MUST reject an unauthorised editor
-- **FR-3:** system MUST log every publish
+- **FR-1:** system MUST publish a module. Source: the human, 2026-06-01: "publish".
+- **FR-2:** system MUST reject an unauthorised editor. Source: invented — approved
+  2026-06-01 (review note).
+- **FR-3:** system MUST log every publish. Source: the audit brief (2026-06-01).
 
 ## Security-relevant surfaces
 - [x] None of the above
@@ -1282,6 +1283,96 @@ PLAN_FWV_NO_TASK_NAMED = _PLAN_FWV_BASE + """
 The checker itself is the demo; run it and watch it fail.
 """
 
+# ── `fr-source` fixtures — source traceability (FR-1/FR-2) ────────────────────
+# The post-mortem's link 1: a requirement invented at spec time reads exactly like one
+# the human asked for, and the build then serves the invention. The check makes every FR
+# name where it came from — a quotation, a document reference, or `invented` + an
+# approval. It judges PRESENCE, not truthfulness (a fabricated quote passes the machine;
+# challenging what a Source: says is review's job — the 1a honesty convention).
+
+# Corpus-shaped: all four legal source shapes in one spec — a quotation mid-paragraph on
+# the def line, `invented — approved` with the date across a line break (the live spec's
+# FR-2 writes exactly that), a continuation-line `Source:`, and the approver-reference
+# form. FR-1's own prose mentions a backticked `Source:` BEFORE its real source — the
+# mention must read as prose, not as the source (the live spec's FR-1/FR-2 shape).
+SPEC_FR_SOURCED = """# Feature Specification: Payload archive
+
+## Functional requirements
+
+### Traceability
+- **FR-1:** Every payload carries a `Source:` tag — either a quotation or an approved
+  invention. Source: the human, 2026-08-09: "every payload must say where it came from".
+- **FR-2:** Rejected payloads are archived for replay. Source: invented — approved
+  2026-08-09 (post-incident review; the human signed the intake).
+
+### Retention
+- **FR-3:** Archives expire after 90 days.
+  Source: the retention draft (2026-07-01), adopted verbatim.
+- **FR-4:** Expiry runs nightly. Source: invented — approved by Stefan (intake Q2).
+"""
+
+# One sourced, one bare — partial presence is a defect the waiver can NOT rescue
+# (absence-only downgrade, the same partial-vs-absent logic as unit-test-contract).
+SPEC_FR_PARTIAL = """# Feature Specification: Payload archive
+
+<!-- gate-check: legacy-artifact — spec predates the Source: convention -->
+
+## Functional requirements
+- **FR-1:** Every payload is archived. Source: the human, 2026-08-09: "archive them".
+- **FR-2:** Archives expire after 90 days.
+"""
+
+# `invented` (first word, case-insensitive) with no approval — FAILs; a quoted source
+# containing a date is NOT mistaken for an invention.
+SPEC_FR_INVENTED_BARE = """# Feature Specification: Payload archive
+
+## Functional requirements
+- **FR-1:** Rejected payloads are archived. Source: invented — felt necessary.
+- **FR-2:** Expiry runs nightly. Source: Invented, obviously correct.
+- **FR-3:** Archives expire after 90 days. Source: the human, 2026-08-09: "90 days".
+"""
+
+# FR ids defined, zero `Source:` anywhere — the musician-events shape. Bare → FAIL;
+# with the file-scoped waiver → WARN naming it (absence-only downgrade).
+SPEC_FR_NONE = """# Feature Specification: Payload archive
+
+## Functional requirements
+- **FR-1:** Every payload is archived.
+- **FR-2:** Archives expire after 90 days.
+"""
+
+SPEC_FR_NONE_WAIVED = (
+    "<!-- gate-check: legacy-artifact — spec authored before the Source: convention -->\n"
+    + SPEC_FR_NONE)
+
+# A fenced example carrying `Source:` never sources the FR above it — fence-stripped
+# like every parser in the checker.
+SPEC_FR_FENCED_SOURCE = """# Feature Specification: Payload archive
+
+## Functional requirements
+- **FR-1:** Every payload is archived.
+
+```markdown
+Source: invented — approved 2026-08-09
+```
+"""
+
+# Seam fixtures: an otherwise fully-green artifact set (SPEC_CLEAN_NOSEC's shape) whose
+# spec gains one FR — sourced (green floor) or bare (the check must flip the exit code).
+_FR_SECTION_SOURCED = """
+## Functional requirements
+- **FR-1:** the footer label reads correctly. Source: the human, 2026-08-09: "rename it".
+"""
+
+_FR_SECTION_BARE = """
+## Functional requirements
+- **FR-1:** the footer label reads correctly.
+"""
+
+# TASKS_GOOD with the seam spec's FR-1 cited, so requirement-coverage stays green and the
+# seam cases attribute their exit code to fr-source alone.
+TASKS_FR_CITED = TASKS_GOOD.replace("validate URL (SC-1)", "validate URL (SC-1, FR-1)")
+
 
 def _run(files: dict) -> tuple[int, str]:
     with tempfile.TemporaryDirectory() as d:
@@ -2045,6 +2136,86 @@ def run():
                     "tasks.md": TASKS_GOOD})
     results.append((rc == 0 and "✓ [deliverable-first]" in out,
                     "seam: armed spec + compliant first-working-version plan exits 0"))
+
+    # ── 24. `fr-source` — source traceability (FR-1/FR-2) ─────────────────────
+    # Letters (a)–(f) are T02's contract in tasks.md. Unit-level direct calls first
+    # (the function's own branch logic, D1-test style), then the seam through the
+    # live CLI proving the check is wired into run_checks().
+
+    def _frs(spec):
+        f = _gate_check.Findings()
+        _gate_check.check_fr_sources(spec, f)
+        verdicts = [s for s, c, d in f.items if c == "fr-source"]
+        details = [d for s, c, d in f.items if c == "fr-source"]
+        return verdicts, details
+
+    # 24b/c. all four corpus source shapes pass in one spec: quotation mid-paragraph,
+    # `invented — approved` with its date across a line break, continuation-line Source:,
+    # approved-by reference — and FR-1's backticked `Source:` mention reads as prose.
+    verdicts, details = _frs(SPEC_FR_SOURCED)
+    results.append((verdicts == ["pass"] and any("all 4" in d for d in details),
+                    "all four corpus source shapes pass (quote, invented+date across a "
+                    "line break, continuation line, approved-by)"))
+
+    # 24a. an FR with no Source: → FAIL naming exactly the bare FR — and the waiver in
+    # the same file does NOT rescue partial absence (never-waivable, like its siblings)
+    verdicts, details = _frs(SPEC_FR_PARTIAL)
+    results.append((verdicts == ["fail"]
+                     and any("FR-2" in d for d in details)
+                     and not any("FR-1" in d for d in details),
+                    "a bare FR beside a sourced one FAILs naming only the bare FR, "
+                    "waiver notwithstanding"))
+
+    # 24d. `Source: invented` with no approval → FAIL naming the FRs (first word,
+    # case-insensitive); a quoted source carrying a date is not an invention
+    verdicts, details = _frs(SPEC_FR_INVENTED_BARE)
+    results.append((verdicts == ["fail"]
+                     and any("FR-1" in d and "FR-2" in d for d in details)
+                     and not any("FR-3" in d for d in details),
+                    "invented sources with no approval FAIL naming FR-1/FR-2, not the "
+                    "quoted FR-3"))
+
+    # 24e. zero sources across all FRs + the spec-level waiver → WARN naming the waiver
+    verdicts, details = _frs(SPEC_FR_NONE_WAIVED)
+    results.append((verdicts == ["warn"]
+                     and any("legacy waiver exercised" in d for d in details),
+                    "FRs with zero sources + a stated waiver WARNs, naming the waiver"))
+
+    # 24e-b. the same spec with NO waiver → FAIL, and the finding tells the author the
+    # waiver form exists (same convention as every flipped floor)
+    verdicts, details = _frs(SPEC_FR_NONE)
+    results.append((verdicts == ["fail"]
+                     and any("legacy-artifact" in d for d in details),
+                    "FRs with zero sources and no waiver FAILs, naming the waiver form"))
+
+    # 24-fence. a fenced `Source:` example never sources the FR above it
+    verdicts, details = _frs(SPEC_FR_FENCED_SOURCE)
+    results.append((verdicts == ["fail"],
+                    "a fenced Source: example is stripped — the FR reads as bare"))
+
+    # 24f. a spec defining no FR ids yields NO fr-source findings (nothing to source),
+    # and the missing-section behaviour of the other checks is untouched via the CLI
+    verdicts, details = _frs(SPEC_CLEAN_NOSEC)
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC})
+    results.append((verdicts == [] and rc == 0 and "fr-source" not in out,
+                    "a spec with no FR definitions produces no fr-source findings and "
+                    "existing behaviour is unchanged"))
+
+    # 24f-b. an FR id cited in prose (`(FR-7 …)`) is a mention, not a definition
+    verdicts, details = _frs('# S\n\nThe post-mortem (FR-7 "multi-day") tells the story.\n')
+    results.append((verdicts == [],
+                    "an FR id cited in prose is not an FR definition"))
+
+    # 24-seam. RED: a bare FR flips an otherwise-green artifact set to exit 1 naming
+    # fr-source; GREEN floor: the same set with the FR sourced exits 0 with the pass line
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC + _FR_SECTION_BARE,
+                    "plan.md": PLAN_THREATMODEL_NA, "tasks.md": TASKS_FR_CITED})
+    results.append((rc == 1 and "fr-source" in out,
+                    "seam: one bare FR exits 1 through the live CLI naming fr-source"))
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC + _FR_SECTION_SOURCED,
+                    "plan.md": PLAN_THREATMODEL_NA, "tasks.md": TASKS_FR_CITED})
+    results.append((rc == 0 and "✓ [fr-source]" in out,
+                    "seam: the same set with the FR sourced exits 0 with the pass line"))
 
     return results
 

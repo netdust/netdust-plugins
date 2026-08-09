@@ -1433,6 +1433,103 @@ def check_requirement_coverage(spec_text: str, tasks_text: str, f: Findings) -> 
           f"all {len(ids)} requirement(s) cited in tasks.md: " + ", ".join(ids[:8]))
 
 
+# ── fr-source — every functional requirement traces to the ask (FR-1/FR-2) ───
+
+# A line DEFINING a requirement (`- **FR-1:** …`) as opposed to citing one (`(FR-7 …)`) —
+# leading position + the id:colon shape is what separates definition from mention; the id
+# grammar itself matches what `_req_ids` parses. Bold tolerated on either side of the
+# colon, same punctuation stance as FWV_TASK_LINE / STAKES_LINE.
+FR_DEF_LINE = re.compile(r"^\s*(?:[-*+]\s+)?\**(FR-\d+)(?::\**|\**:)")
+# `Source:` opening the source text. A backtick-quoted `Source:` is prose ABOUT the
+# convention, not a source — the live corpus's own FR-1/FR-2 mention the marker in
+# backticks before stating their real source.
+SOURCE_MARK = re.compile(r"(?<!`)\bSource:")
+# An invention passes only with an approval: `approved` followed by something date-like,
+# or an explicit approver reference (`approved by <who>`).
+INVENTED_SOURCE = re.compile(r"invented\b", re.IGNORECASE)
+SOURCE_APPROVAL = re.compile(
+    r"\bapproved\b(?:\s+by\s+\S+|.*?\d{4}-\d{2}-\d{2})", re.IGNORECASE | re.DOTALL)
+
+
+def check_fr_sources(spec_text: str, f: Findings) -> None:
+    """FR-1/FR-2 — every functional requirement traces to the ask.
+
+    The post-mortem's link 1: a requirement invented at spec time reads exactly like one
+    the human asked for, and the build then serves the invention. So every FR-defining
+    line (`- **FR-1:** …`, the same id convention check_requirement_coverage parses) must
+    carry a `Source:` — on the def line or a continuation line before the next FR /
+    heading; everything from `Source:` to the end of that FR's block is the source text.
+    A source whose first word is `invented` (case-insensitive) additionally needs an
+    approval; any other non-empty source text (a quotation, a document reference, "the
+    human, <date>: …") passes.
+
+    PRESENCE, not truthfulness: a fabricated quotation passes the machine — challenging
+    what a `Source:` says is the review gate's job, the same honesty convention every
+    check here follows.
+
+    Waiver regime mirrors the siblings: zero sources across all FRs + the file-scoped
+    `legacy-artifact` waiver → WARN naming it (absence-only downgrade); partial presence
+    is a defect and FAILs naming the bare FRs, waiver notwithstanding. A spec defining
+    no FR ids produces no findings — nothing to source; section presence stays the other
+    checks' business.
+    """
+    blocks: list[tuple[str, str]] = []  # (fr_id, block text joined to one line)
+    cur_id, cur_lines = None, []
+    for ln in strip_fenced(spec_text).splitlines():
+        m = FR_DEF_LINE.match(ln)
+        if m:
+            if cur_id:
+                blocks.append((cur_id, " ".join(cur_lines)))
+            cur_id, cur_lines = m.group(1), [ln]
+        elif heading_text(ln):
+            if cur_id:
+                blocks.append((cur_id, " ".join(cur_lines)))
+            cur_id, cur_lines = None, []
+        elif cur_id:
+            cur_lines.append(ln)
+    if cur_id:
+        blocks.append((cur_id, " ".join(cur_lines)))
+
+    if not blocks:
+        return  # no FR definitions — nothing to source
+
+    unsourced, unapproved = [], []
+    for fr_id, text in blocks:
+        m = SOURCE_MARK.search(text)
+        src = text[m.end():].strip() if m else ""
+        if not src:
+            unsourced.append(fr_id)
+        elif INVENTED_SOURCE.match(src) and not SOURCE_APPROVAL.search(src):
+            unapproved.append(fr_id)
+
+    total = len(blocks)
+    if len(unsourced) == total:
+        waiver = legacy_waiver(spec_text)
+        if waiver:
+            f.add("warn", "fr-source",
+                  f"no FR carries a `Source:` line ({total} FRs) — legacy waiver "
+                  f"exercised: {waiver}")
+        else:
+            f.add("fail", "fr-source",
+                  f"no FR carries a `Source:` line ({total} FRs): "
+                  + ", ".join(unsourced[:8])
+                  + " — every requirement traces to the ask or an approved invention; "
+                  "a spec that genuinely predates the convention says so with a "
+                  "`<!-- gate-check: legacy-artifact — <reason> -->` marker")
+        return
+    if unsourced:
+        f.add("fail", "fr-source",
+              f"{len(unsourced)}/{total} FR(s) carry no `Source:` line: "
+              + ", ".join(unsourced[:8]))
+    if unapproved:
+        f.add("fail", "fr-source",
+              "`Source: invented` with no approval (needs `approved <date>` or "
+              "`approved by <who>`): " + ", ".join(unapproved[:8]))
+    if not (unsourced or unapproved):
+        f.add("pass", "fr-source",
+              f"all {total} FR(s) carry a `Source:` (inventions approved)")
+
+
 # ── deliverable-first (1j) — the first demoable slice comes before scaffolding ─
 
 FWV_SECTION = "First working version"
@@ -1608,6 +1705,7 @@ def run_checks(spec_dir: Path) -> Findings:
         check_success_criteria(spec_text, f)
         check_security_surfaces(spec_text, f)
         check_user_facing_surfaces(spec_text, f)
+        check_fr_sources(spec_text, f)  # FR-1/2 — source traceability
     if plan_text is not None:
         check_plan_gates(plan_text, f)
         check_threat_model(plan_text, spec_text, f)
