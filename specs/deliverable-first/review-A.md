@@ -38,3 +38,4 @@ authored the diff. Verdict: 0 Critical / 3 Important / 5 Suggestions + 9 simplic
 Live-CLI seam cases + self-hosting corpus case per check; fence-strip inheritance tested per
 check; the two-gate interlock (invalid waiver trips behaviour-cluster AND unit-test-contract);
 docstrings honest about presence-not-truth throughout.
+- S-A (sentinel) — verify-budget `--base` argument-injection guard (`--` separator); defensive only, `--base` is not artifact-controlled.
