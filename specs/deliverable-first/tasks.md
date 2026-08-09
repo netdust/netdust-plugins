@@ -32,7 +32,7 @@ RED until: `tests/test_spec_gate_check.py::test_deliverable_first_missing_sectio
   Notes: the two worked examples in the 1j draft (josworld-core T05-fifth; yootheme-baseline test-only T03) become fixture cases for (c) and (d).
   (FR-3, FR-4, FR-5, AC-3)
 
-- [ ] T02 [Tier A] Implement `check_fr_sources()` — every FR line in spec.md must carry a `Source:` continuation; `invented` sources must carry an approval.  (files: plugins/netdust-agent/bin/gate-check.py, plugins/netdust-agent/tests/test_spec_gate_check.py)
+- [x] T02 [Tier A] Implement `check_fr_sources()` — every FR line in spec.md must carry a `Source:` continuation; `invented` sources must carry an approval.  (files: plugins/netdust-agent/bin/gate-check.py, plugins/netdust-agent/tests/test_spec_gate_check.py)
   Test-author: solo — standard stakes, checker validation logic, not a security-boundary category.
   Proven by: new test — the T02 case block in `test_spec_gate_check.py`.
   Unit test: RED-first. (a) an FR with no `Source:` line → FAIL naming the FR; (b) `Source:` quoting the request → pass; (c) `Source: invented — approved <date>` → pass; (d) `Source: invented` with no approval → FAIL; (e) spec-level `legacy-artifact` waiver → WARN; (f) a spec with no `## Functional requirements` section → existing missing-section behaviour unchanged.
