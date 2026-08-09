@@ -23,7 +23,7 @@
 
 Behaviour: `gate-check.py` refuses a musician-events-shaped plan and never again interrupts a run over a test ratio.
 Observable: one command per claim — the fixture replay exits 1 naming `deliverable-first` + `fr-source`; this spec's own artifacts exit 0; an above-ceiling verify-budget input exits 0 printing its report line.
-RED until: `tests/test_spec_gate_check.py::test_deliverable_first_missing_section_fails`
+RED until: `plugins/netdust-agent/tests/test_spec_gate_check.py::test_deliverable_first_missing_section_fails`
 
 - [x] T01 [Tier A] Implement `check_deliverable_first()` per the 1j draft with the decided parameters (named task in first 3, FAIL; test-only files FAIL; N/A only for non-runnable deliverables; `legacy-artifact` → WARN; >2 preceding tasks → WARN). Step 0: bring up pytest (`pip3 install --user pytest` or distro package) and record the working invocation.  (files: plugins/netdust-agent/bin/gate-check.py, plugins/netdust-agent/tests/test_spec_gate_check.py)
   Test-author: solo — standard stakes, checker validation logic, not a security-boundary category.

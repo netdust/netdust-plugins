@@ -1440,6 +1440,35 @@ TASKS_BEHAVIOUR_ON_DISK = (_BEHAVIOUR_TASKS_HEAD
                                "(files: src/notify.php, tests/NotifyTest.php)",
                                "(files: src/notify.php)"))
 
+# I-1 probe (disk rung): the RED-until path names a DIRECTORY that exists under the
+# repo root. A directory is not a test — the block must read dangling, not valid. The
+# member files drop the tests/ entry so validity could only come from the disk rung.
+TASKS_BEHAVIOUR_DIR_ONLY = (_BEHAVIOUR_TASKS_HEAD
+                            + "Behaviour: one mail per event, never a duplicate.\n"
+                            + "Observable: `php bin/replay.php fixtures/events.json` prints `sent=1`.\n"
+                            + "RED until: tests/::test_one_mail\n\n"
+                            + _BEHAVIOUR_TASKS_BODY.replace(
+                                "(files: src/notify.php, tests/NotifyTest.php)",
+                                "(files: src/notify.php)"))
+
+# I-1 probe (files rung): the RED-until path is a SUBSTRING of a member file
+# (`src` inside `src/notify.php`) — the files rung must require an exact match against
+# the comma-split member paths, never a substring hit.
+TASKS_BEHAVIOUR_SUBSTRING = (_BEHAVIOUR_TASKS_HEAD
+                             + "Behaviour: one mail per event, never a duplicate.\n"
+                             + "Observable: `php bin/replay.php fixtures/events.json` prints `sent=1`.\n"
+                             + "RED until: src::test_one_mail\n\n"
+                             + _BEHAVIOUR_TASKS_BODY.replace(
+                                 "(files: src/notify.php, tests/NotifyTest.php)",
+                                 "(files: src/notify.php)"))
+
+# S-2 rider: backtick quoting on the PATH half alone (`path`::method) must resolve
+# exactly like the fully-quoted form — no false dangle from a trailing backtick
+# surviving the `::` split.
+TASKS_BEHAVIOUR_BACKTICK_PATH = TASKS_BEHAVIOUR_VALID.replace(
+    "RED until: `tests/NotifyTest.php::test_one_mail_per_event`",
+    "RED until: `tests/NotifyTest.php`::test_one_mail_per_event")
+
 # strip_fenced inheritance: a fenced block SAMPLE between the heading and the first task
 # must be invisible — the cluster reads block-less (the "carries no behaviour block" FAIL),
 # NOT as a full block with a dangling RED (which a fence leak would produce, since
@@ -2381,6 +2410,31 @@ def run():
     verdicts, details = _bhv(TASKS_BEHAVIOUR_ON_DISK)
     results.append((verdicts == ["fail"],
                     "(d) the same cluster with no repo root to find the file on FAILs"))
+
+    # 25g. I-1 (disk rung): `RED until: tests/::x` where `tests/` is a DIRECTORY under
+    # the repo root → dangling FAIL — a directory satisfies `.exists()` but is not a
+    # test file; only `.is_file()` may validate the disk rung.
+    with tempfile.TemporaryDirectory() as d:
+        (Path(d) / "tests").mkdir()
+        verdicts, details = _bhv(TASKS_BEHAVIOUR_DIR_ONLY, repo_root=Path(d))
+    results.append((verdicts == ["fail"] and any("tests/" in x for x in details),
+                    "(I-1) a RED-until path naming an existing DIRECTORY FAILs as "
+                    "dangling — only a real file satisfies the disk rung"))
+
+    # 25h. I-1 (files rung): `RED until: src::x` beside a member whose files list
+    # `src/notify.php` → dangling FAIL — exact comma-split path match required,
+    # never a substring.
+    verdicts, details = _bhv(TASKS_BEHAVIOUR_SUBSTRING)
+    results.append((verdicts == ["fail"] and any("`src`" in x for x in details),
+                    "(I-1) a RED-until path that is only a SUBSTRING of a member file "
+                    "FAILs as dangling — exact match against comma-split paths"))
+
+    # 25i. S-2: backticks on the path half alone (`path`::method) must not false-dangle
+    # — the path resolves exactly like the fully-quoted corpus form.
+    verdicts, details = _bhv(TASKS_BEHAVIOUR_BACKTICK_PATH)
+    results.append((verdicts == ["pass"],
+                    "(S-2) a backticked path half (`path`::method) resolves like the "
+                    "fully-quoted form — no false dangle"))
 
     # 25-fence. strip_fenced inheritance: a fenced block sample is invisible — the
     # cluster reads BLOCK-LESS (not full-with-dangling-RED, which a fence leak would

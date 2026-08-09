@@ -1477,9 +1477,11 @@ def parse_behaviour_clusters(tasks_text: str) -> list[dict]:
 
 def _red_until_path(value: str) -> str:
     """The machine-checked PATH half of `RED until: <path>::<method>` (backtick quoting
-    tolerated). The `::method` half is contract prose — presence, not truth; whether that
-    method exists and bites is the review gate's and the T05 hook's business."""
-    return value.strip().strip("`").split("::", 1)[0].strip()
+    tolerated — around the whole value or the path half alone, so the trailing backtick
+    of `` `path`::method `` is stripped AFTER the split, never left to false-dangle).
+    The `::method` half is contract prose — presence, not truth; whether that method
+    exists and bites is the review gate's and the T05 hook's business."""
+    return value.strip().strip("`").split("::", 1)[0].strip().strip("`").strip()
 
 
 def repo_root_for(spec_dir: Path) -> Path | None:
@@ -1498,8 +1500,10 @@ def repo_root_for(spec_dir: Path) -> Path | None:
 
 def _block_status(c: dict, repo_root: Path | None) -> str:
     """none | partial | dangling | valid. A full block is VALID when its RED-until path
-    exists on disk under the repo root, or appears in a member task's `(files:)` segment
-    (the test is CREATED by a task in the cluster)."""
+    is a FILE on disk under the repo root (`.is_file()` — a directory named `tests/`
+    is not a test, I-1), or exactly matches one of a member task's comma-split
+    `(files:)` paths (the test is CREATED by a task in the cluster; a substring hit
+    like `src` inside `src/notify.php` binds to nothing, I-1)."""
     present = [k for k in _BLOCK_KEYS if c[k]]
     if not present:
         return "none"
@@ -1508,9 +1512,10 @@ def _block_status(c: dict, repo_root: Path | None) -> str:
     path = _red_until_path(c["red_until"])
     if not path:
         return "partial"
-    if repo_root is not None and (repo_root / path).exists():
+    if repo_root is not None and (repo_root / path).is_file():
         return "valid"
-    if any(path in m["files"] for m in c["members"]):
+    if any(path == p.strip() for m in c["members"]
+           for p in m["files"].split(",")):
         return "valid"
     return "dangling"
 
@@ -1866,6 +1871,9 @@ def check_deliverable_first(plan_text: str, spec_text: str | None,
               f"the first-working-version task {named} sits at position {position} — "
               "not among the first 3. Ordering is the whole point: naming a "
               "first-working-version task and scheduling it late changes nothing")
+    # Deliberate dual-fire (S-5b): at position > 3 the FAIL above AND this WARN both
+    # emit — the FAIL is the verdict, the WARN carries the human-look framing. The
+    # pairing is contract-locked by test 23h; do not "simplify" one away.
     if position - 1 > 2:
         f.add("warn", "deliverable-first",
               f"{position - 1} task(s) precede the first-working-version task {named} — "
