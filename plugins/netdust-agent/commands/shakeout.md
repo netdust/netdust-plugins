@@ -1,277 +1,51 @@
 ---
-description: Spec-complete gate. Run when all task groups in a spec are done — before merging the branch. Stack-agnostic. Runs the test-effectiveness audit and feature-acceptance verification first, re-runs the /integration checks, then Playwright if a config exists, then invokes the shake-out skill, then auto-dispatches the reviewer panel in parallel on the full branch diff — panel size set by the branch's review tier (FULL = 5/6 personas, STANDARD = 2, LIGHT = 1).
+description: Spec-complete gate. Run when all task groups in a spec are done — before merging the branch. Exercises the built artifact (shakeout-qa), then dispatches the reviewer panel on the full branch diff, panel size set by the branch's review tier (FULL = reviewer + security-sentinel + code-simplicity, STANDARD = reviewer + code-simplicity, LIGHT = reviewer alone).
 allowed_tools: ["Bash", "Read", "Glob", "Skill", "Agent"]
 ---
 
-Run the **spec-complete gate**. This fires when an entire spec is done, before merging the branch. It's heavier than `/integration` — full QA sweep + e2e + multi-perspective review.
+Run the **spec-complete gate** — the pre-merge sweep that uses the artifact instead of
+trusting the suite. Steps, in order:
 
-## What this gate is, in one line
+## Step 1 — Integration + telemetry
 
-> Before merging, prove the artifact actually works end-to-end and survives review from multiple angles (simplicity, security, performance, architecture drift).
-
-## Pre-flight
-
-Verify you're on a feature branch, not `main` / `master` / `staging`:
-
-```bash
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
-case "$BRANCH" in
-  main|master|staging)
-    echo "Refusing to run /shakeout on $BRANCH. Switch to a feature branch first."
-    exit 1
-    ;;
-esac
-```
-
-Then resolve the base branch — **never hardcode `main`**; on a master-default repo a hardcoded `main` empties every diff range below, which silently disarms the budget tripwire and blinds the diff-scoped steps:
+Re-run the full test suite(s) against the branch (the project's real runners — on WP the
+netdust harness: `composer test:unit`, `ddev composer test:int`, or `composer gate`).
+Any regression against the recorded baseline blocks the gate. Then print the ratio line
+(never blocking):
 
 ```bash
-if git rev-parse --verify -q main >/dev/null; then BASE=main
-elif git rev-parse --verify -q master >/dev/null; then BASE=master
-else BASE=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||'); fi
-echo "→ base branch: ${BASE:-NONE RESOLVED}"
+PLUGIN_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+python3 "$PLUGIN_DIR/bin/verify-budget.py" specs/<feature> --base "$(git merge-base HEAD main)" || true
 ```
 
-If `BASE` resolved empty, stop and tell the user — every diff-scoped step below depends on it.
+Fold the `verify-ratio:` line into the final report — observability, not a gate
+(decision 2026-08-09).
 
-## Step 0 — Test-effectiveness audit (the suite *bites*, not just passes)
+## Step 2 — Exercise the artifact
 
-Before anything else, audit whether the test suite would actually go RED if a dangerous path broke — a green suite that never exercises the denial branch, the second tenant, the un-mocked wire, or the unmounted guard ships bugs past every later gate. This is the cheapest place to catch a green-but-blind test, and its `covered`/`blind`/`fixed` manifest becomes the convergence target the Step 4 reviewers verify against (so they verify gaps instead of re-discovering them).
+Dispatch **`shakeout-qa`**: it drives the plan's `## Acceptance flows` matrix through the
+faithful layer — UI flows through a real browser (Playwright spec if present, else
+`superpowers-chrome`), backend flows through the un-mocked wire — and returns a
+pass/fail/not-reachable manifest with reproducible failing payloads. No UI flow counts
+as `pass` without a browser having driven it.
 
-> Note: if you reached `/shakeout` via the harness (`building` Stage 3), that stage already ran this audit — you may skip Step 0. Running `/shakeout` standalone, this is the only place the audit fires, so do not skip it.
+## Step 3 — The reviewer panel, on the full branch diff
 
-Use the Skill tool, pointed at the branch diff (Situation A — phase/spec-complete audit):
+State the branch tier, then dispatch in parallel with fresh context (the author never
+reviews its own diff):
 
-```
-Skill("test-effectiveness")
-```
+- **FULL** (any security surface, invariant, or data-layer/migration touch): `reviewer` +
+  `security-sentinel` + `code-simplicity-reviewer` (+ the stack's drift reviewer on WP).
+- **STANDARD**: `reviewer` + `code-simplicity-reviewer`.
+- **LIGHT** (doc/config only): `reviewer` alone.
 
-Hand it the diff range (`$(git merge-base HEAD "$BASE")..HEAD`) as the audit target. It will walk the eight failure modes (stale fixture, test-world≠real-world, wire-mock leak, unmounted guard, happy-path-only/missing-denial, no-coverage, concurrency, shape-not-invoked) over every guard, fixture, wire, mount, and timer the diff introduced, and for each either name the test that goes RED or record it `blind` and author the test that closes it.
+Escalation is one-way: any finding on a security surface promotes to FULL. Reviewers
+verify against the plan's `## Threat model` and `ARCHITECTURE-INVARIANTS.md` — named
+targets, not free-form hunting.
 
-**Wait for the audit manifest before continuing.** If it surfaced `blind` paths, those tests are authored now (RED-first) and the unit suite below must include them. If the audit aborts or the suite can't be made to bite, stop and report — don't proceed to a review pass that would just re-discover the gap.
+## Step 4 — Close by ledger, then finish
 
-## Step 0b — Feature-acceptance verification (does the FEATURE behave, not just the code)
-
-If this branch added or changed a **user-facing feature** (a view, form, wizard, interactive flow, CRUD surface, or an endpoint a client/agent drives), verify it behaves the way it's meant to be used — every intended flow, every edge — driven through the real surface. test-effectiveness (Step 0) proved the tests *bite*; this proves the *feature behaves*. These two gates are siblings: one audits code coverage, the other drives behavior.
-
-> Note: if you reached `/shakeout` via the harness, `planning`'s 1g gate authored an `## Acceptance flows` matrix in the plan and `building` Stage 3 may have already driven it — point this step at that matrix rather than re-deriving. Running `/shakeout` standalone with no matrix, derive the intended-use flows from the spec/diff now.
-
-Use the Skill tool (Situation B — verify the matrix):
-
-```
-Skill("feature-acceptance")
-```
-
-It will drive each flow + edge through its faithful layer — **UI flows through the real browser** (a Playwright spec if one exists → else `superpowers-chrome` `use_browser` against the running dev server), **backend flows through the un-mocked wire** (a real request through the mounted app, asserting response + DB state + emitted event) — checking the six edge classes per flow (empty/zero state, denied actor, wrong-order/re-entry, concurrent/double, boundary value, mid-flow failure).
-
-**Bring up the real surface first** (start the dev server for browser flows; have the API reachable for backend flows). The skill emits a `pass`/`fail`/`not-reachable`/`unverified-no-browser` manifest. A `fail` is a bug fixed here (via `superpowers:systematic-debugging`) before proceeding. **No UI flow is marked `pass` without a real browser driving it** — if the browser can't be reached, those flows are `unverified-no-browser` and reported to the user as residual risk, never laundered to green.
-
-**Wait for the manifest before continuing.** Like Step 0's, it becomes a convergence target the Step 4 reviewers verify against.
-
-## Step 1 — Re-run /integration's checks
-
-The spec gate is a superset. If the group-level gates don't pass, there's no point shaking out.
-
-Detect the stack the same way `/integration` does. Run:
-
-1. Type-check (Bun/TS only — see `/integration` for the command).
-2. Unit + integration tests (full suite, not delta).
-
-If any fail: stop. Report. Don't proceed. The user fixes and re-runs.
-
-## Step 1b — Verification-budget over the WHOLE branch diff
-
-A per-cluster pass can stay under the ceiling at every `/integration` gate and still land a branch well over it — this is the one place the whole branch is measured:
-
-```bash
-VB_SCRIPT="<plugin>/bin/verify-budget.py"   # plugins/netdust-agent/bin/verify-budget.py
-# Pick the feature dir: loop marker → dirs the diff actually touched → ls fallback.
-if [[ -f tasks/.harness-loop.json ]]; then
-  SPEC_DIR=$(python3 -c "import json; print(json.load(open('tasks/.harness-loop.json')).get('feature_dir',''))")
-  echo "→ SPEC_DIR from loop marker: $SPEC_DIR"
-fi
-if [[ -z "${SPEC_DIR:-}" ]]; then
-  SPEC_DIR=$(git diff --name-only "$BASE...HEAD" -- specs/ | cut -d/ -f1-2 | sort -u | head -1)
-  [[ -n "$SPEC_DIR" ]] && echo "→ SPEC_DIR from the diff range: $SPEC_DIR"
-fi
-if [[ -z "${SPEC_DIR:-}" ]]; then
-  SPEC_DIR=$(ls -d specs/*/ 2>/dev/null | head -1)
-  [[ -n "$SPEC_DIR" ]] && echo "→ SPEC_DIR from ls fallback: $SPEC_DIR"
-fi
-BUDGET_HALT=0
-if [[ -f "$VB_SCRIPT" ]]; then
-  python3 "$VB_SCRIPT" ${SPEC_DIR:+"$SPEC_DIR"} --base "$(git merge-base HEAD "$BASE")" || {
-    BUDGET_HALT=1
-    echo "BUDGET HALT — carry on composing the report; STOP at Step 4 before the reviewer panel."
-  }
-else
-  echo "→ verify-budget.py not found — skipping the budget check (fail-open)."
-fi
-```
-
-It compares test lines added to implementation lines added against the ceiling the plan's `Stakes:` level justifies. **On a HALT: do not abort here — carry the `BUDGET_HALT` flag, finish composing the report (Steps 2–3), then STOP at Step 4 before dispatching the reviewer panel** and put the script's report in front of the user with the branch summary. The three causes it names (stakes line too low / evidence duplicated / drives committed as durable specs) are the user's triage, not yours, and deleting tests to silence it is forbidden. On PASS, fold the printed ratio into the final report — it is cheap observability either way. Missing script or git trouble fails OPEN.
-
-## Step 2 — Playwright e2e (if configured)
-
-```bash
-PW=$(find . -maxdepth 4 -name 'playwright.config.*' -not -path './node_modules/*' | head -1)
-if [[ -n "$PW" ]]; then
-  echo "→ Running Playwright from $(dirname "$PW")"
-  (cd "$(dirname "$PW")" && bunx playwright test) || exit 1
-else
-  echo "→ No playwright.config — skipping e2e. (Add one to gate this.)"
-fi
-```
-
-Same for `cypress.config.*`, `vitest.workspace.*` with e2e suites — best-effort, don't be clever.
-
-For WordPress/Statamic projects: if `tests/acceptance/` exists with Codeception specs, run `vendor/bin/codecept run acceptance` (prefix `ddev exec ` if `.ddev/` exists).
-
-## Step 3 — Invoke the shake-out skill
-
-The `shake-out` skill is the QA sweep itself (Sweep → Manifest → Fix). This command does NOT replicate it — it invokes it.
-
-Use the Skill tool:
-
-```
-Skill("shake-out")
-```
-
-Hand off to the skill. It will:
-- Read the plan (point it at `tasks/todo.md` or the spec under `docs/superpowers/specs/` if present)
-- Sweep the artifact end-to-end
-- Compile a bug manifest
-- Fix systematically via `superpowers:systematic-debugging` per bug
-- Re-sweep after fixes
-
-**Wait for the skill to complete and the manifest to be either empty or fully resolved before continuing.** This is the QA gate proper.
-
-## Step 4 — Auto-dispatch the multi-reviewer pass (panel sized by review tier)
-
-**Budget gate first:** if Step 1b set `BUDGET_HALT=1`, STOP HERE. Present everything composed so far (Steps 0–3 outcomes) together with the budget script's report to the user, and do NOT dispatch the reviewer panel — a branch whose verification spend has outrun its declared stakes gets a human decision before it buys a five-agent review pass.
-
-Once shake-out reports green (and no budget HALT is pending), dispatch the reviewer agents **in parallel**. This means a single assistant turn containing multiple `Agent` tool calls in one message — not sequential calls. If Step 0 produced a `covered`/`blind`/`fixed` manifest (and/or Step 0b a `pass`/`fail`/`unverified-no-browser` acceptance manifest), include them in each agent's briefing as the convergence targets — reviewers verify the `blind→fixed` transitions, the driven flow outcomes, and flag any path still `blind` or any UI flow still `unverified-no-browser`, rather than re-discovering coverage/behavior gaps free-form.
-
-Compute the diff range:
-
-```bash
-MB=$(git merge-base HEAD "$BASE")   # $BASE resolved in Pre-flight
-RANGE="${MB}..HEAD"
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
-SPEC=$(ls docs/superpowers/specs/*.md 2>/dev/null | tail -1)  # most recent spec, if any
-```
-
-**First, decide the branch diff's review tier (the 1h facet of `planning`'s task-shaping gate; restated per `building` Step 2.8).** The panel composition is read from the tier — do not always dispatch the full five. Tier uses the **same surface triggers as the threat-modeling gate (1a)**:
-
-- **FULL** — the diff `<RANGE>` touches any 1a trigger surface (auth/session/token, URL allow-lists, crypto, untrusted parsing, tenancy/workspace boundaries, outbound requests to user-supplied addresses), OR a named architecture invariant, OR the data layer / migrations. Quick check:
-  ```bash
-  git diff --name-only "$RANGE" | grep -iE 'auth|session|token|scope|crypto|url.*allow|allow.*list|migrat|/db/|schema|tenan|workspace|webhook|parse|frontmatter' && echo "→ FULL candidate"
-  ```
-- **STANDARD** — multi-file behavior changes outside those surfaces (UI features, route/component work).
-- **LIGHT** — doc-only / copy / config / skill-body edits (`git diff --name-only "$RANGE"` is all `.md` / config).
-
-State the tier + one-line justification before dispatching. Then dispatch ONLY the agents the tier names, in a single parallel message:
-
-| # | subagent_type | FULL | STANDARD | LIGHT |
-|---|---|:--:|:--:|:--:|
-| 1 | `reviewer` (generalist five-pillar) | ✓ | ✓ | ✓ |
-| 2 | `code-simplicity-reviewer` | ✓ | ✓ | — |
-| 3 | `security-sentinel` | ✓ | — | — |
-| 4 | `performance-oracle` | ✓ | only if diff hits a `CODE-MAP.md` hot path | — |
-| 5 | `invariant-auditor` | ✓ | ✓ | — |
-| 6 | `netdust-wp:ntdst-drift-reviewer` | WP only | WP only | — |
-
-So: **FULL** = the whole panel (5, +drift on WP). **STANDARD** = `reviewer` + `invariant-auditor` (+`code-simplicity-reviewer`; +`performance-oracle` only on a named hot path) — no `security-sentinel`. **LIGHT** = a single `reviewer` pass, no fan-out.
-
-**Escalation is one-way.** If any dispatched reviewer surfaces a finding on a 1a surface, promote the branch to FULL and dispatch the skipped personas (`security-sentinel`, `performance-oracle`) on the same diff before triaging. Never de-escalate.
-
-**`/security-review` is independent of tier.** If a `## Threat model` was authored at plan time for this work, `/security-review` is still mandatory at merge regardless of the panel tier (announce it in the next-steps block below).
-
-The generalist `reviewer` (#1) reads the whole diff across all five dimensions and catches the integration bugs no single-pillar specialist is looking for; the specialists each go deep on one pillar. The dispatched set runs in the same parallel block.
-
-**Before this reviewer fan-out, the artifact sweep is owned by the `shakeout-qa` agent** — it runs the built artifact end-to-end (driving the real browser for UI flows, the un-mocked wire for backend), compiling the bug manifest the shake-out skill (Step 3) describes. Dispatch `shakeout-qa` for that sweep, or run the sweep inline per the shake-out skill; either way the artifact is exercised before the diff reviewers run.
-
-Briefing template (use verbatim per agent, substituting the lens):
-
-```
-Review the diff <RANGE> on branch <BRANCH>.
-
-Spec (if present): <SPEC, or "no spec file under docs/superpowers/specs/">
-
-Your lens: <one-line lens, e.g. "code simplicity / YAGNI / dead code">
-
-Constraints:
-- Read git diff <RANGE> first; this is the changeset.
-- Read the spec file if one exists; it's the intent.
-- Findings only — do not propose patches longer than a few lines.
-- Severity for each finding: BLOCKER / SHOULD-FIX / NICE-TO-HAVE.
-- Brevity wins. No filler. No restating the diff.
-- Report format:
-    ## <Lens>
-    ### BLOCKER (n)
-    - <file:line> — <issue>
-    ### SHOULD-FIX (n)
-    - ...
-    ### NICE-TO-HAVE (n)
-    - ...
-
-If your lens finds nothing, say so in one line.
-```
-
-**Important:** the dispatched `Agent` calls (however many the tier names) MUST go in a single assistant message so they run concurrently. Sequential calls defeat the point.
-
-## Step 4b — Surface the run-observability rubric (if a trace exists)
-
-Before presenting the consolidated triage, check whether this feature has a run trace: `specs/<feature>/run-log.jsonl`. If it exists, run `python3 <plugin>/bin/run-score.py specs/<feature>` — it writes `specs/<feature>/run-rubric.md` (five graded dimensions) or exits cleanly printing "no trace recorded" if the log turned out empty; either way it never blocks. If a rubric was written, fold its table into the consolidated report below. If `run-log.jsonl` doesn't exist at all, add one line to the report instead: "No run trace recorded for this feature — run-observability trace was not enabled during execution." This is report-only per FR-6 — never fails the gate.
-
-After all reports return, present the consolidated triage to the user:
-
-```
-✅ /shakeout: unit + integration + type + e2e + shake-out all green
-✅ Review tier: <FULL | STANDARD | LIGHT> — <N> reviewer agents reported.
-📊 Run rubric: <grades table, or "no trace recorded", or "no run trace recorded for this feature">
-
-Consolidated findings:
-
-  BLOCKERS (must fix before merge):     <count>
-  SHOULD-FIX (recommended):              <count>
-  NICE-TO-HAVE (optional):               <count>
-
-Top findings by lens:
-  - simplicity:    <one-line summary>
-  - security:      <one-line summary>
-  - performance:   <one-line summary>
-  - architecture:  <one-line summary>
-  - drift (WP):    <one-line summary>  ← only if WP
-
-[Full per-agent reports follow below.]
-
-Next steps:
-  1. Triage BLOCKERS now — fix here, then re-run /shakeout.
-  2. SHOULD-FIX → triage with user; either fix or record in memory/STATE.md.
-  3. NICE-TO-HAVE → ignore or open issues.
-  4. When BLOCKERS == 0:
-       /code-review --base=$BASE --effort=<high if tier FULL, else medium> --comment
-     for one final inline pass.
-  4b. If a `## Threat model` was authored for this work at plan time:
-       /security-review        ← mandatory regardless of review tier.
-  5. Then invoke superpowers:finishing-a-development-branch.
-```
-
-If any reviewer agent fails to return (timeout, error): print which one failed and stop. The user re-runs `/shakeout` after fixing the agent or skipping it manually.
-
-## Failure modes
-
-- **Stack mismatch (mixed mono-repo)**: run each detected stack's gate. Report each separately.
-- **Skill invocation fails**: print the error and stop. Don't fall through to the announcement.
-- **shake-out aborts and re-plans**: that's the skill's normal escape hatch. Respect it — do not announce success.
-- **No spec file**: the shake-out skill will ask. If the user has only `tasks/todo.md`, point it there.
-
-## What this command does NOT do
-
-- Does not auto-invoke `/code-review` — it has its own UX (`--fix`, `--comment`) and pairs better with the user looking at findings on screen.
-- Does not merge or push.
-- Does not update `.last-integration` (that's a group-level marker).
-- Does not auto-fix reviewer findings — those need human triage.
-
-The principle: **`/shakeout` proves the artifact works, runs the deep review automatically, and hands the user a triaged list.** The user pulls the final triggers (fixing blockers, `/code-review`, merge).
+Criticals become task lines closing on named checks; Importants triage fix-now / park /
+reject (default park); a round with zero new Criticals CLOSES review (hard cap two
+rounds). Then `superpowers:finishing-a-development-branch`, reporting the bug manifest,
+the panel verdicts, and the ratio line together.

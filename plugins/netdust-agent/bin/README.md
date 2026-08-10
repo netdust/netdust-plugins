@@ -27,18 +27,18 @@ bin/
 ├── run-trace.py      ← in-loop event trace (single-writer append; `show --durations`)
 ├── run-score.py      ← deterministic 5-dimension evaluator rubric over the trace
 ├── run-cost.py       ← read-only transcript miner: per-dispatch / per-stage token tables
-└── verify-budget.py  ← THE TRIPWIRE. Added test lines vs added implementation lines over a
+└── verify-budget.py  ← TELEMETRY. Added test lines vs added implementation lines over a
                         git range, against the ceiling the plan's Stakes: level justifies.
-                        Exit 1 = HALT to the human. Fails OPEN on any git problem.
+                        Prints one verify-ratio: line; always exits 0 (decision 2026-08-09).
 ```
 
 **`verify-budget.py` is the odd one out and deliberately so.** Every other gate here answers
 *"is this verified?"*. That one answers *"is this verification worth what it cost?"* — the
 question nothing in the harness could ask until a contact page accumulated ~8000 lines of
 tests with every individual gate satisfied (calibration: `contact-page-8k`). It is not a
-quality measure and must never be read as one: a HALT means the spend outran the plan's
-declared stakes and a human should look, and the most common correct resolution is that the
-stakes line was too low. It cannot see effort that left no lines in the diff — dispatch
+quality measure and must never be read as one: an `[over-ceiling]` suffix means the spend
+outran the declared stakes — record it and move on; the structural controls on runaway
+verification are the deliverable-first gate and behaviour clusters in gate-check.py. It cannot see effort that left no lines in the diff — dispatch
 round-trips, re-planning, a test-author/implementer pair ping-ponging on a fixture; that
 half of the picture is `run-cost.py`'s.
 

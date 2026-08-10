@@ -83,16 +83,13 @@ if [[ -z "${SPEC_DIR:-}" ]]; then
   [[ -n "$SPEC_DIR" ]] && echo "→ SPEC_DIR from ls fallback: $SPEC_DIR"
 fi
 if [[ -f "$VB_SCRIPT" ]]; then
-  python3 "$VB_SCRIPT" ${SPEC_DIR:+"$SPEC_DIR"} --base "${LAST:-$(git merge-base HEAD "$BASE")}" || {
-    echo "BUDGET HALT — do not write the marker; report to the user (see the script's three causes)."
-    exit 1
-  }
+  python3 "$VB_SCRIPT" ${SPEC_DIR:+"$SPEC_DIR"} --base "${LAST:-$(git merge-base HEAD "$BASE")}" || true
 else
-  echo "→ verify-budget.py not found — skipping the budget tripwire (fail-open)."
+  echo "→ verify-budget.py not found — no ratio line (fail-open)."
 fi
 ```
 
-It compares test lines added against implementation lines added over the group diff, against the ceiling the plan's `Stakes:` level justifies (`standard` when the plan predates the dial). **A HALT is a stop-and-report to the user, never a cleanup task** — do not delete tests to pass it, and do not update `.last-integration` past it; the most common correct resolution is raising a too-low stakes line in a plan-correction commit. If the script is missing or git misbehaves, it fails OPEN — the gate never blocks on its own tooling.
+It prints one `verify-ratio:` telemetry line (test lines vs implementation lines against the stakes ceiling) and always exits 0 — record the line in the group's evidence and continue; it never interrupts anyone (decision 2026-08-09).
 
 ## Step 4 — On green, write the marker and announce
 

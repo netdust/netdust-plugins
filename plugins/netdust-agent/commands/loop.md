@@ -21,7 +21,7 @@ Preconditions — refuse to arm (say why) if any fails:
 
 Then:
 
-4. Read `Loop budget: ~N` from `<feature-dir>/plan.md` (planner-proposed);
+4. Read `Loop budget: ~N` from `<feature-dir>/plan.md` (from the plan);
    default 25 if absent.
 5. Write `tasks/.harness-loop.json`:
    `{"feature_dir": "<feature-dir>", "iteration": 0, "max_iterations": N,

@@ -1,115 +1,49 @@
-# netdust-agent — the two-layer harness
+# netdust-agent — the overlay on superpowers
 
-This plugin holds the full Netdust development harness, organized around one idea:
+One idea, decided 2026-08-10 (the re-thinning):
 
-> **Harness = the skeleton** (steps, gates, ordering, "don't skip").
-> **Craft = the how-to** the harness reaches for at each step.
+> **Superpowers is the workhorse.** It brainstorms, plans, writes tests-first code,
+> reviews, and finishes branches. **netdust-agent guides and gates that work** — it adds
+> netdust best practices to each superpowers stage and verifies them mechanically. It
+> never replaces upstream content; a netdust skill that restates superpowers is a defect
+> (that drift is how 27 skills and 3,900 lines accumulated by 0.17).
 
-The harness decides *when* and *whether*. The craft is *how to actually do it*. Keeping them as distinct, legibly-named layers is the whole point of this plugin.
+## The six skills
 
----
-
-## The two layers
-
-### Layer 1 — Harness (control flow)
-
-These skills are **sequencers and gates**. They do not teach craft; they decide what fires, in what order, and prove it fired. `harnessed-development` is the single entry point — an intake ROUTER that classifies the work (Class A–F) and routes it to the two spines, which meet at an enforced seam: an approved `tasks.md` with `bin/gate-check.py` GREEN. `planning` stops there; `building` refuses to start without it.
-
-- `harnessed-development` — entry point; intake router only (class dial A–F → spine; F = vision-brief, brainstorm-only, no plan/tasks artifact). States TWO dials: the class dial routes the work, the **stakes dial** (`high|standard|low` — what a failure costs) scales what verifying it buys. They are independent — a contact page is a real Class A at low stakes.
-- `planning` — PLAN spine; sequences brainstorm → (spec-authoring) → plan(+gates 1a–1i incl. the stakes dial, task-shaping 1d/1f/1h) → (spec-analysis); STOPS at the seam for human approval. Presence-aware: inline in the main conversation while the human is steering, dispatched background `planner` once unattended — the pre-unattended ladder (gate-check GREEN, seam approval, doubting-decisions) gates either way.
-- `building` — BUILD spine; precondition = the seam artifact; sequences execute (per-task testing + standards gates, review-cluster HALTs, optional armed `/loop`) → shake-out → finish → compounding. Stage 2's test/dev split is tier-conditional: an independent test-author writes the RED test first for Tier-A security-boundary tasks (the plan's `Test-author: split` field, machine-checked by `gate-check.py`'s test-author-mode check); other tasks run solo RED-first TDD.
-- `superpowers:writing-plans` (upstream base, not a local skill) — gate: spec → plan → tasks
-- `spec-authoring` — gate (Stage 0.5, unconditional): the spec is authored by `superpowers:brainstorming` into `specs/<feature>/spec.md` (per the `memory/GLOBAL.md` location preference) against this skill's own `<artifact_contract>` — there are no artifact templates, the scripts in `bin/` are the only definition of the shape; this gate HALTs on unresolved `[NEEDS CLARIFICATION]` and on success criteria carrying no number, and owns the rule that open questions are handed back rather than defaulted away
-- `spec-analysis` — gate (Stage 1.5): a semantic cross-check read (spec ↔ plan ↔ tasks coverage — judgment, not machine-checked, and it says so) + mechanical `gate-check.py` — the pre-execution barrier that machine-checks 1a/1d/1f/1g
-- `run-trace.py` / `run-score.py` (`bin/`) — in-loop event trace + evaluator rubric: `loop-gate.py` emits decision events automatically (fail-open); `/shakeout` surfaces the graded rubric at spec-close; report-only, no new gate. `run-trace.py show --durations` adds per-segment timing; `run-cost.py` is a strictly read-only transcript miner emitting per-dispatch/per-stage token tables — same report-only posture, no new gate
-- `standards-gate` — gate (Step 2.6b): runs the project linter at each code-task close; backstopped by `subagent-stop.py`
-- `constitution-bridge` — setup: generates `docs/constitution.md` as a view over RULES/SOUL/invariants; the plan's `## Constitution check` gate verifies against it
-- `testing-workflow` — gate: per-task, *what does a failure cost (the plan's `Stakes:` dial, read never re-decided), what already proves this (the evidence ladder → `Proven by:`), and only then what tier of test this needs, RED-first*
-- `threat-modeling` — gate: inject `## Threat model` when triggers match
-- `architecture-invariants` — gate: name convergence points; flag bypasses
-- `feature-acceptance` — gate: author + drive the acceptance-flows matrix (edges driven, and drives promoted to durable specs, scaled by stakes)
-- `test-effectiveness` — gate: would the green suite actually go RED? (a machine gate is a legitimate answer; sweep surface scaled by stakes)
-- `shake-out` — gate: spec-complete pre-merge sweep
-- `superpowers:finishing-a-development-branch` (upstream base, not a local skill) — gate: merge / PR / cleanup
-- `compounding` — gate: spec-close harvest into CODE-MAP + skills
-- `/evaluate` (a command, not a skill) — gate: process retro
-
-### Layer 2 — Craft (the how-to the harness reaches for)
-
-These are what the harness **loads** at each step. Gerund-named.
-
-- `writing-tests` — reached for by `testing-workflow`; RED→GREEN-within-a-task mechanics
-- `designing-apis` — reached for at plan stage when an API is needed
-- `building-frontend` — reached for at execute stage for UI tasks
-- `engineering-context` — reached for at session start / task switch
-- `versioning-with-git` — commit-craft (branch *flow* stays in the stack's dev-stack)
-- `driving-the-browser` — how to operate Chrome (test *strategy* stays in feature-acceptance)
-- `refining-ideas` — divergent→convergent ideation (sibling to brainstorming)
-- `sourcing-from-docs` — cite official docs before asserting API behavior
-- `doubting-decisions` — adversarial fresh-context review of a decision
-- `simplifying-code` — reduce complexity, preserve behavior
-- `deploying` — thin how-to over the stack's deploy dispatcher
-
----
-
-## The two dials (what scales what)
-
-The harness has always scaled ceremony. Until 2026-07-31 it scaled it on one axis, and that
-was the bug behind `contact-page-8k`:
-
-| Dial | Asks | Set by | Scales |
-|---|---|---|---|
-| **Class** (A–F) | how big is this work? | `harnessed-development` at intake | which spine runs, how much PLANNING it warrants |
-| **Stakes** (high/standard/low) | what breaks if it's wrong? | `planning` gate 1i, machine-checked | how much VERIFYING it buys — tier obligations, edge driving, audit depth, budget ceiling |
-
-They do not track each other. A contact page is a genuine Class A at `low`/`standard`; a
-one-line token-store edit is Class D at `high`. Reading one off the other is the mistake.
-
-Both fields are **set once and read everywhere** — no run-time agent re-decides its own
-task's mode (`Test-author:`) or its own feature's stakes. The agent that would save the
-effort is the worst-placed to authorise saving it, which is the same reasoning behind the
-test/dev split and reviewer independence.
-
-**One rule keeps the relaxation safe: stakes never waives a guard.** It governs how much
-evidence *beyond a guard's proven presence* the work buys. Presence is proven at every
-level; any predicate encoding a rule this project chose is Tier A at every level.
-
-## The naming convention (the legibility rule)
-
-No subfolders. **The name carries the role.** Read the skill list, know the layer:
-
-| Layer | Name shape | Reads like |
+| Skill | Adds to | What it adds |
 |---|---|---|
-| Harness | phase / gate **noun** | a checkpoint (`testing-workflow`, `shake-out`) |
-| Craft | **gerund** (`-ing`) | a capability (`writing-tests`, `designing-apis`) |
+| `harnessed-development` | intake | the class dial (A–F, priced by open decisions) + the stakes dial; routes, does no stage work |
+| `planning` | `superpowers:brainstorming` + `writing-plans` | the plan-time gates: Source: per FR, threat model, invariants, ground-truth, stakes, deliverable-first, task shaping, behaviour clusters — all checked by `bin/gate-check.py`; stops at the seam |
+| `building` | `superpowers:subagent-driven-development` / `executing-plans` + `test-driven-development` | the seam precondition, ground-truth per dispatch, the evidence contract the stop hook parses, feature tests after each cluster, review gates with independent reviewers |
+| `testing-workflow` | `superpowers:test-driven-development` | the tier decision (A/B, evidence ladder) and the WP runners — Brain Monkey / wp-phpunit via the netdust-wp-manager template, which superpowers doesn't know |
+| `threat-modeling` | `planning` | the trigger list + the `## Threat model` section shape |
+| `architecture-invariants` | `planning` / review | the convergence-point doc shape reviews check bypasses against |
 
-Scan rule: **gerund = how-to (craft); phase/gate noun = when/whether (harness).** Gerunds are reserved for craft so the contrast stays sharp — a few gates keep noun names that already read as checkpoints. Named exceptions on the harness side: the two spines `planning` and `building` (named for the lifecycle halves they own, per the plan/build split) and the pre-existing `threat-modeling`/`compounding`.
+## Agents (6)
 
-## The authority rule (whose file, whose citation)
+`implementer` (greens tasks, TDD), `test-author` (feature tests after each task group;
+rare pre-task RED on split tasks), `reviewer` (whole-diff generalist),
+`security-sentinel`, `code-simplicity-reviewer`, `shakeout-qa` (drives the artifact).
+Reviewers ship without Edit/Write — a finder can never quietly become the fixer.
 
-When a Netdust skill and an upstream skill (superpowers, addyosmani/agent-skills) cover the same ground:
+## The machine layer (the part that is NOT prose)
 
-> **The Netdust skill is the authoritative `SKILL.md`.** Upstream content is woven IN as reinforcement — never added as a competing parallel file.
+- `hooks/` — SessionStart memory injection, Stop-hook tag capture, PreToolUse guard,
+  `subagent-stop.py` (blocks a code-editing close whose suite didn't run or exited
+  non-zero; sensitive-path floor), `loop-gate.py` (armed `/loop`).
+- `bin/` — `gate-check.py` (the single definition of the spec/plan/tasks grammar),
+  `loop-check.py`, `run-trace.py`, `run-score.py`, `run-cost.py`, `verify-budget.py`
+  (telemetry line, never a HALT — decision 2026-08-09).
+- `tests/` — `bash plugins/netdust-agent/tests/run.sh`, 22 self-runner modules. The
+  hooks and scripts are tested code; keep it that way.
 
-Superpowers is the base; addyosmani fills genuine gaps; Netdust discipline is the spine. A craft skill cites the gate that reaches for it, and the gate cites the craft it loads — wired both ways.
+## Evals
 
-## The calibration rule (tell a war story once)
+Every skill ships with eval cases (`evals/`): test prompts + assertions that a session
+following the skill produces the required artifacts. A skill edit without a passing eval
+doesn't ship — skills get the same RED-first discipline as code.
 
-Every gate traces to a real incident — that's the test for a gate's existence. But an
-incident has **ONE full home** (usually the owning skill's body, `references/`, or
-`lessons.md`); everywhere else cites its slug, e.g. `(calibration: traverse-clause)`.
-The index of all slugs + canonical homes is `skills/_shared/calibrations.md`. New skill
-prose never retells an indexed incident — it cites. This keeps the hot path (SKILL.md
-bodies loaded per stage) lean while losing no lesson.
+## Commands
 
-## Provenance
-
-- Harness discipline + risk-tiering + the gate sequence: Netdust harness discipline.
-- Base process skills: `superpowers:*`.
-- Craft fills: concepts learned from `addyosmani/agent-skills` (MIT) — folded into Netdust-voiced skills, not copied verbatim.
-
-## Standalone harness
-
-This plugin is fully self-contained. It holds the complete two-layer harness — the `harnessed-development` intake router, the `planning` + `building` spines it routes to, every gate they fire (testing-workflow, threat-modeling, architecture-invariants, feature-acceptance, test-effectiveness, shake-out, compounding, standards-gate), its own tooling (`bin/` → `gate-check.py`, `loop-check.py`, `run-trace.py`, `run-score.py`, `run-cost.py`, `verify-budget.py`, all bare-`python3`) (keystone: the handoff is `tasks.md`, and it is never executed flat — the artifact contracts live in the authoring skills, not in templates), the craft skills the gates reach for, the reviewer/specialist agents, the session + guard hooks, and its own commands (`/deploy`, `/shakeout`, `/evaluate`, `/loop`, …). Nothing here depends on or defers to another Netdust plugin: every skill, gate, command, and agent it references resolves WITHIN this plugin (or to an external `superpowers:*` / `superpowers-chrome` base). It supersedes the older Netdust core harness — this plugin is now the sole home for that discipline.
-
-One documented exception: netdust-core canonically owns the two memory-maintenance commands — `/memory-audit` (named by the session-start hook's truncation warning) and `/pattern-miner` (referenced by `memory/GLOBAL.md` and the `compounding` skill as the cross-project promotion path). Both are best-effort pointers, not load-bearing — everything the harness actually gates on resolves within this plugin.
+`/shakeout` (spec-complete gate), `/integration` (group gate), `/loop`, `/deploy`,
+`/skill-audit`, `/evaluate`, `/architecture-invariants`.

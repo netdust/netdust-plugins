@@ -29,29 +29,29 @@ def run():
     check("planning: names gate-check.py as the seam's machine check",
           "gate-check.py" in planning)
     check("planning: has an explicit STOP-at-the-seam section",
-          "## The seam — STOP here" in planning)
+          "## The seam — STOP" in planning)
     check("planning: forbids invoking building itself",
-          "Do not invoke `building`" in planning)
-    check("planning: carries the plan-time gates (1a/1b/1c/1e/1g + task-shaping 1d)",
-          all(f"**1{k}." in planning for k in "abdeg"))
-    check("planning: task-shaping gate absorbs 1f and 1h as facets",
-          "(1f)" in planning and "(1h)" in planning)
+          "not invoke `building`" in planning)
+    check("planning: carries the plan-time gates (threat model, invariants, ground-truth, stakes, deliverable-first, task shaping)",
+          all(k in planning for k in ("## Threat model", "Architecture invariants",
+              "ground-truth", "Stakes", "First working version", "Task shaping")))
+    check("planning: carries the Source: rule and the behaviour-block grammar",
+          "`Source:`" in planning and "Behaviour:" in planning)
     check("planning: no execution machinery (dispatch addendum stays in building)",
           "addendum_for_dispatch" not in planning
           and "Netdust addendum — mandatory close-out" not in planning)
 
     # ── the seam, building side ──────────────────────────────────────────────
-    first_tag = building.split("---", 2)[2].lstrip()
-    check("building: <precondition> is the FIRST section after frontmatter",
-          first_tag.startswith("<precondition>"))
+    body = building.split("---", 2)[2]
+    check("building: precondition is the FIRST section after frontmatter",
+          body.lstrip().startswith("# Building") and
+          body.index("## Precondition") < body.index("## Stage 2"))
     check("building: precondition demands a fresh gate-check run (exit 0), not an assertion",
-          "gate-check.py" in building
-          and "do not trust a transcript assertion" in building)
+          "gate-check.py" in building and "run NOW by you" in building)
     check("building: precondition covers every plan-less class entry (C, D, E)",
-          all(f"**{c} —" in building for c in "CDE"))
-    check("building: carries the verbatim dispatch addenda (test/dev split pair)",
-          "## Netdust addendum — test-author close-out (RED)" in building
-          and "## Netdust addendum — implementer close-out (GREEN)" in building)
+          all(f"| {c} " in building for c in "CDE"))
+    check("building: carries the machine-parsed dispatch contract the stop hook consumes",
+          "HARNESS-EVIDENCE" in building and "subagent-stop.py" in building)
     # The seam's other half: tasks.md is executed task-by-task THROUGH the gates.
     # Any flat executor over the task list bypasses threat-model verify, per-task
     # tiers, the review-cluster HALT and the subagent-stop backstop — so the red
@@ -60,16 +60,18 @@ def run():
           "flat" in building.lower()
           and "bypass" in building.lower()
           and "The handoff is `tasks.md`" in building)
+    check("building: repositions the test-author to feature tests after each cluster",
+          "Feature tests after each cluster" in building)
     check("building: owns the armed loop protocol",
           "loop-gate.py" in building and "loop-check.py" in building)
-    check("building: no plan-authoring content (1a gate text lives in planning only)",
-          "**1a." not in building)
+    check("building: no plan-authoring content (threat-model section shape lives in planning only)",
+          not any(ln.startswith("## Threat model") for ln in building.splitlines()))
 
     # ── the router stays thin ────────────────────────────────────────────────
     check("router: routes to both spines",
           "`planning`" in router and "`building`" in router)
     check("router: keeps the class dial (A–F intake table)",
-          all(f"**{c} —" in router for c in "ABCDEF"))
+          all(f"**{c}**" in router for c in "ABCDEF"))
     check("router: no stage content re-fused in (no Step 2.x, no gate bodies, no addendum)",
           "Step 2.5" not in router
           and "## Stage" not in router
@@ -84,10 +86,9 @@ def run():
           "harnessed-development/SKILL.md` (gate" not in calibrations
           and "harnessed-development/SKILL.md` (Step" not in calibrations
           and "harnessed-development/SKILL.md` (integration" not in calibrations)
-    check("calibrations: plan-time homes point at planning",
-          "planning/SKILL.md` (gate 1a)" in calibrations)
-    check("calibrations: execution homes point at building",
-          "building/SKILL.md` (Step 2.5)" in calibrations)
+    check("calibrations: index file still exists and names the load-bearing slugs",
+          all(slug in calibrations for slug in
+              ("contact-page-8k", "deliverable-last", "plan-drift-4x")))
 
     return results
 

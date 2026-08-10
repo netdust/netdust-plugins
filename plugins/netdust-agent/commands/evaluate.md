@@ -52,7 +52,7 @@ For the commit range, capture:
 
 6. **Commit classification** by message prefix:
    - `phase-N:` (implementation)
-   - `phase-N: BUG-*` (shake-out fix)
+   - `phase-N: BUG-*` (shakeout fix)
    - `phase-N: <letter><digit>` like F1, G14, H22 (review-fix pass)
    - `phase-N: plan` or `plan correction` (meta-work on the plan)
    - `memory(*)` (auto-memory, skip in classification but note count)
@@ -305,7 +305,7 @@ Next sub-phase ready to start? Run /integration when its tasks finish, then /eva
 
 - NOT a code review (`/code-review` does that).
 - NOT a correctness gate (`/integration` does that).
-- NOT a shake-out (`/shakeout` does that — but `/shakeout` is also process-aware in its own way).
+- NOT a shake-out (`/shakeout` does that — which exercises the artifact itself).
 - NOT a place to write new code logic. Only meta-corrections to the plan, lessons to memory, follow-ups to a task list.
 
 ## When to skip running it
