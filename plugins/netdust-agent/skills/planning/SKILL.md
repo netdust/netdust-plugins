@@ -23,8 +23,11 @@ rule on top: **every FR carries a `Source:` line** — a quote from the ask, or
 human, never a default you pick (checked: `check_fr_sources`).
 
 On WordPress work the stack sub-plugin's design skills (architecture / data / patterns)
-replace generic brainstorming for the *technical* shape — intent questions still go to the
-human.
+own the *technical* shape — but they never replace the INTENT interrogation: the open
+decisions (payment? stock? who sees what?) go to the human as explicit questions BEFORE
+the spec is written, and their rulings are recorded in the spec (the record-shop spec's
+`## Intent decisions` table is the reference shape). Skipping the questions because the
+stack skills "replace brainstorming" is the loophole this sentence used to allow.
 
 ## Stage 1 — Plan (invoke `superpowers:writing-plans`)
 
