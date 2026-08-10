@@ -8,7 +8,7 @@ One idea, decided 2026-08-10 (the re-thinning):
 > never replaces upstream content; a netdust skill that restates superpowers is a defect
 > (that drift is how 27 skills and 3,900 lines accumulated by 0.17).
 
-## The six skills
+## The seven skills
 
 | Skill | Adds to | What it adds |
 |---|---|---|
@@ -18,6 +18,7 @@ One idea, decided 2026-08-10 (the re-thinning):
 | `testing-workflow` | `superpowers:test-driven-development` | the tier decision (A/B, evidence ladder) and the WP runners — Brain Monkey / wp-phpunit via the netdust-wp-manager template, which superpowers doesn't know |
 | `threat-modeling` | `planning` | the trigger list + the `## Threat model` section shape |
 | `architecture-invariants` | `planning` / review | the convergence-point doc shape reviews check bypasses against |
+| `compounding` | spec-close | the learning loop: session lessons land in CODE-MAP + skill lessons + evals as approved proposals — how the agents and skills improve |
 
 ## Agents (7)
 

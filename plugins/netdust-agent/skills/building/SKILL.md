@@ -74,8 +74,9 @@ is the implementer's law — RED first, watched, never weakened). Netdust adds:
    wire (`shakeout-qa` agent; no UI flow passes without a browser having driven it).
 2. Branch review at the branch's tier (same panel rules as above), then
    `superpowers:finishing-a-development-branch`.
-3. Report the whole-branch verify-budget line with the summary. Harvest durable lessons
-   to the CODE-MAP / skill lessons as PROPOSALS (report-only) when the spec taught any.
+3. Report the whole-branch verify-budget line with the summary. Then invoke `compounding`
+   — the learning loop: what the spec taught lands in CODE-MAP / skill lessons / evals as
+   approved proposals.
 
 ## Armed loop
 
