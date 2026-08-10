@@ -20,7 +20,9 @@ Actually invoke it — its job is interrogating user intent, which is what preve
 requirements. The spec it produces lands at `specs/<feature>/spec.md`. Netdust adds ONE
 rule on top: **every FR carries a `Source:` line** — a quote from the ask, or
 `invented — approved <date>`. An invention nobody approved is an open question for the
-human, never a default you pick (checked: `check_fr_sources`).
+human, never a default you pick (checked: `check_fr_sources`). The invocation itself is
+machine-enforced: creating `spec.md` without `superpowers:brainstorming` in the session
+transcript is denied by the PreToolUse guard (the upstream-invocation floor).
 
 On WordPress work the stack sub-plugin's design skills (architecture / data / patterns)
 own the *technical* shape — but they never replace the INTENT interrogation: the open
@@ -32,7 +34,8 @@ stack skills "replace brainstorming" is the loophole this sentence used to allow
 ## Stage 1 — Plan (invoke `superpowers:writing-plans`)
 
 Write the reasoning to `specs/<feature>/plan.md` and the executable list to
-`specs/<feature>/tasks.md` — two files, no duplicated task list. **The grammar is defined
+`specs/<feature>/tasks.md` — two files, no duplicated task list. (Creating either
+without `superpowers:writing-plans` invoked is denied by the same guard floor.) **The grammar is defined
 by `bin/gate-check.py` and nowhere else** — read its findings, not a template. What the
 gates require, beyond upstream's own craft:
 

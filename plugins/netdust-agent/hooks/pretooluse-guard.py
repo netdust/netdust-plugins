@@ -22,10 +22,14 @@ Decision policy (v1 — conservative, favor `ask` over `deny`):
     literal command to a human; the model's stated intent is NOT trusted).
   • Everything else, any non-Bash tool, any parse failure → no output
     (passthrough): the call proceeds through the normal permission flow.
-  v1 deliberately uses `ask` for ALL patterns, never `deny` — a hard deny
+  v1 deliberately uses `ask` for ALL Bash patterns, never `deny` — a hard deny
   risks blocking legit work, and `ask` already stops the autonomous/injected
-  case (a human sees the literal command). Reserve `deny` for a future
-  site.yml-prod-path rule if it proves needed.
+  case (a human sees the literal command).
+  The ONE deny tier (2026-08-10): the upstream-invocation floor on Write —
+  creating specs/<f>/spec.md (plan.md, tasks.md) without the corresponding
+  superpowers skill invoked in this session's transcript. Deny is right there
+  because the correction is agent-side and costs one tool call; it fails OPEN
+  on every tooling problem and never applies to edits of existing files.
 
 CRITICAL — fails OPEN. Per the Claude Code hook contract, exit 2 is the only
 exit code that blocks a tool on the hook's own authority; any other exit code
@@ -110,6 +114,101 @@ DENYLIST: list[tuple[str, re.Pattern]] = [
 ]
 
 
+# ── The upstream-invocation floor (2026-08-10) ────────────────────────────────
+#
+# Superpowers is the workhorse; the netdust overlays add gates around it. That
+# architecture held in prose and failed in practice three sessions running:
+# specs and plans were authored without ever loading the upstream skill. This
+# floor makes the invocation mechanical: CREATING a seam artifact requires its
+# upstream superpowers skill to appear as a Skill tool_use in the session
+# transcript. The decision is `deny` (not `ask`) BY DESIGN — the correction is
+# agent-side and costs one tool call (invoke the named skill, retry); no human
+# needs to arbitrate. Editing existing artifacts is free (Class B freshness
+# reviews, ledger ticks), a waiver comment in the content bypasses, and every
+# tooling failure (no transcript_path, unreadable file) fails OPEN like the
+# rest of this hook. Limit stated honestly: this proves the skill was LOADED
+# (its discipline in context), not followed — that half stays with review.
+
+UPSTREAM_FLOOR: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"(?:^|/)specs/[^/]+/spec\.md$"), "superpowers:brainstorming"),
+    (re.compile(r"(?:^|/)specs/[^/]+/(?:plan|tasks)\.md$"), "superpowers:writing-plans"),
+]
+UPSTREAM_WAIVER = "<!-- upstream: waived"
+
+
+def transcript_has_skill(transcript_path: str, skill: str) -> bool:
+    """True if the session transcript records a Skill tool_use for `skill`.
+    Line-prefiltered so a multi-MB transcript costs one pass, JSON-confirmed so
+    a prose mention of the skill name never counts as an invocation."""
+    with open(transcript_path, errors="ignore") as f:
+        for line in f:
+            if skill not in line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            content = (entry.get("message") or {}).get("content")
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if (isinstance(block, dict) and block.get("type") == "tool_use"
+                        and block.get("name") == "Skill"
+                        and (block.get("input") or {}).get("skill") == skill):
+                    return True
+    return False
+
+
+def check_upstream_floor(hook_input: dict) -> dict | None:
+    """Return a deny decision when a seam artifact is being CREATED without its
+    upstream superpowers skill in the transcript; None to pass through."""
+    tool_input = hook_input.get("tool_input") or {}
+    if not isinstance(tool_input, dict):
+        return None
+    file_path = tool_input.get("file_path", "")
+    if not isinstance(file_path, str) or not file_path:
+        return None
+    needed = None
+    for pat, skill in UPSTREAM_FLOOR:
+        if pat.search(file_path):
+            needed = skill
+            break
+    if needed is None:
+        return None  # not a seam artifact
+    if Path(file_path).exists():
+        return None  # editing, not creating — Class B / ledger ticks stay free
+    content = tool_input.get("content", "")
+    if isinstance(content, str) and UPSTREAM_WAIVER in content:
+        log(f"upstream-floor waived path={file_path!r}")
+        return None
+    transcript_path = hook_input.get("transcript_path", "")
+    if not isinstance(transcript_path, str) or not transcript_path:
+        log("upstream-floor passthrough reason=no-transcript-path (fail open)")
+        return None
+    try:
+        if transcript_has_skill(transcript_path, needed):
+            return None  # upstream skill loaded — floor satisfied
+    except OSError:
+        log(f"upstream-floor passthrough reason=transcript-unreadable path={transcript_path!r} (fail open)")
+        return None
+    reason = (
+        f"netdust-agent upstream-invocation floor: you are creating "
+        f"{Path(file_path).name} but this session never invoked `{needed}` — "
+        f"superpowers is the workhorse and the overlay only adds gates around it "
+        f"(planning Stage {'0' if needed.endswith('brainstorming') else '1'}). "
+        f"Invoke Skill(\"{needed}\") first, then retry this Write. Genuine "
+        f"exceptions state `{UPSTREAM_WAIVER} — <reason> -->` in the file."
+    )
+    log(f"deny reason=upstream-floor missing={needed!r} path={file_path!r}")
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": reason,
+        }
+    }
+
+
 def match_denylist(command: str) -> tuple[str, str] | None:
     """Return (label, matched_text) for the first denylist hit, else None.
     A command that begins with a read-only echo/grep/cat is treated as inert
@@ -136,8 +235,13 @@ def main() -> None:
         return  # fail OPEN
 
     tool_name = hook_input.get("tool_name", "")
+    if tool_name == "Write":
+        decision = check_upstream_floor(hook_input)
+        if decision is not None:
+            print(json.dumps(decision))
+        return
     if tool_name != "Bash":
-        # Guard only governs Bash in v1 (Edit/Write prod-path matching deferred).
+        # Bash denylist + the Write upstream floor are the guard's two jobs.
         return  # passthrough
 
     tool_input = hook_input.get("tool_input") or {}

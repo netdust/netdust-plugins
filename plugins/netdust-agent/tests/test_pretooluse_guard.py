@@ -13,10 +13,10 @@ Decision policy (v1, from the parked threat model — favor `ask` over `deny`):
   - destructive pattern matched  → "ask"  (surface the literal command to a human)
   - everything else / non-Bash   → passthrough (exit 0, no stdout = proceed)
 
-v1 deliberately never emits "deny" — a hard deny risks blocking legit work,
-and "ask" already stops the autonomous/injected case (a human sees the
-literal command). `deny` is reserved for a future, more confident tier; the
-live guard (pretooluse-guard.py) does not implement it yet.
+Bash patterns deliberately never emit "deny" — "ask" already stops the
+autonomous/injected case. The one deny tier is the upstream-invocation floor
+on Write (seam artifacts require their superpowers skill in the transcript),
+pinned in the cases at the bottom of this file.
 
 CRITICAL invariant tested here: the guard FAILS OPEN. Malformed stdin, a
 non-Bash tool, or any internal error must NOT block the call — the hook
@@ -64,7 +64,7 @@ def _run(tool_name: str, tool_input: dict, raw_stdin: str | None = None) -> tupl
 
 
 def _decision(stdout: str) -> str:
-    """Parse the hook's stdout → 'allow'|'ask' (v1 never emits 'deny'), or
+    """Parse the hook's stdout → 'allow'|'ask'|'deny', or
     'passthrough' if empty (proceed). 'unparseable'/'malformed' surface
     structural bugs."""
     if not stdout.strip():
@@ -95,6 +95,46 @@ def _raw_case(desc: str, raw: str, expected: str) -> tuple[bool, str]:
     got = _decision(out)
     passed = (got == expected) and (rc == 0)
     return passed, f"{desc} (expected {expected}, got {got}, rc={rc})"
+
+
+def _upstream_case(desc: str, relpath: str, expected: str, *,
+                   invoked: list[str] = [], target_exists: bool = False,
+                   content: str = "# spec", transcript: str | None = "auto",
+                   expect_named: str | None = None) -> tuple[bool, str]:
+    """Drive the upstream-invocation floor: Write to specs/<f>/<file> with a
+    controlled transcript. transcript='auto' builds a JSONL carrying one Skill
+    tool_use per name in `invoked`; None omits transcript_path entirely;
+    any other string is used as the (possibly bogus) path."""
+    with tempfile.TemporaryDirectory() as tmp:
+        target = Path(tmp) / relpath
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target_exists:
+            target.write_text("existing")
+        payload = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Write",
+            "tool_input": {"file_path": str(target), "content": content},
+            "cwd": tmp,
+        }
+        if transcript == "auto":
+            tp = Path(tmp) / "transcript.jsonl"
+            lines = []
+            for name in invoked:
+                lines.append(json.dumps({"type": "assistant", "message": {"content": [
+                    {"type": "tool_use", "name": "Skill", "input": {"skill": name}}]}}))
+            lines.append(json.dumps({"type": "user", "message": {"content": "hello"}}))
+            tp.write_text("\n".join(lines) + "\n")
+            payload["transcript_path"] = str(tp)
+        elif transcript is not None:
+            payload["transcript_path"] = transcript
+        result = subprocess.run(["python3", str(HOOK)], input=json.dumps(payload),
+                                capture_output=True, text=True, timeout=10)
+        got = _decision(result.stdout)
+        passed = (got == expected) and (result.returncode == 0)
+        if passed and expect_named and expected == "deny":
+            obj = json.loads(result.stdout)
+            passed = expect_named in obj["hookSpecificOutput"]["permissionDecisionReason"]
+        return passed, f"{desc} (expected {expected}, got {got}, rc={result.returncode})"
 
 
 # --- scenarios ------------------------------------------------------------
@@ -163,6 +203,42 @@ def run() -> list[tuple[bool, str]]:
     # === The guard must NEVER exit 2 on any input (exit 2 blocks unconditionally) ===
     rc, _ = _run("Bash", {"command": "rm -rf /"})
     r.append((rc == 0, f"never exit 2 even on worst command (rc={rc})"))
+
+    # === The upstream-invocation floor (2026-08-10): superpowers is the workhorse,
+    # and prose alone never made the invocation happen — three sessions in three
+    # days authored specs/plans without loading the upstream skill. Creating a
+    # seam artifact without its upstream skill in the transcript → deny, with the
+    # reason NAMING the skill so the agent self-corrects in one tool call. ===
+    r.append(_upstream_case("new spec.md without brainstorming → deny naming it",
+                            "specs/f/spec.md", "deny",
+                            expect_named="superpowers:brainstorming"))
+    r.append(_upstream_case("new spec.md WITH brainstorming invoked → passthrough",
+                            "specs/f/spec.md", "passthrough",
+                            invoked=["superpowers:brainstorming"]))
+    r.append(_upstream_case("new plan.md without writing-plans → deny naming it",
+                            "specs/f/plan.md", "deny",
+                            invoked=["superpowers:brainstorming"],
+                            expect_named="superpowers:writing-plans"))
+    r.append(_upstream_case("new tasks.md without writing-plans → deny",
+                            "specs/f/tasks.md", "deny",
+                            expect_named="superpowers:writing-plans"))
+    r.append(_upstream_case("new plan.md WITH writing-plans invoked → passthrough",
+                            "specs/f/plan.md", "passthrough",
+                            invoked=["superpowers:writing-plans"]))
+    r.append(_upstream_case("EXISTING spec.md, no invocation → passthrough (edit, not create)",
+                            "specs/f/spec.md", "passthrough", target_exists=True))
+    r.append(_upstream_case("waiver comment in content → passthrough",
+                            "specs/f/spec.md", "passthrough",
+                            content="<!-- upstream: waived — Class B freshness -->\n# spec"))
+    r.append(_upstream_case("no transcript_path in payload → passthrough (fail open)",
+                            "specs/f/spec.md", "passthrough", transcript=None))
+    r.append(_upstream_case("unreadable transcript_path → passthrough (fail open)",
+                            "specs/f/spec.md", "passthrough",
+                            transcript="/nonexistent/t.jsonl"))
+    r.append(_upstream_case("Write outside specs/ → floor does not apply",
+                            "docs/notes.md", "passthrough"))
+    r.append(_upstream_case("review doc inside specs/ dir → floor does not apply",
+                            "specs/f/review-A.md", "passthrough"))
 
     return r
 
