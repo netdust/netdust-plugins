@@ -166,6 +166,25 @@ add_filter('ntdst/api/rate_window/password_reset', fn() => 900);
 add_filter('ntdst/api/rate_limit/cron_sync', fn() => 0);
 ```
 
+**Budget arithmetic — `get_nonce` consumes the TARGET action's bucket** (daan
+record-shop, 2026-08-10). `check_nonce_permission()` resolves the `action` param and
+rate-checks it, so an anonymous client's nonce mint costs one unit of that action's
+budget. A first-visit public flow (mint + call) costs **2 units**; with a cached
+nonce, subsequent calls cost 1. Size per-action limits with that arithmetic — a
+"3/60" checkout allows ~2 first-window completions, not 3. (Each HTTP request counts
+exactly once: WP core invokes `permission_callback` twice per request — dispatch +
+`rest_send_allow_header` — and the limiter memoizes per request-object to compensate.
+Do not add side effects to permission callbacks expecting single invocation.)
+
+**Denial statuses are asymmetric on purpose.** A rate-limited request gets `WP_Error
+'rate_limited'` → HTTP **429** (clients must know to back off); an auth/origin denial
+stays bare `false` → 401 `rest_forbidden` (attackers learn nothing). In handlers:
+**refuse with `WP_Error` (with `['status' => n]`), never an `apiError()` array** — the
+router intercepts `WP_Error` into a single-wrapped `{success:false}` with the real
+4xx, while a returned array rides out as HTTP 200 `success:true`. Successes are
+double-wrapped on the wire (handler `apiSuccess()` + router wrap); the JS client
+unwraps the outer layer only.
+
 ### Custom allowed origins
 
 > This filter widens the **same-origin CSRF gate**'s `Origin`/`Referer` allow-list for the `api_data` path — it does NOT turn `Endpoints` into a cross-origin JSON API. A real cross-origin endpoint (CORS preflight, `Access-Control-*` headers, cookie-less caller) is `ntdst_router()->rest()` + `NTDST_Cors_Policy` — see `rest-cors.md`.

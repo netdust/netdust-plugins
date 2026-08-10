@@ -129,3 +129,13 @@ The full canonical list is `NTDST_Data_Model::WP_COLUMNS` in `api/Data.php` — 
 ---
 
 For project-specific incidents (e.g. "this LearnDash integration quirk", "this Stride business rule"), see the originating project's `memory/` directory — not this file.
+
+---
+
+## Rate-limit budget arithmetic and refusal shapes on the api_data wire
+
+**Problem (daan record-shop, 2026-08-10):** the first anonymous public WRITE action shipped with a 3/60s limit and the wire gate found only 2 requests landing per window, with denials surfacing as 401 `rest_forbidden`. Three framework truths were paid for over the wire: (1) WP core invokes `permission_callback` twice per request (dispatch + `rest_send_allow_header`) — the limiter double-counted until a per-request-object memo landed, and the fleet default 30/60 had effectively been 15 forever; (2) `get_nonce` rate-checks the TARGET action, so a first-visit flow costs 2 budget units; (3) `getClientIp()` honoured the attacker-authored leftmost `X-Forwarded-For` — bucket identity must be the rightmost untrusted hop.
+
+**Rules:** size per-action limits knowing mint+call = 2 units on first visit; never add side effects to a REST permission callback expecting single invocation; refuse from handlers with `WP_Error` (+`['status']`) only — an `apiError()` array rides out as HTTP 200 `success:true`; 429/`rate_limited` vs bare-false/401 is a deliberate asymmetry, keep it. Full mechanics: `references/api-endpoints.md` §Per-action rate limits.
+
+**Eval:** `netdust-wp/evals/behavioral-lessons.json` → `api-rate-budget`.

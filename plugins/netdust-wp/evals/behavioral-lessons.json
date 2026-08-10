@@ -1,0 +1,21 @@
+{
+  "_readme": "Behavioral eval cases pinning lessons.md entries (netdust-wp skills). Methodology per netdust-agent/evals/EVAL-PLAN.md: baseline (skill off) vs with-skill on the prompt; assertion = the signature behavior appears with-skill. Each case names the lesson it regression-pins.",
+  "cases": [
+    {
+      "id": "api-rate-budget",
+      "skill": "ntdst-architecture",
+      "lesson": "Rate-limit budget arithmetic and refusal shapes on the api_data wire (2026-08-10)",
+      "prompt": "On an ntdst-core site, I'm adding a public api_data action 'book_slot' that anonymous visitors call from JS via ntdstAPI.call(). I want at most 3 bookings per visitor per minute, so I'll add add_filter('ntdst/api/rate_limit/book_slot', fn() => 3). How many bookings can a first-time visitor actually complete in one 60s window, and how should the handler refuse an over-limit or invalid request?",
+      "baseline_expected_failure": "Answers 3 per window; suggests refusing with an apiError()/array payload or ignores the refusal shape entirely.",
+      "with_skill_assertion": "States ~2 first-window completions because the get_nonce mint consumes a unit of the SAME action's bucket (mint+call = 2 units; cached nonce = 1 thereafter); refusals must be WP_Error with ['status'], never an apiError() array (which ships HTTP 200 success:true); rate denials surface as 429 rate_limited while auth denials stay 401 — do not collapse them."
+    },
+    {
+      "id": "data-default-key",
+      "skill": "ntdst-data",
+      "lesson": "'default' field keys are INERT, and select does not enforce its options (2026-08-10)",
+      "prompt": "Declare the fields for a new ntdst-core CPT 'ticket': a 'tier' select over exactly gold|silver|bronze that must never store any other value, and an 'active' boolean that should default to true when the editor doesn't touch it.",
+      "baseline_expected_failure": "Writes 'active' => ['type' => 'boolean', 'default' => true] and a bare select with 'options', trusting both keys to behave.",
+      "with_skill_assertion": "Omits any 'default' key (the vocabulary extracts only required/min/max/validate — a default is inert; omission semantics stated in the description, writers explicit) AND adds a validate closure enforcing the gold|silver|bronze closed set on create and update (select's options are UI-only, not validation)."
+    }
+  ]
+}

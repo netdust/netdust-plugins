@@ -149,3 +149,15 @@ if (is_wp_error($result)) {
 **Second, separate trap in the same method: `validateData()` runs BEFORE `sanitizeData()`.** So a required field whose raw value is non-empty but *sanitizes away* still lands empty — an unparseable `date` (`sanitizeDate` → `''`), invalid `json` (`sanitizeJson` → `[]`), a `relation` given `['']` (`array_filter` → `[]`). The metabox path is protected, because its own `sanitize_field` collapses these before `update()` sees them; a programmatic caller or crafted POST is not.
 
 **What is NOT empty, and this matters:** `false`, `0`, `0.0` and `'0'` all pass. A required boolean may be `false` and a required integer may be `0`. The metabox posts a hidden `value="0"` ahead of each checkbox, which sanitizes to PHP `false` rather than `''`, so an unticked required checkbox validates correctly.
+
+---
+
+## `'default'` field keys are INERT, and `select` does not enforce its `options`
+
+**Problem (daan record-shop, 2026-08-10):** `record_product` declared `'available' => ['type' => 'boolean', 'default' => true]` and the task contract said "defaults to true". The rule extraction reads only `required`/`min`/`max`/`validate`; `MetaboxGenerator` has no default handling either. A fresh product's checkbox rendered unticked, an ORM `create()` omitting the key stored nothing — proven with a failing probe while the key was still present. Three musician services (`ProjectService`, `DiscographyService`, `TourService`) still carry the same inert keys, drifting as "behaviour" that never was.
+
+**Rule:** never write a `'default'` key in a field config — state omission semantics in the field description and make writers explicit. In the review direction: a `'default'` key in a diff is dead config, flag it.
+
+**Same session, same table:** `select` sanitizes (`sanitize_text_field`) but does **not** validate against its `options`. A closed set (`new|handled`) needs an explicit `validate` closure, on create AND update, or any string is storable.
+
+**Eval:** `netdust-wp/evals/behavioral-lessons.json` → `data-default-key`.
