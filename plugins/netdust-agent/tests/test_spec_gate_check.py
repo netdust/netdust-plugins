@@ -2073,7 +2073,11 @@ def run():
     # authored at cee7b48 and flipped GREEN by the c8d5087 wiring.
 
     # 18. real script against specs/run-observability (zero Test-author: lines) → exit 0
+    # (the live-corpus cases run only where the source repo's specs/ exists — an
+    # installed cache copy carries the code but not the corpus)
     repo_root = Path(__file__).parent.parent.parent.parent
+    if not (repo_root / "specs").is_dir():
+        return results
     ro_dir = repo_root / "specs" / "run-observability"
     proc = subprocess.run([sys.executable, str(CHECKER), str(ro_dir)],
                            capture_output=True, text=True, timeout=15)

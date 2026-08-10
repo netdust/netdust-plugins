@@ -592,11 +592,12 @@ def run() -> list[tuple[bool, str]]:
 
     # THE live-corpus proof: both in-repo plans' budgets must actually read. Pre-fix this
     # was None on both — the run-observability evaluator graded every run ungraded.
-    for feature in ("harness-efficiency", "run-observability"):
-        plan = REPO_ROOT / "specs" / feature / "plan.md"
-        budget = _run_score_mod.read_budget(plan.read_text()) if plan.exists() else None
-        case(f"read_budget reads the live specs/{feature} plan's budget (not None)",
-             budget is not None)
+    if (REPO_ROOT / "specs").is_dir():   # live corpus only in the source repo, not a cache copy
+        for feature in ("harness-efficiency", "run-observability"):
+            plan = REPO_ROOT / "specs" / feature / "plan.md"
+            budget = _run_score_mod.read_budget(plan.read_text()) if plan.exists() else None
+            case(f"read_budget reads the live specs/{feature} plan's budget (not None)",
+                 budget is not None)
 
     return results
 
