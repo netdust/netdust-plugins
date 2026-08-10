@@ -104,7 +104,7 @@ Cluster A gate.
 
 ### Cluster B — the enforcement boundary (1 task · effective stakes: high · provisional tier: FULL)
 
-- [ ] T05 [Tier A] Teach `hooks/subagent-stop.py` the behaviour-cluster transition tolerance  (files: plugins/netdust-agent/hooks/subagent-stop.py, plugins/netdust-agent/tests/test_subagent_stop_evidence.py)
+- [x] T05 [Tier A] Teach `hooks/subagent-stop.py` the behaviour-cluster transition tolerance  (files: plugins/netdust-agent/hooks/subagent-stop.py, plugins/netdust-agent/tests/test_subagent_stop_evidence.py)
   Contract: when the run ledger (`tasks/.harness-loop.json`) carries an open
   `cluster-open` event naming a RED test, an implementer close whose ONLY suite failure
   is exactly that named test is admitted (and the admission recorded); any other failure

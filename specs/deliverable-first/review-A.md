@@ -39,3 +39,4 @@ Live-CLI seam cases + self-hosting corpus case per check; fence-strip inheritanc
 check; the two-gate interlock (invalid waiver trips behaviour-cluster AND unit-test-contract);
 docstrings honest about presence-not-truth throughout.
 - S-A (sentinel) — verify-budget `--base` argument-injection guard (`--` separator); defensive only, `--base` is not artifact-controlled.
+- Fleet (implementer, T05) — the hook's TEST_CMD_PATTERN recognizer does not know this repo's own runner (`bash plugins/netdust-agent/tests/run.sh`), so every agent close in the plugin repo argues with the gate; own spec/branch, not this feature's diff.
