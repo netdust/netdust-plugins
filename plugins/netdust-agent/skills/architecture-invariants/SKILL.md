@@ -23,7 +23,8 @@ autopsy.
 **Bypass smell:** <what a violating diff looks like>
 ```
 
-Plans cite touched invariants in `## Architecture invariants touched`; the `reviewer`
-checks the diff against the named convergence points, and any path that routes around
-one is a finding keyed to the invariant number. Use `/architecture-invariants audit` to
+Plans cite touched invariants in `## Architecture invariants touched`; the
+`invariant-auditor` agent enforces the doc at FULL-tier reviews and `/shakeout` — it runs
+each invariant's mechanical check verbatim, hunts bypasses AND reinvented second homes,
+and proposes `## Deliberate exceptions` entries for unrecorded intent. Use `/architecture-invariants audit` to
 author the doc for an existing codebase.

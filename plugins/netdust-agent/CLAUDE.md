@@ -19,11 +19,14 @@ One idea, decided 2026-08-10 (the re-thinning):
 | `threat-modeling` | `planning` | the trigger list + the `## Threat model` section shape |
 | `architecture-invariants` | `planning` / review | the convergence-point doc shape reviews check bypasses against |
 
-## Agents (6)
+## Agents (7)
 
 `implementer` (greens tasks, TDD), `test-author` (feature tests after each task group;
 rare pre-task RED on split tasks), `reviewer` (whole-diff generalist),
-`security-sentinel`, `code-simplicity-reviewer`, `shakeout-qa` (drives the artifact).
+`security-sentinel`, `code-simplicity-reviewer`, `invariant-auditor` (the no-drift
+agent: convergence-point bypasses AND reinvented solutions, against
+ARCHITECTURE-INVARIANTS.md + CODE-MAP.md — restored 2026-08-10 after its transcript
+record proved it out), `shakeout-qa` (drives the artifact).
 Reviewers ship without Edit/Write — a finder can never quietly become the fixer.
 
 ## The machine layer (the part that is NOT prose)

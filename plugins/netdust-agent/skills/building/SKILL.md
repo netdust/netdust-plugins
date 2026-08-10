@@ -55,7 +55,9 @@ is the implementer's law — RED first, watched, never weakened). Netdust adds:
   Ten seconds of looking beats a dispatch of reasoning about markup.
 - **Independent reviewers, tier-scaled**: LIGHT — one generalist `reviewer`; STANDARD —
   `reviewer` + `code-simplicity-reviewer`; FULL (any security surface, invariant, or
-  data-layer/migration touch) — add `security-sentinel`. The author never reviews its own
+  data-layer/migration touch) — add `security-sentinel`, and `invariant-auditor` whenever
+  the project carries an `ARCHITECTURE-INVARIANTS.md` (the no-drift check: bypasses AND
+  reinvented solutions). The author never reviews its own
   diff; escalation to FULL is one-way. Record the verify-budget telemetry line
   (`bin/verify-budget.py` — reports, never interrupts) in the cluster evidence.
 - **Findings close by ledger arithmetic**: Criticals (and Importants at effective-high

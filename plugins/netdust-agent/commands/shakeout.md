@@ -1,5 +1,5 @@
 ---
-description: Spec-complete gate. Run when all task groups in a spec are done — before merging the branch. Exercises the built artifact (shakeout-qa), then dispatches the reviewer panel on the full branch diff, panel size set by the branch's review tier (FULL = reviewer + security-sentinel + code-simplicity, STANDARD = reviewer + code-simplicity, LIGHT = reviewer alone).
+description: Spec-complete gate. Run when all task groups in a spec are done — before merging the branch. Exercises the built artifact (shakeout-qa), then dispatches the reviewer panel on the full branch diff, panel size set by the branch's review tier (FULL = reviewer + security-sentinel + code-simplicity + invariant-auditor, STANDARD = reviewer + code-simplicity, LIGHT = reviewer alone).
 allowed_tools: ["Bash", "Read", "Glob", "Skill", "Agent"]
 ---
 
@@ -35,7 +35,8 @@ State the branch tier, then dispatch in parallel with fresh context (the author 
 reviews its own diff):
 
 - **FULL** (any security surface, invariant, or data-layer/migration touch): `reviewer` +
-  `security-sentinel` + `code-simplicity-reviewer` (+ the stack's drift reviewer on WP).
+  `security-sentinel` + `code-simplicity-reviewer` + `invariant-auditor` when an
+  `ARCHITECTURE-INVARIANTS.md` exists (+ the stack's drift reviewer on WP).
 - **STANDARD**: `reviewer` + `code-simplicity-reviewer`.
 - **LIGHT** (doc/config only): `reviewer` alone.
 

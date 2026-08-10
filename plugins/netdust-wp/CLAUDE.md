@@ -27,7 +27,7 @@ For these, see `netdust-core/CLAUDE.md` and `netdust-agent/CLAUDE.md`:
 - `secure-server` + `ploi` skills + ploi MCP (netdust-core)
 - `research`, `market-research`, `brand-voice`, `marketing` (netdust-core)
 - The coding harness — `harnessed-development`, `planning`, `building`, `testing-workflow`, `threat-modeling`, `architecture-invariants` (netdust-agent 0.18 — thin overlays on superpowers, which does the process work)
-- The reviewer agents (netdust-agent): `reviewer`, `security-sentinel`, `code-simplicity-reviewer`, `shakeout-qa` — plus this plugin's `ntdst-drift-reviewer` on WP
+- The reviewer agents (netdust-agent): `reviewer`, `security-sentinel`, `code-simplicity-reviewer`, `invariant-auditor`, `shakeout-qa` — plus this plugin's `ntdst-drift-reviewer` on WP
 - `/deploy`, `/skill-audit`, `/pattern-miner`, `/red-test` (netdust-core)
 - The 9-method deploy catalog (`memory/deploy-patterns.md`) (netdust-core)
 - Voice (`SOUL.md`) and universal rules (`RULES.md`) (netdust-core)
