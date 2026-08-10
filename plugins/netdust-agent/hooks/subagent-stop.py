@@ -44,27 +44,6 @@ Purpose:
     • an implementer whose suite exited non-zero is blocked, reason naming
       the command and exit code. Unknown exit (no line, no scrapeable
       result) degrades to the pre-P0 ran-only behavior.
-    • behaviour-cluster transition tolerance (FR-8) — the ONE exception to
-      the implementer green gate: while the run ledger
-      (<feature-dir>/run-log.jsonl, feature dir from the loop marker)
-      carries an OPEN `cluster-open` event naming a RED test
-      (data.red_test = "<path>::<method>", with no later `cluster-close`),
-      an implementer red close whose SCRAPED failing identities (`FAILED
-      <path>::<method>` lines in the last test run's tool_result) are
-      EXACTLY {the named test} is ADMITTED — recorded as one
-      `cluster-red-admitted` ledger event naming the test, and NEVER
-      minting `suite-green` (C1c: only a scraped green mints that fact).
-      Any other failure set — a different test, the named test plus others,
-      an identity merely extending the named one, or no scrapeable
-      identities at all — blocks as before, the reason naming the failures
-      the tolerance does not cover; after `cluster-close`, a still-red
-      named test blocks with the reason naming it. No `cluster-open` in the
-      ledger → behaviour is bit-for-bit as before. Scraped-failure-wins is
-      unaffected: a claimed exit=0 over a scraped named-test failure IS
-      that failure (admitted); over any other scraped failure it blocks.
-      The tolerance is keyed to scraped identities ONLY — testimony cannot
-      manufacture the named failure, so an admission can never be claimed
-      into existence.
 
   On an implementer GREEN close while a harness loop is armed
   (tasks/.harness-loop.json), it appends one `suite-green` event (sha + cmd)
@@ -311,16 +290,6 @@ EVIDENCE_LINE_RE = re.compile(r"^\s*HARNESS-EVIDENCE:\s*(.+?)\s*$", re.MULTILINE
 EVIDENCE_FIELD_RE = re.compile(r'(\w+)=(?:"([^"]*)"|(\S+))')
 EXIT_CODE_RE = re.compile(r"exit code:?\s*(\d+)", re.IGNORECASE)
 
-# FR-8: the failure identity as the scraper sees it — `FAILED
-# <path>::<method>` lines in a test run's tool_result text (the runner's
-# failure-summary shape). The behaviour-cluster tolerance compares these
-# identities EXACTLY (set equality), never by containment.
-FAILED_IDENT_RE = re.compile(r"^FAILED\s+(\S+)", re.MULTILINE)
-
-# The run ledger file name — run-trace.py's LOG_NAME; this hook only READS it
-# (all writes go through bin/run-trace.py, the single writer).
-RUN_LOG_NAME = "run-log.jsonl"
-
 
 def scan_subagent_activity(messages: list[dict]) -> dict:
     """
@@ -514,25 +483,6 @@ def scraped_run_status(runs: list[dict],
     return None
 
 
-def scraped_failed_identities(runs: list[dict],
-                              results: dict[str, tuple[bool, str]]
-                              ) -> list[str] | None:
-    """Failing-test identities scraped from the LAST test run with a matched
-    tool_result — `FAILED <path>::<method>` lines, the same channel
-    scraped_run_status reads. Returns None when no run has a scrapeable
-    result, [] when the result text names no identities. SCRAPED only: the
-    evidence line contributes no identities, so the FR-8 tolerance can never
-    be claimed into existence — a loosening requires positive scraped
-    proof."""
-    for run in reversed(runs):
-        res = results.get(run["id"])
-        if res is None:
-            continue
-        _, text = res
-        return FAILED_IDENT_RE.findall(text)
-    return None
-
-
 def _read_globs(path: Path) -> list[str]:
     return [ln.strip() for ln in path.read_text().splitlines()
             if ln.strip() and not ln.strip().startswith("#")]
@@ -678,68 +628,6 @@ def resolve_task_mode(cwd: str, edited_paths: list[str]) -> str | None:
         return None
 
 
-def read_cluster_state(cwd: str) -> dict | None:
-    """The run ledger's behaviour-cluster state (FR-8). Reads
-    <feature-dir>/run-log.jsonl — feature dir resolved from the loop marker,
-    the same way emit_suite_green resolves it — and returns
-    {"open": bool, "red_test": str} for the LAST `cluster-open` event
-    carrying data.red_test; open iff no later `cluster-close` follows it.
-    None when unarmed, no ledger, or no cluster-open — the caller then
-    behaves bit-for-bit as before. Fail-open on any read error: no
-    tolerance, which is the conservative direction for an admission."""
-    try:
-        marker_path = Path(cwd or ".") / MARKER_REL
-        if not marker_path.exists():
-            return None
-        marker = json.loads(marker_path.read_text())
-        feature_dir = Path(cwd or ".") / (marker.get("feature_dir") or "")
-        log_path = feature_dir / RUN_LOG_NAME
-        if not log_path.exists():
-            return None
-        state: dict | None = None
-        for ln in log_path.read_text().splitlines():
-            try:
-                ev = json.loads(ln)
-            except json.JSONDecodeError:
-                continue
-            name = ev.get("event")
-            if name == "cluster-open":
-                data = ev.get("data")
-                red = (data.get("red_test") or "") if isinstance(data, dict) \
-                    else ""
-                if red:
-                    state = {"open": True, "red_test": red}
-            elif name == "cluster-close" and state is not None:
-                state["open"] = False
-        return state
-    except Exception as e:
-        log(f"cluster-state-read-failed err={e}")
-        return None
-
-
-def emit_cluster_red_admitted(cwd: str, red_test: str) -> None:
-    """Record an FR-8 admitted red close: one `cluster-red-admitted` event
-    (data.red_test = the admitted test) through bin/run-trace.py. Mirrors
-    emit_suite_green: fail-open, never affects the decision. It deliberately
-    does NOT mint `suite-green` — an admitted RED is not the fact loop-check
-    trusts (C1c: only a scraped green may mint that)."""
-    try:
-        marker_path = Path(cwd or ".") / MARKER_REL
-        if not marker_path.exists():
-            return
-        marker = json.loads(marker_path.read_text())
-        feature_dir = Path(cwd or ".") / (marker.get("feature_dir") or "")
-        subprocess.run(
-            [sys.executable, str(RUN_TRACE), "append", str(feature_dir),
-             "cluster-red-admitted", f"red_test={red_test}"],
-            capture_output=True, timeout=10, cwd=cwd or ".",
-        )
-        log(f"cluster-red-admitted-traced feature={feature_dir} "
-            f"red_test={red_test}")
-    except Exception as e:
-        log(f"cluster-red-admitted-trace-failed err={e}")
-
-
 def emit_suite_green(cwd: str, cmd: str) -> None:
     """Append one `suite-green` event (sha + cmd) through bin/run-trace.py when
     a harness loop is armed for this cwd. Unarmed → skip silently. Fail-open:
@@ -862,23 +750,6 @@ def build_block_message(activity: dict, missing: list[str],
             "is wrong — never weaken it), re-run the suite to green, and end "
             "with the updated HARNESS-EVIDENCE line.\n"
         )
-        if "cluster_named" in details:
-            unexpected = ", ".join(details.get("cluster_unexpected") or []) \
-                or "<no scrapeable failure identity>"
-            parts.append(
-                "\nAn open behaviour-cluster tolerance admits ONLY "
-                f"{details['cluster_named']} as the failing test. Unexpected "
-                f"failure(s) this run: {unexpected}. Fix those — the named "
-                "RED itself may stay red until cluster-close.\n"
-            )
-        if "cluster_closed_red" in details:
-            parts.append(
-                "\nThe behaviour-cluster is CLOSED (cluster-close in the run "
-                "ledger), but its named RED test "
-                f"{details['cluster_closed_red']} is still failing. The "
-                "transition tolerance ended at cluster-close — a cluster may "
-                "not close red; green the named test first.\n"
-            )
 
     if "standards-red" in missing:
         parts.append(
@@ -1077,33 +948,12 @@ def main() -> None:
     has_linter = project_has_linter(cwd)
     missing = []
     details: dict = {}
-    admitted_red: str | None = None
     if not tests_ran:
         missing.append("tests")
     elif role == "implementer" and suite is not None and not suite["green"]:
-        # FR-8: behaviour-cluster transition tolerance. Mid-cluster (an OPEN
-        # cluster-open in the run ledger naming a RED test), a red close is
-        # admitted iff the SCRAPED failing identities are EXACTLY {the named
-        # test} — set equality, so a superset or an identity merely extending
-        # the named one never slips through. Everything else blocks as
-        # before, with the reason naming what the tolerance does not cover.
-        cluster = read_cluster_state(cwd)
-        failed = scraped_failed_identities(activity["test_runs"], results)
-        if (cluster is not None and cluster["open"] and failed
-                and set(failed) == {cluster["red_test"]}):
-            admitted_red = cluster["red_test"]
-        else:
-            missing.append("suite-red")
-            details["suite_cmd"] = suite["cmd"]
-            details["suite_exit"] = suite["exit"]
-            if cluster is not None:
-                if cluster["open"]:
-                    details["cluster_named"] = cluster["red_test"]
-                    details["cluster_unexpected"] = [
-                        f for f in (failed or [])
-                        if f != cluster["red_test"]]
-                elif failed and cluster["red_test"] in failed:
-                    details["cluster_closed_red"] = cluster["red_test"]
+        missing.append("suite-red")
+        details["suite_cmd"] = suite["cmd"]
+        details["suite_exit"] = suite["exit"]
     if has_linter:
         if not lint_ran:
             missing.append("standards")
@@ -1134,7 +984,6 @@ def main() -> None:
     log(
         f"evidence role={role} claimed={claimed_role} "
         f"suite={suite} lint={lint} sensitive={len(sensitive_hits)}"
-        + (f" cluster-red-admitted={admitted_red}" if admitted_red else "")
     )
 
     # Record the green fact for the loop ledger (loop-check's FINISHED
@@ -1147,13 +996,6 @@ def main() -> None:
     if (role == "implementer" and suite is not None and suite["green"]
             and sc_suite is not None and sc_suite["green"]):
         emit_suite_green(cwd, suite["cmd"])
-
-    # FR-8: record the admitted red close in the ledger — only when the close
-    # actually goes through (an admission another gate still blocks is not an
-    # admitted close). Fail-open; never affects the decision, never mints
-    # suite-green.
-    if admitted_red is not None and not missing:
-        emit_cluster_red_admitted(cwd, admitted_red)
 
     if not missing:
         sys.exit(0)
