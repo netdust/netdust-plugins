@@ -1,41 +1,56 @@
 # CLAUDE.md — {{PROJECT_NAME}}
 
-You are working on **{{PROJECT_NAME}}**, a Netdust WordPress project. This file is the operating manual — read it at the start of every session.
+You are working on **{{PROJECT_NAME}}**, a Netdust WordPress project. Read this at the
+start of every session. Operational config (stack, hosting, deploy, risk): `site.yml`.
 
 @~/.claude/plugins/netdust-wp/CLAUDE.md
 
-For operational config (stack, hosting, deploy method, risk level), see `site.yml`.
+## How to work here
 
----
+1. **Every code-changing request enters through `netdust-agent:harnessed-development`**
+   (Skill tool). It costs one sentence — a work Class (A–F, priced by open decisions,
+   not files) and Stakes — and routes the work: a tweak goes straight to one TDD cycle;
+   a feature runs `planning` → your approval at the seam → `building`. Superpowers does
+   the process work; the netdust overlays add the gates and this stack's environment.
 
-## How to Work in This Repo
+2. **Design uses the framework skills for the technical shape** —
+   `netdust-wp:ntdst-architecture` (services, DI, boundaries), `ntdst-data` (CPTs,
+   fields, queries, REST), `ntdst-patterns` (where files live). Intent questions still
+   go to the human via `superpowers:brainstorming` — every requirement in a spec quotes
+   the ask or is an approved invention (`Source:` lines, machine-checked).
 
-1. **For any non-trivial work, load `netdust-agent:harnessed-development`** (via the Skill tool). It is the single entry point for the full harness — invoking it engages the whole pipeline so no gate gets skipped: design → write-plan (+ threat-modeling + architecture-invariants when triggered) → execute (subagent/TDD + mandatory testing-workflow at every task close, plus the Step 2.5 plan-freshness ground-truth) → shake-out → finish-branch. It is stack-agnostic and defers to `netdust-wp` for the WordPress-specific skills, reviewers, and test runner. The gates below are *fired by this skill*; they are documented here as the contract it enforces.
+3. **ntdst-core is always the base.** Framework conventions apply to all new code —
+   never reinvent what the framework or an existing module already solves; the
+   `invariant-auditor` and `ntdst-drift-reviewer` check for bypasses AND second homes
+   against `ARCHITECTURE-INVARIANTS.md` (author it via `/architecture-invariants audit`
+   if missing) and `docs/architecture/CODE-MAP.md`.
 
-2. **Design before planning uses the framework skills, not generic brainstorming.** On WordPress work, `harnessed-development`'s design stage uses `netdust-wp:ntdst-architecture` (service lifecycle, DI, boundaries — self-triggers on "add a service"), `netdust-wp:ntdst-data` (data layer, CPTs, repositories, REST), and `netdust-wp:ntdst-patterns` (where files live). These replace `superpowers:brainstorming` for WP. There is no `ntdst-brainstorm` skill.
+4. **Plan gates on WP work**: `netdust-wp:wp-plan-requirements` injects the four-pillar
+   security line per data-flow and the ntdst-core layering checklist into every plan;
+   `netdust-agent:threat-modeling` fires on any untrusted-input / auth / capability /
+   outbound surface — including ad-hoc one-liners (Class D).
 
-3. **WP plan-requirements gate (fired by `harnessed-development` Stage 1, WP override).** On a WP feature, `netdust-wp:wp-plan-requirements` injects mandatory sections into the plan *before* task breakdown: a **WP-security line per data-flow** (the four pillars — validate / sanitize / escape / authorize), an **ntdst-core layering checklist** (Repository access, no raw `wp_ajax_*`, no `ob_start+include`, no swallowed `WP_Error`, correct Data API vocabulary), and a **`drift pre-check clean`** acceptance line per module task. This means WP good-practice and framework patterns are REQUIREMENTS IN THE PLAN — `/code-review` and `ntdst-drift-reviewer` then verify the diff against that named list instead of hunting. Reviewers are the last line, not the first.
+5. **Tests run through the netdust harness, always** — per-task:
+   `ddev composer test:unit` (Brain Monkey, seconds); integration:
+   `ddev composer test:int` (wp-phpunit); full gate: `composer gate` — its exit code is
+   the single source of truth. Superpowers doesn't know this environment; the dispatch
+   carries it. Feature tests are written by the independent `test-author` after each
+   task group.
 
-4. **Threat-modeling gate (fired by `harnessed-development` Stage 1a).** `netdust-agent:threat-modeling` produces a `## Threat model` section embedded inline in the plan BEFORE task breakdown, IF the work touches: user-controlled input ($_GET/$_POST/REST payloads), auth/capability/nonce surfaces, untrusted parsing (uploads, shortcode/block attrs, AI tool-call args), dynamic SQL, outbound requests to user-supplied URLs, or multi-site boundaries. Also fires on ad-hoc security-boundary edits with no plan (a one-line change to a capability check, a `$wpdb` query, a REST `permission_callback`). `wp-security` and `wp-database` self-trigger on PHP edits and reinforce this.
-
-5. **Architecture-invariants gate (fired by `harnessed-development` Stage 1b).** If the project has an `ARCHITECTURE-INVARIANTS.md`, the work citing a convergence point invokes `netdust-agent:architecture-invariants`. `/shakeout` auto-dispatches the `invariant-auditor` (and, on WP, the `ntdst-drift-reviewer`). If the doc doesn't exist yet, author it via `/architecture-invariants audit`.
-
-6. **Tests + quality: this project ships the standardized gate layer.** Per-task suite: `ddev composer test:unit` (seconds, no WP/DB). Full gate: `composer gate` (host-invoked) — its exit code is the single source of truth; tier list and per-tier recipes in `README-testing.md` (note: the phpcs lint tier is currently scoped to `tests/`). `composer format` (Pint) is editor-side, outside the gate.
-
-7. Commit atomically per task. Update `memory/STATE.md` and `tasks/todo.md` as you go.
+6. Commit atomically per task. Update `memory/STATE.md` and `tasks/todo.md` as you go;
+   at spec-close, `compounding` harvests what the session taught.
 
 ## Conventions
 
-- **ntdst-core framework conventions apply to all new code** — Modules / Handlers / Admin / Integrations / Contracts / Domain / Infrastructure layering. See `ntdst-architecture` and `ntdst-patterns`.
-- **WP-specific rules** live in `~/.claude/plugins/netdust-wp/RULES.md` (sanitize/escape/nonce/cap, `$wpdb->prepare()` always, prefix everything, i18n, never edit WP core or `{{WPCLI_PATH}}/`). Universal rules in `netdust-core/RULES.md`.
-- **Stack / hosting / deploy** — see `site.yml`. Deploy via `/deploy` (never to prod without explicit confirmation).
+- WP rules: `~/.claude/plugins/netdust-wp/RULES.md` (sanitize/escape/nonce/cap,
+  `$wpdb->prepare()` always, prefix everything, i18n, never edit WP core or
+  `{{WPCLI_PATH}}/`). Universal rules: `netdust-core/RULES.md`.
+- Deploy via `/deploy` — never to prod without explicit confirmation.
 
 ## Project memory
 
-- `memory/STATE.md` — living snapshot of where the project is. Read at session start, update at session end. Keep it a SNAPSHOT — archive history to `memory/ARCHIVE.md` (the session hook warns if STATE.md exceeds ~40 KB).
-- `memory/lessons.md` — after any correction, append a rule that prevents the same mistake.
-- `tasks/todo.md` — active task list for the current branch / session.
+- `memory/STATE.md` — living snapshot; read at session start, update at session end.
+- `memory/lessons.md` — after any correction, a rule that prevents the repeat.
+- `tasks/todo.md` — the active list for the current branch.
 
----
-
-**Next step:** open `memory/STATE.md` to see where we left off, then pick the next task.
+**Next step:** open `memory/STATE.md`, then pick the next task.
