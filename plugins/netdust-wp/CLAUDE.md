@@ -26,8 +26,8 @@ For these, see `netdust-core/CLAUDE.md` and `netdust-agent/CLAUDE.md`:
 - `dev-stack` skill (DDEV, git, Makefile verbs, `.env`) (netdust-core)
 - `secure-server` + `ploi` skills + ploi MCP (netdust-core)
 - `research`, `market-research`, `brand-voice`, `marketing` (netdust-core)
-- The coding harness — `harnessed-development`, `testing-workflow`, `shake-out`, `test-effectiveness`, `threat-modeling`, `architecture-invariants`, `feature-acceptance`, `compounding` (netdust-agent)
-- The 8 coding reviewer agents (netdust-agent) — code review is done by netdust-agent's `reviewer` agent + the specialist reviewers
+- The coding harness — `harnessed-development`, `planning`, `building`, `testing-workflow`, `threat-modeling`, `architecture-invariants` (netdust-agent 0.18 — thin overlays on superpowers, which does the process work)
+- The reviewer agents (netdust-agent): `reviewer`, `security-sentinel`, `code-simplicity-reviewer`, `shakeout-qa` — plus this plugin's `ntdst-drift-reviewer` on WP
 - `/deploy`, `/skill-audit`, `/pattern-miner`, `/red-test` (netdust-core)
 - The 9-method deploy catalog (`memory/deploy-patterns.md`) (netdust-core)
 - Voice (`SOUL.md`) and universal rules (`RULES.md`) (netdust-core)
@@ -39,7 +39,7 @@ For these, see `netdust-core/CLAUDE.md` and `netdust-agent/CLAUDE.md`:
 - **Design stage (Stage 0/1).** WP work does **not** use generic `superpowers:brainstorming`. The framework design skills replace it: `ntdst-architecture` (service lifecycle, DI, boundaries — self-triggers on "add a service" and is "MUST be consulted during implementation planning"), `ntdst-data` (data layer, CPTs, repositories, REST), and `ntdst-patterns` (where files live). Invoke these to design before planning.
 - **Plan-time security/data gates.** The `netdust-agent:threat-modeling` + `netdust-agent:architecture-invariants` gates still fire per their triggers; on WP, `wp-security` and `wp-database` self-trigger on PHP edits and reinforce them.
 - **Testing (Stage 2).** Already automatic — `netdust-agent:testing-workflow` detects `composer.json + WordPress` and selects Codeception/PHPUnit; `wp-testing` self-triggers on `phpunit.xml` / `Cest` / `WPTestCase`. No manual override needed.
-- **Shake-out / review (Stage 3).** Already automatic — `/shakeout` detects WP and adds the 5th reviewer `netdust-wp:ntdst-drift-reviewer` alongside the generic four.
+- **Shake-out / review (Stage 3).** `/shakeout` detects WP and adds `netdust-wp:ntdst-drift-reviewer` to the panel.
 
 There is no `ntdst-brainstorm` skill (it was never built). For WP design, use the three framework skills above.
 
