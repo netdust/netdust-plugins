@@ -1283,7 +1283,8 @@ CONTRACT_LINE = re.compile(r"^\s+(Unit|Integration) test:\s*(\S.*)$")
 NO_UNIT_TEST = re.compile(r"^no unit test\b", re.IGNORECASE)
 
 
-def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
+def check_unit_test_contract(tasks_text: str, f: Findings,
+                             repo_root: Path | None = None) -> None:
     """1d — every task states the behavioral contract its test asserts.
 
     `Test-author:` says WHO writes the test; this says WHAT it must prove. Either line
@@ -1291,6 +1292,14 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
     both on one task is belt+braces. Tier B may opt out explicitly with
     `Unit test: no unit test: Tier B, <reason>` — a stated waiver, not an omission.
     Text after `Integration test:` is NEVER a waiver; it always reads as a contract.
+
+    A third form (FR-7): `Unit test: covered by cluster behaviour`. VALID — the task is a
+    member of a cluster carrying the full behaviour block whose `RED until:` test
+    resolves (see check_behaviour_clusters) — it counts as a stated contract for ANY
+    tier, Tier A included: the cluster's RED is the behavioural proof, which is the
+    grammar's whole point (per-task RED moves up to the behaviour level). INVALID — no
+    such cluster/block — it reads as a waiver, so a Tier A task leaning on it trips the
+    Tier-A-waiver FAIL below; never a silent pass.
 
     The task's WHOLE continuation block (per the shared `task_blocks()` walker) is
     scanned and every contract/waiver line collected before deciding, so line order
@@ -1312,6 +1321,7 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
     defect and FAILs regardless.
     """
     total, missing, tier_a_waived, integration_parallel = 0, [], [], []
+    covered_ok: set[str] | None = None  # computed lazily — only when the form appears
     for task_id, task_rest, cont in task_blocks(tasks_text):
         total += 1
         is_tier_a = bool(TIER_A.search(task_rest))
@@ -1321,10 +1331,18 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
             m = CONTRACT_LINE.match(ln)
             if m:
                 is_unit_form = m.group(1) == "Unit"
+                value = m.group(2).strip()
                 if not is_unit_form:
                     has_integration = True
-                elif NO_UNIT_TEST.match(m.group(2).strip()):
+                elif NO_UNIT_TEST.match(value):
                     has_unit_waiver = True
+                elif CLUSTER_COVERED.match(value):
+                    if covered_ok is None:
+                        covered_ok = behaviour_covered_task_ids(tasks_text, repo_root)
+                    if task_id in covered_ok:
+                        has_unit_contract = True   # the cluster's RED is the contract
+                    else:
+                        has_unit_waiver = True     # invalid waiver — Tier A trips below
                 else:
                     has_unit_contract = True
 
@@ -1358,7 +1376,8 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
               "(`Unit test:` / `Integration test:`): " + ", ".join(missing[:8]))
     if tier_a_waived:
         f.add("fail", "unit-test-contract",
-              "Tier A may not waive its test with `no unit test:` — "
+              "Tier A may not waive its test with `no unit test:` (nor lean on "
+              "`covered by cluster behaviour` outside a valid behaviour block) — "
               + ", ".join(tier_a_waived[:8]))
     if integration_parallel:
         f.add("fail", "unit-test-contract",
@@ -1366,6 +1385,227 @@ def check_unit_test_contract(tasks_text: str, f: Findings) -> None:
               "never parallel, serialize: " + ", ".join(integration_parallel[:8]))
     if not (missing or tier_a_waived or integration_parallel):
         f.add("pass", "unit-test-contract", f"all {total} tasks state a test contract")
+
+
+# ── behaviour-cluster (FR-6/FR-7) — one RED per behaviour, observable from outside ───
+#
+# A `### Cluster` heading may carry, between itself and the cluster's first task line, up
+# to three prose lines (order free, each at line start, bold/bullet tolerated like the
+# other line matchers here): `Behaviour:` (one sentence), `Observable:` (how it is
+# verified from OUTSIDE the file), and `RED until: <path>::<method>` naming the one
+# failing test that belongs to the BEHAVIOUR rather than to any task. "Full block" = all
+# three present. Inside such a cluster a member task may satisfy its `Unit test:` line
+# with `covered by cluster behaviour` — per-task proof moves up to the behaviour level
+# (FR-7: "Tasks below a behaviour boundary don't need their own proof, they need to not
+# break the proof that's already running"). Opt-in: members may equally keep ordinary
+# unit-test lines under the same block.
+
+BEHAVIOUR_BLOCK_LINES = {
+    "behaviour": re.compile(
+        r"^\s*(?:[-*]\s+)?(?:\*\*)?Behaviour(?:\*\*)?:\s*(\S.*?)\s*$", re.IGNORECASE),
+    "observable": re.compile(
+        r"^\s*(?:[-*]\s+)?(?:\*\*)?Observable(?:\*\*)?:\s*(\S.*?)\s*$", re.IGNORECASE),
+    "red_until": re.compile(
+        r"^\s*(?:[-*]\s+)?(?:\*\*)?RED until(?:\*\*)?:\s*(\S.*?)\s*$", re.IGNORECASE),
+}
+_BLOCK_KEYS = ("behaviour", "observable", "red_until")
+BEHAVIOUR_LABEL = {"behaviour": "`Behaviour:`", "observable": "`Observable:`",
+                   "red_until": "`RED until:`"}
+CLUSTER_COVERED = re.compile(r"^covered by cluster behaviour\b", re.IGNORECASE)
+
+
+def _covered_by_cluster(cont: list[str]) -> bool:
+    """True when a continuation block's `Unit test:` value is the FR-7 waiver form."""
+    for ln in cont:
+        m = CONTRACT_LINE.match(ln)
+        if m and m.group(1) == "Unit" and CLUSTER_COVERED.match(m.group(2).strip()):
+            return True
+    return False
+
+
+def parse_behaviour_clusters(tasks_text: str) -> list[dict]:
+    """Per `### Cluster`: the behaviour-block values (read ONLY between the heading and
+    the cluster's first task line — a `Behaviour:` inside a task's continuation is that
+    task's prose, never the cluster's block) and the members as
+    {id, files, covered}. Fences are stripped first, so a fenced block sample is
+    invisible — same rule as every other parser here."""
+    lines = strip_fenced(tasks_text).splitlines()
+    n, i = len(lines), 0
+    clusters: list[dict] = []
+    cur: dict | None = None
+    while i < n:
+        ln = lines[i]
+        if CLUSTER_HEADING.match(ln):
+            if cur is not None:
+                clusters.append(cur)
+            cur = {"name": ln.lstrip("# ").split("(")[0].strip(),
+                   "behaviour": None, "observable": None, "red_until": None,
+                   "members": []}
+            i += 1
+            continue
+        h = heading_text(ln)
+        if h and h[0] <= 2:  # phase boundary — same rule as parse_clusters
+            if cur is not None:
+                clusters.append(cur)
+                cur = None
+            i += 1
+            continue
+        tm = TASK_LINE.match(ln)
+        if tm and cur is not None:
+            cont = []  # the task_blocks() boundary: next column-0 bullet or heading
+            j = i + 1
+            while j < n and not lines[j].startswith("- ") and not heading_text(lines[j]):
+                cont.append(lines[j])
+                j += 1
+            seg = FILES_SEGMENT.search(tm.group(2))
+            cur["members"].append({"id": tm.group(1),
+                                   "files": seg.group(1) if seg else "",
+                                   "covered": _covered_by_cluster(cont)})
+            i = j
+            continue
+        if cur is not None and not cur["members"]:
+            for key, rx in BEHAVIOUR_BLOCK_LINES.items():
+                m = rx.match(ln)
+                if m:
+                    cur[key] = m.group(1).strip()
+                    break
+        i += 1
+    if cur is not None:
+        clusters.append(cur)
+    return clusters
+
+
+def _red_until_path(value: str) -> str:
+    """The machine-checked PATH half of `RED until: <path>::<method>` (backtick quoting
+    tolerated — around the whole value or the path half alone, so the trailing backtick
+    of `` `path`::method `` is stripped AFTER the split, never left to false-dangle).
+    The `::method` half is contract prose — presence, not truth; whether that method
+    exists and bites is the review gate's and the T05 hook's business."""
+    return value.strip().strip("`").split("::", 1)[0].strip().strip("`").strip()
+
+
+def repo_root_for(spec_dir: Path) -> Path | None:
+    """The git toplevel containing the feature dir — what RED-until paths resolve
+    against on disk. None when no `.git` is found walking up (tmp fixture dirs), which
+    limits resolution to the member-files fallback."""
+    try:
+        d = spec_dir.resolve()
+    except OSError:
+        return None
+    for p in (d, *d.parents):
+        if (p / ".git").exists():
+            return p
+    return None
+
+
+def _block_status(c: dict, repo_root: Path | None) -> str:
+    """none | partial | dangling | valid. A full block is VALID when its RED-until path
+    is test-shaped (a `tests/` path — FWV_TEST_PATH, the one dialect, I-A) AND resolves
+    to a FILE strictly under the resolved repo root (an absolute path, which
+    `repo_root / path` would otherwise adopt wholesale, or a `../` traversal escapes
+    the root and reads dangling, I-A; a directory named `tests/` is not a test, I-1),
+    or exactly matches one of a member task's comma-split `(files:)` paths (the test
+    is CREATED by a task in the cluster, so that rung is shape-blind by design; a
+    substring hit like `src` inside `src/notify.php` binds to nothing, I-1)."""
+    present = [k for k in _BLOCK_KEYS if c[k]]
+    if not present:
+        return "none"
+    if len(present) < len(_BLOCK_KEYS):
+        return "partial"
+    path = _red_until_path(c["red_until"])
+    if not path:
+        return "partial"
+    if repo_root is not None and FWV_TEST_PATH.search(path):
+        try:
+            root = repo_root.resolve()
+            p = (repo_root / path).resolve()
+        except OSError:
+            root = p = None
+        if p is not None and root in p.parents and p.is_file():
+            return "valid"
+    if any(path == p.strip() for m in c["members"]
+           for p in m["files"].split(",")):
+        return "valid"
+    return "dangling"
+
+
+def behaviour_covered_task_ids(tasks_text: str, repo_root: Path | None) -> set[str]:
+    """Task ids whose `covered by cluster behaviour` would be VALID — members of a
+    cluster carrying the full block whose RED-until test resolves."""
+    ids: set[str] = set()
+    for c in parse_behaviour_clusters(tasks_text):
+        if _block_status(c, repo_root) == "valid":
+            ids.update(m["id"] for m in c["members"])
+    return ids
+
+
+def check_behaviour_clusters(tasks_text: str, f: Findings,
+                             repo_root: Path | None = None) -> None:
+    """FR-6/FR-7 — the behaviour-block grammar: one RED per behaviour.
+
+    The failing test moves up one level — it belongs to the behaviour, not to the task —
+    and the machine checks PRESENCE plus the named test, per the 1a honesty convention:
+
+      - a full block whose `RED until:` path neither exists on disk (under the feature
+        dir's git toplevel) nor appears in any member task's `(files:)` segment → FAIL —
+        the behaviour RED binds to nothing;
+      - `covered by cluster behaviour` on a task outside any cluster, in a cluster with
+        no block, or in one whose block is partial → FAIL naming task and cluster — the
+        waiver is accepted only against the FULL block (a Tier A task doing this also
+        trips check_unit_test_contract's Tier-A-waiver FAIL; never a silent pass);
+      - at least one valid block → a ✓ naming the cluster(s).
+
+    NOT machine-judged, stated deliberately: the `::method` half of `RED until:` is
+    contract prose (presence, not truth — whether the method exists and goes RED is the
+    T05 hook's and the review gate's business), observable ADMISSIBILITY (config/array
+    shapes are inadmissible as a cluster observable) is FR-9's sequencer rule in the
+    planning skill, and a partial block nobody leans on is silent — the grammar is
+    opt-in, and an unfinished block with no waiver riding on it gates nothing.
+
+    Artifacts with no behaviour blocks and no waiver forms produce ZERO findings — the
+    AC-3 back-compat lock."""
+    clusters = parse_behaviour_clusters(tasks_text)
+    by_task = {m["id"]: c for c in clusters for m in c["members"]}
+    valid_names = []
+
+    for c in clusters:
+        c["status"] = _block_status(c, repo_root)
+        if c["status"] == "valid":
+            valid_names.append(c["name"])
+        elif c["status"] == "dangling":
+            users = [m["id"] for m in c["members"] if m["covered"]]
+            suffix = (" — relied on by " + ", ".join(users[:4])) if users else ""
+            f.add("fail", "behaviour-cluster",
+                  f"{c['name']}: `RED until:` names `{_red_until_path(c['red_until'])}` "
+                  "— a test file neither on disk under the repo root nor in any member "
+                  f"task's `(files:)` segment; the behaviour RED binds to nothing{suffix}")
+
+    for task_id, _rest, cont in task_blocks(tasks_text):
+        if not _covered_by_cluster(cont):
+            continue
+        c = by_task.get(task_id)
+        if c is None:
+            f.add("fail", "behaviour-cluster",
+                  f"{task_id} states `covered by cluster behaviour` outside any "
+                  "`### Cluster` heading — the form is legal only inside a cluster "
+                  "carrying the full behaviour block")
+        elif c["status"] == "none":
+            f.add("fail", "behaviour-cluster",
+                  f"{task_id} states `covered by cluster behaviour` but {c['name']} "
+                  "carries no behaviour block (`Behaviour:` + `Observable:` + "
+                  "`RED until:`) — the waiver binds to nothing")
+        elif c["status"] == "partial":
+            missing = ", ".join(BEHAVIOUR_LABEL[k] for k in _BLOCK_KEYS if not c[k])
+            f.add("fail", "behaviour-cluster",
+                  f"{task_id} states `covered by cluster behaviour` but {c['name']}'s "
+                  f"behaviour block is missing {missing} — the FULL block is what the "
+                  "waiver is accepted against")
+        # valid → the member is covered; dangling → already reported at cluster level
+
+    if valid_names:
+        f.add("pass", "behaviour-cluster",
+              f"{len(valid_names)} cluster(s) carry a valid behaviour block "
+              "(one RED per behaviour): " + ", ".join(valid_names[:4]))
 
 
 REQ_ID = re.compile(r"\b(FR|SC)-(\d+)\b")
@@ -1433,6 +1673,247 @@ def check_requirement_coverage(spec_text: str, tasks_text: str, f: Findings) -> 
           f"all {len(ids)} requirement(s) cited in tasks.md: " + ", ".join(ids[:8]))
 
 
+# ── fr-source — every functional requirement traces to the ask (FR-1/FR-2) ───
+
+# A line DEFINING a requirement (`- **FR-1:** …`) as opposed to citing one (`(FR-7 …)`) —
+# leading position + the id:colon shape is what separates definition from mention; the id
+# grammar itself matches what `_req_ids` parses. Bold tolerated on either side of the
+# colon, same punctuation stance as FWV_TASK_LINE / STAKES_LINE.
+FR_DEF_LINE = re.compile(r"^\s*(?:[-*+]\s+)?\**(FR-\d+)(?::\**|\**:)")
+# `Source:` opening the source text. A backtick-quoted `Source:` is prose ABOUT the
+# convention, not a source — the live corpus's own FR-1/FR-2 mention the marker in
+# backticks before stating their real source.
+SOURCE_MARK = re.compile(r"(?<!`)\bSource:")
+# A column-0 bullet ENDS the current FR's block (I-2): only indented lines continue a
+# block, so a colon-less FR def (`- **FR-2** …`, not an FR_DEF_LINE) can no longer
+# donate its `Source:` to the FR above it while itself escaping the check.
+COL0_BULLET = re.compile(r"^[-*+]\s")
+# A source must SAY something: at least one word character (S-4 — `Source: —` is
+# contentless punctuation, not a source).
+SOURCE_WORD = re.compile(r"\w")
+# An invention passes only with an approval: `approved` followed by something date-like,
+# or an explicit approver reference (`approved by <who>`).
+INVENTED_SOURCE = re.compile(r"invented\b", re.IGNORECASE)
+SOURCE_APPROVAL = re.compile(
+    r"\bapproved\b(?:\s+by\s+\S+|.*?\d{4}-\d{2}-\d{2})", re.IGNORECASE | re.DOTALL)
+
+
+def check_fr_sources(spec_text: str, f: Findings) -> None:
+    """FR-1/FR-2 — every functional requirement traces to the ask.
+
+    The post-mortem's link 1: a requirement invented at spec time reads exactly like one
+    the human asked for, and the build then serves the invention. So every FR-defining
+    line (`- **FR-1:** …`, the same id convention check_requirement_coverage parses) must
+    carry a `Source:` — on the def line or an INDENTED continuation line; the block ends
+    at the next FR def, a heading, or ANY column-0 bullet (I-2 — a colon-less FR def is
+    a column-0 bullet, and its `Source:` must never donate upward to the FR above).
+    Everything from `Source:` to the end of that FR's block is the source text. A source
+    whose first word is `invented` (case-insensitive) additionally needs an approval;
+    any other source text carrying at least one word character (a quotation, a document
+    reference, "the human, <date>: …") passes — bare punctuation like `Source: —` is
+    contentless and reads as unsourced (S-4).
+
+    PRESENCE, not truthfulness: a fabricated quotation passes the machine — challenging
+    what a `Source:` says is the review gate's job, the same honesty convention every
+    check here follows.
+
+    Waiver regime mirrors the siblings: zero sources across all FRs + the file-scoped
+    `legacy-artifact` waiver → WARN naming it (absence-only downgrade); partial presence
+    is a defect and FAILs naming the bare FRs, waiver notwithstanding. A spec defining
+    no FR ids produces no findings — nothing to source; section presence stays the other
+    checks' business.
+    """
+    blocks: list[tuple[str, str]] = []  # (fr_id, block text joined to one line)
+    cur_id, cur_lines = None, []
+    for ln in strip_fenced(spec_text).splitlines():
+        m = FR_DEF_LINE.match(ln)
+        if m:
+            if cur_id:
+                blocks.append((cur_id, " ".join(cur_lines)))
+            cur_id, cur_lines = m.group(1), [ln]
+        elif heading_text(ln) or COL0_BULLET.match(ln):
+            if cur_id:
+                blocks.append((cur_id, " ".join(cur_lines)))
+            cur_id, cur_lines = None, []
+        elif cur_id:
+            cur_lines.append(ln)
+    if cur_id:
+        blocks.append((cur_id, " ".join(cur_lines)))
+
+    if not blocks:
+        return  # no FR definitions — nothing to source
+
+    unsourced, unapproved = [], []
+    for fr_id, text in blocks:
+        m = SOURCE_MARK.search(text)
+        src = text[m.end():].strip() if m else ""
+        if not SOURCE_WORD.search(src):
+            unsourced.append(fr_id)
+        elif INVENTED_SOURCE.match(src) and not SOURCE_APPROVAL.search(src):
+            unapproved.append(fr_id)
+
+    total = len(blocks)
+    if len(unsourced) == total:
+        waiver = legacy_waiver(spec_text)
+        if waiver:
+            f.add("warn", "fr-source",
+                  f"no FR carries a `Source:` line ({total} FRs) — legacy waiver "
+                  f"exercised: {waiver}")
+        else:
+            f.add("fail", "fr-source",
+                  f"no FR carries a `Source:` line ({total} FRs): "
+                  + ", ".join(unsourced[:8])
+                  + " — every requirement traces to the ask or an approved invention; "
+                  "a spec that genuinely predates the convention says so with a "
+                  "`<!-- gate-check: legacy-artifact — <reason> -->` marker")
+        return
+    if unsourced:
+        f.add("fail", "fr-source",
+              f"{len(unsourced)}/{total} FR(s) carry no `Source:` line: "
+              + ", ".join(unsourced[:8]))
+    if unapproved:
+        f.add("fail", "fr-source",
+              "`Source: invented` with no approval (needs `approved <date>` or "
+              "`approved by <who>`): " + ", ".join(unapproved[:8]))
+    if not (unsourced or unapproved):
+        f.add("pass", "fr-source",
+              f"all {total} FR(s) carry a `Source:` (inventions approved)")
+
+
+# ── deliverable-first (1j) — the first demoable slice comes before scaffolding ─
+
+FWV_SECTION = "First working version"
+# The section's `**Task:** T0n` line — same punctuation tolerance as STAKES_LINE (bold
+# markup, list bullet, either colon placement), because a demoted-by-formatting task name
+# would silently disarm the ordering assertions that are this gate's whole point.
+FWV_TASK_LINE = re.compile(
+    r"^\s*(?:[-*]\s+)?(?:\*\*)?Task(?:\*\*)?:\s*\**\s*(T\d+)\b", re.IGNORECASE)
+# A path under any `test/` / `tests/` directory, at the root or nested. The 1j draft's
+# assertion 4: a task producing ONLY such paths cannot be a first working version.
+# Also the ONE test-shaped dialect `_block_status`'s disk rung confines to (I-A) —
+# do not grow a second definition of "test-shaped" beside this one.
+FWV_TEST_PATH = re.compile(r"(^|/)tests?/", re.IGNORECASE)
+
+
+def check_deliverable_first(plan_text: str, spec_text: str | None,
+                            tasks_text: str | None, f: Findings) -> None:
+    """1j — the plan names its first demoable slice and schedules it early.
+
+    The gate the 2026-08-03 post-mortem proposed and 2026-08-09 decided (reference:
+    skills/planning/references/gate-1j-deliverable-first.md): every gate in the spine asks
+    "is this verified?"; this is the one place that asks "is this useful yet?". Enforced
+    per FR-3/4/5 with the decided parameters:
+
+      - section absent while the spec flags a user-facing surface → FAIL (a legacy plan
+        stating the `legacy-artifact` waiver degrades ABSENCE to a WARN naming it);
+      - `N/A` is legitimate ONLY when no user-facing surface is flagged (a genuinely
+        non-runnable deliverable) — N/A on a user-facing spec → FAIL;
+      - the named task must exist in tasks.md → FAIL when it doesn't;
+      - the named task must sit among the FIRST 3 tasks (inclusive of position 3) → FAIL
+        otherwise — ordering is the whole point, a first-working-version task scheduled
+        eighth changes nothing;
+      - a named task whose `(files:)` segment lists ONLY test paths → FAIL — a task
+        producing no non-test file cannot be a first working version (the assertion that
+        catches both of the post-mortem's plans);
+      - more than 2 tasks preceding the named one → WARN, worth a human look.
+
+    Parses over strip_fenced text like every task walker, so the planning template's own
+    fenced `## First working version` example never counts as a real section. Position
+    counts EVERY task in document order — [HUMAN] yield points included, because the
+    deliverable waits on them all the same.
+    """
+    triggered = spec_user_facing_triggered(spec_text) if spec_text else []
+    body = section_body(strip_fenced(plan_text), FWV_SECTION)
+
+    if body is None:
+        if not triggered:
+            f.add("pass", "deliverable-first",
+                  "no ## First working version and no user-facing surface flagged — "
+                  "nothing runnable owes an ordering")
+            return
+        waiver = legacy_waiver(plan_text)
+        if waiver:
+            f.add("warn", "deliverable-first",
+                  "no ## First working version on a user-facing plan — legacy waiver "
+                  f"exercised: {waiver}")
+            return
+        f.add("fail", "deliverable-first",
+              "spec flags user-facing surface(s) "
+              f"[{', '.join(triggered[:3])}] but the plan carries no ## First working "
+              "version — nothing names the first demoable slice, so the gradient points "
+              "at proofs and scaffolding instead of the thing that was asked for")
+        return
+
+    author_lines = [ln for ln in body.strip().splitlines()
+                    if not ln.lstrip().startswith(">")]
+    author = "\n".join(author_lines).strip()
+    if re.match(r"^N/?A\b", author, re.IGNORECASE):
+        if triggered:
+            f.add("fail", "deliverable-first",
+                  "## First working version is N/A but the spec flags user-facing "
+                  f"surface(s) [{', '.join(triggered[:3])}] — N/A is legitimate only for "
+                  "a genuinely non-runnable deliverable (docs-only, pure test infra)")
+        else:
+            f.add("pass", "deliverable-first",
+                  "## First working version marked N/A and no user-facing surface "
+                  "flagged — a non-runnable deliverable is legitimate")
+        return
+
+    named = next((m.group(1).upper() for m in
+                  (FWV_TASK_LINE.match(ln) for ln in author_lines) if m), None)
+    if named is None:
+        f.add("fail", "deliverable-first",
+              "## First working version names no task (`**Task:** T0n`) — a section "
+              "that points at nothing orders nothing")
+        return
+
+    if tasks_text is None:
+        return  # plan-only stage: nothing to verify ordering / files against yet
+
+    order, files_by_task = [], {}
+    for task_id, task_rest, _cont in task_blocks(tasks_text):
+        order.append(task_id)
+        seg = FILES_SEGMENT.search(task_rest)
+        files_by_task[task_id] = seg.group(1).strip() if seg else ""
+    if not order:
+        return  # check_task_tiers already reports "no task lines"
+
+    if named not in order:
+        f.add("fail", "deliverable-first",
+              f"## First working version names {named}, which does not exist in "
+              "tasks.md — the ordering gate cannot bind to a phantom task")
+        return
+
+    position = order.index(named) + 1
+    ok = True
+    if position > 3:
+        ok = False
+        f.add("fail", "deliverable-first",
+              f"the first-working-version task {named} sits at position {position} — "
+              "not among the first 3. Ordering is the whole point: naming a "
+              "first-working-version task and scheduling it late changes nothing")
+    # Deliberate dual-fire (S-5b): at position > 3 the FAIL above AND this WARN both
+    # emit — the FAIL is the verdict, the WARN carries the human-look framing. The
+    # pairing is contract-locked by test 23h; do not "simplify" one away.
+    if position - 1 > 2:
+        f.add("warn", "deliverable-first",
+              f"{position - 1} task(s) precede the first-working-version task {named} — "
+              "legal, but worth a human look at what the deliverable is waiting on")
+
+    paths = [p.strip() for p in files_by_task.get(named, "").split(",") if p.strip()]
+    if paths and all(FWV_TEST_PATH.search(p) for p in paths):
+        ok = False
+        f.add("fail", "deliverable-first",
+              f"the first-working-version task {named} lists only test paths in its "
+              "`(files:)` segment — a task producing no non-test file cannot be a "
+              "first working version")
+
+    if ok:
+        f.add("pass", "deliverable-first",
+              f"## First working version names {named} (position {position}) with "
+              "non-test deliverable files")
+
+
 def check_clusters(tasks_text: str, f: Findings) -> None:
     clusters = parse_clusters(tasks_text)
     if not clusters:
@@ -1479,6 +1960,7 @@ def run_checks(spec_dir: Path) -> Findings:
         check_success_criteria(spec_text, f)
         check_security_surfaces(spec_text, f)
         check_user_facing_surfaces(spec_text, f)
+        check_fr_sources(spec_text, f)  # FR-1/2 — source traceability
     if plan_text is not None:
         check_plan_gates(plan_text, f)
         check_threat_model(plan_text, spec_text, f)
@@ -1486,14 +1968,17 @@ def run_checks(spec_dir: Path) -> Findings:
         check_stakes(plan_text, spec_text, f)
         check_cluster_stakes(plan_text, f)
         check_loop_budget(plan_text, f)
+        check_deliverable_first(plan_text, spec_text, tasks_text, f)  # 1j — cross-artifact
     if tasks_text is not None:
+        root = repo_root_for(spec_dir)  # RED-until paths resolve against the git toplevel
         check_task_tiers(tasks_text, f)
         check_files_segment(tasks_text, f)
         check_human_yield(tasks_text, f)
         check_test_author_mode(tasks_text, f)
         check_proven_by(tasks_text, f)
         check_security_boundary_mode(tasks_text, f)
-        check_unit_test_contract(tasks_text, f)
+        check_unit_test_contract(tasks_text, f, repo_root=root)
+        check_behaviour_clusters(tasks_text, f, repo_root=root)  # FR-6/FR-7
         check_clusters(tasks_text, f)
         check_review_gates(tasks_text, f)
         check_review_tiers(tasks_text, f)

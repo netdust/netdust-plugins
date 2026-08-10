@@ -43,16 +43,11 @@ def run_gate(cwd: Path, stdin_obj: dict, home: Path,
     return p.returncode, p.stdout
 
 
-# ── budget-seam stubs (I2 / C1) ──────────────────────────────────────────────
+# ── budget-seam stub (I-3 re-contract) ───────────────────────────────────────
 # A scratch plugin tree with the REAL loop-gate + loop-check + run-trace but a STUBBED
-# verify-budget.py, so the budget seam can be driven without manufacturing a real diff.
-
-STUB_CRASH = """#!/usr/bin/env python3
-import sys
-open(__file__ + '.argv', 'w').write(' '.join(sys.argv[1:]))
-sys.stderr.write('Traceback (most recent call last):\\n  boom\\n')
-sys.exit(1)
-"""
+# verify-budget.py speaking the RETIRED pre-0b6ccd1 HALT contract — output no real
+# verify-budget can produce anymore. The gate must never consult it: the stub records
+# its argv iff invoked, so an empty recording proves the seam is gone.
 
 STUB_HALT = """#!/usr/bin/env python3
 import sys
@@ -271,34 +266,28 @@ def run() -> list[tuple[bool, str]]:
         case("dry-loop disarm -> run log gains a loop-disarm-dry event",
              rc2 == 0 and len(dry_events) == 1)
 
-    # --- I2 / C1: the budget seam — crash ≠ HALT, base resolved not hardcoded ----
-    # A verify-budget that CRASHES (exit 1, no "BUDGET: HALT" marker) is a tooling
-    # failure, not a verdict: the loop must proceed with the NORMAL next-unit block,
-    # never the stop-and-report budget block. And on a master-default repo the base
-    # must resolve to `master` — hardcoded `main` left the tripwire inert on the
-    # exact repo shape of the incident it exists to catch.
-
-    with tempfile.TemporaryDirectory() as tmp:
-        gate = setup_stub_plugin(tmp, STUB_CRASH)
-        cwd = setup(tmp, TASKS_ONE_OPEN, marker={})
-        git_master(cwd)
-        rc, out = run_gate(cwd, {"cwd": str(cwd)}, Path(tmp), gate=gate)
-        case("I2: budget CRASH (exit 1, no HALT marker) -> normal block, "
-             "not the budget block",
-             rc == 0 and '"decision": "block"' in out
-             and "verify-budget HALT" not in out and "T02" in out)
-        case("C1: loop-gate resolves --base to `master` on a master-default repo",
-             "--base master" in stub_argv(gate))
+    # --- I-3 re-contract: the gate no longer reads budget output at all -----------
+    # The HALT consumer branch is retired (verify-budget always exits 0 and never
+    # prints HALT since 0b6ccd1; the old stub pinned a contract no real input can
+    # produce — green-but-blind). Adversarial shape: a git-master repo with a stub
+    # verify-budget speaking the OLD HALT contract is exactly the environment where
+    # the retired branch would have fired. The gate must emit the NORMAL next-unit
+    # block, never a budget block, and must not invoke verify-budget at all.
 
     with tempfile.TemporaryDirectory() as tmp:
         gate = setup_stub_plugin(tmp, STUB_HALT)
         cwd = setup(tmp, TASKS_ONE_OPEN, marker={})
         git_master(cwd)
         rc, out = run_gate(cwd, {"cwd": str(cwd)}, Path(tmp), gate=gate)
-        case("I2: a real HALT (exit 1 + marker) still blocks with the budget reason",
-             rc == 0 and '"decision": "block"' in out and "verify-budget HALT" in out)
-        case("I2: the HALT block keeps the marker armed (exit-2 posture)",
-             marker_of(cwd) is not None)
+        case("I-3: old-contract HALT stub present -> normal next-unit block, "
+             "never the budget block",
+             rc == 0 and '"decision": "block"' in out
+             and "verify-budget HALT" not in out and "BUDGET" not in out
+             and "T02" in out)
+        case("I-3: verify-budget is never consulted (stub argv recording empty)",
+             stub_argv(gate) == "")
+        case("I-3: the block keeps the marker armed and iterating",
+             marker_of(cwd) is not None and marker_of(cwd)["iteration"] == 1)
 
     # --- T02: fail-open contract (FR-2) -----------------------------------
     # Tracing must NEVER change the gate's decision or stdout. Force

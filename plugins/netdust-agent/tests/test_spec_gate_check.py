@@ -271,9 +271,10 @@ SPEC_WITH_REQS = """# Feature Specification: Course publishing
 - **SC-1:** an editor publishes a module in under 3 minutes
 
 ## Functional requirements
-- **FR-1:** system MUST publish a module
-- **FR-2:** system MUST reject an unauthorised editor
-- **FR-3:** system MUST log every publish
+- **FR-1:** system MUST publish a module. Source: the human, 2026-06-01: "publish".
+- **FR-2:** system MUST reject an unauthorised editor. Source: invented — approved
+  2026-06-01 (review note).
+- **FR-3:** system MUST log every publish. Source: the audit brief (2026-06-01).
 
 ## Security-relevant surfaces
 - [x] None of the above
@@ -552,6 +553,12 @@ PLAN_FLOWS_EMPTY_TABLE = PLAN_FLOWS_NA.replace(
 """,
 )
 
+# Carries the 1j `## First working version` section since the deliverable-first gate
+# landed — the same fixture amendment SPEC_TRIGGERED et al. received when the 1g
+# user-facing sections and the Stakes: dial became mandatory grammar (the paired case's
+# assertions are unchanged and unweakened; a user-facing plan simply must now name its
+# first demoable slice to be a green fixture). Names TASKS_GOOD's T01: position 1,
+# non-test file (lib/url.ts).
 PLAN_FLOWS_FILLED = PLAN_FLOWS_NA.replace(
     "## Acceptance flows\nN/A — small feature.",
     """## Acceptance flows
@@ -560,6 +567,12 @@ PLAN_FLOWS_FILLED = PLAN_FLOWS_NA.replace(
 |---|---|---|
 | issue an invoice | PDF stored, editor sees it listed | empty: no line items → blocked with a message; denied: viewer role refused; re-entry: back-then-submit does not double-issue; concurrent: double-submit issues one; boundary: 0.00 total refused; mid-flow failure: storage error rolls the record back |
 | email the invoice | recipient receives it once | empty: no recipient → blocked; denied: viewer cannot send; re-entry: resend is idempotent per invoice; concurrent: two sends deliver one; boundary: 500-char subject truncated; mid-flow failure: SMTP error leaves it queued, not sent |
+
+## First working version
+
+**Task:** T01
+**Demonstrates:** a wired validator an editor can exercise from the first cluster
+**Verify by:** drive the wizard's first screen and watch an RFC1918 target refused
 """,
 )
 
@@ -1181,6 +1194,352 @@ TASKS_FENCED_REALSHAPED_TASK_LINE = """# Tasks: x
 """
 
 
+# ── `deliverable-first` fixtures — the 1j gate (first demoable slice first) ──
+# The 2026-08-03 post-mortem's gate, decided 2026-08-09 (FR-3/4/5): a plan must carry
+# `## First working version` naming a task among the FIRST 3 whose `(files:)` produces at
+# least one non-test file; `N/A` only when the spec flags no user-facing surface; a legacy
+# plan states the `legacy-artifact` waiver and degrades ABSENCE to WARN. The two worked
+# examples in the 1j draft become fixture shapes here: josworld-core's first seeable task
+# fifth (position FAIL) and yootheme-baseline's test-only T03 (files FAIL).
+
+# Five tasks, deliberately post-mortem-shaped: T01 non-test scaffold, T02 test-only,
+# T03 mixed (impl + test), T04 the first admin-visible surface — too late.
+TASKS_FWV = """# Tasks: Case model
+
+### Cluster C1
+- [ ] T01 [Tier B] scaffold the loader pair  (files: src/loader.php)
+- [ ] T02 [Tier A] boot-order proof  (files: tests/Integration/BootOrderTest.php)
+- [ ] T03 [Tier A] register the case model  (files: src/model.php, tests/model.spec.php)
+- [ ] T04 [Tier A] case admin screen  (files: src/admin.php)
+- [ ] T05 [Tier B] docs  (files: README.md)
+"""
+
+# Same list with a [HUMAN] yield point among the preceding tasks — it still counts toward
+# position (the deliverable waits on it all the same), so T04 stays fourth.
+TASKS_FWV_HUMAN_PRECEDING = TASKS_FWV.replace(
+    "- [ ] T02 [Tier A] boot-order proof  (files: tests/Integration/BootOrderTest.php)",
+    "- [ ] T02 [HUMAN] approve the destructive rename")
+
+_PLAN_FWV_BASE = """# Implementation Plan: Case model
+
+## Constitution check
+- [x] ok
+
+## Threat model
+N/A — no surface flagged.
+
+## Acceptance flows
+N/A — fixture.
+
+## Architecture invariants touched
+N/A
+
+## Spec-premise ground-truth
+N/A
+
+## Phases & review clusters
+See tasks.md.
+
+## Stakes
+Stakes: standard — fixture
+
+## Technical context
+- **Loop budget:** ~6 iterations
+"""
+
+def _plan_fwv(task_id: str) -> str:
+    return _PLAN_FWV_BASE + f"""
+## First working version
+
+**Task:** {task_id}
+**Demonstrates:** an editor sees the case model in wp-admin
+**Verify by:** open wp-admin and create one case
+"""
+
+# The section marked N/A, threat-model style — legitimate ONLY on a non-user-facing spec.
+PLAN_FWV_NA = _PLAN_FWV_BASE + """
+## First working version
+N/A — docs-only deliverable, nothing runnable lands.
+"""
+
+# The section present ONLY inside a fenced example (the planning template's own format
+# block) — must read as ABSENT, exactly as fenced task lines and Stakes: samples do.
+PLAN_FWV_FENCED_ONLY = _PLAN_FWV_BASE + """
+## Per-section format
+
+```markdown
+## First working version
+
+**Task:** T01
+**Demonstrates:** <what a human can SEE or RUN>
+**Verify by:** <command / URL / screen>
+```
+"""
+
+# The section present but naming nothing — a section that points at nothing orders nothing.
+PLAN_FWV_NO_TASK_NAMED = _PLAN_FWV_BASE + """
+## First working version
+
+The checker itself is the demo; run it and watch it fail.
+"""
+
+# ── `fr-source` fixtures — source traceability (FR-1/FR-2) ────────────────────
+# The post-mortem's link 1: a requirement invented at spec time reads exactly like one
+# the human asked for, and the build then serves the invention. The check makes every FR
+# name where it came from — a quotation, a document reference, or `invented` + an
+# approval. It judges PRESENCE, not truthfulness (a fabricated quote passes the machine;
+# challenging what a Source: says is review's job — the 1a honesty convention).
+
+# Corpus-shaped: all four legal source shapes in one spec — a quotation mid-paragraph on
+# the def line, `invented — approved` with the date across a line break (the live spec's
+# FR-2 writes exactly that), a continuation-line `Source:`, and the approver-reference
+# form. FR-1's own prose mentions a backticked `Source:` BEFORE its real source — the
+# mention must read as prose, not as the source (the live spec's FR-1/FR-2 shape).
+SPEC_FR_SOURCED = """# Feature Specification: Payload archive
+
+## Functional requirements
+
+### Traceability
+- **FR-1:** Every payload carries a `Source:` tag — either a quotation or an approved
+  invention. Source: the human, 2026-08-09: "every payload must say where it came from".
+- **FR-2:** Rejected payloads are archived for replay. Source: invented — approved
+  2026-08-09 (post-incident review; the human signed the intake).
+
+### Retention
+- **FR-3:** Archives expire after 90 days.
+  Source: the retention draft (2026-07-01), adopted verbatim.
+- **FR-4:** Expiry runs nightly. Source: invented — approved by Stefan (intake Q2).
+"""
+
+# One sourced, one bare — partial presence is a defect the waiver can NOT rescue
+# (absence-only downgrade, the same partial-vs-absent logic as unit-test-contract).
+SPEC_FR_PARTIAL = """# Feature Specification: Payload archive
+
+<!-- gate-check: legacy-artifact — spec predates the Source: convention -->
+
+## Functional requirements
+- **FR-1:** Every payload is archived. Source: the human, 2026-08-09: "archive them".
+- **FR-2:** Archives expire after 90 days.
+"""
+
+# `invented` (first word, case-insensitive) with no approval — FAILs; a quoted source
+# containing a date is NOT mistaken for an invention.
+SPEC_FR_INVENTED_BARE = """# Feature Specification: Payload archive
+
+## Functional requirements
+- **FR-1:** Rejected payloads are archived. Source: invented — felt necessary.
+- **FR-2:** Expiry runs nightly. Source: Invented, obviously correct.
+- **FR-3:** Archives expire after 90 days. Source: the human, 2026-08-09: "90 days".
+"""
+
+# FR ids defined, zero `Source:` anywhere — the musician-events shape. Bare → FAIL;
+# with the file-scoped waiver → WARN naming it (absence-only downgrade).
+SPEC_FR_NONE = """# Feature Specification: Payload archive
+
+## Functional requirements
+- **FR-1:** Every payload is archived.
+- **FR-2:** Archives expire after 90 days.
+"""
+
+SPEC_FR_NONE_WAIVED = (
+    "<!-- gate-check: legacy-artifact — spec authored before the Source: convention -->\n"
+    + SPEC_FR_NONE)
+
+# I-2 probe: a colon-less FR def (`- **FR-2** …`, colon missing) is not an FR_DEF_LINE,
+# so under the old walker it CONTINUED FR-1's block and donated its `Source:` upward —
+# FR-1 read sourced while FR-2 escaped the check entirely. The block must flush at any
+# column-0 bullet that is not an FR def: FR-1 reads bare, the donation never happens.
+SPEC_FR_COLONLESS = """# Feature Specification: Payload archive
+
+## Functional requirements
+- **FR-1:** Every payload is archived.
+- **FR-2** Archives expire after 90 days. Source: the human, 2026-08-09: "90 days".
+- **FR-3:** Expiry runs nightly. Source: invented — approved by Stefan (intake Q2).
+"""
+
+# S-4 rider: a `Source:` whose value carries no word character (`Source: —`) is
+# contentless — it must read as unsourced, never as a source.
+SPEC_FR_DASH_SOURCE = """# Feature Specification: Payload archive
+
+## Functional requirements
+- **FR-1:** Every payload is archived. Source: —
+- **FR-2:** Expiry runs nightly. Source: the human, 2026-08-09: "nightly".
+"""
+
+# A fenced example carrying `Source:` never sources the FR above it — fence-stripped
+# like every parser in the checker.
+SPEC_FR_FENCED_SOURCE = """# Feature Specification: Payload archive
+
+## Functional requirements
+- **FR-1:** Every payload is archived.
+
+```markdown
+Source: invented — approved 2026-08-09
+```
+"""
+
+# Seam fixtures: an otherwise fully-green artifact set (SPEC_CLEAN_NOSEC's shape) whose
+# spec gains one FR — sourced (green floor) or bare (the check must flip the exit code).
+_FR_SECTION_SOURCED = """
+## Functional requirements
+- **FR-1:** the footer label reads correctly. Source: the human, 2026-08-09: "rename it".
+"""
+
+_FR_SECTION_BARE = """
+## Functional requirements
+- **FR-1:** the footer label reads correctly.
+"""
+
+# TASKS_GOOD with the seam spec's FR-1 cited, so requirement-coverage stays green and the
+# seam cases attribute their exit code to fr-source alone.
+TASKS_FR_CITED = TASKS_GOOD.replace("validate URL (SC-1)", "validate URL (SC-1, FR-1)")
+
+
+# ── `behaviour-cluster` fixtures — the FR-6/FR-7 grammar (T03) ────────────────
+# One RED per behaviour, observable from outside: a `### Cluster` may carry
+# `Behaviour:` + `Observable:` + `RED until: <path::method>`, and a member task may then
+# satisfy its test-contract line with `covered by cluster behaviour` INSTEAD of its own
+# unit test — accepted only inside a cluster carrying the FULL block whose `RED until:`
+# test file exists on disk or is created by a member task (its path appears in a member's
+# `(files:)` segment). The machine checks presence + the named test; observable
+# ADMISSIBILITY (no config/array shapes) is FR-9's sequencer rule, not checked here.
+
+_BEHAVIOUR_TASKS_HEAD = """# Tasks: Notifier
+
+### Cluster N1 — the notifier  (2 tasks · provisional tier: STANDARD)
+
+"""
+
+_BEHAVIOUR_BLOCK = """Behaviour: one mail per event, never a duplicate.
+Observable: `php bin/replay.php fixtures/events.json` prints `sent=1 dupes=0`.
+RED until: `tests/NotifyTest.php::test_one_mail_per_event`
+
+"""
+
+_BEHAVIOUR_TASKS_BODY = """- [ ] T01 [Tier A] implement the notifier dedupe  (files: src/notify.php, tests/NotifyTest.php)
+      Test-author: solo — standard stakes, fixture
+      Proven by: new test — the cluster's behaviour RED
+      Unit test: covered by cluster behaviour
+- [ ] T02 [Tier B] wire the notifier into the dispatcher  (files: src/dispatch.php)
+      Test-author: solo — Tier B
+      Proven by: existing test — the cluster's behaviour RED reaches the wire
+      Unit test: the dispatcher invokes notify exactly once per event
+
+**Integration gate (N1):** replay fixtures/events.json end to end; exactly one mail lands.
+
+── REVIEW GATE ──  *(tier STANDARD)*
+"""
+
+# (a)+(e): full block, RED-until file created by member T01, T02 keeps an ordinary line —
+# opt-in grammar, both forms legal inside one cluster.
+TASKS_BEHAVIOUR_VALID = _BEHAVIOUR_TASKS_HEAD + _BEHAVIOUR_BLOCK + _BEHAVIOUR_TASKS_BODY
+
+# (b): the same waiver-using member with NO block at all above it.
+TASKS_BEHAVIOUR_NO_BLOCK = _BEHAVIOUR_TASKS_HEAD + _BEHAVIOUR_TASKS_BODY
+
+# (c): `Behaviour:`/`Observable:` present but no `RED until:` — a block that names no RED
+# cannot cover anyone.
+TASKS_BEHAVIOUR_PARTIAL = (_BEHAVIOUR_TASKS_HEAD
+                           + "Behaviour: one mail per event, never a duplicate.\n"
+                           + "Observable: `php bin/replay.php fixtures/events.json` prints `sent=1`.\n\n"
+                           + _BEHAVIOUR_TASKS_BODY)
+
+# (d): full block whose RED-until test is neither on disk nor in any member's files —
+# the replace targets the `::`-qualified RED value only; T01's files still name
+# tests/NotifyTest.php, which must NOT satisfy a RED pointing at GhostTest.
+TASKS_BEHAVIOUR_DANGLING = TASKS_BEHAVIOUR_VALID.replace(
+    "tests/NotifyTest.php::test_one_mail_per_event",
+    "tests/GhostTest.php::test_missing")
+
+# Disk rung: the RED-until file is NOT in any member's `(files:)` segment, so validity can
+# come only from the file existing on disk under the given repo root.
+TASKS_BEHAVIOUR_ON_DISK = (_BEHAVIOUR_TASKS_HEAD
+                           + "Behaviour: one mail per event, never a duplicate.\n"
+                           + "Observable: `php bin/replay.php fixtures/events.json` prints `sent=1`.\n"
+                           + "RED until: tests/OnDiskTest.php::test_one_mail\n\n"
+                           + _BEHAVIOUR_TASKS_BODY.replace(
+                               "(files: src/notify.php, tests/NotifyTest.php)",
+                               "(files: src/notify.php)"))
+
+# I-1 probe (disk rung): the RED-until path names a DIRECTORY that exists under the
+# repo root. A directory is not a test — the block must read dangling, not valid. The
+# member files drop the tests/ entry so validity could only come from the disk rung.
+TASKS_BEHAVIOUR_DIR_ONLY = (_BEHAVIOUR_TASKS_HEAD
+                            + "Behaviour: one mail per event, never a duplicate.\n"
+                            + "Observable: `php bin/replay.php fixtures/events.json` prints `sent=1`.\n"
+                            + "RED until: tests/::test_one_mail\n\n"
+                            + _BEHAVIOUR_TASKS_BODY.replace(
+                                "(files: src/notify.php, tests/NotifyTest.php)",
+                                "(files: src/notify.php)"))
+
+# I-1 probe (files rung): the RED-until path is a SUBSTRING of a member file
+# (`src` inside `src/notify.php`) — the files rung must require an exact match against
+# the comma-split member paths, never a substring hit.
+TASKS_BEHAVIOUR_SUBSTRING = (_BEHAVIOUR_TASKS_HEAD
+                             + "Behaviour: one mail per event, never a duplicate.\n"
+                             + "Observable: `php bin/replay.php fixtures/events.json` prints `sent=1`.\n"
+                             + "RED until: src::test_one_mail\n\n"
+                             + _BEHAVIOUR_TASKS_BODY.replace(
+                                 "(files: src/notify.php, tests/NotifyTest.php)",
+                                 "(files: src/notify.php)"))
+
+# I-A probes (disk-rung confinement): the rung must accept ONLY a test-shaped path
+# resolving to a file STRICTLY UNDER the repo root. `.is_file()` alone accepts three
+# escapes — an absolute path (`repo_root / "/etc/hostname"` discards the left operand),
+# a `../` traversal (os.stat resolves it right past the root), and any in-repo non-test
+# file (README.md) — each of which vacuously validates the block and unlocks the Tier-A
+# `covered by cluster behaviour` waiver. The member files drop the tests/ entry so
+# validity could only come from the disk rung.
+def _bhv_disk_tasks(red_path: str) -> str:
+    return (_BEHAVIOUR_TASKS_HEAD
+            + "Behaviour: one mail per event, never a duplicate.\n"
+            + "Observable: `php bin/replay.php fixtures/events.json` prints `sent=1`.\n"
+            + f"RED until: {red_path}::test_one_mail\n\n"
+            + _BEHAVIOUR_TASKS_BODY.replace(
+                "(files: src/notify.php, tests/NotifyTest.php)",
+                "(files: src/notify.php)"))
+
+
+# I-A (e): the files rung is SHAPE-BLIND by design — a member-declared RED-until path
+# of any shape (spec/checks.php: not test-shaped, not on disk) stays valid, because the
+# member task is creating it.
+TASKS_BEHAVIOUR_FILES_NONTEST = (_BEHAVIOUR_TASKS_HEAD
+                                 + "Behaviour: one mail per event, never a duplicate.\n"
+                                 + "Observable: `php bin/replay.php fixtures/events.json` prints `sent=1`.\n"
+                                 + "RED until: spec/checks.php::test_one_mail\n\n"
+                                 + _BEHAVIOUR_TASKS_BODY.replace(
+                                     "(files: src/notify.php, tests/NotifyTest.php)",
+                                     "(files: src/notify.php, spec/checks.php)"))
+
+# S-2 rider: backtick quoting on the PATH half alone (`path`::method) must resolve
+# exactly like the fully-quoted form — no false dangle from a trailing backtick
+# surviving the `::` split.
+TASKS_BEHAVIOUR_BACKTICK_PATH = TASKS_BEHAVIOUR_VALID.replace(
+    "RED until: `tests/NotifyTest.php::test_one_mail_per_event`",
+    "RED until: `tests/NotifyTest.php`::test_one_mail_per_event")
+
+# strip_fenced inheritance: a fenced block SAMPLE between the heading and the first task
+# must be invisible — the cluster reads block-less (the "carries no behaviour block" FAIL),
+# NOT as a full block with a dangling RED (which a fence leak would produce, since
+# tests/SampleTest.php resolves to nothing).
+TASKS_BEHAVIOUR_FENCED = (_BEHAVIOUR_TASKS_HEAD
+                          + "```\n"
+                          + "Behaviour: <one sentence>\n"
+                          + "Observable: <command + expected output>\n"
+                          + "RED until: tests/SampleTest.php::test_sample\n"
+                          + "```\n\n"
+                          + _BEHAVIOUR_TASKS_BODY)
+
+# The waiver form on a task under no `### Cluster` heading at all.
+TASKS_BEHAVIOUR_OUTSIDE = """# Tasks: x
+
+## Phase 1
+- [ ] T01 [Tier A] implement the notifier dedupe  (files: src/notify.php)
+      Test-author: solo — standard stakes, fixture
+      Unit test: covered by cluster behaviour
+"""
+
+
 def _run(files: dict) -> tuple[int, str]:
     with tempfile.TemporaryDirectory() as d:
         for name, content in files.items():
@@ -1406,7 +1765,7 @@ def run():
     # 10s. Tier A + solo on a token/migration file → WARN (gate still PASSes: heuristic)
     rc, out = _run({"tasks.md": TASKS_TIER_A_SOLO_ON_BOUNDARY})
     results.append((rc == 0 and "! [security-boundary-mode]" in out
-                     and "T01" in out and "ALWAYS split" in out,
+                     and "T01" in out and "split at effective-`high` stakes" in out,
                     "Tier A + solo on a security-boundary file WARNs, never FAILs"))
 
     # 10t. same task, correct `split` mode → silent
@@ -1837,6 +2196,406 @@ def run():
     rc, out = _run({"tasks.md": TASKS_GOOD})
     results.append((rc == 0 and "! [proven-by]" in out and "pre-0.16" in out,
                     "zero `Proven by:` lines WARNs as a pre-0.16 tasks.md, never FAILs"))
+
+    # ── 23. `deliverable-first` — the 1j gate (FR-3/4/5) ──────────────────────
+    # Unit-level direct calls first (the function's own branch logic, D1-test style),
+    # then the seam cases through the live CLI proving the check is wired into
+    # run_checks(). Letters (a)–(h) are T01's contract in tasks.md.
+
+    def _fwv(plan, spec, tasks):
+        f = _gate_check.Findings()
+        _gate_check.check_deliverable_first(plan, spec, tasks, f)
+        verdicts = [s for s, c, d in f.items if c == "deliverable-first"]
+        details = [d for s, c, d in f.items if c == "deliverable-first"]
+        return verdicts, details
+
+    # 23a. plan WITHOUT the section + spec flagging a user-facing surface → FAIL
+    verdicts, details = _fwv(_PLAN_FWV_BASE, SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["fail"]
+                     and any("First working version" in d for d in details),
+                    "no ## First working version on a user-facing spec FAILs (1j)"))
+
+    # 23b. section naming a task absent from tasks.md → FAIL naming it
+    verdicts, details = _fwv(_plan_fwv("T99"), SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["fail"] and any("T99" in d for d in details),
+                    "## First working version naming a nonexistent task FAILs"))
+
+    # 23c. named task in position 4 → FAIL (not among the first 3; the josworld shape)
+    verdicts, details = _fwv(_plan_fwv("T04"), SPEC_USER_FACING, TASKS_FWV)
+    results.append(("fail" in verdicts
+                     and any("position 4" in d for d in details),
+                    "first-working-version task at position 4 FAILs — not among the first 3"))
+
+    # 23h. the same shape carries the >2-preceding WARN — 3 tasks precede T04. The WARN
+    # is belt+braces beside the FAIL: it survives even if a human later relaxes the
+    # first-3 threshold (the 1j draft's open question 1).
+    results.append(("warn" in verdicts
+                     and any("3 task(s) precede" in d for d in details),
+                    "3 tasks preceding the named one WARNs (independent of the FAIL)"))
+
+    # 23d. named task whose `(files:)` lists ONLY tests/ paths → FAIL (the yootheme shape)
+    verdicts, details = _fwv(_plan_fwv("T02"), SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["fail"]
+                     and any("only test paths" in d for d in details),
+                    "first-working-version task with test-only files FAILs"))
+
+    # 23e. valid section, task in first 3, non-test file → pass
+    verdicts, details = _fwv(_plan_fwv("T01"), SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["pass"],
+                    "named task first with a non-test file PASSes"))
+
+    # 23e-b. boundary: position 3 is INSIDE "among the first 3" (inclusive), and mixed
+    # impl+test files are not "only tests/" — pass with no WARN riding along.
+    verdicts, details = _fwv(_plan_fwv("T03"), SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["pass"],
+                    "position 3 (inclusive boundary) with mixed files PASSes, no WARN"))
+
+    # 23f. `N/A — docs-only` on a spec with NO user-facing surface → pass (threat-model
+    # N/A convention: legitimate only for a genuinely non-runnable deliverable)
+    verdicts, details = _fwv(PLAN_FWV_NA, SPEC_CLEAN_NOSEC, TASKS_FWV)
+    results.append((verdicts == ["pass"],
+                    "N/A first-working-version on a non-user-facing spec PASSes"))
+
+    # 23f-b. the same N/A on a spec that DOES flag a user-facing surface → FAIL
+    verdicts, details = _fwv(PLAN_FWV_NA, SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["fail"] and any("N/A" in d for d in details),
+                    "N/A first-working-version on a user-facing spec FAILs"))
+
+    # 23g. absence + a stated `legacy-artifact` waiver → WARN naming the waiver (FR-5:
+    # never a silent pass), gate does not fail
+    verdicts, details = _fwv(
+        "<!-- gate-check: legacy-artifact — plan authored before the 1j gate -->\n"
+        + _PLAN_FWV_BASE, SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["warn"]
+                     and any("legacy waiver exercised" in d for d in details),
+                    "absent section + legacy waiver WARNs, naming the waiver"))
+
+    # 23i. a fenced `## First working version` example never counts — the plan reads as
+    # ABSENT and FAILs, exactly as fenced Stakes:/task-line samples are stripped
+    verdicts, details = _fwv(PLAN_FWV_FENCED_ONLY, SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["fail"]
+                     and any("First working version" in d for d in details),
+                    "a fenced-only ## First working version reads as absent and FAILs"))
+
+    # 23j. a [HUMAN] yield point preceding the named task still counts toward position —
+    # T04 stays fourth even when T02 is a [HUMAN] approval step
+    verdicts, details = _fwv(_plan_fwv("T04"), SPEC_USER_FACING, TASKS_FWV_HUMAN_PRECEDING)
+    results.append(("fail" in verdicts and any("position 4" in d for d in details),
+                    "a [HUMAN] task preceding the named one still counts toward position"))
+
+    # 23k. the section present but naming NO task → FAIL (points at nothing, orders nothing)
+    verdicts, details = _fwv(PLAN_FWV_NO_TASK_NAMED, SPEC_USER_FACING, TASKS_FWV)
+    results.append((verdicts == ["fail"] and any("names no task" in d for d in details),
+                    "a ## First working version naming no task FAILs"))
+
+    # 23L. seam: the check is WIRED into run_checks() — an armed user-facing spec whose
+    # plan lacks the section exits 1 through the live CLI naming `deliverable-first`
+    rc, out = _run({"spec.md": SPEC_USER_FACING, "plan.md": PLAN_FLOWS_NA,
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "deliverable-first" in out,
+                    "seam: armed spec + section-less plan exits 1 naming deliverable-first"))
+
+    # 23m. seam GREEN floor: the same armed spec with a compliant plan (section naming
+    # TASKS_GOOD's T01, non-test files, position 1) exits 0 with the pass finding — this
+    # is also existing case 10ae's shape kept green under the new grammar
+    rc, out = _run({"spec.md": SPEC_USER_FACING, "plan.md": PLAN_FLOWS_FILLED,
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "✓ [deliverable-first]" in out,
+                    "seam: armed spec + compliant first-working-version plan exits 0"))
+
+    # ── 24. `fr-source` — source traceability (FR-1/FR-2) ─────────────────────
+    # Letters (a)–(f) are T02's contract in tasks.md. Unit-level direct calls first
+    # (the function's own branch logic, D1-test style), then the seam through the
+    # live CLI proving the check is wired into run_checks().
+
+    def _frs(spec):
+        f = _gate_check.Findings()
+        _gate_check.check_fr_sources(spec, f)
+        verdicts = [s for s, c, d in f.items if c == "fr-source"]
+        details = [d for s, c, d in f.items if c == "fr-source"]
+        return verdicts, details
+
+    # 24b/c. all four corpus source shapes pass in one spec: quotation mid-paragraph,
+    # `invented — approved` with its date across a line break, continuation-line Source:,
+    # approved-by reference — and FR-1's backticked `Source:` mention reads as prose.
+    verdicts, details = _frs(SPEC_FR_SOURCED)
+    results.append((verdicts == ["pass"] and any("all 4" in d for d in details),
+                    "all four corpus source shapes pass (quote, invented+date across a "
+                    "line break, continuation line, approved-by)"))
+
+    # 24a. an FR with no Source: → FAIL naming exactly the bare FR — and the waiver in
+    # the same file does NOT rescue partial absence (never-waivable, like its siblings)
+    verdicts, details = _frs(SPEC_FR_PARTIAL)
+    results.append((verdicts == ["fail"]
+                     and any("FR-2" in d for d in details)
+                     and not any("FR-1" in d for d in details),
+                    "a bare FR beside a sourced one FAILs naming only the bare FR, "
+                    "waiver notwithstanding"))
+
+    # 24d. `Source: invented` with no approval → FAIL naming the FRs (first word,
+    # case-insensitive); a quoted source carrying a date is not an invention
+    verdicts, details = _frs(SPEC_FR_INVENTED_BARE)
+    results.append((verdicts == ["fail"]
+                     and any("FR-1" in d and "FR-2" in d for d in details)
+                     and not any("FR-3" in d for d in details),
+                    "invented sources with no approval FAIL naming FR-1/FR-2, not the "
+                    "quoted FR-3"))
+
+    # 24e. zero sources across all FRs + the spec-level waiver → WARN naming the waiver
+    verdicts, details = _frs(SPEC_FR_NONE_WAIVED)
+    results.append((verdicts == ["warn"]
+                     and any("legacy waiver exercised" in d for d in details),
+                    "FRs with zero sources + a stated waiver WARNs, naming the waiver"))
+
+    # 24e-b. the same spec with NO waiver → FAIL, and the finding tells the author the
+    # waiver form exists (same convention as every flipped floor)
+    verdicts, details = _frs(SPEC_FR_NONE)
+    results.append((verdicts == ["fail"]
+                     and any("legacy-artifact" in d for d in details),
+                    "FRs with zero sources and no waiver FAILs, naming the waiver form"))
+
+    # 24g. I-2: a colon-less FR def carrying the only `Source:` — the block flushes at
+    # the column-0 bullet, so the apparently-sourced FR-1 FAILs as bare instead of
+    # absorbing the donated source (never a vacuous all-sourced pass).
+    verdicts, details = _frs(SPEC_FR_COLONLESS)
+    results.append((verdicts == ["fail"]
+                     and any("FR-1" in x for x in details)
+                     and not any("FR-3" in x for x in details),
+                    "(I-2) a colon-less FR def's Source: no longer donates upward — "
+                    "the apparently-sourced FR-1 FAILs as bare"))
+
+    # 24h. S-4: `Source: —` carries no word character — contentless, reads as bare.
+    verdicts, details = _frs(SPEC_FR_DASH_SOURCE)
+    results.append((verdicts == ["fail"]
+                     and any("FR-1" in x for x in details)
+                     and not any("FR-2" in x for x in details),
+                    "(S-4) a Source: with no word character (`—`) FAILs as bare"))
+
+    # 24-fence. a fenced `Source:` example never sources the FR above it
+    verdicts, details = _frs(SPEC_FR_FENCED_SOURCE)
+    results.append((verdicts == ["fail"],
+                    "a fenced Source: example is stripped — the FR reads as bare"))
+
+    # 24f. a spec defining no FR ids yields NO fr-source findings (nothing to source),
+    # and the missing-section behaviour of the other checks is untouched via the CLI
+    verdicts, details = _frs(SPEC_CLEAN_NOSEC)
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC})
+    results.append((verdicts == [] and rc == 0 and "fr-source" not in out,
+                    "a spec with no FR definitions produces no fr-source findings and "
+                    "existing behaviour is unchanged"))
+
+    # 24f-b. an FR id cited in prose (`(FR-7 …)`) is a mention, not a definition
+    verdicts, details = _frs('# S\n\nThe post-mortem (FR-7 "multi-day") tells the story.\n')
+    results.append((verdicts == [],
+                    "an FR id cited in prose is not an FR definition"))
+
+    # 24-seam. RED: a bare FR flips an otherwise-green artifact set to exit 1 naming
+    # fr-source; GREEN floor: the same set with the FR sourced exits 0 with the pass line
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC + _FR_SECTION_BARE,
+                    "plan.md": PLAN_THREATMODEL_NA, "tasks.md": TASKS_FR_CITED})
+    results.append((rc == 1 and "fr-source" in out,
+                    "seam: one bare FR exits 1 through the live CLI naming fr-source"))
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC + _FR_SECTION_SOURCED,
+                    "plan.md": PLAN_THREATMODEL_NA, "tasks.md": TASKS_FR_CITED})
+    results.append((rc == 0 and "✓ [fr-source]" in out,
+                    "seam: the same set with the FR sourced exits 0 with the pass line"))
+
+    # ── 25. `behaviour-cluster` — the FR-6/FR-7 grammar (T03) ─────────────────
+    # Letters (a)–(f) are T03's contract in tasks.md. Unit-level direct calls first
+    # (the function's own branch logic, D1-test style), then the interplay with
+    # check_unit_test_contract (the waiver form is a Unit-test-line value), then the
+    # seam through the live CLI, then the self-hosting corpus (this repo's own
+    # specs/deliverable-first Cluster A carries the block).
+
+    def _bhv(tasks, repo_root=None):
+        f = _gate_check.Findings()
+        _gate_check.check_behaviour_clusters(tasks, f, repo_root=repo_root)
+        verdicts = [s for s, c, d in f.items if c == "behaviour-cluster"]
+        details = [d for s, c, d in f.items if c == "behaviour-cluster"]
+        return verdicts, details
+
+    # 25a. (a) full block + RED-until file created by a member task → the waiver passes,
+    # and the ✓ line names the cluster. Also (e) rides here: T02's ordinary `Unit test:`
+    # line coexists with the block, and no finding rides along the single pass verdict.
+    verdicts, details = _bhv(TASKS_BEHAVIOUR_VALID)
+    results.append((verdicts == ["pass"] and any("N1" in d for d in details),
+                    "(a/e) covered-by-cluster inside a full block whose test a member "
+                    "creates PASSes, ✓ naming the cluster; the sibling's ordinary "
+                    "unit-test line draws no finding"))
+
+    # 25a-b. (a) unit-test-contract accepts the valid waiver as a stated contract — the
+    # Tier A task is neither bare nor waived (the cluster's RED is the behavioural proof).
+    f = _gate_check.Findings()
+    _gate_check.check_unit_test_contract(TASKS_BEHAVIOUR_VALID, f)
+    verdicts = [s for s, c, d in f.items if c == "unit-test-contract"]
+    results.append((verdicts == ["pass"],
+                    "(a) a VALID covered-by-cluster satisfies unit-test-contract — Tier A "
+                    "accepted, per-task RED moved up to the behaviour level"))
+
+    # 25b. (b) the same form in a cluster with NO behaviour block → FAIL naming both the
+    # task id and the cluster heading text.
+    verdicts, details = _bhv(TASKS_BEHAVIOUR_NO_BLOCK)
+    results.append((verdicts == ["fail"]
+                     and any("T01" in d and "N1" in d for d in details),
+                    "(b) the waiver form in a cluster with NO behaviour block FAILs, "
+                    "naming task and cluster"))
+
+    # 25b-b. (b) …and the existing Tier-A-waiver FAIL fires in unit-test-contract —
+    # never a silent pass for a Tier A leaning on a block that isn't there.
+    f = _gate_check.Findings()
+    _gate_check.check_unit_test_contract(TASKS_BEHAVIOUR_NO_BLOCK, f)
+    fails = [d for s, c, d in f.items if c == "unit-test-contract" and s == "fail"]
+    results.append((any("Tier A may not waive" in d and "T01" in d for d in fails),
+                    "(b) a Tier A task using an INVALID covered-by-cluster trips the "
+                    "Tier-A-waiver FAIL in unit-test-contract"))
+
+    # 25c. (c) `Behaviour:` without `RED until:` while a member uses the waiver → FAIL
+    # naming task, cluster, and the missing line.
+    verdicts, details = _bhv(TASKS_BEHAVIOUR_PARTIAL)
+    results.append((verdicts == ["fail"]
+                     and any("T01" in d and "N1" in d and "RED until" in d for d in details),
+                    "(c) a partial block (no `RED until:`) with a waiver-using member "
+                    "FAILs, naming the missing line"))
+
+    # 25d. (d) `RED until:` naming a test neither on disk nor in any member's files →
+    # FAIL naming the dangling path; no ✓ line rides along.
+    verdicts, details = _bhv(TASKS_BEHAVIOUR_DANGLING)
+    results.append(("fail" in verdicts and "pass" not in verdicts
+                     and any("tests/GhostTest.php" in d for d in details),
+                    "(d) a RED-until test that resolves to nothing FAILs, naming the path"))
+
+    # 25d-b. the disk rung: the SAME cluster shape whose RED-until file is not in any
+    # member's files validates ONLY when the file exists under the repo root.
+    with tempfile.TemporaryDirectory() as d:
+        (Path(d) / "tests").mkdir()
+        (Path(d) / "tests" / "OnDiskTest.php").write_text("<?php // fixture")
+        verdicts, details = _bhv(TASKS_BEHAVIOUR_ON_DISK, repo_root=Path(d))
+    results.append((verdicts == ["pass"],
+                    "(d-inverse) a RED-until file existing on disk validates the block "
+                    "even when no member's files name it"))
+    verdicts, details = _bhv(TASKS_BEHAVIOUR_ON_DISK)
+    results.append((verdicts == ["fail"],
+                    "(d) the same cluster with no repo root to find the file on FAILs"))
+
+    # 25g. I-1 (disk rung): `RED until: tests/::x` where `tests/` is a DIRECTORY under
+    # the repo root → dangling FAIL — a directory satisfies `.exists()` but is not a
+    # test file; only `.is_file()` may validate the disk rung.
+    with tempfile.TemporaryDirectory() as d:
+        (Path(d) / "tests").mkdir()
+        verdicts, details = _bhv(TASKS_BEHAVIOUR_DIR_ONLY, repo_root=Path(d))
+    results.append((verdicts == ["fail"] and any("tests/" in x for x in details),
+                    "(I-1) a RED-until path naming an existing DIRECTORY FAILs as "
+                    "dangling — only a real file satisfies the disk rung"))
+
+    # 25h. I-1 (files rung): `RED until: src::x` beside a member whose files list
+    # `src/notify.php` → dangling FAIL — exact comma-split path match required,
+    # never a substring.
+    verdicts, details = _bhv(TASKS_BEHAVIOUR_SUBSTRING)
+    results.append((verdicts == ["fail"] and any("`src`" in x for x in details),
+                    "(I-1) a RED-until path that is only a SUBSTRING of a member file "
+                    "FAILs as dangling — exact match against comma-split paths"))
+
+    # 25j. I-A (disk-rung confinement): the docstring claims "a FILE on disk under the
+    # repo root"; the code must enforce it. Repo root is `outer/repo`; the escapes live
+    # in `outer` (the root's parent). Four probes, each dangling:
+    #   (a)  `/etc/hostname` — absolute, not test-shaped (both rungs reject);
+    #   (a2) an absolute path to a REAL test-shaped file — only resolution can reject;
+    #   (b)  `../tests/test_escape.py` — test-shaped `../` traversal to a real file in
+    #        the root's parent — only the under-root resolution can reject;
+    #   (c)  `README.md` — real file under the root but not test-shaped — only the
+    #        shape rung can reject.
+    # Then (d) the legitimate shape (`tests/test_x.py` under the root) still validates,
+    # and (e) the shape-blind files rung still validates a member-declared non-test
+    # path even when the disk rung rejects it.
+    with tempfile.TemporaryDirectory() as d:
+        outer = Path(d)
+        ia_root = outer / "repo"
+        (ia_root / "tests").mkdir(parents=True)
+        (ia_root / "README.md").write_text("# not a test")
+        (ia_root / "tests" / "test_x.py").write_text("# legitimate")
+        (outer / "tests").mkdir()
+        (outer / "tests" / "test_escape.py").write_text("# outside the root")
+        ia = {label: _bhv(_bhv_disk_tasks(red), repo_root=ia_root)[0]
+              for red, label in [
+                  ("/etc/hostname", "absolute"),
+                  (str(outer / "tests" / "test_escape.py"), "absolute-test-shaped"),
+                  ("../tests/test_escape.py", "traversal"),
+                  ("README.md", "in-repo-non-test")]}
+        v_legit, _ = _bhv(_bhv_disk_tasks("tests/test_x.py"), repo_root=ia_root)
+        v_files, _ = _bhv(TASKS_BEHAVIOUR_FILES_NONTEST, repo_root=ia_root)
+    results.append((ia["absolute"] == ["fail"] and ia["absolute-test-shaped"] == ["fail"],
+                    "(I-A a) an absolute RED-until path reads dangling — plain "
+                    "(/etc/hostname) and test-shaped alike; pathlib's discarded left "
+                    "operand no longer validates the block"))
+    results.append((ia["traversal"] == ["fail"],
+                    "(I-A b) a test-shaped ../ traversal to a real file in the root's "
+                    "parent reads dangling — the resolved path must sit strictly under "
+                    "the resolved repo root"))
+    results.append((ia["in-repo-non-test"] == ["fail"],
+                    "(I-A c) an in-repo non-test file (README.md) reads dangling — the "
+                    "disk rung confines to test-shaped paths (FWV_TEST_PATH, the one "
+                    "dialect)"))
+    results.append((v_legit == ["pass"],
+                    "(I-A d) the legitimate shape — tests/test_x.py existing under the "
+                    "root — still validates the disk rung (no regression)"))
+    results.append((v_files == ["pass"],
+                    "(I-A e) the files rung stays shape-blind — a member-declared "
+                    "non-test path (spec/checks.php) validates even though the disk "
+                    "rung rejects it"))
+
+    # 25i. S-2: backticks on the path half alone (`path`::method) must not false-dangle
+    # — the path resolves exactly like the fully-quoted corpus form.
+    verdicts, details = _bhv(TASKS_BEHAVIOUR_BACKTICK_PATH)
+    results.append((verdicts == ["pass"],
+                    "(S-2) a backticked path half (`path`::method) resolves like the "
+                    "fully-quoted form — no false dangle"))
+
+    # 25-fence. strip_fenced inheritance: a fenced block sample is invisible — the
+    # cluster reads BLOCK-LESS (not full-with-dangling-RED, which a fence leak would
+    # produce since tests/SampleTest.php resolves to nothing).
+    verdicts, details = _bhv(TASKS_BEHAVIOUR_FENCED)
+    results.append((verdicts == ["fail"]
+                     and any("carries no behaviour block" in d for d in details)
+                     and not any("SampleTest" in d for d in details),
+                    "a fenced block sample is stripped — the cluster reads block-less"))
+
+    # 25-outside. the waiver form on a task under no `### Cluster` heading → FAIL.
+    verdicts, details = _bhv(TASKS_BEHAVIOUR_OUTSIDE)
+    results.append((verdicts == ["fail"] and any("T01" in d for d in details),
+                    "the waiver form outside any cluster FAILs, naming the task"))
+
+    # 25f. (f) AC-3 back-compat lock: artifacts with no behaviour blocks anywhere yield
+    # ZERO behaviour-cluster findings — unit level and through the live CLI.
+    verdicts, details = _bhv(TASKS_GOOD)
+    rc, out = _run({"spec.md": SPEC_TRIGGERED, "plan.md": PLAN_GATES_FULL,
+                    "tasks.md": TASKS_GOOD})
+    results.append((verdicts == [] and rc == 0 and "behaviour-cluster" not in out,
+                    "(f) no behaviour blocks anywhere → zero behaviour-cluster findings, "
+                    "existing corpus output unchanged"))
+
+    # 25-seam. the check is WIRED into run_checks(): a valid block exits 0 with the ✓
+    # line; a block-less waiver exits 1 carrying BOTH the behaviour-cluster FAIL and the
+    # Tier-A-waiver FAIL.
+    rc, out = _run({"tasks.md": TASKS_BEHAVIOUR_VALID})
+    results.append((rc == 0 and "✓ [behaviour-cluster]" in out and "N1" in out,
+                    "seam: a valid behaviour-block tasks.md exits 0 with the ✓ line"))
+    rc, out = _run({"tasks.md": TASKS_BEHAVIOUR_NO_BLOCK})
+    results.append((rc == 1 and "behaviour-cluster" in out
+                     and "Tier A may not waive" in out,
+                    "seam: a block-less waiver exits 1 — behaviour-cluster FAIL plus the "
+                    "Tier-A-waiver FAIL together"))
+
+    # 25-self. the self-hosting corpus: this repo's specs/deliverable-first Cluster A
+    # carries the full block (RED-until file created by member tasks) while its members
+    # keep ordinary unit-test lines — exit 0 with the ✓ naming Cluster A (AC-2 shape).
+    df_dir = repo_root / "specs" / "deliverable-first"
+    proc = subprocess.run([sys.executable, str(CHECKER), str(df_dir)],
+                           capture_output=True, text=True, timeout=15)
+    results.append((proc.returncode == 0
+                     and "✓ [behaviour-cluster]" in proc.stdout
+                     and "Cluster A" in proc.stdout,
+                    "seam: specs/deliverable-first self-hosts the grammar — exit 0, "
+                    "✓ naming Cluster A"))
 
     return results
 
