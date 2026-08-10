@@ -13,7 +13,7 @@
       "name": "netdust-core",
       "source": "./plugins/netdust-core",
       "description": "Netdust business + ops + content core — the per-project memory convention (live hooks in netdust-agent), content/marketing (brand-voice, marketing, market-research), research, ops/infra (ploi, secure-server, dev-stack), 9-method /deploy + /memory-audit + /pattern-miner + ploi MCP. NOT a coding harness — that's netdust-agent. Stack-agnostic. Layered on by netdust-wp, netdust-statamic.",
-      "version": "0.2.6",
+      "version": "0.2.7",
       "strict": false
     },
     {
