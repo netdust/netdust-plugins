@@ -32,12 +32,15 @@ locks (Step 6).
 ## Step 1: Run the analyzer trio (live-URL route)
 
 Before any token or motion claim, run all three page-analyzer MCP tools
-against the reference, writing into the reference's store directory:
+against the reference. Do not pass a literal `~` in `outputDir` — Node does
+no tilde expansion, so a verbatim `~/Sites/...` string mkdirs a literal
+`./~` tree next to wherever the process runs instead of your home directory.
+Omit `outputDir` and let the server's `OUTPUT_DIR` env default place the
+output under the reference store:
 
 ```
 analyze_page(
   url: "<reference URL>",
-  outputDir: "~/Sites/design-references/<name>/capture",
   includeScreenshots: true,
   includeAssets: true,
   breakpoints: ["mobile", "desktop"]
@@ -45,25 +48,34 @@ analyze_page(
 
 capture_motion(
   url: "<reference URL>",
-  outputDir: "~/Sites/design-references/<name>/capture",
   probes: ["load", "scroll", "hover", "declared"]
 )
 
 download_assets(
   url: "<reference URL>",
-  outputDir: "~/Sites/design-references/<name>/assets",
   types: ["all"]
 )
 ```
 
-`analyze_page` writes DOM structure, computed CSS, typography, spacing, and
-(with `includeScreenshots: true`) screenshots at each breakpoint into
-`outputDir`. `capture_motion` writes `motion.json` and `motion-spec.md` into
-`outputDir` — measured durations, easings (including a fitted cubic-bezier
-with its max error where no named easing matches), scroll ranges as viewport
-percentages, and stagger groups, one table per trigger (page-load,
-scroll-triggered, hover, continuous). `download_assets` writes assets plus
-`manifest.json` into its own `outputDir`.
+The `OUTPUT_DIR` default slugs by the target URL's hostname
+(`<OUTPUT_DIR>/<hostname-slug>/capture` or `/assets`), not by the reference
+name you picked in Step 0 — after capture, rename or move that slugged
+directory into the curated `~/Sites/design-references/<name>/` layout. If you
+want the curated name written directly (skipping the rename), pass an
+ABSOLUTE, already-expanded `outputDir` path instead (e.g. resolve `~` to the
+real home directory yourself before writing the call) — never a literal `~`.
+
+`analyze_page` returns its DOM structure, computed CSS, typography, spacing,
+and color-palette findings in the tool RESPONSE — cite those values directly
+from the response in-session, there is no analysis JSON on disk. With
+`includeScreenshots: true` it writes screenshot PNGs at each breakpoint into
+`outputDir`; that's the only thing it puts on disk. `capture_motion` writes
+`motion.json` and `motion-spec.md` into `outputDir` — measured durations,
+easings (including a fitted cubic-bezier with its max error where no named
+easing matches), scroll ranges as viewport percentages, and stagger groups,
+one table per trigger (page-load, scroll-triggered, hover, continuous).
+`download_assets` writes assets plus `manifest.json` into its own
+`outputDir`.
 
 **Present the full capture summary before asking questions.**
 
@@ -96,8 +108,9 @@ Maximum 3-4 questions per round. Never dump everything at once.
 
 ## Step 3: Categorize findings
 
-- **Measured**: came from `analyze_page` / `capture_motion` output. Cite the
-  file (`motion-spec.md`, the analysis JSON).
+- **Measured**: came from `analyze_page` (cite the tool RESPONSE — it has no
+  on-disk analysis file) or `capture_motion` (cite the on-disk file,
+  `motion.json` / `motion-spec.md`).
 - **Confirmed**: user explicitly stated in interview.
 - **Open**: unresolved — resolve before Plan.
 - **Out of scope**: explicitly excluded.
