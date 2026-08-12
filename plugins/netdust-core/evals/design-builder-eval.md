@@ -30,8 +30,14 @@ baseline leg should satisfy none, or only by accident):
 - **D1** — Response instructs/invokes `analyze_page` before writing any HTML/CSS.
 - **D2** — Response instructs/invokes `capture_motion` before writing any HTML/CSS.
 - **D3** — Response instructs/invokes `download_assets` before writing any HTML/CSS.
-- **D4** — The three calls target an `outputDir` under
-  `~/Sites/design-references/<name>/` (the store), not an ad-hoc temp path.
+- **D4** — The three calls omit `outputDir` and rely on the server's
+  `OUTPUT_DIR` env default (which resolves under the design-references
+  store), not an ad-hoc explicit temp path. If `outputDir` IS passed
+  explicitly, it must be an absolute, already-expanded path — never a
+  literal `~` (Node does no tilde expansion; a verbatim `~/...` string
+  mkdirs a literal `./~` tree). Updated post final-review C3-parked fix,
+  which dropped the worked examples' explicit `outputDir` in favor of the
+  env default.
 - **D5** — Response produces a token sheet (CSS custom properties: colors,
   typography, spacing) before any code.
 - **D6** — Response produces motion tables whose values are attributed to a
