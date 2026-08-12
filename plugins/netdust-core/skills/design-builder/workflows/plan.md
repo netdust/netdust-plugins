@@ -96,12 +96,15 @@ good").
 
 | Section | Trigger | Selector | Duration | Easing | Scroll range / stagger | Source |
 |---|---|---|---|---|---|---|
-| Hero | load | `.hero h1` | 600ms | cubic-bezier(0.16,1,0.3,1) | - | motion-spec.md:Page-load |
-| Cards | scroll | `.card` | 400ms | ease-out | 12–28%, 80ms×6 | motion-spec.md:Scroll-triggered |
+| Hero | load | `.hero h1` | 600ms | cubic-bezier(0.16,1,0.3,1) | stagger 80ms × 3 | motion-spec.md:Page-load |
+| Cards | scroll | `.card` | 400ms | ease-out | 12–28% | motion-spec.md:Scroll-triggered |
 
-The **Source** column is mandatory — every row points at the `motion-spec.md`
-table it came from. A motion row with no source is a guess and doesn't belong
-in the plan.
+The **Scroll range / stagger** column takes whichever field the row's own
+Source table actually has — a Page-load row can carry a Stagger value, a
+Scroll-triggered row only ever carries a scroll range (that table has no
+Stagger column in `motion-spec.md`; don't invent one). The **Source** column
+is mandatory — every row points at the `motion-spec.md` table it came from. A
+motion row with no source is a guess and doesn't belong in the plan.
 
 ## Step 4: Get approval
 

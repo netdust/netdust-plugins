@@ -126,13 +126,38 @@ SPACING
 --space-gap:         40px
 ```
 
-Motion tables transcribed directly from `motion-spec.md` — one table per
-trigger, values as measured, not restated in prose:
+Motion tables transcribed directly from `motion-spec.md` — **one table per
+trigger, with that trigger's own column set exactly as `motion-spec.md`
+renders it.** Never merge triggers into one table, and never add a column a
+trigger's table doesn't have (a scroll-triggered row has no Stagger column —
+if you want to note a stagger, that means you're actually looking at a
+page-load row).
 
-| Selector | Trigger | Delay/Range | Properties | Duration | Easing | Stagger |
-|---|---|---|---|---|---|---|
-| `.hero h1` | load | 200ms | opacity: 0→1; transform: translateY(40px)→0 | 600ms | cubic-bezier(0.16,1,0.3,1) (fitted, max error 0.004) | - |
-| `.card` | scroll | 12–28% | opacity: 0→1 | 400ms | ease-out | 80ms × 6 |
+**Page-load** (`Selector | Delay | Properties | Duration | Easing | Stagger`):
+
+| Selector | Delay | Properties | Duration | Easing | Stagger |
+|---|---|---|---|---|---|
+| `.hero h1` | 200ms | opacity: 0→1; transform: translateY(40px)→0 | 600ms | cubic-bezier(0.16,1,0.3,1) (fitted, max error 0.004) | - |
+
+**Scroll-triggered** (`Selector | Scroll range | Properties | Duration | Easing`
+— no Stagger column; scroll-triggered motion doesn't stagger by definition
+in this capture, so don't invent one):
+
+| Selector | Scroll range | Properties | Duration | Easing |
+|---|---|---|---|---|
+| `.card` | 12–28% | opacity: 0→1 | 400ms | ease-out |
+
+**Hover** (`Selector | Properties | Duration | Easing`):
+
+| Selector | Properties | Duration | Easing |
+|---|---|---|---|
+| `.nav a` | text-decoration-color: transparent→currentColor | 200ms | ease |
+
+**Continuous** (`Selector | Properties | Duration | Easing | Iterations`):
+
+| Selector | Properties | Duration | Easing | Iterations |
+|---|---|---|---|---|
+| `.loader-ring` | transform: rotate(0deg)→rotate(360deg) | 1200ms | linear | infinite |
 
 A row with no measured value gets no row — leave it out rather than guess a
 placeholder. If `motion-spec.md` marks a candidate `unmeasurable` or

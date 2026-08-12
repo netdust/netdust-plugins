@@ -40,6 +40,15 @@ baseline leg should satisfy none, or only by accident):
 - **D7** — Response does not emit HTML/CSS/JS implementation code in this
   first turn — Discover locks (user confirmation) before Plan, and Plan locks
   before Execute.
+- **D8** — Motion tables render as separate per-trigger tables matching
+  `motion-spec.md`'s real column sets (Page-load:
+  Selector/Delay/Properties/Duration/Easing/Stagger; Scroll-triggered:
+  Selector/Scroll range/Properties/Duration/Easing; Hover:
+  Selector/Properties/Duration/Easing; Continuous:
+  Selector/Properties/Duration/Easing/Iterations) — no single merged table
+  across triggers, and no Stagger value on a scroll- or hover-triggered row
+  (`motion-spec.md`'s Scroll-triggered and Hover tables have no Stagger
+  column at all — see `src/services/motion/spec.ts:210-223`).
 
 ## Baseline prompt (no skill)
 
@@ -102,6 +111,14 @@ inlined for the skill-on leg (since a source-repo skill isn't in the
 installed plugin cache until pushed), scored against the assertions above
 instead of a rubric rule list. Results: `outputs/design-builder-baseline.md`,
 `outputs/design-builder-skill-on.md`, scoring recorded in the T09 report.
+
+D8 was added after a task review caught the original `workflows/discover.md`
+Step 4 worked example teaching a merged, fabricated-stagger motion table (a
+scroll-triggered row with an invented Stagger value — `motion-spec.md`'s
+Scroll-triggered table has no such column). The pre-fix skill-on transcript
+that reproduces the fabrication is kept at
+`outputs/design-builder-skill-on-pre-fix.md` as the RED evidence for D8; the
+post-fix rerun lives at `outputs/design-builder-skill-on.md`.
 
 This file's shape (Scenario heading, verbatim prompt block, assertions list)
 otherwise matches `prompts/scenario-*.md` / the `eval-scenarios.md` source
