@@ -83,9 +83,14 @@ Keep only the rows that apply to what the feature actually builds; delete the re
 Every module-touching task in the breakdown gets this acceptance criterion, so the drift categories gate **task close**, not only shake-out:
 
 ```
-Acceptance: drift pre-check clean — `/drift-reviewer <touched path>` returns no findings
-(the nine categories), and the per-flow security line above is satisfied in the diff.
+Acceptance: drift pre-check clean — `python3 "$CLAUDE_PLUGIN_ROOT/bin/drift-check.py" <touched path>`
+exits 0 (or every hit carries `// ntdst-allow: <check-key> — <reason>`), and the per-flow security
+line above is satisfied in the diff.
 ```
+
+The gate is the cheap, deterministic half and runs at every task close. `/drift-reviewer` stays the
+judgment pass — pass-throughs, service-vs-sub-component, whether an `ntdst-allow` reason is any
+good — and belongs at phase or pre-merge boundaries, not on every task.
 
 ## The convergence contract
 

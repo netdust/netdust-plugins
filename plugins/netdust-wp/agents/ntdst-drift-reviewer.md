@@ -13,13 +13,33 @@ You do NOT scan the whole codebase blindly. The user gives you a scope — a fil
 
 You produce a **prioritized punch list**, not an essay. Each finding has: file:line, category, what's wrong, the rule reference, suggested fix. Group by category. Sort by severity within category. If a finding is borderline (might be a legitimate exception), say so explicitly.
 
+## Run the gate first
+
+**Before reading anything, run the mechanical half:**
+
+```bash
+python3 "$CLAUDE_PLUGIN_ROOT/bin/drift-check.py" <scope>
+```
+
+It decides the grep-decidable checks — repository bypasses, raw meta/post writes, raw `wp_ajax_*`,
+raw `ntdst/api_data` filter registration, `ob_start()`, direct `register_post_type()` /
+`register_taxonomy()`, manual `template_include`, hardcoded meta prefixes, wrong Data API
+vocabulary, unprepared `$wpdb`, `permission_callback => __return_true`. Its output IS those findings;
+report them, don't re-derive them by hand. `ntdst-core` itself is exempt (it implements the
+primitives), and a line carrying `// ntdst-allow: <check-key> — <reason>` is a documented exception —
+**an allow with no reason is itself a finding**, and the gate already flags that.
+
+**Your job is the half a grep cannot decide:** is a gated exception's reason actually good? Is this a
+service or a sub-component? Is this pass-through a layer or drift? Is this raw read the legitimate
+batch path, or an excuse from the table in `ntdst-data`'s `SKILL.md`? Spend your effort there.
+
 ## Before you start
 
 Read these references once at the start of every audit. They are the canon you check against:
 
 - `~/.claude/plugins/netdust-wp/skills/ntdst-architecture/references/anti-patterns.md` — the rule book
 - `~/.claude/plugins/netdust-wp/skills/ntdst-architecture/references/architecture.md` — framework tool-fit table
-- `~/.claude/plugins/netdust-wp/skills/ntdst-data/references/data-orm.md` — accepted Data API vocabulary (WP_COLUMNS), warn-on-unregistered-keys
+- `~/.claude/plugins/netdust-wp/skills/ntdst-data/SKILL.md` — accepted Data API vocabulary (WP_COLUMNS), warn-on-unregistered-keys, the raw-read judgment table
 - `~/.claude/plugins/netdust-wp/skills/ntdst-architecture/lessons.md` — incident journal (the "why" behind the rules)
 - `~/.claude/plugins/netdust-wp/agents/ntdst-drift-reviewer.lessons.md` — your own calibration notes from past audits. Apply as additional exception rules. NEVER append to this file yourself — surface candidate entries in your report's "Suggested calibration updates" section; the human curates.
 - `~/.claude/plugins/netdust-wp/skills/ntdst-patterns/golden-paths/*.md` — the four worked vertical-slice exemplars. Read the one matching the diff's archetype ONLY when running check #11 (golden-path conformance); skip otherwise.

@@ -2,7 +2,7 @@
 
 Project incidents that became framework rules. Each entry: what happened, what we learned, where the rule now lives.
 
-For canonical rules and code patterns, read the `references/` files. This file is the journal — it explains *why* the references say what they say.
+For canonical rules, read `SKILL.md` (judgment) and `golden-paths/` (how). This file is the journal — it explains *why* they say what they say. Anything a grep can decide is enforced by `bin/drift-check.py`, not argued here.
 
 ---
 
@@ -13,13 +13,13 @@ For canonical rules and code patterns, read the `references/` files. This file i
 - 5 admin controllers used raw `add_action('wp_ajax_*')`
 - Newer code copied the wrong (sibling) pattern because that's what was nearby
 
-**Rule:** When writing a new class, identify which framework layer it touches (endpoints, response, data, logger, router, mailer) and read the corresponding `references/*.md`. Do NOT pattern-match against the closest existing file in the directory — that file may be drifted.
+**Rule:** When writing a new class, build to the golden path for its archetype and read the layer's section in `references/framework-map.md`. Do NOT pattern-match against the closest existing file in the directory — that file may be drifted.
 
 **How to apply:**
-1. Before writing, ask: which references apply? (api-endpoints, response, data-layer, router, logger, mailer)
-2. Read the actual reference. Don't skim.
-3. If a neighbouring file uses a different pattern, the neighbour is suspect. Build to the reference, not the neighbour.
-4. After writing, scan for: raw `add_action('wp_ajax_*')`, `ob_start + include`, `get_post_meta`, swallowed `WP_Error`. If any present — refactor before commit.
+1. Before writing, open the matching slice: `golden-paths/feature-service.md`, `ntdst-data`'s `golden-paths/model-and-api-action.md`, or one of `ntdst-patterns`' golden paths.
+2. Read `framework-map.md` for the layer you're touching, and **read source for the signature**.
+3. If a neighbouring file uses a different pattern, the neighbour is suspect. Build to the slice, not the neighbour.
+4. Before commit, run `bin/drift-check.py` — the scan for raw `wp_ajax_*`, `ob_start + include`, `get_post_meta` and friends is now mechanical, not a thing you have to remember.
 
 ---
 
@@ -59,7 +59,7 @@ For canonical rules and code patterns, read the `references/` files. This file i
 | Resolve template name → file path for WP | `ntdst_router()->template('single', $cb, $post_type)` | Raw `add_filter('template_include', ...)` |
 | URL pattern → callback | `ntdst_router()->get('pattern/:param', $cb)` | Raw `add_action('parse_request', ...)` |
 | Pre-query interception (rewrite query vars BEFORE WP runs the query) | Raw `add_action('parse_request', ...)` | `ntdst_router()` (fires on `template_include`, too late) |
-| AJAX/REST endpoint | `add_filter('ntdst/api_data/{action}', ...)` | `add_action('wp_ajax_*', ...)` |
+| AJAX/REST endpoint | `ntdst_api_action($action, $handler, $opts)` | `add_action('wp_ajax_*', ...)`, or a raw `add_filter('ntdst/api_data/…')` |
 | Send email | `ntdst_mail()->to()->template()->send()` | `wp_mail()` |
 | Log | `ntdst_log('channel')->level(...)` | `error_log()`, swallowed `WP_Error` |
 | Read/write CPT | per-domain repository | `ntdst_data()` direct, raw `wp_insert_post`/`get_post_meta` |
@@ -101,7 +101,7 @@ If NO framework helper fits, explicitly defend the raw-WP idiom. Not every opera
 | `content` | ~~`post_content`~~ |
 | `excerpt` | ~~`post_excerpt`~~ |
 
-The full canonical list is `NTDST_Data_Model::WP_COLUMNS` in `api/Data.php` — 16 columns total. See `references/data-layer.md`.
+The full canonical list is `NTDST_Data_Model::WP_COLUMNS` in `api/Data.php` — 16 columns total. `drift-check.py`'s `wp-column-vocabulary` check now catches the common three at commit time.
 
 **Safety net (since 2026-05-19):** `NTDST_Data_Model::warnUnregisteredKeys()` logs unknown keys via `ntdst_log('data')->warning()` and drops them. Watch `logs/data-YYYY-MM-DD.log` after refactors. Zero warnings = correct vocabulary.
 
@@ -125,6 +125,105 @@ The full canonical list is `NTDST_Data_Model::WP_COLUMNS` in `api/Data.php` — 
 **Test files become the documentation of the state machine.** In Stride, `tests/manual/shake-*.php` are the reusable shakeout scripts.
 
 **When to use:** Before launch, after major refactors of a stateful system, before merging code that adds or removes listeners.
+
+---
+
+---
+
+## A method belongs on `Theme` iff its subject dies when you switch themes
+
+**Problem (daan, 2026-08-08):** `NTDST_Theme` had grown into a facade over five unrelated
+subsystems — it registered post types, registered taxonomies, registered API actions, and carried a
+whole module DSL, alongside its actual job of wiring hooks, template paths and assets. Nothing about
+a CPT or an API action dies when you switch themes, so none of it belonged there.
+
+**Rule:** *a method belongs on `Theme` iff its subject dies when you switch themes.* A hook binding,
+a template path, a template helper — yes. A post type, a taxonomy, an API action — no; those have
+owners elsewhere and outlive the theme. `register()`, `taxonomy()`, `apiAction()` and `module()` were
+retired with no shim; `ntdst_data()->register()`, its `taxonomies` key, `ntdst_api_action()` and
+`mixin()` are where those subjects live now.
+
+**The correction that matters more than the rule.** The first draft of this refactor deleted the
+whole surface, having diagnosed *chainability* as the god-object smell. That was wrong, and it was
+caught at the seam: the defect was **incoherence**, not chaining. The fluent wiring surface was
+retained deliberately. When something feels like a god object, name which property is actually
+offensive before you delete on the strength of the feeling.
+
+**Corollary that cost a live bug:** the facade ran hook names through `sanitize_key()`. That strips
+`/` and `.`, so hooking one of the framework's own `ntdst/…` filters through `$theme->filter()`
+registered a name nothing ever fires. Wrapping a primitive is not free — every normalisation you add
+on the way through is a behavioural difference you now own.
+
+---
+
+## A forwarder is a second surface, and it drifts
+
+**Problem (daan, 2026-08-08):** Two methods kept "for compatibility" did nothing but call the real
+implementation on another class. Both drifted from their targets **twice in a single week** — once
+in signature, once in null-handling — because nothing forced them to move together.
+
+**Rule:** a pass-through kept for compatibility is not a courtesy, it is a second equally-correct
+path that the codebase will drift between. **Delete as you move.** If a forwarder must survive a
+migration window, give it an explicit removal date and a test that asserts it agrees with its target.
+
+**Corollary for docs:** the same is true of documentation. A reference file restating an API is a
+forwarder for that API, and it drifts exactly the way code forwarders do. That is why this skill's
+API references were collapsed — see the structure note at the end of this file.
+
+---
+
+## A grep bounded by a hypothesis finds what the hypothesis predicts
+
+**Problem (daan, 2026-08-08):** This error recurred **three times in one refactor**, each time in a
+different disguise:
+
+1. *"Does daan call `->module()`?"* — grep says no, so the DSL looked dead. It was alive across the
+   corpus; the question scoped the evidence to one site.
+2. *"Is `ntdst_page_data()` dead?"* — grep over `*Service.php` said yes. A **template** called it on
+   every render. The file-type filter encoded the hypothesis.
+3. *"Do these CPTs derive their own capabilities?"* — an auth-surface map asserted they did. Source
+   said three of them register `capability_type => 'post'` and inherit generic caps.
+
+**Rule:** a grep is a test of a hypothesis, not a survey. Before trusting a negative result, ask
+**what would this search miss if I were wrong** — which paths, which file types, which callers, which
+*other repositories* — and widen it until the answer is "nothing material". Confirm a linchpin claim
+against source, not against a previous agent's summary.
+
+**Specifically for framework work:** derive seams from the **corpus across all consumer sites**, not
+from one site's tree. "Does *this* site use it?" answers what this site uses, never what the
+framework owes its consumers.
+
+---
+
+## Exhaustive, accurate documentation did not stop the drift
+
+**Problem (2026-08-08, measured across 13 consumer projects):** 13/13 hand-roll `get_post_meta()` /
+`get_posts()`, 11/13 hand-roll `ob_start()`, 5/13 call `register_taxonomy()` directly, 4/13 register
+raw `wp_ajax_*` — while these skills described every one of those framework doors correctly, at
+length, the whole time. A pressure baseline confirmed the prose *works on a reader who reads it*: a
+fresh agent under a deadline used the repository, batched with `withMeta()`, escaped every sink, and
+said three separate docs independently blocked its first instinct.
+
+**Rule:** that is an **enforcement gap, not a documentation gap**, and the two have different fixes.
+*If a rule is decidable by grep, it belongs in a gate, not in a paragraph.* The paragraph is for the
+judgment a grep cannot make — is this raw read the justified batch exception? — and for the positive
+recipe that makes the right thing easier. `bin/drift-check.py` now owns the mechanical half.
+
+**Corollary on form:** ours is a wrong-shape failure, not a discipline failure, so these skills lead
+with positive recipes ("register a CPT with `ntdst_data()->register()`") rather than prohibitions.
+Prohibitions measurably backfire on shaping problems.
+
+---
+
+## Note on this skill's structure (2026-08-08)
+
+The `references/` tree was **94% API inventory** and carried files whose claims were false. The
+inventory was collapsed into `references/framework-map.md` (decisions + traps) and
+`golden-paths/feature-service.md` (a worked slice); `anti-patterns.md`, `architecture.md` and
+`plugin-scaffold.md` were kept and corrected. Retired: `services.md`, `container.md`, `router.md`,
+`response.md`, `logger.md`, `mailer.md`, `data-layer.md`, `theme-api.md`, `api-endpoints.md`,
+`rest-cors.md`, and both `templates/*.php.md`. Where a lesson above points at one of them, read
+`framework-map.md` instead — and read **source** for any signature.
 
 ---
 

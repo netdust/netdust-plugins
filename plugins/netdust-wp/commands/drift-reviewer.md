@@ -29,7 +29,7 @@ Run an NTDST drift audit on: $ARGUMENTS
        - `~/.claude/plugins/netdust-wp/agents/ntdst-core-gaps.md` — known framework gaps + their workarounds. **Read this file EVEN IF YOU EXPECT IT TO BE EMPTY** — same logic. If you find a project doing X because the framework forces it, check this file first; if the gap is already documented, don't re-surface it. If it's new, surface as a candidate entry under "Framework gaps observed."
        - `~/.claude/plugins/netdust-wp/skills/ntdst-architecture/references/anti-patterns.md` — the rule book
        - `~/.claude/plugins/netdust-wp/skills/ntdst-architecture/references/architecture.md` — framework tool-fit table
-       - `~/.claude/plugins/netdust-wp/skills/ntdst-data/references/data-orm.md` — Data API vocabulary
+       - `~/.claude/plugins/netdust-wp/skills/ntdst-data/SKILL.md` — Data API vocabulary + the judgment table
        - `~/.claude/plugins/netdust-wp/skills/ntdst-architecture/lessons.md` — incident journal
        - Project memory if present: `~/.claude/projects/<project-id>/memory/MEMORY.md` — project-specific exceptions
      - "Produce the report in the exact format the agent file specifies"

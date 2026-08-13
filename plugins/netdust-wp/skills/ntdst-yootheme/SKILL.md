@@ -1,3 +1,23 @@
+---
+name: ntdst-yootheme
+description: >
+  Use when building, styling, debugging, or extending a YOOtheme Pro site in an
+  NTDST WordPress project — composing or editing a page, wiring site chrome
+  (header, footer, mobile panel, navbar, top/bottom positions), styling a child
+  theme, driving pages from data, or extending the Builder with PHP. Triggers on
+  phrases like "add a section to the homepage", "edit the header", "why is my CSS
+  being overridden", "add a dynamic content source", "bind this field to the
+  builder", "custom builder element", "make this a template", "install a demo
+  package", "the page renders blank after I edited the layout", "where does
+  YOOtheme store this". Activates on the keywords YOOtheme, YOOtheme Pro, UIkit,
+  `uk-`, Builder, layout JSON, dynamic content, ObjectType, resolver,
+  `theme.child.less`, `theme_mods_`, `get_theme_mod('config')`, customizer,
+  `YOOthemeDynamicContentService`, `attach_post_meta`. Also use when reviewing
+  YOOtheme work for its silent-failure traps — props that write into the layout
+  JSON and emit nothing, defaults that hide an element entirely, utilities that
+  outrank child-theme CSS, resolvers that break JSON serialization.
+---
+
 # NTDST YOOtheme Integration — Domain Knowledge
 
 Use when building, styling, or extending a YOOtheme Pro site: composing pages,

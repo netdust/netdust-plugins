@@ -83,8 +83,11 @@ Soft caps. Treat as warnings, not hard rules — if exceeding the cap is the cle
 | Logger | `ntdst_log('channel')` | `NTDST_Logger` |
 | Mailer | `ntdst_mail()` / `ntdst_notify()` | `NTDST_Mailer` / `void` |
 | Sectors | `ntdst_sectors()` | `NTDST_SectorRegistry` |
-| Metabox | `ntdst_metabox()` | `NTDST_MetaboxGenerator` |
-| Endpoints | `ntdst_endpoints()` | `NTDST_Endpoints` (aliased as `Endpoints` for back-compat) |
+| Metabox | `ntdst_metabox()` | `NTDST_MetaboxGenerator` (in `admin/`) |
+| Endpoints | `ntdst_endpoints()` | `NTDST_Endpoints` |
+| API action (register) | `ntdst_api_action($action, $handler, $opts)` | `void` — the door for `ntdst/api_data/*` |
+| API action (floor cap) | `ntdst_api_floor_cap($post_type)` | `string` — `''` denies everyone |
+| Page render / read-back | `NTDST_Template_Loader::page()` / `ntdst_page_data()` | `?string` / `mixed` |
 
 > **There is no cache helper.** `ntdst_query_cache()` and `NTDST_Query_Cache` are
 > **DELETED**, along with `$model->cache(N)`, `ntdst_clear_posts_cache()` and
@@ -92,7 +95,13 @@ Soft caps. Treat as warnings, not hard rules — if exceeding the cap is the cle
 > post / `post_meta` / `post-queries` / term caches are the caching, and core invalidates
 > them on every write — including writes that never went through the model. That is a
 > security property (a layer-owned cache is one core does not invalidate), not just a
-> simplification. See `data-layer.md` → Caching.
+> simplification. See `ntdst-data` → Query and return-shape decisions.
+
+> **Helper index caveat.** This table is inventory, and inventory drifts — it is kept only
+> because "which door do I knock on" is the one lookup a decision cannot answer. Confirm the
+> symbol exists in *this project's* `ntdst-core` before calling it; the copies are forked
+> 40%+ apart. `ntdst_router()->rest()` and `NTDST_Cors_Policy`, for instance, exist on
+> **stride only**. See `framework-map.md`.
 
 ## Framework Tool Fit — Right Tool per Operation
 
@@ -100,16 +109,22 @@ A helper's name doesn't tell you when it's the wrong tool. Before refactoring "u
 
 | Operation | Right tool | NOT |
 |---|---|---|
+| Render a page from a route | `NTDST_Template_Loader::page($tpl, $data)`, read back with `ntdst_page_data()` | `ob_start + include` |
 | Render template + output the response | `ntdst_response()->render('path/template')` | `ob_start + include` |
 | Render template → string (for emails / AJAX HTML) | `ntdst_response()->html('path/template')` | `ob_start + include` |
 | `template_include` callback (resolve template name → file path for WP) | `ntdst_router()->template('single', $cb, $post_type)` | Raw `add_filter('template_include', ...)` |
 | URL pattern → callback | `ntdst_router()->get('pattern/:param', $cb)` | Raw `add_action('parse_request', ...)` |
 | Pre-query interception (rewrite query vars BEFORE WP runs the query) | Raw `add_action('parse_request', ...)` — `ntdst_router()` fires too late | `ntdst_router()` |
-| Same-origin AJAX endpoint | `add_filter('ntdst/api_data/{action}', ...)` (nonce + rate-limit + origin check handled — **authorization is still yours**) | `add_action('wp_ajax_*', ...)` |
-| Cross-origin / headless REST | `ntdst_router()->rest()` + `NTDST_Cors_Policy` | `ntdst/api_data/*` — its nonce authenticates nothing for a cookie-less caller |
+| Same-origin AJAX endpoint | `ntdst_api_action($action, $handler, $opts)` (nonce + rate-limit + origin + the capability floor — **the per-row check is still yours**) | `add_action('wp_ajax_*', ...)`, or a raw `add_filter('ntdst/api_data/…')` |
+| Cross-origin / headless REST | `ntdst_router()->rest()` + `NTDST_Cors_Policy` — **stride only, not ported**; see `framework-map.md` before assuming it | `ntdst/api_data/*` — its nonce authenticates nothing for a cookie-less caller |
+| Register a CPT or taxonomy | `ntdst_data()->register($type, $config)`; taxonomies in its `taxonomies` key | `register_post_type()` / `register_taxonomy()`, `$theme->register()` / `->taxonomy()` |
+| Bind a hook, a template path, a mixin | `$theme->on()` / `->filter()` / `->templatePath()` / `->mixin()` | the retired `$theme->module()` DSL |
 | Send email | `ntdst_mail()->to()->template()->send()` | `wp_mail()` |
 | Log structured events | `ntdst_log('channel')->level(...)` | `error_log()`, swallowed `WP_Error` |
 | Read/write CPT | per-domain Repository | `ntdst_data()` direct, raw `wp_insert_post` / `get_post_meta` |
+
+Most of the "NOT" column is now enforced mechanically by `bin/drift-check.py` — this table is the
+positive half (which door), not the prohibition.
 
 **The two failure modes:**
 
@@ -137,18 +152,25 @@ Two distinct namespaces — don't mix them:
 // FRAMEWORK hooks (ntdst-core's own events — leave the prefix alone)
 do_action('ntdst/services_registered', $bootstrap);
 apply_filters('ntdst/{post_type}/fields', $fields);
-add_filter('ntdst/api_data/{action}', $handler);  // ntdst_api router
+apply_filters('ntdst/api/public_actions', $actions);
+add_filter('ntdst/api_data/{action}', $handler);   // register via ntdst_api_action()
 
-// PROJECT-level service hooks (use the project's own prefix, NOT netdust_/ntdst_)
-// Replace {project} with the project slug: stride, vad, atelier296, etc.
-apply_filters('{project}_{slug}_config', $defaults);     // e.g. stride_edition_config
-apply_filters('{project}_{slug}_enabled', true);         // e.g. stride_edition_enabled
+// SERVICE lifecycle — the names Bootstrap ACTUALLY fires. `{slug}` is derived
+// from the class name (AdminUIService -> admin_ui), not from metadata()['name'].
+apply_filters("ntdst_service_{$slug}_config", $defaults);
+apply_filters("ntdst_service_{$slug}_enabled", true);
+// fed from the bootstrap config: config['services']['overrides'][$slug]
 
-// PROJECT-level domain events
+// PROJECT-level domain events (use the project's own slug: stride, vad, …)
 do_action('{project}/{domain}/{action}', $array_payload);  // e.g. stride/registration/created
 ```
 
-The `netdust_` prefix is **not** a framework reservation — it was an old placeholder. Real projects use their own slug: Stride uses `stride_*` / `stride/*`, VAD Vormingen uses `vad_*` / `vad/*`, etc. Use whatever the project's `mu-plugins/<project>-core/` directory implies.
+**`ntdst_service_{slug}_config` / `_enabled` are the only names Bootstrap fires**, and there is no
+shim for the retired `netdust_{slug}_*` pair — a listener on an old name is silently inert, which for
+a `_enabled` deny filter means the service **boots anyway**. A service may also apply its own
+`{project}_{slug}_config` filter as a project-level convention, but Bootstrap never fires it and the
+`config['services']['overrides']` mechanism cannot reach it. Pick one deliberately and say which in
+the class docblock.
 
 Domain event payloads are **plain associative arrays**, not event-object classes — `do_action('stride/registration/created', ['user_id' => $uid, 'edition_id' => $eid])`, not `do_action(..., new RegistrationCreated($uid, $eid))`.
 

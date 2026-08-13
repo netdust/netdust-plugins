@@ -1,337 +1,247 @@
 ---
 name: ntdst-data
 description: >
-  NTDST framework data layer, ORM, and API patterns. Use when planning,
-  designing, or implementing data models, custom post types, field definitions,
-  metaboxes, REST API endpoints, database queries, or CRUD operations. MUST be
-  consulted during implementation planning to ensure Data Manager usage,
-  correct return types, API handler structure, and caching strategy. Activates
-  alongside ntdst-architecture for any data-related work.
+  Use when planning, designing, implementing, or reviewing data models, custom
+  post types, taxonomies, field definitions, metaboxes, API actions, database
+  queries, or CRUD operations in an NTDST WordPress project. Triggers on
+  phrases like "register a CPT", "add a custom post type", "add a taxonomy",
+  "add a field to the model", "add a metabox", "add an api_data action", "an
+  AJAX endpoint", "expose this publicly", "query the model", "add a repository
+  method", "why is this returning WP_Error", "why is this meta key empty", and
+  on the keywords `ntdst_data`, `ntdst_api_action`, `NTDST_Data_Model`,
+  `NTDST_Data_Manager`, `NTDST_MetaboxGenerator`, `public_fields`,
+  `meta_prefix`, `withMeta`, `WP_COLUMNS`, `ntdst/api_data`,
+  `ntdst/api/public_actions`. Also use when deciding whether an action may be
+  reached anonymously, or what capability should gate it. Activates alongside
+  ntdst-architecture for data work.
 ---
 
-# NTDST Data Layer — Domain Knowledge
+# NTDST Data Layer
 
-Use when creating data models, custom post types, field definitions, metaboxes, API endpoints, database queries, or CRUD operations in the NTDST framework.
+**This skill carries decisions and traps, not an API listing.** Method names and signatures live in
+`api/Data.php`, `api/Endpoints.php` and `admin/MetaboxGenerator.php`, where they cannot drift. Decide
+the case here, build from the golden path, then read source for the exact call.
 
-> ## Reference implementation: daan's `ntdst-core` (as of 2026-08-07)
->
-> There is ONE ntdst-core. Copies of it live in each project and they are at
-> different versions — **daan's is the most current, and this skill describes
-> it.** Other projects (stride, stride-output-reshape) are behind and will be
-> brought up; until a project is ported, its copy may still carry the older
-> behaviour listed under "was" below.
->
-> **What changed on 2026-08-07** — if you are reading older code, this is what
-> you are looking at, and each change is a narrowing you should not undo:
->
-> | | now | was |
-> |---|---|---|
-> | `->withMeta()` row meta | schema-projected: **unprefixed**, type-cast, declared fields only | raw bag: **prefixed**, every meta row |
-> | `getMeta($id, …)` | publish-only by default; 4th arg `$status`, same as `find()` | `find($id, 'any')` — read drafts silently |
-> | public actions shipped by the framework | **none** — `$public_actions` is empty | `get_recent_posts`, `search_posts`, `send_magic_link` |
-> | `search_posts` | retired → `relation_search` on `NTDST_RelationField`, non-public | present, and public |
-> | `getFormattedPosts()` on a protected post | withholds `content`/`excerpt`, sets `protected` | served the body a post password withholds |
->
-> **Still verify against the project's own `api/Data.php` and `api/Endpoints.php`
-> before writing.** This skill is a map, not the territory — it drifted from the
-> code for six weeks (2026-06-23 → 2026-08-06) describing a deleted API, and the
-> fix is always to read the source.
+**`ntdst-core` is a per-project fork with no shared upstream** — see `ntdst-architecture` for the
+divergence table. Confirm a method exists in *this project's* copy before calling it. Where this file
+says "HEAD", it means daan's copy, which is the most-evolved on Data, Endpoints, Theme and Metabox.
 
-## Essential Principles
+## The mechanical rules are a gate, not prose
 
-### Zero Raw SQL
-All database operations go through `ntdst_data()`. Never use `$wpdb` directly.
-Never use `get_post_meta()` / `update_post_meta()` directly — use Data Manager.
+Everything a grep can decide — raw meta calls, raw post writes, repository bypasses, `ob_start()`
+rendering, raw `wp_ajax_*`, raw `ntdst/api_data` filter registration, direct
+`register_post_type()`/`register_taxonomy()`, hardcoded meta prefixes, wrong Data API vocabulary,
+unprepared `$wpdb`, `permission_callback => __return_true` — is enforced by:
 
-### JavaScript API Client
-Never use `fetch()` directly. Always use `ntdstAPI.call()`.
+```bash
+python3 "$CLAUDE_PLUGIN_ROOT/bin/drift-check.py"            # staged files
+python3 "$CLAUDE_PLUGIN_ROOT/bin/drift-check.py" --since HEAD~1
+python3 "$CLAUDE_PLUGIN_ROOT/bin/drift-check.py" path/to/module
+```
 
-### WP_Error on Failure
-Every create/update/delete must check `is_wp_error($result)` and propagate errors.
-
-### Use `post_status` Not `status`
-For WordPress post status, always use `post_status` key (not `status`) to avoid collision with custom meta fields named `status`.
-
-## Data Manager API
+**Run it before you close a task that touched PHP.** A deliberate exception is annotated on the line,
+with a reason, and stays greppable:
 
 ```php
-$model = ntdst_data()->get('portfolio');
-
-// CRUD
-$post   = $model->create($data);        // Returns WP_Post or WP_Error
-$post   = $model->find($id);            // PUBLISH-ONLY. Returns WP_Post or WP_Error
-$post   = $model->find($id, 'any');     // Any status — an admin screen wants this
-$post   = $model->find($id, ['publish', 'draft']);  // An explicit set
-$result = $model->update($id, $data);   // Returns WP_Post or WP_Error
-$result = $model->delete($id);          // Soft delete (trash)
-$result = $model->delete($id, true);    // Force delete
-
-// Meta operations
-$value = $model->getMeta($id, 'field');           // PUBLISH-ONLY, like find()
-$all   = $model->getMeta($id);                    // All declared fields
-$value = $model->getMeta($id, 'field', null, 'any');  // Explicit status to read a draft
-$model->updateMeta($id, 'field', $value);         // Single field
-$model->updateMetaBatch($id, ['a' => 1, 'b' => 2]); // Batch update (single cache clear)
-$model->deleteMeta($id, 'field');
-
-// Query builder
-$posts = $model->where('featured', true)->withMeta()->limit(10)->get();
-$posts = $model->whereTax('category', 'web-design')->get();
-$posts = $model->where('price', ['>', 1000])->orderBy('date', 'DESC')->get();
-$page  = $model->paginate($page, $per_page);
-$count = $model->where('featured', true)->count();
-$first = $model->where('featured', true)->first();
-
-// Model introspection
-$schema = $model->getSchema();       // Get field definitions
-$prefix = $model->getMetaPrefix();   // Get meta key prefix
+// ntdst-allow: raw-meta — DISTINCT meta column for the admin filter dropdown; no Data API terminal
 ```
 
-## Global Helpers
+An allow with no reason is itself a finding. Don't re-argue a gated rule in prose — fix it or
+annotate it. This gate exists because accuracy was never the binding constraint: across 13 consumer
+projects, **13 of 13** hand-roll `get_post_meta()`/`get_posts()` with the framework and its docs
+sitting right there.
 
-```php
-ntdst_data()                          // Data Manager singleton
-ntdst_data()->isRegistered($name)     // Has a model been registered? (no side effect)
-ntdst_get_formatted_posts($args)      // Direct query returning formatted arrays
-```
+---
 
-> **REMOVED — do not write these, they no longer exist.** `ntdst_get_posts_fast()`,
-> `ntdst_query_cache()`, `ntdst_clear_posts_cache()`, `ntdst_invalidate_post_type()`.
-> The free-function "second door" into the query layer was swept onto the chain API,
-> and the layer's own cache was deleted outright. If you find a call to one of these,
-> it is dead code from before that sweep — replace it with the chain API
-> (`ntdst_data()->get($type)->where(...)->get()`) or `ntdst_get_formatted_posts()`.
+## Start here — build to the worked slice
 
-`isRegistered()` is the safe way to check whether a model exists when iterating over post types — `ntdst_data()->get($name)` will auto-create an empty model entry as a side effect, which would persist and shadow a later schema-bearing registration.
+**`golden-paths/model-and-api-action.md`** is the complete vertical slice: a CPT with typed fields, a
+taxonomy, an auto-generated metabox, an anonymous read action, and a capability-gated write action.
+Open it and build to it rather than assembling from the rules below. It carries a
+`Verified against source:` date so staleness is visible instead of silent.
 
-## CRITICAL: `find()` decides NOTHING about visibility except status
+**The recipes**, when you only need the door:
 
-`find(int $id, $status = 'publish')`. The second parameter used to be a
-`bool $skipCache`. **It is now a post status**, and passing a bool throws
-`InvalidArgumentException` deliberately — a silently-denying signature change is
-the worst shape available, so it fails loudly instead.
+| To do this | Call this |
+|---|---|
+| Register a CPT with fields | `ntdst_data()->register($name, $config)` — check the return for `WP_Error` |
+| Attach a taxonomy | the `taxonomies` key inside that same config, with optional `terms` to seed |
+| Get an auto metabox | declare `fields`; it is generated. `'auto_metabox' => false` opts out |
+| Register an API action | `ntdst_api_action($action, $handler, $opts)` |
+| Make an action reachable logged-out | `$opts = ['public' => true]` |
+| Floor an action by capability | `$opts = ['cap_type' => $post_type]` — type-derived, fail-closed |
+| Read one record | `$model->find($id)` → `WP_Post`-shaped **object**, or `WP_Error` |
+| Read a list | `$model->where(...)->withMeta()->limit(...)->get()` → **arrays of arrays** |
+| Emit the declared public shape | `->publicRows()` / `->publicRow($id, $status)` |
+| Write | `$model->create($data)` / `->update($id, $data)` — friendly keys, check `is_wp_error()` |
+| Check a model exists without creating one | `ntdst_data()->isRegistered($name)` |
 
-```php
-$model->find($id);              // publish only — the SAFE default
-$model->find($id, 'any');       // every status
-$model->find($id, ['publish','draft']);
-$model->find($id, true);        // ✗ throws InvalidArgumentException
-```
+The rules below decide the cases the recipes don't cover.
 
-**The layer no longer half-decides.** It applies the status you asked for and
-nothing else — it does not guess, cache, or filter on your behalf. Authorization
-is the CALLER's job, in the handler, every time. Pass an explicit `$status` when
-you genuinely want unpublished rows (an admin screen does; a public read does not).
+## The four rules that do not change
 
-| Method | Returns | Access |
-|--------|---------|--------|
-| `find($id)` | `WP_Post` (with `->meta`, `->fields`) or `WP_Error` | `$post->post_title`, `$post->fields['key']` |
-| `first()` | `WP_Post` (same shape as `find()`) or `null` | `$post->post_title`, `$post->fields['key']` |
-| `get()` | Array of associative arrays; `meta` is **schema-projected** | `$posts[0]['title']`, `$posts[0]['meta']['declared_field']` |
-| `count()` | `int` | — |
-| `paginate()` | `['data' => [...], 'pagination' => [...]]` | — |
+1. **No raw SQL, no direct meta.** All persistence goes through the data layer, and CPT access goes
+   through that domain's repository — the single mediator. `ntdst_data()->get('type')` should appear
+   in exactly one file per post type.
+2. **`WP_Error` on failure, and never swallowed.** Every create/update/delete result is
+   `is_wp_error()`-checked. A swallowed error is invisible data loss; that is exactly how a silent
+   save bug survived in production.
+3. **Friendly key vocabulary, not `wp_posts` column names.** Pass `title`, `content`, `excerpt` —
+   not `post_title`. The canonical accepted set is `NTDST_Data_Model::WP_COLUMNS` (16 columns).
+4. **`post_status`, never `status`.** A field literally named `status` is common, and the collision
+   silently sends a post-table value into meta.
 
-A not-found row and a wrong-status row return the **same** `WP_Error` — a caller
-who may not see this status learns nothing about whether it exists. Do not rely on
-the error to distinguish them, and remember it when writing a denial test: assert
-the row is REACHABLE first, or your denial may be passing because the fixture
-never existed.
+## What changed on 2026-08-07 / 08 — read this if you are reading older code
 
-`first()` and `find()` are now interchangeable in shape — both return WP_Post with `->fields` populated. Code that accessed `$item->id` (lowercase) on the old stdClass-cast `first()` result needs to become `$item->ID` (WP_Post property).
+Each row is a **narrowing you should not undo**. Older forks still carry the "was" column.
 
-**Most common bug:** Treating `find()` result as array → fatal error.
+| | now | was |
+|---|---|---|
+| `->withMeta()` row meta | schema-projected: **unprefixed**, type-cast, declared fields only | raw bag: **prefixed**, every meta row |
+| `getMeta($id, …)` | publish-only by default; 4th arg `$status`, same as `find()` | `find($id, 'any')` — read drafts silently |
+| public actions shipped by the framework | **none** — the public list is empty | `get_recent_posts`, `search_posts`, `send_magic_link` |
+| `search_posts` | retired → `relation_search` on `NTDST_RelationField`, non-public | present, and public |
+| `getFormattedPosts()` on a protected post | withholds `content`/`excerpt`, sets `protected` | served the body a post password withholds |
+| CPT / taxonomy / API-action registration | `ntdst_data()->register()`, its `taxonomies` key, `ntdst_api_action()` | `$theme->register()` / `->taxonomy()` / `->apiAction()` |
+| metabox + relation field | `admin/MetaboxGenerator.php`, `admin/RelationField.php` | `api/MetaboxGenerator.php`, `services/RelationField.php` |
+| page rendering | `NTDST_Template_Loader::page()` / `::pageData()`; `ntdst_page_data()` **survives** | `NTDST_Response::page()` / `::pageData()` / `::toRestResponse()` |
+| query cache | **deleted** — `$model->cache(N)`, `ntdst_query_cache()`, `ntdst_clear_posts_cache()`, `ntdst_invalidate_post_type()`, `ntdst_get_posts_fast()` all gone | present |
 
-```php
-// WRONG
-$post = $model->find($id);
-$title = $post['title'];  // FATAL ERROR
+**Still verify against this project's own `api/Data.php` and `api/Endpoints.php` before writing.**
+This skill is a map, not the territory — it drifted from the code for six weeks (2026-06-23 →
+2026-08-06) describing a deleted API, and the fix is always to read the source.
 
-// CORRECT
-$post = $model->find($id);
-if (is_wp_error($post)) {
-    return $post; // Or handle the error.
-}
-$title  = $post->post_title;
-$client = $post->fields['client_name'];
+## Registration decisions
 
-// first() — same access pattern; null when no rows match.
-$featured = $model->where('featured', true)->first();
-if ($featured !== null) {
-    $title = $featured->post_title;
-}
-```
+- **Private by default. Silence is not privacy.** Registration merges your config over
+  `public => false, has_archive => false`; a model opts **in** to visibility. The old default merged
+  caller config *over* `public => true`, so a model registered without visibility flags was
+  published, archived and queryable — which is why every non-public CPT had to state six denials by
+  hand, and why forgetting one was a disclosure. **Opt IN to public; never opt out of it.**
+- **A failed registration is returned, never swallowed.** `register_post_type()` returns `WP_Error`
+  for an invalid or reserved name. Older code discarded it and built the model anyway, leaving a
+  half-registered phantom that reports healthy: `isRegistered()` true while `post_type_exists()`
+  false. Fail closed, and loudly.
+- **Taxonomies are declared with the model**, via the `taxonomies` config key, and are registered
+  only after the post type succeeds. (`NTDST_Data_Manager::registerTaxonomy()` is the direct door for
+  a taxonomy with no owning model.) The `Theme::taxonomy()` wrapper that used to hold these defaults
+  is retired — a taxonomy outlives a theme switch, so it was never Theme's job — and its defaults
+  were lifted verbatim, so changing them changes every taxonomy that relied on the wrapper.
+- **Asking about a model must not create one.** In HEAD, a lookup miss returns an error; it used to
+  auto-register a phantom into a *static* array, so a caller-supplied type name on a public endpoint
+  could register whatever it liked, and nothing could tell a real model from someone's typo. Use
+  `isRegistered()`, never the getter, when iterating post types.
+- **A custom `capability_type` grants nothing.** `map_meta_cap` *maps* meta capabilities onto
+  primitives; it never *invents* primitives. Giving a type its own capability names produces
+  capabilities held by no role at all — administrator included. Grant them on `init`, reading the
+  list off the registered post-type object. The golden path has the worked version.
+- **Metaboxes are generated from the field definitions**, and they live in `admin/` — admin UI, not
+  transport. That directory owns the **write-authorization gate**: whether an actor may write a
+  model's fields is decided in the metabox save method, and read access to its error notices is
+  gated by the same predicate so read ⊆ write by construction.
 
-### Atomic create/update (best-effort)
+## Query and return-shape decisions
 
-`create()` and `update()` roll back on meta-write failure. `create()` deletes the new post if any meta write fails. `update()` snapshots prior post-table fields and meta state, then restores via `restorePostData()` / `restoreMetaData()` on failure. This is application-level rollback, not a DB transaction — for critical multi-table paths (capacity locks, voucher counts) still wrap the whole business operation in `$wpdb->query('START TRANSACTION')`.
+- **`find()` returns an object; `get()` returns arrays of arrays. Mixing them is the most common bug
+  in this layer.** Array-accessing a `find()` result is a fatal.
 
-`update_post_meta` returns `false` both on errors and on unchanged values. The data layer treats unchanged values as success, so re-saving the same value doesn't trigger a spurious rollback.
+  | Method | Returns | Access |
+  |---|---|---|
+  | `find($id)` | `WP_Post` (with `->meta`, `->fields`) or `WP_Error` | `$post->post_title`, `$post->fields['key']` |
+  | `first()` | `WP_Post`, same shape, or `null` | `$post->post_title`, `$post->fields['key']` |
+  | `get()` | array of associative arrays; `meta` is **schema-projected** | `$rows[0]['title']`, `$rows[0]['meta']['declared_field']` |
+  | `count()` | `int` | — |
+  | `paginate()` | `['data' => [...], 'pagination' => [...]]` | — |
 
-## Model Registration
+- **`find($id, $status = 'publish')` — the second argument is a post status, and publish-only is the
+  safe default.** It used to be a `bool $skipCache`; a leftover `find($id, true)` would have quietly
+  meant "accept the status `true`", matching nothing and denying every row, so it now **throws**.
+  *Fail-closed-but-invisible is the worst shape available* — this is what it looks like when fixed.
+  Pass an explicit status when you genuinely want unpublished rows; an admin screen does, a public
+  read does not. **Authorization is the caller's job**; the layer applies the status you asked for
+  and decides nothing else.
+- **A not-found row and a wrong-status row return the same `WP_Error`** — a caller who may not see
+  this status learns nothing about whether it exists. Remember it when writing a denial test: assert
+  the row is REACHABLE first, or your denial may be passing because the fixture never existed.
+- **Batch-loaded meta is schema-projected, so drop the prefix.** `get()` / `all()` / `paginate()`
+  project each row's `meta` through the declared schema — **unprefixed, type-cast, declared fields
+  only**, the same set `find()->fields` reports. `$row['meta'][$prefix . 'date']` now returns null
+  **silently**, and a filter or sort built on it fails OPEN. Read `$row['meta']['date']`. Never
+  hardcode `_ntdst_` either way. Older forks still return the raw prefixed bag — check that project's
+  `api/Data.php` before porting a reader.
+- **Rollback is best-effort, not a transaction.** Create deletes the new post if a meta write fails;
+  update snapshots prior post and meta state and restores on failure. This is application-level, not
+  a DB transaction — for critical multi-table paths (capacity locks, voucher counts) still wrap the
+  business operation in an explicit SQL transaction.
+- **`update_post_meta()` returns `false` both for errors and for unchanged values.** The layer treats
+  unchanged as success, so re-saving an identical value does not trigger a spurious rollback. Any
+  code you write against raw meta must make the same distinction or it will invent failures.
+- **There is no query cache in HEAD**, and its absence is a security property. A layer-owned cache is
+  one core does not invalidate, so a write that bypassed the model could leave a stale value being
+  served — for a revocation flag, a revoked credential still reading as live. WordPress's own post /
+  `post_meta` / term caches are the caching, and core invalidates them on any write, whoever
+  performed it. **Do not reintroduce a bespoke cache over post meta** without solving that, and do
+  not write invalidation hooks for a cache this copy does not have.
 
-> **Defaults are PRIVATE, and this was a security fix — do not "restore" them.**
-> `register()` now merges your config over `['public' => false, 'has_archive' => false]`.
-> It used to be the reverse, which meant a CPT registered with no opinion was
-> published, archived and publicly queryable — that default is exactly why every
-> non-public CPT on every ntdst-core site was anonymously enumerable. **Opt IN to
-> public; never opt out of it.** Silence must mean private.
+### Traps
 
-```php
-ntdst_data()->register('portfolio', [
-    'label'       => 'Portfolio Items',
-    'public'      => true,   // explicit opt-in — say it or you don't get it
-    'has_archive' => true,
-    'supports'    => ['title', 'editor', 'thumbnail'],
-    'fields'      => [
-        'client_name' => 'text',
-        'year'        => 'integer',
-        'featured'    => 'boolean',
-        'price'       => ['type' => 'float', 'min' => 0],
-        'email'       => ['type' => 'email', 'required' => true],
-        'images'      => 'gallery',
-        'related'     => ['type' => 'relation', 'post_type' => 'artist'],
-        'links'       => 'repeater',
-    ],
-    'field_groups' => [
-        'basic' => ['title' => 'Basic Info', 'fields' => ['client_name', 'year']],
-        'media' => ['title' => 'Media', 'fields' => ['images']],
-    ],
-    'use_tabs' => true,
-]);
-```
+- **Unknown keys are logged and dropped, not written.** A writer using the wrong vocabulary shows up
+  as `_ntdst_post_*` keys in a meta dump and as warnings in the data log. Zero warnings after a
+  refactor is the proof the vocabulary is right.
+- **An unknown *field type* throws at registration.** It used to fall through to
+  `sanitize_text_field` silently, which is how a `wysiwig` typo quietly stripped a field's markup with
+  nothing failing. Several types were also *advertised but never sanitised* until this was fixed — a
+  helper that accepts a type name and then ignores it is lying about its own vocabulary. Read the
+  exception message for the accepted set; it is the authoritative list.
+- **Repeater rows are read back largely as stored.** Sub-fields are sanitized on write, but a
+  top-level allow-list projection does **not** filter sub-keys. If you project a payload for
+  anonymous callers, project the repeater's rows too, or an undeclared sub-key ships.
 
-Metaboxes are auto-generated from field definitions. Tabbed interface via `use_tabs`.
+## API action decisions
 
-## Field Types
+- **Register through `ntdst_api_action()`, not a raw filter.** The action hook is an ordinary
+  WordPress filter, so a raw `add_filter('ntdst/api_data/…')` works — and forfeits the declared
+  capability floor, the public-allowlist entry, and the dispatch-time gate. It puts the whole burden
+  on the handler.
+- **Default-deny, and the framework never opts a site in.** The public (anonymous) action list ships
+  **empty**. Anonymous exposure is a decision only a site can make, because only the site knows what
+  its data means, so it is made in one place — the public-actions filter.
+  *The list used to ship recent-posts, post-search, user-search and magic-link actions, opting every
+  site into an anonymous caller-parameterised query surface it never asked for. Ground-truthing found
+  zero consumers for most and an authenticated admin autocomplete for the rest. Retiring it let an
+  entire gate stack be **deleted** rather than fixed. Do not reintroduce a generic,
+  caller-parameterised query action.*
+- **`api_data` is a fast-AJAX read layer, not a general-purpose public API**, and the origin check
+  does **not** save you — it returns true when there is no Origin, no Referer and no auth cookie. It
+  fails open. Treat every public handler as internet-facing.
+- **A declared capability floor bites at dispatch, ahead of the handler** — so it protects even a
+  handler that forgot to check. It is defense in depth **alongside** the handler's own per-row check,
+  never a replacement for it.
+- **Prefer the type-derived floor over a literal capability.** `cap_type` resolves the post type
+  object's own `cap->edit_others_posts` and is **fail-closed**: an unresolvable or empty capability
+  denies everyone, administrators included. The literal `capability` option is retained only because
+  it was reconciled from the retired `Theme::apiAction()` wrapper, and it keeps that wrapper's
+  fail-**open**-on-empty semantics.
+- **Public wins over any floor.** Marking an action public never floors it — anonymous reachability
+  is not conditional on a capability. Setting both is a by-design footgun; don't.
+- **The relation autocomplete is the one framework-provided data action, and it is not public.**
+  `relation_search` gates on two cheap questions: is the requested type a **declared relation
+  target** (an allow-list derived from the registered schemas — every `post_type` named by a
+  `relation` field), and does the caller hold that type's own `edit_others_posts`? A type nobody
+  points a relation field at is unreachable, and nobody has to remember to exclude it.
+- **The JS client has exactly three methods** — `call`, `upload`, `download`
+  (`ntdst-core/assets/js/ntdst-api.js`). There are no per-action helper wrappers;
+  `getRecentPosts()` / `searchPosts()` / `getPostDetails()` / `getTaxonomyTerms()` were documented for
+  years and never existed. Call the action by name, and never `fetch()` the route directly — the
+  client carries the nonce, CSRF and rate-limit handling.
 
-Every type in this table is genuinely sanitized. That was not always true: `select`,
-`date` and `wysiwyg` were **advertised but never implemented** and fell through to
-`sanitize_text_field` silently. A CPT helper that accepts a type name and then
-ignores it is lying about its own vocabulary — so the vocabulary was made real.
-Use the type that means what you mean.
+### The authorization idiom — three rules, each learned the hard way
 
-| Type | Sanitizer | Admin UI |
-|------|-----------|----------|
-| `text` | `sanitize_text_field` | Text input |
-| `textarea` | `sanitize_textarea_field` | Textarea |
-| `email` | `sanitize_email` | Email input |
-| `url` | `esc_url_raw` | URL input |
-| `html`, `content` | `wp_kses_post` | WP Editor |
-| `wysiwyg` | `wp_kses_post` | WP Editor |
-| `int`, `integer` | `absint` | Number input |
-| `float`, `double` | `floatval` | Number input with step |
-| `bool`, `boolean` | `sanitizeBoolean()` | Checkbox |
-| `date` | `sanitizeDate()` | Date input |
-| `select` | `sanitize_text_field` | Dropdown (needs `options`) |
-| `array` | `sanitizeNestedArray()` | — |
-| `json` | `sanitizeJson()` | — |
-| `relation` | `absint` per id, always an array | Post selector (needs `post_type`) |
-| `gallery` | `absint` per id, always an array | Media library picker |
-| `repeater` | `sanitizeRepeater()` — **rows carry their own sub-types** | Sortable rows (needs `fields`) |
-
-**Repeater caveat, know this before you expose one publicly:** sub-fields are
-sanitized on write, but rows are read back through `formatRepeaterField()` largely
-as stored. An allow-list projection applied at the top level does **not** filter
-sub-keys. If you project a payload for anonymous callers, project the repeater's
-rows too, or an undeclared sub-key ships.
-
-**Validation options:** `required`, `min`, `max`, `validate` callback.
-
-**Meta prefix:** Configure `meta_prefix` to auto-prefix all meta keys:
-```php
-ntdst_data()->register('portfolio', [
-    'meta_prefix' => 'pf_',  // All meta stored as pf_field_name
-    'fields' => ['client' => 'text'],  // Access as 'client', stored as 'pf_client'
-]);
-```
-
-## API Endpoints
-
-### Architecture
-```
-ntdstAPI.call('action', params)  →  POST /wp-json/ntdst/v1/action
-    → Filter: ntdst/api_data/{action}  →  Handler returns data
-```
-
-Auto-nonce management, rate limiting (30/60s), CSRF protection.
-
-### Handler Template (Every handler follows this)
-
-```php
-add_filter('ntdst/api_data/update_item', function ($data, $params) {
-    // 1. Sanitize
-    $id    = absint($params['id'] ?? 0);
-    $title = sanitize_text_field($params['title'] ?? '');
-
-    // 2. Validate
-    if (!$id || empty($title)) {
-        return new WP_Error('invalid_input', 'ID and title required');
-    }
-
-    // 3. Check permissions
-    if (!current_user_can('edit_post', $id)) {
-        return new WP_Error('forbidden', 'Permission denied');
-    }
-
-    // 4. Use Data Manager
-    $model  = ntdst_data()->get('my_type');
-    $result = $model->update($id, ['title' => $title]);
-
-    // 5. Handle errors
-    if (is_wp_error($result)) {
-        return $result;
-    }
-
-    // 6. Return success
-    return ['updated' => true, 'id' => $id];
-}, 10, 2);
-```
-
-### Public vs Protected — read this before adding a public action
-
-`api_data` is a **fast-AJAX read layer**, not a general-purpose public API. That is a
-legitimate design, but it means an action you add to `public_actions` is reachable by
-anyone, with caller-supplied params, and `verifyOrigin()` does **not** save you — it
-returns true when there is no Origin, no Referer and no auth cookie. It fails open.
-Treat every public handler as internet-facing.
-
-**The framework ships NO public actions and no data actions at all.**
-`$public_actions` is empty; `NTDST_Endpoints` is a router — origin, rate limit,
-nonce, auth gate, dispatch — with no opinion about anyone's data. Anonymous
-exposure is a per-site decision made in exactly one place:
-
-```php
-add_filter('ntdst/api/public_actions', fn($a) => [...$a, 'my_action']);
-```
-
-Everything not listed there requires a logged-in caller before the handler runs.
-
-> **Retired 2026-08-07 — do not write these, they no longer exist.**
-> `get_recent_posts` and `search_users` are DELETED. `send_magic_link` was
-> removed from the public list (it never had a handler). `search_posts` MOVED to
-> `NTDST_RelationField::handleRelationSearch()` as the non-public
-> `relation_search`. Older projects may still carry them until ported.
->
-> These were "example" actions that made every site's data anonymously queryable
-> by a caller-supplied post type. Defending that surface took five generations of
-> security review; retiring it let the whole gate stack be deleted rather than
-> fixed. **Do not reintroduce a generic, caller-parameterised query action.**
-
-**The relation autocomplete.** `relation_search` is the one framework-provided
-data action, and it is not public. Its gate is two questions, both cheap: is the
-requested type a **declared relation target** (an allow-list DERIVED from the
-registered schemas — every `post_type` named by a `relation` field), and does the
-caller hold that type's own `edit_others_posts`? A type nobody points a relation
-field at is unreachable, and nobody has to remember to exclude it.
-
-### Authorization idiom — three rules, each learned the hard way
-
-**1. `edit_posts` is NOT authorization.** It means "may create and edit MY OWN
-posts", and **Contributors and Authors hold it**. Gating a read path on it hands
-every non-public row to the lowest content role. This shipped twice, in different
-files, both times with a comment claiming it meant "editors only". Use
-`edit_others_posts` — "may edit posts belonging to someone else" — which is what a
-handler returning other people's rows actually implies.
+**1. `edit_posts` is NOT authorization.** It means "may create and edit MY OWN posts", and
+**Contributors and Authors hold it**. Gating a read path on it hands every non-public row to the
+lowest content role. This shipped twice, in different files, both times with a comment claiming it
+meant "editors only". Use `edit_others_posts` — "may edit posts belonging to someone else" — which is
+what a handler returning other people's rows actually implies.
 
 **2. Read the capability OFF THE TYPE, never as a literal.**
 
@@ -346,30 +256,29 @@ $mayReadOthers = $cap !== '' && current_user_can($cap);
 if (!current_user_can('edit_others_posts')) { ... }
 ```
 
-The literal and the mapped answer coincide for a `capability_type => 'post'` type —
-and stop coinciding the moment anyone gives that type its own capability type, which
-is a standard hardening. Then the literal silently admits every generic Editor to a
-type that no longer means to grant them anything. **Resolve and validate BEFORE
-calling `current_user_can()`** — a non-string capability must deny, not be passed in.
+The literal and the mapped answer coincide for a `capability_type => 'post'` type — and stop
+coinciding the moment anyone gives that type its own capability type, which is a standard hardening.
+Then the literal silently admits every generic Editor to a type that no longer means to grant them
+anything. **Resolve and validate BEFORE calling `current_user_can()`** — a non-string capability must
+deny, not be passed in. This is exactly what `cap_type` does for you at dispatch.
 
-**3. Defence in depth: gate the FETCH as well as the response.** Decide the
-capability first, then let it choose the status you fetch:
+**3. Gate the FETCH as well as the response.** Decide the capability first, then let it choose the
+status you fetch:
 
 ```php
 $release = $model->find($id, $mayReadOthers ? 'any' : ['publish']);
 // ... then the handler gate STAYS, as an independent second control
 ```
 
-An unprivileged caller's embargoed row is then never loaded at all, so a later
-mistake in the gate has nothing left to leak.
+An unprivileged caller's embargoed row is then never loaded at all, so a later mistake in the gate
+has nothing left to leak.
 
 ### Never return a raw `WP_Post` from a public handler
 
-`find()` populates `->meta` with **every** meta row including protected
-`_`-prefixed keys, and `json_encode` serialises all of `WP_Post`'s public
-properties — `post_password` among them. Nothing downstream filters. Project an
-explicit **allow-list**, and build it by iterating the declared schema rather than
-filtering `->fields`:
+`find()` populates `->meta` with **every** meta row including protected `_`-prefixed keys, and
+`json_encode` serialises all of `WP_Post`'s public properties — `post_password` among them. Nothing
+downstream filters. Declare `public_fields` on the model and emit `->publicRows()` / `->publicRow()`,
+or project an explicit allow-list **built by iterating the declared schema**:
 
 ```php
 $declared = [];
@@ -382,81 +291,78 @@ return array_merge($declared, [
 ]);
 ```
 
-Iterating the schema makes the projection the contract in both directions: a
-declared field can never go missing, and an undeclared one can never leak even if
-the layer later hands back more than it was asked for. A denylist of known-bad keys
-fails the moment someone adds a field.
+Iterating the schema makes the projection the contract in both directions: a declared field can never
+go missing, and an undeclared one can never leak even if the layer later hands back more than it was
+asked for. A denylist of known-bad keys fails the moment someone adds a field.
 
-### JavaScript Client
+---
 
-The client has exactly **three** methods — `call`, `upload`, `download`
-(`ntdst-core/assets/js/ntdst-api.js`). There are no per-action helper wrappers;
-`getRecentPosts()` / `searchPosts()` / `getPostDetails()` / `getTaxonomyTerms()`
-were documented for years and never existed. Call the action by name.
+## Judgment — when a raw call is legitimate, and the excuses that aren't
 
-```javascript
-await ntdstAPI.call('my_action', params);
-await ntdstAPI.upload('import_csv', formData);
-await ntdstAPI.download('export_zip', { id: 12 });
+The mechanical rules are gated (above). What a grep *cannot* decide is whether a particular raw read
+is the justified exception. That judgment is here.
 
-// Error handling
-try { await ntdstAPI.call('action', params); }
-catch (error) { showError(error.message); }
-```
+**A raw meta or post read is legitimate in exactly two situations:**
 
-## Anti-Patterns
+1. **A batch path where the Data API has no terminal for the query.** The corpus-wide example is a
+   `DISTINCT` meta-column read for an admin filter dropdown — there is no `distinctMeta()`, so
+   `$wpdb` with `prepare()` is the honest answer. This is a **framework gap**, so file it as one.
+2. **Inside that domain's repository**, which is where the raw call is supposed to live.
+
+Everything else is drift. The excuses, and what is actually true:
+
+| The excuse | The reality |
+|---|---|
+| *"It's faster to write `get_post_meta()` than to read the docs."* | It is faster **once**. It then costs every reader who must work out whether this field is sanitised, prefixed, or validated — and it silently skips the sanitiser the schema declares. The golden path is a copy-paste away and is shorter than the raw version. |
+| *"It's just one field, a repository is overkill."* | One field is how every one of the 13 started. The repository is ~10 lines and it is the seam that makes the next reader's change safe. |
+| *"It's read-only, so nothing can break."* | A read that bypasses the model bypasses the meta prefix. Change `meta_prefix` and every raw reader breaks silently, returning empty rather than erroring. |
+| *"I'll batch it myself with `withMeta()` and add the prefix."* | The prefix is no longer in the projected bag. That read returns null **silently**, and a filter built on it fails open — two live sites were found that way. Read the declared field name. |
+| *"It's an internal admin screen, not public-facing."* | Admin is where capabilities are weakest relative to what's on screen, and `is_admin()` is a **context flag, not authorization**. Escaping and capability checks are not a public-facing concern. |
+| *"It's a prototype / we're demoing it today."* | Prototypes are what ship. Name it in the plan as a deliberate exception with a removal date, or write it correctly — those are the two honest options. |
+| *"The neighbouring file does it this way."* | The neighbour may be drifted; that is the measured base rate here. Build to the golden path, not to the sibling. |
+| *"The Data API doesn't support what I need."* | Sometimes **true** — and then it is a framework gap worth reporting, not a silent workaround. Say which terminal is missing. A gap named once gets fixed for 13 sites; a gap worked around gets re-worked-around 13 times. |
+
+**Red flags — stop and re-check if you catch yourself:**
+
+- typing `get_post_meta`, `get_posts`, `wp_insert_post` or `$wpdb` anywhere outside a `*Repository.php`
+- typing a literal `_ntdst_` or any meta-key prefix, or concatenating `getMetaPrefix()` onto a
+  `$row['meta']` read
+- writing `ob_start()` to build markup
+- reaching for `add_action('wp_ajax_…')` because "it's just a quick endpoint"
+- registering a post type or taxonomy with a raw WordPress call
+- returning `$post` (or `['data' => $post]`) from a handler anyone unauthenticated can reach
+- about to justify any of the above with a sentence from the left column above
+
+## Anti-patterns — the drift vocabulary reviewers key off
 
 | Smell | Fix |
-|-------|-----|
-| `$wpdb->query(...)` | `ntdst_data()->get('type')->...` |
-| `get_post_meta($id, 'key', true)` | `$model->getMeta($id, 'key')` |
-| `update_post_meta(...)` | `$model->update($id, ['key' => $val])` or `$model->updateMeta()` |
-| `$post['title']` after `find()` | `$post->post_title` (object, not array) |
+|---|---|
+| `$wpdb->query(...)` for CPT data | the repository for that post type |
+| `get_post_meta()` / `update_post_meta()` in a service | the model's field accessors |
+| array access on a `find()` result | it is a `WP_Post` object |
+| `find($id, true)` | throws — the 2nd arg is a status; pass `'any'` or a status array |
+| `$row['meta'][$prefix . 'x']` after `withMeta()` | `$row['meta']['x']` — the bag is schema-projected |
 | `return false` on error | `return new WP_Error(...)` |
-| `fetch('/wp-json/...')` in JS | `ntdstAPI.call('action', params)` |
-| `posts_per_page => -1` | Set reasonable limit or paginate |
-| Meta in foreach loop | Use `->withMeta()->get()` (batch) |
-| Missing `absint()` / `sanitize_*()` | Sanitize ALL API input |
-| Missing `current_user_can()` | Check permissions for write actions |
-| No `is_wp_error()` check | Always check create/update/delete results |
-| `'status' => 'publish'` | Use `'post_status' => 'publish'` (avoid meta collision) |
-| Multiple `updateMeta()` calls | Use `updateMetaBatch()` for multiple fields |
-| `find($id, true)` | Throws. Second arg is `$status` — pass `'any'` or a status array |
-| `ntdst_get_posts_fast()`, `ntdst_query_cache()`, `ntdst_clear_posts_cache()`, `ntdst_invalidate_post_type()` | Deleted. Chain API, or `ntdst_get_formatted_posts()` |
-| `$model->cache(3600)->get()` | Deleted. Core's caching is the caching |
-| `current_user_can('edit_posts')` as a READ gate | Contributors hold it. Use `edit_others_posts`, read off the type object |
-| `current_user_can('edit_others_posts')` as a literal | Resolve `$type->cap->edit_others_posts`; fail closed on empty/non-string |
-| `'data' => $post` from a public handler | Project an allow-list built from the declared schema — raw `WP_Post` leaks `post_password` + all meta |
-| `register()` with no `public` key, expecting private | It IS private now — but say `'public' => false` anyway if privacy is load-bearing |
-| Registering a type `public => true, exclude_from_search => true` | That is the "reachable by URL, hidden from search" idiom — it needs an explicit review, not silence |
+| no `is_wp_error()` check on a write | always check; log if you can't propagate |
+| raw `add_action('wp_ajax_*')` or raw `add_filter('ntdst/api_data/…')` | `ntdst_api_action()` |
+| `fetch('/wp-json/…')` in JS | `ntdstAPI.call()` / `.upload()` / `.download()` |
+| `posts_per_page => -1` | a real limit, or paginate |
+| meta read inside a `foreach` | batch it with `->withMeta()` |
+| missing `absint()` / `sanitize_*()` on API input | sanitize **all** input |
+| missing capability check on a write action | declare `cap_type` **and** check the row |
+| `current_user_can('edit_posts')` as a READ gate | Contributors hold it — use `edit_others_posts`, read off the type object |
+| `current_user_can('edit_others_posts')` as a literal | resolve `$type->cap->edit_others_posts`; fail closed on empty/non-string |
+| `'status' => 'publish'` | `'post_status' => 'publish'` |
+| `'data' => $post` from a public handler | `publicRows()`, or a schema-derived allow-list |
+| hardcoded `_ntdst_` prefix | read the prefix from the model — or, in a projected bag, don't read a prefix at all |
+| several single-field meta writes in a row | `updateMetaBatch()` (one cache clear) |
+| `$model->cache(N)`, `ntdst_query_cache()`, `ntdst_get_posts_fast()` | deleted — chain API, or `ntdst_get_formatted_posts()` |
+| `register()` with no `public` key, expecting private | it IS private now — say `'public' => false` anyway if privacy is load-bearing |
+| `public => true, exclude_from_search => true` | the "reachable by URL, hidden from search" idiom — needs an explicit review, not silence |
 
-## Caching — the layer has no cache of its own any more
+## See also
 
-**`NTDST_Query_Cache` is DELETED.** So are `$model->cache(N)`, the `cache_time`
-property, `ntdst_clear_posts_cache()`, `ntdst_invalidate_post_type()` and
-`ntdst_query_cache()`. If you are reading older code or docs that use them, that
-code is dead. The layer stopped having a performance opinion.
-
-What remains is **WordPress's own** caching, which is the point:
-
-- `getPostMeta()` prefers core's `post_meta` cache — primed by `WP_Query` on any
-  read, and **invalidated by core on any write, whoever performs it** — and falls
-  back to one prepared SQL statement when cold.
-- `find()` is `get_post()`, which is core's own cached read.
-
-This is a security property, not just a simplification. A layer-owned cache is one
-core does not invalidate, so a write that bypassed the model (a raw
-`update_post_meta()`) could leave a stale value being served — which for a
-revocation flag means a revoked credential still reading as live. Using core's group
-means any writer's invalidation counts. **Do not reintroduce a bespoke cache over
-post meta** without solving that.
-
-Batch prime with `$model->withMeta()->get()` or `update_postmeta_cache($ids)`.
-
-## Reference Files
-
-| File | Content |
-|------|---------|
-| `references/data-orm.md` | Full CRUD, query builder, validation, field types, caching |
-| `references/api.md` | REST endpoints, JS client, security, built-in actions |
-| `references/metabox.md` | Auto-generated metaboxes, field options, tabs, conditionals |
+- `golden-paths/model-and-api-action.md` — the worked slice
+- `ntdst-architecture` — service lifecycle, DI, the fork/divergence table, `references/framework-map.md`
+- `ntdst-patterns` — where files live
+- `lessons.md` — the incidents these rules came from
