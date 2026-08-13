@@ -1,14 +1,102 @@
 [
- {"name": "harnessed-development", "query": "Add a booking form to the contact page — do it properly through the harness.", "should_trigger": true, "type": "skill"},
- {"name": "harnessed-development", "query": "What does the AccessGrantService actually do? Just explain it, don't change anything.", "should_trigger": false, "type": "skill"},
- {"name": "planning", "query": "Write a plan for the private-events feature before we build anything.", "should_trigger": true, "type": "skill"},
- {"name": "planning", "query": "Execute the tasks.md for musician-events, cluster B.", "should_trigger": false, "type": "skill"},
- {"name": "building", "query": "The plan is approved and gate-check is green — start building.", "should_trigger": true, "type": "skill"},
- {"name": "building", "query": "Spec out how invitations should work — we're still deciding the shape.", "should_trigger": false, "type": "skill"},
- {"name": "testing-workflow", "query": "I just added the derived end-date logic plus a thin badge component — do both need tests, and at what tier?", "should_trigger": true, "type": "skill"},
- {"name": "testing-workflow", "query": "Would this suite actually go RED if the tenancy guard broke? Audit it.", "should_trigger": false, "type": "skill"},
- {"name": "threat-modeling", "query": "Planning the invite-token feature — build the attack model before task breakdown.", "should_trigger": true, "type": "skill"},
- {"name": "threat-modeling", "query": "Audit the already-shipped token endpoints for vulnerabilities.", "should_trigger": false, "type": "skill"},
- {"name": "architecture-invariants", "query": "Name the one place 'may this requester see this event' gets decided, so reviews can catch bypasses.", "should_trigger": true, "type": "skill"},
- {"name": "architecture-invariants", "query": "Reformat this service file to WPCS.", "should_trigger": false, "type": "skill"}
+ {
+  "name": "harnessed-development",
+  "query": "Add a booking form to the contact page — do it properly through the harness.",
+  "should_trigger": true,
+  "type": "skill"
+ },
+ {
+  "name": "harnessed-development",
+  "query": "What does the AccessGrantService actually do? Just explain it, don't change anything.",
+  "should_trigger": false,
+  "type": "skill"
+ },
+ {
+  "name": "planning",
+  "query": "Write a plan for the private-events feature before we build anything.",
+  "should_trigger": true,
+  "type": "skill"
+ },
+ {
+  "name": "planning",
+  "query": "Execute the tasks.md for musician-events, cluster B.",
+  "should_trigger": false,
+  "type": "skill"
+ },
+ {
+  "name": "building",
+  "query": "The plan is approved and gate-check is green — start building.",
+  "should_trigger": true,
+  "type": "skill"
+ },
+ {
+  "name": "building",
+  "query": "Spec out how invitations should work — we're still deciding the shape.",
+  "should_trigger": false,
+  "type": "skill"
+ },
+ {
+  "name": "testing-workflow",
+  "query": "I just added the derived end-date logic plus a thin badge component — do both need tests, and at what tier?",
+  "should_trigger": true,
+  "type": "skill"
+ },
+ {
+  "name": "testing-workflow",
+  "query": "Would this suite actually go RED if the tenancy guard broke? Audit it.",
+  "should_trigger": false,
+  "type": "skill"
+ },
+ {
+  "name": "threat-modeling",
+  "query": "Planning the invite-token feature — build the attack model before task breakdown.",
+  "should_trigger": true,
+  "type": "skill"
+ },
+ {
+  "name": "threat-modeling",
+  "query": "Audit the already-shipped token endpoints for vulnerabilities.",
+  "should_trigger": false,
+  "type": "skill"
+ },
+ {
+  "name": "architecture-invariants",
+  "query": "Name the one place 'may this requester see this event' gets decided, so reviews can catch bypasses.",
+  "should_trigger": true,
+  "type": "skill"
+ },
+ {
+  "name": "architecture-invariants",
+  "query": "Reformat this service file to WPCS.",
+  "should_trigger": false,
+  "type": "skill"
+ },
+ {
+  "name": "convergence",
+  "desc": "The spec-completeness gate — read the CODEBASE against specs/<feature>/ (spec + plan + tasks) and find what was promised but never built. Gaps classified missing / partial / contradicts / unrequested with file evidence, appended to tasks.md as a PROPOSED convergence phase that must pass gate-check.py and seam approval before building executes it. Use on resumed or stalled branches, finishing work, or before /shakeout — \"what did the spec promise that isn't built yet\", \"is anything missing or half-implemented\", \"check the code against the spec\", \"what's left to build here\". NOT shake-out (that drives what exists; this finds what doesn't, cheaper and earlier) and NOT Stage 1.5 (that reads artifact against artifact before execution; this reads code against intent after). Read-only on code; append-only on tasks.md; never dispatches what it proposes.",
+  "type": "skill",
+  "should_trigger": true,
+  "query": "The stride-lms saved-views branch stalled in June and I'm picking it back up — before anything else, what did the spec promise that isn't actually in the code yet?"
+ },
+ {
+  "name": "convergence",
+  "desc": "The spec-completeness gate — read the CODEBASE against specs/<feature>/ (spec + plan + tasks) and find what was promised but never built. Gaps classified missing / partial / contradicts / unrequested with file evidence, appended to tasks.md as a PROPOSED convergence phase that must pass gate-check.py and seam approval before building executes it. Use on resumed or stalled branches, finishing work, or before /shakeout — \"what did the spec promise that isn't built yet\", \"is anything missing or half-implemented\", \"check the code against the spec\", \"what's left to build here\". NOT shake-out (that drives what exists; this finds what doesn't, cheaper and earlier) and NOT Stage 1.5 (that reads artifact against artifact before execution; this reads code against intent after). Read-only on code; append-only on tasks.md; never dispatches what it proposes.",
+  "type": "skill",
+  "should_trigger": true,
+  "query": "All tasks in specs/webhook-intake are ticked but I don't trust it — check the codebase against the spec and tell me what's missing or only half-implemented."
+ },
+ {
+  "name": "convergence",
+  "desc": "The spec-completeness gate — read the CODEBASE against specs/<feature>/ (spec + plan + tasks) and find what was promised but never built. Gaps classified missing / partial / contradicts / unrequested with file evidence, appended to tasks.md as a PROPOSED convergence phase that must pass gate-check.py and seam approval before building executes it. Use on resumed or stalled branches, finishing work, or before /shakeout — \"what did the spec promise that isn't built yet\", \"is anything missing or half-implemented\", \"check the code against the spec\", \"what's left to build here\". NOT shake-out (that drives what exists; this finds what doesn't, cheaper and earlier) and NOT Stage 1.5 (that reads artifact against artifact before execution; this reads code against intent after). Read-only on code; append-only on tasks.md; never dispatches what it proposes.",
+  "type": "skill",
+  "should_trigger": false,
+  "query": "The feature is fully built and unit tests are green — drive the acceptance flows through a real browser and tell me if it actually works end to end."
+ },
+ {
+  "name": "convergence",
+  "desc": "The spec-completeness gate — read the CODEBASE against specs/<feature>/ (spec + plan + tasks) and find what was promised but never built. Gaps classified missing / partial / contradicts / unrequested with file evidence, appended to tasks.md as a PROPOSED convergence phase that must pass gate-check.py and seam approval before building executes it. Use on resumed or stalled branches, finishing work, or before /shakeout — \"what did the spec promise that isn't built yet\", \"is anything missing or half-implemented\", \"check the code against the spec\", \"what's left to build here\". NOT shake-out (that drives what exists; this finds what doesn't, cheaper and earlier) and NOT Stage 1.5 (that reads artifact against artifact before execution; this reads code against intent after). Read-only on code; append-only on tasks.md; never dispatches what it proposes.",
+  "type": "skill",
+  "should_trigger": false,
+  "query": "The plan and tasks.md are freshly written for specs/lti-launch — before I dispatch the first task, verify the artifacts are consistent and run the machine check."
+ }
 ]

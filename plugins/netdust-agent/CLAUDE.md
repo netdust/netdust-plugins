@@ -8,7 +8,7 @@ One idea, decided 2026-08-10 (the re-thinning):
 > never replaces upstream content; a netdust skill that restates superpowers is a defect
 > (that drift is how 27 skills and 3,900 lines accumulated by 0.17).
 
-## The seven skills
+## The eight skills
 
 | Skill | Adds to | What it adds |
 |---|---|---|
@@ -19,6 +19,7 @@ One idea, decided 2026-08-10 (the re-thinning):
 | `threat-modeling` | `planning` | the trigger list + the `## Threat model` section shape |
 | `architecture-invariants` | `planning` / review | the convergence-point doc shape reviews check bypasses against |
 | `compounding` | spec-close | the learning loop: session lessons land in CODE-MAP + skill lessons + evals as approved proposals — how the agents and skills improve |
+| `convergence` | resumed/stalled work, pre-`/shakeout` | the spec-completeness question no other gate asks: code read against `specs/<feature>/`, gaps (missing/partial/contradicts/unrequested) appended to `tasks.md` as a PROPOSED phase behind gate-check + the seam; `unrequested` hands off to `invariant-auditor`; `/converge` |
 
 ## Agents (7)
 
@@ -49,5 +50,6 @@ doesn't ship — skills get the same RED-first discipline as code.
 
 ## Commands
 
-`/shakeout` (spec-complete gate), `/integration` (group gate), `/loop`, `/deploy`,
-`/skill-audit`, `/evaluate`, `/architecture-invariants`.
+`/shakeout` (spec-complete gate), `/integration` (group gate), `/converge`
+(spec-completeness gate), `/loop`, `/deploy`, `/skill-audit`, `/evaluate`,
+`/architecture-invariants`.

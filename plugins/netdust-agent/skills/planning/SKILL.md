@@ -80,7 +80,10 @@ python3 <plugin>/bin/gate-check.py specs/<feature>
 
 Exit 0 or fix the artifacts and re-run. No checklist substitutes; `building` re-runs this
 at entry. Then read spec/plan/tasks against each other once for what no script judges:
-does the task citing FR-2 actually satisfy it; does any task invent scope.
+does the task citing FR-2 actually satisfy it; does any task invent scope; do two FR/SC
+lines ask for the same thing twice; does a vague adjective (*fast, secure, robust*) stand
+where a threshold should be; does one concept wear two names across the three files. Fix
+in the artifact or hand back — never carry a finding into Stage 2 as a mental note.
 
 ## The seam — STOP
 
