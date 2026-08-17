@@ -332,4 +332,22 @@ def run() -> list[tuple[bool, str]]:
         case("fail-open: nonexistent feature_dir on bypass -> stdout byte-identical",
              out_missing == out_bypass_control)
 
+    # ── flow-marker stand-down (one marker path, two drivers) ────────────
+    # A netdust-flow marker (written by /flow arm) lives at the same path
+    # and carries flow fields this plugin's marker never has. The gate must
+    # leave it entirely alone — no block, no disarm, no trace — because in
+    # a flow-harnessed repo the driver is the flow walker's own Stop hook,
+    # and a second driver here could block a stop the walker deliberately
+    # allowed for a human seal yield.
+    with tempfile.TemporaryDirectory() as tmp:
+        cwd = setup(tmp, TASKS_ONE_OPEN,
+                    marker={"flow": "site", "node": "build"})
+        before = (cwd / "tasks" / ".harness-loop.json").read_text()
+        rc, out = run_gate(cwd, {"cwd": str(cwd)}, Path(tmp))
+        case("flow marker: allows the stop (rc 0)", rc == 0)
+        case("flow marker: emits nothing", out == "")
+        case("flow marker: marker left byte-identical",
+             (cwd / "tasks" / ".harness-loop.json").read_text() == before)
+        case("flow marker: no trace events written", trace_events(cwd) == [])
+
     return results
