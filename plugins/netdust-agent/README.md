@@ -16,7 +16,7 @@ Sequencers and gates. They decide what fires and prove it fired. `harnessed-deve
 |---|---|
 | `harnessed-development` | **Entry point.** Intake router only: the class dial (A–F) → the right spine (F = brainstorm-only, no plan/tasks artifact). |
 | `planning` | **PLAN spine.** Sequences brainstorm → spec → plan(+gates, task-shaping) → spec-analysis; STOPS at the seam for human approval. Never executes. Presence-aware: plans inline in the main conversation while the human is actively steering, dispatches the background `planner` only once the human has stepped away or the run is unattended — either way the same pre-unattended ladder (gate-check GREEN, seam approval, doubting-decisions) gates before any unattended execution. |
-| `building` | **BUILD spine.** Precondition = the seam artifact; sequences execute → test/standards gates → review clusters → shake-out → finish. Refuses to start plan-driven work without a green gate-check. Owns the armed `/loop`. |
+| `building` | **BUILD spine.** Precondition = the seam artifact; sequences execute → test/standards gates → review clusters → shake-out → finish. Refuses to start plan-driven work without a green gate-check. Owns the armed `/loop` — except in flow-harnessed repos (`.flow/` at the repo root), where the netdust-flow road owns the loop: `/loop` refuses and `loop-gate.py` stands down on flow markers (see `harnessed-development`). |
 | `threat-modeling` | Plan-time gate: embed a `## Threat model` when a security surface is touched. |
 | `architecture-invariants` | Gate: name the convergence points; flag bypasses. |
 | `feature-acceptance` | Gate: author + drive the `## Acceptance flows` matrix. |
