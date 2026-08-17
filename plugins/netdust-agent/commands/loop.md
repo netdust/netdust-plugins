@@ -18,18 +18,24 @@ Preconditions — refuse to arm (say why) if any fails:
 2. **Class A/B only.** C/D/E are single cycles; nothing to loop.
 3. **Stage 1.5 green:** run `python3 <plugin>/bin/gate-check.py <feature-dir>`
    — exit 0 required. A loop on a gate-failing plan grinds a defective plan.
+4. **Not a flow-harnessed repo.** If `.flow/` exists at the repo root, the
+   armed loop is the netdust-flow road's — refuse and route to
+   `/flow <feature-dir> <road>` (see `harnessed-development`). One marker
+   path, one driver; and if `tasks/.harness-loop.json` already exists with
+   flow fields (`flow`/`node`), a road is armed RIGHT NOW — never overwrite
+   it.
 
 Then:
 
-4. Read `Loop budget: ~N` from `<feature-dir>/plan.md` (from the plan);
+5. Read `Loop budget: ~N` from `<feature-dir>/plan.md` (from the plan);
    default 25 if absent.
-5. Write `tasks/.harness-loop.json`:
+6. Write `tasks/.harness-loop.json`:
    `{"feature_dir": "<feature-dir>", "iteration": 0, "max_iterations": N,
    "last_done": <current checked count>, "dry": 0}`
-6. Ensure `.gitignore` contains `tasks/.harness-loop.json` (runtime state,
+7. Ensure `.gitignore` contains `tasks/.harness-loop.json` (runtime state,
    never committed — same treatment as the stop-hook sidecar).
-7. Emit `python3 <plugin>/bin/run-trace.py append <feature-dir> loop-armed budget=<N>`.
-8. Confirm to the user in two lines: armed, budget, and how the loop ends
+8. Emit `python3 <plugin>/bin/run-trace.py append <feature-dir> loop-armed budget=<N>`.
+9. Confirm to the user in two lines: armed, budget, and how the loop ends
    (FINISHED → disarms, Stage 3 runs attended · `[HUMAN]` task → yields with
    the question · budget/dry-loop → disarms · `/loop off` anytime).
 
