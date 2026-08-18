@@ -446,6 +446,18 @@ def _ensure_sidecar_gitignored(cwd: str) -> None:
 
 
 def git_commit_memory(cwd: str) -> None:
+    """Commit ONLY the hook's own memory/ + tasks/ output — never the ambient
+    index.
+
+    Every git verb here is PATH-SCOPED to the two dirs the hook owns. A bare
+    `git add`/`git diff --cached`/`git commit` operates on the WHOLE index, so
+    any change a session staged elsewhere (a `git rm` of source mid-build, a
+    half-staged edit) would be swept into this commit and mislabelled
+    "auto-capture session end" — the 2026-08 data-loss bug, where 308 lines of
+    source templates were deleted from HEAD under a memory label and nothing
+    else. The pathspecs below make that structurally impossible: the guard
+    only fires on OUR changes, and the commit can only ever contain OUR paths.
+    """
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--is-inside-work-tree"],
@@ -456,21 +468,33 @@ def git_commit_memory(cwd: str) -> None:
 
         _ensure_sidecar_gitignored(cwd)
 
+        # Only the dirs that actually exist — a pathspec that matches nothing
+        # would make `git commit -- <pathspec>` abort (and drop the capture).
+        paths = [p for p in ("memory/", "tasks/") if (Path(cwd) / p).is_dir()]
+        if not paths:
+            return
+
         subprocess.run(
-            ["git", "add", "memory/", "tasks/"],
+            ["git", "add", "--", *paths],
             cwd=cwd, capture_output=True,
         )
 
+        # SCOPE the "anything to commit?" check to our paths. An unrelated
+        # pre-staged change must NOT make this fire when memory/tasks are
+        # themselves unchanged (that was the "308 deleted lines, no memory
+        # content" commit).
         status = subprocess.run(
-            ["git", "diff", "--cached", "--quiet"],
+            ["git", "diff", "--cached", "--quiet", "--", *paths],
             cwd=cwd, capture_output=True,
         )
         if status.returncode == 0:
-            return  # Nothing staged
+            return  # nothing of OURS changed — leave the index alone
 
+        # Commit ONLY our paths. Other staged changes stay staged, untouched.
         project = Path(cwd).name
         subprocess.run(
-            ["git", "commit", "-m", f"memory({project}): auto-capture session end"],
+            ["git", "commit", "-m", f"memory({project}): auto-capture session end",
+             "--", *paths],
             cwd=cwd, capture_output=True,
         )
     except Exception as e:
