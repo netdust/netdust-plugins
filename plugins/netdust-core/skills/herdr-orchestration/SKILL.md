@@ -81,6 +81,11 @@ pane, cwd and focus all return; the processes are gone.
 
 ## Protocol — first contact before touching shared ground
 
+Start any topology or cross-pane work with `herdr session list`. Sessions are separate
+servers with separate ID spaces, and a bare `herdr` command resolves to the session the
+CALLING pane lives in — never the project's by default. Reaching any other session takes
+an explicit `--session <name>`, on every call.
+
 `herdr api snapshot` returns every agent, layout and focus in one call — prefer it to a
 sweep of list commands. Agents the human started carry no unique name; the `agent` field
 holds the kind, not an identity. Join a herdr pane to a ListAgents peer on `cwd`, and
@@ -136,5 +141,14 @@ read one before you install it.
 - **Stale briefs**: whatever the brief claims about the environment, the dispatched
   agent verifies against the repo (see recipe). CLAUDE.md drifts; `composer.json`
   doesn't lie.
+- **A working pane will not give you depth**: `agent read --lines N` fails on a busy
+  pane with `agent_not_idle` — alternate-screen history is only capturable by scrolling
+  while idle. While a pane works, `--source visible` is the only source that answers, and
+  it returns one viewport. Whatever scrolls past between two reads is gone for good. So
+  read at the state TRANSITION, when the screen still holds what caused it, never on a
+  timer.
+- **Topology built in the wrong session cannot be moved**: there is no cross-session
+  move. Rebuild it in the right session and close the wrong one, re-seating every agent
+  by hand. Check `herdr session list` before you create, not after.
 - Use `--no-focus` everywhere; never prompt the operator's focused pane; never
   `herdr server stop` from a live session.
