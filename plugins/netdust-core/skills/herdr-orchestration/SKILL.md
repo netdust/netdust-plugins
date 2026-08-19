@@ -44,9 +44,21 @@ it for you.
 
 ## Decision — remote boxes run their own server
 
-For agent work on a fleet box: `ssh` in, then run `herdr` there. The server, the agents
-and the shells all live on that box, so a dropped SSH connection is only a detach. Do
-not attach from the workstation with `herdr --remote <host>`: the thin client buys
+For agent work on a fleet box, name the session and go in with one command:
+
+```bash
+ssh -t <host> herdr --session <name>      # e.g. ssh -t netdust-web herdr --session stride
+```
+
+`-t` is required — herdr is a TUI and needs a PTY. The server, the agents and the shells
+all live on that box, so a dropped connection is only a detach: reconnect with the same
+command and the work is still running.
+
+That is also the reason to go through herdr at all. `ssh -t <host> claude` puts the agent
+straight on the connection, and a drop kills it silently — a frozen screen locally, no
+process remotely. Check `pgrep` on the box, never the pane.
+
+Do not attach from the workstation with `herdr --remote <host>`: the thin client buys
 nothing here and adds a transport plus a keybinding question. Fleet operations that are
 not agent work stay on plain SSH with `netdust-core:ploi`.
 
