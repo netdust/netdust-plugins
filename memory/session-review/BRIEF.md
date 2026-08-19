@@ -26,13 +26,23 @@ Stefan approves what lands. You are in the MARKETPLACE SOURCE repo
 
 ## Finding your subject
 
+Your subject is **the main agent pane in your own herdr session** — the project
+workspace you were placed beside. You are pane three of that session's topology
+(out-of-repo work · shakeout · session review); you watch the session you live in,
+never another one.
+
 ```bash
-herdr --session <name> api snapshot     # agents[]: pane_id, agent_status, cwd, terminal_title_stripped
+herdr api snapshot     # agents[]: pane_id, agent_status, cwd, terminal_title_stripped
 ```
 
-Your subject is the working agent pane that is not you. Confirm by `cwd` — yours
-is `~/Projects/netdust-plugins`. Sessions are separate servers, so pass
-`--session` when your subject lives in another one.
+Take the agent that is not you — yours has cwd `~/Projects/netdust-plugins`. The
+subject's cwd is the project's checkout. A bare `herdr` command resolves to your
+own session, which is exactly what you want here; if you ever need another
+session, it needs an explicit `--session <name>`, and sessions are separate
+servers with separate ID spaces.
+
+If the subject pane is `idle` and has never worked, there is nothing to observe.
+Say so and stop — do not manufacture findings from an empty pane.
 
 ## How to watch — read at the TRANSITION, never on a timer
 
@@ -54,9 +64,13 @@ and act only when one of them CHANGES.
 At each transition, read the viewport once:
 
 ```bash
-herdr --session <name> agent read <target> --source recent-unwrapped --lines 120
+herdr agent read <target> --source visible
 ```
 
+Use `--source visible` while the subject is working — it is the only source that
+answers. `agent read --lines N` fails on a busy pane with `agent_not_idle`:
+alternate-screen history is only capturable by scrolling while idle. Keep
+`--source recent-unwrapped --lines 120` for a subject that has settled.
 `--source detection` gives the smaller bottom-buffer snapshot when you only need
 the current state. Use `pane wait-output <pane> --regex <pat> --timeout <ms>` to
 sleep until something specific appears instead of burning polls.
