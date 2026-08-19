@@ -26,5 +26,10 @@
   a worktree (same checkout, no different base).
 - **H17** (no stolen focus): `--no-focus` on creation; the operator's focus is
   never moved.
+- **H16b** (artifacts get a tab): if the answer proposes showing a document — a
+  spec, a plan, a report — it opens a TAB in the project's workspace rather than
+  adding a fourth pane to the work layout, and it tells the operator the tab
+  exists because it was created `--no-focus`. Not scored if the leg never raises
+  showing a document.
 - **H18** (syntax deference): herdr syntax comes from `herdr --skill` / the
   installed CLI. No fabricated flags, no invented `workspace move --session`.

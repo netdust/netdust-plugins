@@ -37,6 +37,13 @@ channels carries it.
 - Same checkout, helper process only (run the gate, tail a log) → sibling `pane split
   --current --cwd "$PWD" --no-focus`. Panes are for processes, workspaces are for
   branches.
+- An artifact the operator READS — a spec, a plan, a review report → a **tab** in the
+  project's workspace, never a fourth pane crowding the work layout:
+  `tab create --workspace <id> --label spec --no-focus`, then `pane run <root-pane>`
+  with `bat --style=numbers,header --paging=always <file>`. Use
+  `watch -n2 --color 'bat --color=always --style=numbers <file>'` while the file is
+  still being written. Then TELL the operator the tab is there — you made it
+  `--no-focus`, so nothing moved and they will not find it by accident.
 
 herdr does not isolate file changes: two panes in one directory edit the same file. The
 worktree IS the isolation, and using it safely stays a git decision — herdr only creates
@@ -85,6 +92,11 @@ Start any topology or cross-pane work with `herdr session list`. Sessions are se
 servers with separate ID spaces, and a bare `herdr` command resolves to the session the
 CALLING pane lives in — never the project's by default. Reaching any other session takes
 an explicit `--session <name>`, on every call.
+
+**Every pane of one project's topology belongs to ONE session — the project's.** Work
+pane, helper panes, viewer tabs, the session-review pane: all of them, together, in the
+session that project runs in. Your own pane sitting elsewhere is not a reason to build
+there; it is the reason to pass `--session`.
 
 `herdr api snapshot` returns every agent, layout and focus in one call — prefer it to a
 sweep of list commands. Agents the human started carry no unique name; the `agent` field
