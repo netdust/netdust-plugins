@@ -1,6 +1,6 @@
 ---
 name: herdr-orchestration
-description: "Use when running inside the herdr terminal multiplexer (HERDR_ENV=1 in the environment) and work involves other panes or sessions — coordinating with an agent in a neighboring pane, dispatching a framework fix to its own workspace while a feature is mid-flight, arming a notification watcher on a long or unattended run, spawning an independent reviewer, or porting a fix across the fleet. Triggers on keywords herdr, pane, panes, other pane, cross-pane, neighbor session, watcher, doorbell, blocked notification, dispatch, fix workspace, sub worktree, server restart, agent resume, remote box, api snapshot. Symptoms include a framework bug surfacing while the feature branch is dirty, the operator asking two panes to work together, an unattended run that needs the human only at approval gates, a server restart or update proposed while a dispatch is running, or a reviewer that must not share the author's context. Complements herdr's built-in skill (run `herdr --skill` — that output is the syntax authority); this skill carries only the netdust decisions on top: which channel, which topology, which protocol."
+description: "Use when running inside the herdr terminal multiplexer (HERDR_ENV=1 in the environment) and work involves other panes or sessions — coordinating with an agent in a neighboring pane, dispatching a framework fix to its own workspace while a feature is mid-flight, arming a notification watcher on a long or unattended run, spawning an independent reviewer, or porting a fix across the fleet. Triggers on keywords herdr, pane, panes, other pane, cross-pane, neighbor session, watcher, doorbell, blocked notification, dispatch, fix workspace, sub worktree, server restart, agent resume, remote box, api snapshot, watch the other session, watch the other pane, keep an eye on the main agent, review the session. Symptoms include a framework bug surfacing while the feature branch is dirty, the operator asking two panes to work together, an unattended run that needs the human only at approval gates, a server restart or update proposed while a dispatch is running, an operator asking a fresh pane to watch or review another session, or a reviewer that must not share the author's context. Complements herdr's built-in skill (run `herdr --skill` — that output is the syntax authority); this skill carries only the netdust decisions on top: which channel, which topology, which protocol."
 ---
 
 # herdr orchestration — the netdust decisions
@@ -119,6 +119,36 @@ stops working.
 The watcher polls on a timer. A `herdr-plugin.toml` plugin can react to blocked and done
 as events instead — not built. A plugin runs local commands with your permissions, so
 read one before you install it.
+
+## Role — the session-review pane
+
+When the operator seats you in a fresh workspace and says "watch the other session"
+(or watch the other pane / keep an eye on the main agent / review the session), you are
+the session-review pane, NOT the doorbell. The doorbell is `scripts/herdr-watcher.sh`
+below: it notifies a human on a transition and reads nothing. You do the opposite — you
+read at the transition and notify no one. Do not arm the watcher script and call it done.
+
+Read `references/session-review.md` before your first pass. It carries the mechanics;
+these are the decisions:
+
+- **Observe, never act on your subject.** No `agent prompt`, no `send-keys`, no
+  `focus` — focusing marks its tab seen and steals the operator's context, while CLI
+  reads do not. You are a camera, not a hand.
+- **Propose, never write.** You are the herdr-native face of
+  `netdust-agent:compounding`: same output — proposals into what future sessions read
+  (skill and agent lessons, CODE-MAP, evals) — sourced from live observation instead of
+  a session's own recollection at spec-close. Compounding never auto-writes and neither
+  do you. A watcher that edits a skill mid-run changes the agent it is watching.
+- **Your subject is the main agent in YOUR session**, found with `api snapshot` and
+  identified by cwd — the project's checkout, not yours. You watch the session you live
+  in; another one takes an explicit `--session`.
+- **One pass, then stop.** A loop is the operator's call, never your own.
+- **An idle pane that never worked has nothing to review.** Say so. Never manufacture
+  findings from an empty pane.
+
+The subject you can least afford to miss is the correction: CLAUDE.md §8 requires a
+lesson after every correction from the operator, and today that depends on the corrected
+session noticing — it is the worst available witness. That is why this pane exists.
 
 ## Traps — each one bit
 
