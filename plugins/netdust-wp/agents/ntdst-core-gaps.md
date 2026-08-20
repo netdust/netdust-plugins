@@ -58,6 +58,18 @@ Both can be expressed as a single more-general `aggregateGroupedBy(string $group
 
 ### 2026-06-09 — No public schema accessor on Data-Manager models forces reflection in theme/YOOtheme code
 
+> **RESOLVED in ntdst-core 4.x — do NOT use the reflection below.** `NTDST_Data_Model`
+> now exposes `getSchema(): array`, `getMetaPrefix(): string` and
+> `getPublicShape(): array` as public accessors (api/Data.php). The suggested change
+> landed; the workaround in this entry is kept only as the record of why. A session
+> reading this for a schema-aware projection should call `$model->getSchema()` — and
+> note there is still no `getFields()` and no `getFieldType()`, so a type lookup is
+> `$model->getSchema()[$field]` and the declared-fields projection is built by
+> iterating `array_keys($model->getSchema())`.
+>
+> Still open from this entry: the framework does not own the "declared fields only"
+> filter, so each consumer still writes the projection by hand.
+
 **Where surfaced:** Golden-path mining of Rossi's YOOtheme layer (`ntdstheme/services/yootheme/YOOthemeDynamicContentService.php:403` `attach_post_meta()`, and `ArtistSourcesService.php:156` `clean_meta_for_yootheme()`). Both need the registered field list for a post type to (a) filter exposed meta to declared fields only and (b) coerce by field type.
 
 **The gap:** A Data-Manager model registered via `ntdst_data()->register($type, ['fields' => [...]])` exposes its field schema only through a **private `schema` property**. There is no public `getSchema()` / `getFields()` / `getFieldType($field)` accessor. Code that needs the schema does this:
