@@ -179,8 +179,9 @@ class AdvancedService implements NTDST_Service_Meta
 
     private function init(): void
     {
-        // Use injected dependencies
-        $this->theme->apiAction('my_action', [$this, 'handleAction']);
+        // Use injected dependencies. NB: registering the action does NOT go
+        // through the theme — $theme->apiAction() is retired and __call() throws.
+        ntdst_actions()->register('my_action', [$this, 'handleAction']);
     }
 }
 ```

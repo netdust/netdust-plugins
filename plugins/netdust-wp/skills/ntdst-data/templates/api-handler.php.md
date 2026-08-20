@@ -70,15 +70,23 @@ An empty array is a legitimate **success** (zero search hits), not an error:
 ```php
 private function init(): void
 {
-    $theme = ntdst_get(\NTDST_Theme::class);
+    // NOT $theme->apiAction() — that wrapper is RETIRED and NTDST_Theme::__call()
+    // throws BadMethodCallException. ntdst_actions()->register() is the one path.
+    //
+    // The floor wraps the callback and bites at DISPATCH, ahead of it: an
+    // unresolvable or empty capability returns WP_Error('forbidden', …,
+    // ['status' => 403]), which handle_action turns into a proper error response.
+    // It FAILS CLOSED — administrators included — and it is a floor ALONGSIDE
+    // the handler's own per-row check, never a replacement.
+    ntdst_actions()->register('{action_name}', [$this, 'handleAction'], [
+        // Prefer cap_type: the floor is DERIVED from the post type, so a
+        // per-type capability map narrows the gate with you.
+        'cap_type' => '{post_type}',
+        'priority' => 10,
 
-    // Protected action (requires login + capability).
-    // apiAction() wraps the callback: a failed capability check returns
-    // WP_Error('forbidden', …, ['status' => 403]), which handle_action turns
-    // into a proper error response.
-    $theme->apiAction('{action_name}', [$this, 'handleAction'], [
-        'capability' => 'edit_others_posts',  // see the READ-gate warning below
-        'priority'   => 10,
+        // A literal is the fallback, and is correct only while that type's
+        // capability_type is still 'post':
+        // 'capability' => 'edit_others_posts',  // see the READ-gate warning below
     ]);
 }
 
