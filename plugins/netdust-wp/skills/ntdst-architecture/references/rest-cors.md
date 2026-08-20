@@ -43,8 +43,8 @@ ntdst_rest('myproject/v1')
 ```
 
 **The option list is closed.** `NTDST_Rest` consumes `permission`,
-`rate_limit`, `rate_window`; it passes `args`, `schema`, `show_in_index` and
-`allow_batch` through to WordPress. **Any other key refuses the route** — a
+`rate_limit`, `rate_window` and `cors` (`cors` since 4.1.0); it passes `args`,
+`schema`, `show_in_index` and `allow_batch` through to WordPress. **Any other key refuses the route** — a
 typo'd option is a control the author believes is on, so it fails loudly
 instead of registering an unprotected route that reviews as protected.
 
@@ -89,12 +89,29 @@ Two things to know before relying on it:
 
 - It is only sound when `ntdst/trusted_proxies` matches the deployment **and**
   the proxy overwrites `X-Forwarded-For`. Otherwise a caller picks their bucket.
-- **Known gap (F4, open):** a CORS preflight is never charged. `OPTIONS` never
-  matches a route's registered verb list, so preflights cost zero budget while
-  still running the permission callback. Measured: 40 consecutive preflights
-  left the bucket unset, and 5 preflights carrying a 1.1 MB body returned 200
-  each for free. Do **not** "fix" this locally by requiring a content type on
-  `OPTIONS` — that refuses every preflight with a 415 and breaks CORS entirely.
+- **Preflights ARE charged (F4, closed in 4.1.0).** They used not to be:
+  `guard()` spends only for the handler whose verb MATCHED, and an `OPTIONS`
+  preflight never matches `POST`. Measured then — 40 consecutive preflights left
+  the bucket unset, and 5 carrying a 1.1 MB JSON body returned 200 each for
+  nothing, while the same body as a POST was charged. `chargePreflight()`
+  (hooked on `rest_pre_dispatch` at priority 5) closes it. What to know:
+
+  - It charges into a **bucket of the preflight's own** (`ntdst_rest_pf_…`), not
+    the POST bucket. Widening `$matched` instead would have made every CORS
+    write cost two units, and would have charged three for one preflight on a
+    GET+POST+DELETE route, because WP runs every sibling's permission callback
+    to build the `Allow` header.
+  - **Once per request.** The first matching pattern owns the charge.
+  - Only routes that DECLARED a `rate_limit` are in the table; where a pattern
+    carries several, the **highest** limit wins — a preflight precedes any of them.
+  - Matching is **case-INSENSITIVE**, as WP matches routes. A case-sensitive
+    scope check silently stops running for `/NS/V1/THING` while WordPress
+    dispatches it — that is how a consumer's CORS correction went offline.
+  - An over-budget preflight gets a **429**, deliberately: the same answer its
+    POST would get a moment later. That is not the 415 trap below — this refuses
+    only a preflight already over its own budget, never every preflight.
+  - The hook sees every REST request on the site. It returns `$result` untouched
+    unless the request is `OPTIONS` on a route this package itself registered.
 
 ### The WP-core quirk it absorbs for you
 
