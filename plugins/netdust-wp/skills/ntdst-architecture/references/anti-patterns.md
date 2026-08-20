@@ -534,7 +534,7 @@ ntdst_response()->with('result', $result)->json();
 ### Manual template_include
 
 ```php
-// WRONG - bypasses Router
+// WRONG - bypasses NTDST_Pages
 add_filter('template_include', function($template) {
     if (is_singular('portfolio')) {
         return __DIR__ . '/templates/portfolio.php';
@@ -542,8 +542,8 @@ add_filter('template_include', function($template) {
     return $template;
 });
 
-// CORRECT - use Router
-ntdst_router()->single('portfolio', function($post) {
+// CORRECT - use NTDST_Pages
+ntdst_pages()->single('portfolio', function($post) {
     return ntdst_response()
         ->with('project', $post)
         ->template('portfolio/single');

@@ -56,9 +56,9 @@ For canonical rules and code patterns, read the `references/` files. This file i
 |---|---|---|
 | Render template + output | `ntdst_response()->render(...)` | `ob_start + include` |
 | Render template → string | `ntdst_response()->html(...)` | `ob_start + include` |
-| Resolve template name → file path for WP | `ntdst_router()->template('single', $cb, $post_type)` | Raw `add_filter('template_include', ...)` |
-| URL pattern → callback | `ntdst_router()->get('pattern/:param', $cb)` | Raw `add_action('parse_request', ...)` |
-| Pre-query interception (rewrite query vars BEFORE WP runs the query) | Raw `add_action('parse_request', ...)` | `ntdst_router()` (fires on `template_include`, too late) |
+| Resolve template name → file path for WP | `ntdst_pages()->template('single', $cb, $post_type)` | Raw `add_filter('template_include', ...)` |
+| URL pattern → callback | `ntdst_pages()->path('pattern/:param', $cb)` | Raw `add_action('parse_request', ...)` |
+| Pre-query interception (rewrite query vars BEFORE WP runs the query) | Raw `add_action('parse_request', ...)` | `ntdst_pages()` (fires on `template_include`, too late) |
 | AJAX/REST endpoint | `add_filter('ntdst/api_data/{action}', ...)` | `add_action('wp_ajax_*', ...)` |
 | Send email | `ntdst_mail()->to()->template()->send()` | `wp_mail()` |
 | Log | `ntdst_log('channel')->level(...)` | `error_log()`, swallowed `WP_Error` |

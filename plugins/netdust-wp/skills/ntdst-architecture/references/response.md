@@ -4,7 +4,7 @@ Fast template rendering with automatic path discovery — **and** the single own
 
 **Location:** `app/content/mu-plugins/ntdst-core/api/Response.php`
 
-> **`NTDST_Response` is the one place the `{success,…}` envelope is built.** All three output surfaces route through it: `NTDST_Router` renders templates (`html()`/`render()`), while `NTDST_Endpoints` (AJAX) and `NTDST_Rest_Registrar` (REST) emit JSON envelopes via the static builders / `toRestResponse()`. **Two error shapes coexist deliberately** (do not "unify" them — it silently breaks one consumer set): `apiError()` → `{success:false,data:{message,code}}` for `ntdstAPI` JS callers; `jsonPayload()` (via `json()`/`toRestResponse()`) → `{success:false,error:string}` for REST consumers. See `rest-cors.md` and INV-11.
+> **`NTDST_Response` is the one place the `{success,…}` envelope is built.** All three output surfaces route through it: `NTDST_Pages` renders templates (`html()`/`render()`), while `NTDST_Actions` (AJAX) and `NTDST_Rest` (REST) emit JSON envelopes via the **static** builders. **Two error shapes coexist deliberately** (do not "unify" them — it silently breaks one consumer set): `apiError()` → `{success:false,data:{message,code}}` for `ntdstAPI` JS callers; `jsonPayload()` → `{success:false,error:string}` for `json()` callers. See `rest-cors.md` and INV-11.
 
 ## Global Helpers
 
@@ -74,7 +74,7 @@ Templates are searched in this order:
 
 ## Usage Patterns
 
-### In Router/Theme callbacks
+### In Pages/Theme callbacks
 
 ```php
 $theme->single('portfolio', function($post) {
@@ -127,7 +127,7 @@ add_filter('ntdst/api_data/render_preview', function($data, $params) {
 ### For Share Cards / OG Images
 
 ```php
-ntdst_router()->get('share/:type/:slug', function($params) {
+ntdst_pages()->path('share/:type/:slug', function($params) {
     $post = ntdst_data()->get($params['type'])
         ->where('post_name', $params['slug'])
         ->first();
@@ -206,9 +206,10 @@ Variables passed with `with()` are available directly:
 | `render($path)` | `never` | Render and exit |
 | `html($path)` | `string` | Render to string |
 | `json()` | `never` | Output JSON and exit. Falls back to a structured error body if `json_encode` fails (was: silent empty response). |
-| `toRestResponse()` | `WP_REST_Response` | **Non-exiting** JSON representation for the REST-registrar dispatch path — same payload as `json()` + the stored status, but returns instead of `exit`ing. |
+| `apiSuccessResponse(array $data)` *(static)* | `WP_REST_Response` | **Non-exiting**, for a `NTDST_Rest` handler: `{success:true,data:$data}` at status 200. |
+| `apiErrorResponse($msg, $code='error', $status=400)` *(static)* | `WP_REST_Response` | **Non-exiting**: `{success:false,data:{message,code}}` at `$status`. |
 | `apiSuccess(array $data)` *(static)* | `array` | `{success:true, data:$data}` — the shared success envelope builder. |
-| `apiError(string $msg, string $code='error')` *(static)* | `array` | `{success:false, data:{message,code}}` — the `Endpoints`/`ntdstAPI` JS error envelope. |
+| `apiError(string $msg, string $code='error')` *(static)* | `array` | `{success:false, data:{message,code}}` — the `NTDST_Actions` / `ntdstAPI` JS error envelope. |
 | `error($msg, $status)` | `self` | Set error state (used by `json()` / `render()` / `redirect()`) |
 | `redirect($url)` | `never` | `wp_safe_redirect` to `$url`. Appends `?error=` if `error()` has been set. |
 | `download($content, $filename, $mime = null)` | `never` | Stream as attachment. |
@@ -260,6 +261,12 @@ ntdst_response()->inline($ical, 'enrollment.ics');
 
 ## Performance
 
-- Template paths cached statically (shared across Response instances).
-- Located template files cached to avoid repeated `file_exists()` calls.
-- Call `NTDST_Response::clearPathCache()` if paths change at runtime.
+- **Registered paths are NOT cached.** `NTDST_Template_Loader::locate()` reads the path
+  registry live on every call, so a path added after an earlier resolution is seen
+  immediately. There is no cache to reset — `clearPathCache()` / `resetCachedPaths()`
+  were deleted along with the seed-once ordering hazard they existed to paper over.
+  Calling either is a fatal.
+- **Resolved template files ARE cached**, positive hits only. A miss is never cached:
+  one early "not found" would otherwise poison the whole request for every later caller.
+  Per-call `$extraPaths` resolve for that call alone and never populate the shared
+  cache, so a private template cannot hijack another caller's lookup of the same name.

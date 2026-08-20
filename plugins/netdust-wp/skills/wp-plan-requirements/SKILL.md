@@ -35,7 +35,7 @@ Inject the line, naming any planned departure from the slice:
 - [ ] Built to `golden-paths/<archetype>.md` — read before task breakdown.
 - [ ] Deviations from the slice (each named + justified, or "none"):
       e.g. "settings save uses WP Settings API not the ntdst/api_data filter — flat
-            option set, no Alpine UI" / "frontend rendered via ntdst_router()->single()
+            option set, no Alpine UI" / "frontend rendered via ntdst_pages()->single()
             not a parse_request router — no pre-query redirect needed"
 ```
 

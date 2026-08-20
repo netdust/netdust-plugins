@@ -70,15 +70,23 @@ An empty array is a legitimate **success** (zero search hits), not an error:
 ```php
 private function init(): void
 {
-    $theme = ntdst_get(\NTDST_Theme::class);
+    // NOT $theme->apiAction() — that wrapper is RETIRED and NTDST_Theme::__call()
+    // throws BadMethodCallException. ntdst_actions()->register() is the one path.
+    //
+    // The floor wraps the callback and bites at DISPATCH, ahead of it: an
+    // unresolvable or empty capability returns WP_Error('forbidden', …,
+    // ['status' => 403]), which handle_action turns into a proper error response.
+    // It FAILS CLOSED — administrators included — and it is a floor ALONGSIDE
+    // the handler's own per-row check, never a replacement.
+    ntdst_actions()->register('{action_name}', [$this, 'handleAction'], [
+        // Prefer cap_type: the floor is DERIVED from the post type, so a
+        // per-type capability map narrows the gate with you.
+        'cap_type' => '{post_type}',
+        'priority' => 10,
 
-    // Protected action (requires login + capability).
-    // apiAction() wraps the callback: a failed capability check returns
-    // WP_Error('forbidden', …, ['status' => 403]), which handle_action turns
-    // into a proper error response.
-    $theme->apiAction('{action_name}', [$this, 'handleAction'], [
-        'capability' => 'edit_others_posts',  // see the READ-gate warning below
-        'priority'   => 10,
+        // A literal is the fallback, and is correct only while that type's
+        // capability_type is still 'post':
+        // 'capability' => 'edit_others_posts',  // see the READ-gate warning below
     ]);
 }
 
@@ -158,15 +166,19 @@ add_filter('ntdst/api/public_actions', function ($actions) {
 Adding an action here means an **anonymous** caller may both mint a nonce for it and
 dispatch it. Anything the handler can reach is then internet-reachable.
 
-If the handler queries a **caller-supplied post type**, route it through the same gate
-the built-in actions use — `canQueryPostType()` in `api/Endpoints.php` — and **refuse
-the request when nothing requested is queryable**, rather than querying first and
-filtering the rows afterwards. Core's `post-queries` cache keys on the query args and
-the generated SQL, never on who asked, so a post-hoc filter lets one actor's answer be
-served to another. The gate admits a type that is `public && !exclude_from_search`
-outright; otherwise it requires BOTH the type's own `edit_posts` AND
-`edit_others_posts`, read off the type object, failing closed on an empty or non-string
-capability.
+**Do not take the post type from the caller at all.** There is no framework gate left to
+lean on: `canQueryPostType()`, `filterQueryablePostTypes()`, `canQueryUnpublishedMedia()`
+and `nonViewableMediaParentIds()` were all DELETED in the v2.4/3.0 sweep, together with
+the framework-shipped actions that needed them. Core ships **no data actions**, so a
+caller-parameterised query action is now entirely yours to defend, in the handler.
+
+Pin the type in the handler. If a caller genuinely must choose, resolve it against a
+closed allow-list you own and **refuse the request when nothing requested is
+queryable**, rather than querying first and filtering the rows afterwards: core's
+`post-queries` cache keys on the query args and the generated SQL, never on who asked,
+so a post-hoc filter lets one actor's answer be served to another. Where a capability
+decides, read it OFF THE TYPE OBJECT (`$type->cap->edit_others_posts`) and fail closed
+on an empty or non-string value — never a literal.
 
 ## Sanitization Reference
 

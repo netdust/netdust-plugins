@@ -77,14 +77,13 @@ Soft caps. Treat as warnings, not hard rules — if exceeding the cap is the cle
 | Data/ORM | `ntdst_data()->get('type')` | `NTDST_Data_Model` (a fresh clone per call) |
 | Data (registry check) | `ntdst_data()->isRegistered('type')` | `bool`, no side effect |
 | Data (formatted query) | `ntdst_get_formatted_posts($args)` | `array` of formatted rows |
-| Router | `ntdst_router()` / `ntdst_route()` | `NTDST_Router` |
+| Pages | `ntdst_pages()` / `ntdst_pages()->path()` | `NTDST_Pages` |
 | Response | `ntdst_response()` | `NTDST_Response` |
 | Response (terminal) | `ntdst_redirect()` / `ntdst_download()` / `ntdst_inline()` | `never` |
 | Logger | `ntdst_log('channel')` | `NTDST_Logger` |
 | Mailer | `ntdst_mail()` / `ntdst_notify()` | `NTDST_Mailer` / `void` |
-| Sectors | `ntdst_sectors()` | `NTDST_SectorRegistry` |
 | Metabox | `ntdst_metabox()` | `NTDST_MetaboxGenerator` |
-| Endpoints | `ntdst_endpoints()` | `NTDST_Endpoints` (aliased as `Endpoints` for back-compat) |
+| Commands (AJAX) | `ntdst_actions()` | `NTDST_Actions` — **no `Endpoints` alias.** ntdst-core defines no `class_alias()` at all |
 
 > **There is no cache helper.** `ntdst_query_cache()` and `NTDST_Query_Cache` are
 > **DELETED**, along with `$model->cache(N)`, `ntdst_clear_posts_cache()` and
@@ -102,11 +101,11 @@ A helper's name doesn't tell you when it's the wrong tool. Before refactoring "u
 |---|---|---|
 | Render template + output the response | `ntdst_response()->render('path/template')` | `ob_start + include` |
 | Render template → string (for emails / AJAX HTML) | `ntdst_response()->html('path/template')` | `ob_start + include` |
-| `template_include` callback (resolve template name → file path for WP) | `ntdst_router()->template('single', $cb, $post_type)` | Raw `add_filter('template_include', ...)` |
-| URL pattern → callback | `ntdst_router()->get('pattern/:param', $cb)` | Raw `add_action('parse_request', ...)` |
-| Pre-query interception (rewrite query vars BEFORE WP runs the query) | Raw `add_action('parse_request', ...)` — `ntdst_router()` fires too late | `ntdst_router()` |
+| `template_include` callback (resolve template name → file path for WP) | `ntdst_pages()->template('single', $cb, $post_type)` | Raw `add_filter('template_include', ...)` |
+| URL pattern → callback | `ntdst_pages()->path('pattern/:param', $cb)` | Raw `add_action('parse_request', ...)` |
+| Pre-query interception (rewrite query vars BEFORE WP runs the query) | Raw `add_action('parse_request', ...)` — `ntdst_pages()` fires too late | `ntdst_pages()` |
 | Same-origin AJAX endpoint | `add_filter('ntdst/api_data/{action}', ...)` (nonce + rate-limit + origin check handled — **authorization is still yours**) | `add_action('wp_ajax_*', ...)` |
-| Cross-origin / headless REST | `ntdst_router()->rest()` + `NTDST_Cors_Policy` | `ntdst/api_data/*` — its nonce authenticates nothing for a cookie-less caller |
+| Cross-origin / headless REST | `ntdst_rest()` — **but core ships no CORS**; see `rest-cors.md` | `ntdst/api_data/*` — its nonce authenticates nothing for a cookie-less caller |
 | Send email | `ntdst_mail()->to()->template()->send()` | `wp_mail()` |
 | Log structured events | `ntdst_log('channel')->level(...)` | `error_log()`, swallowed `WP_Error` |
 | Read/write CPT | per-domain Repository | `ntdst_data()` direct, raw `wp_insert_post` / `get_post_meta` |
@@ -137,18 +136,28 @@ Two distinct namespaces — don't mix them:
 // FRAMEWORK hooks (ntdst-core's own events — leave the prefix alone)
 do_action('ntdst/services_registered', $bootstrap);
 apply_filters('ntdst/{post_type}/fields', $fields);
-add_filter('ntdst/api_data/{action}', $handler);  // ntdst_api router
+add_filter('ntdst/api_data/{action}', $handler);  // or ntdst_actions()->register()
 
-// PROJECT-level service hooks (use the project's own prefix, NOT netdust_/ntdst_)
-// Replace {project} with the project slug: stride, vad, atelier296, etc.
-apply_filters('{project}_{slug}_config', $defaults);     // e.g. stride_edition_config
-apply_filters('{project}_{slug}_enabled', true);         // e.g. stride_edition_enabled
+// SERVICE hooks — FRAMEWORK-owned, keyed on the service slug. Not project-prefixed.
+apply_filters('ntdst_service_{slug}_config', $defaults);
+apply_filters('ntdst_service_{slug}_enabled', true);     // DENY filter; FAILS OPEN
+get_option('ntdst_service_{slug}', '1');                 // the third level
 
-// PROJECT-level domain events
+// PROJECT-level domain events — these ARE the project's own prefix
 do_action('{project}/{domain}/{action}', $array_payload);  // e.g. stride/registration/created
 ```
 
-The `netdust_` prefix is **not** a framework reservation — it was an old placeholder. Real projects use their own slug: Stride uses `stride_*` / `stride/*`, VAD Vormingen uses `vad_*` / `vad/*`, etc. Use whatever the project's `mu-plugins/<project>-core/` directory implies.
+**The service hooks are the framework's, not the project's.** `netdust_{slug}_config` and
+`netdust_{slug}_enabled` were the framework names before the S9/T02 rename and are now
+`ntdst_service_{slug}_*`. There is **no shim**: a listener on a retired name — or on a
+project-prefixed invention — is silently inert, and because `_enabled` is a DENY filter
+that failure FAILS OPEN, so the service boots. When `plugin-config.php` declares
+`services.overrides.{slug}`, Bootstrap registers its override listener on
+`ntdst_service_{slug}_config`; a service applying any other name never receives it.
+
+DOMAIN events are a different question and do use the project's own slug: Stride uses
+`stride/*`, VAD Vormingen `vad/*`. Use whatever the project's
+`mu-plugins/<project>-core/` directory implies.
 
 Domain event payloads are **plain associative arrays**, not event-object classes — `do_action('stride/registration/created', ['user_id' => $uid, 'edition_id' => $eid])`, not `do_action(..., new RegistrationCreated($uid, $eid))`.
 
@@ -158,8 +167,8 @@ Domain event payloads are **plain associative arrays**, not event-object classes
 theme-root/
 ├── config/theme-config.php       ← services, modules, assets config
 ├── services/                     ← auto-discovered
-│   ├── SecurityService.php       ← root = sector-independent
-│   ├── gallery/                  ← sector-specific (auto-discovered when enabled)
+│   ├── SecurityService.php       ← root = auto-discovered
+│   ├── gallery/                  ← subdirectory: namespaced, listed in config
 │   │   └── ExhibitionService.php
 │   └── printshop/
 ├── templates/                    ← Response templates

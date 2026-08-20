@@ -32,7 +32,7 @@ Use when creating data models, custom post types, field definitions, metaboxes, 
 > | `search_posts` | retired → `relation_search` on `NTDST_RelationField`, non-public | present, and public |
 > | `getFormattedPosts()` on a protected post | withholds `content`/`excerpt`, sets `protected` | served the body a post password withholds |
 >
-> **Still verify against the project's own `api/Data.php` and `api/Endpoints.php`
+> **Still verify against the project's own `api/Data.php` and `api/Actions.php`
 > before writing.** This skill is a map, not the territory — it drifted from the
 > code for six weeks (2026-06-23 → 2026-08-06) describing a deleted API, and the
 > fix is always to read the source.
@@ -102,7 +102,7 @@ ntdst_get_formatted_posts($args)      // Direct query returning formatted arrays
 > it is dead code from before that sweep — replace it with the chain API
 > (`ntdst_data()->get($type)->where(...)->get()`) or `ntdst_get_formatted_posts()`.
 
-`isRegistered()` is the safe way to check whether a model exists when iterating over post types — `ntdst_data()->get($name)` will auto-create an empty model entry as a side effect, which would persist and shadow a later schema-bearing registration.
+`isRegistered()` is the way to ask whether a model exists when iterating over post types. **`get()` no longer auto-registers a phantom** — that was the v2 behaviour, and it meant a caller-supplied type name on a public endpoint could register whatever it liked. It now returns a CLONE of a registered model, or an unstored empty `NTDST_Data_Model` for an unknown name, and writes nothing to the static registry either way. The clone matters too: `$models` is static, so callers used to share one mutable instance and an abandoned `->where()` silently narrowed the next query from anywhere in the process.
 
 ## CRITICAL: `find()` decides NOTHING about visibility except status
 
@@ -218,7 +218,8 @@ Use the type that means what you mean.
 | `url` | `esc_url_raw` | URL input |
 | `html`, `content` | `wp_kses_post` | WP Editor |
 | `wysiwyg` | `wp_kses_post` | WP Editor |
-| `int`, `integer` | `absint` | Number input |
+| `int`, `integer` | `absint` — **strips the sign** | Number input |
+| `signed_int` | `(int)` cast; 0 for an array. **Use this for any value that can be negative** | Number input |
 | `float`, `double` | `floatval` | Number input with step |
 | `bool`, `boolean` | `sanitizeBoolean()` | Checkbox |
 | `date` | `sanitizeDate()` | Date input |
@@ -296,7 +297,7 @@ returns true when there is no Origin, no Referer and no auth cookie. It fails op
 Treat every public handler as internet-facing.
 
 **The framework ships NO public actions and no data actions at all.**
-`$public_actions` is empty; `NTDST_Endpoints` is a router — origin, rate limit,
+`$public_actions` is empty; `NTDST_Actions` is a router — origin, rate limit,
 nonce, auth gate, dispatch — with no opinion about anyone's data. Anonymous
 exposure is a per-site decision made in exactly one place:
 
@@ -373,7 +374,8 @@ filtering `->fields`:
 
 ```php
 $declared = [];
-foreach (array_keys($this->getFields()) as $field) {
+// getSchema() is the model's schema accessor. There is no getFields().
+foreach (array_keys($model->getSchema()) as $field) {
     $declared[$field] = $formatted[$field] ?? null;
 }
 return array_merge($declared, [

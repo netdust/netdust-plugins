@@ -179,8 +179,9 @@ class AdvancedService implements NTDST_Service_Meta
 
     private function init(): void
     {
-        // Use injected dependencies
-        $this->theme->apiAction('my_action', [$this, 'handleAction']);
+        // Use injected dependencies. NB: registering the action does NOT go
+        // through the theme — $theme->apiAction() is retired and __call() throws.
+        ntdst_actions()->register('my_action', [$this, 'handleAction']);
     }
 }
 ```
@@ -194,7 +195,7 @@ These are pre-registered and available for injection:
 | `NTDST_Container` | The container itself |
 | `NTDST_Theme` | Theme fluent API |
 | `NTDST_Data_Manager` | Data ORM |
-| `NTDST_Router` | URL routing |
+| `NTDST_Pages` | URL routing |
 | `NTDST_Logger` | Logging service |
 | `NTDST_Mailer` | Email service |
 
@@ -206,11 +207,11 @@ These are pre-registered and available for injection:
 // In any code
 $theme = ntdst_get(NTDST_Theme::class);
 $data = ntdst_get(NTDST_Data_Manager::class);
-$router = ntdst_get(NTDST_Router::class);
+$pages = ntdst_get(NTDST_Pages::class);
 
 // Or use global helpers
 $data = ntdst_data();
-$router = ntdst_router();
+$pages = ntdst_pages();
 $logger = ntdst_log();
 $mailer = ntdst_mail();
 ```
@@ -318,13 +319,12 @@ small site buys indirection that site will never use. Decide up front:
 |---|---|---|
 | Wiring | `plugin-config.php` + `NTDST_Bootstrap` | explicit `require_once` + `ntdst_get()` |
 | Service shape | `extends AbstractService`, `metadata()`, `getConfigSlug()` | plain class, ctor takes its deps, ctor calls `init()` |
-| Buys you | sectors, auto-discovery, priorities, enable/disable toggles, conditional blocks | nothing extra — and nothing to learn |
-| Use when | one codebase serves multiple site TYPES (gallery **or** artist **or** musician), or services need config-level toggles | a single-purpose site: one client, one shape, no sector switching |
+| Buys you | auto-discovery, priorities, enable/disable toggles, conditional blocks | nothing extra — and nothing to learn |
+| Use when | many services, boot order matters, or services need config-level toggles | a single-purpose site: one client, one shape, a handful of services |
 
 **Model B is a first-class choice, not a shortcut.** DAAN's own entrypoint states
-it skips the sector/auto-discovery/Bootstrap machinery *because* that exists so one
-codebase can be gallery or artist or musician — indirection a single-purpose site
-never uses. Most client marketing sites are model B.
+it skips the auto-discovery/Bootstrap machinery deliberately: a single-purpose site
+never uses the indirection. Most client marketing sites are model B.
 
 ### Model B wiring (the DAAN pattern)
 

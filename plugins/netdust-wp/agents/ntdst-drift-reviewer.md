@@ -115,15 +115,15 @@ Run each of these. For each, the **grep** column gives you the deterministic fir
 
 **Exception:** `*Repository.php` files themselves (legitimate). Migration scripts in `scripts/` (one-off bulk operations may need raw access for perf).
 
-### 9. Raw `template_include` filter where `ntdst_router()->template()` would fit
+### 9. Raw `template_include` filter where `ntdst_pages()->template()` would fit
 
 | Grep | Then |
 |---|---|
-| `grep -rn "add_filter(.template_include" --include="*.php" <scope>` | Each hit is a candidate. If the callback gates on a post type and returns a path, `ntdst_router()->template('single', $cb, $post_type)` is the right tool. |
+| `grep -rn "add_filter(.template_include" --include="*.php" <scope>` | Each hit is a candidate. If the callback gates on a post type and returns a path, `ntdst_pages()->template('single', $cb, $post_type)` is the right tool. |
 
-**Suggested fix:** Move to `ntdst_router()->template(...)`. Same pattern other modules in the codebase use (grep for examples).
+**Suggested fix:** Move to `ntdst_pages()->template(...)`. Same pattern other modules in the codebase use (grep for examples).
 
-**Exception:** the callback does pre-query work that needs `parse_request` timing (rewriting query vars before WP runs the query). `ntdst_router()` fires on `template_include` — too late for that.
+**Exception:** the callback does pre-query work that needs `parse_request` timing (rewriting query vars before WP runs the query). `ntdst_pages()` fires on `template_include` — too late for that.
 
 ### 10. Service constructor injects a dependency only used for one pass-through call
 

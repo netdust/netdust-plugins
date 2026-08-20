@@ -109,10 +109,46 @@ Auxiliary note: this is distinct from "service constructs its repository" (which
 
 **Pattern that looked like drift:** A handler registering `wp_ajax_*` actions to serve PDF/CSV/etc. download responses. The naïve Cat-3 fix is "migrate to `add_filter('ntdst/api_data/{action}', ...)` + `ntdst_response()->download()` because a sibling handler (e.g. iCal export) does it that way." The Handlers-module audit on 2026-05-19 made exactly this suggestion against `AnnualReportHandler`.
 
-**Why it isn't drift:** `NTDST_Endpoints` registers `/wp-json/ntdst/v1/action` as **POST-only** with a separately-fetched nonce (see `ntdst-core/api/Endpoints.php:88-103`). The whole `ntdst/api_data/*` filter chain runs only inside that POST handler. That makes the path incompatible with `<a href="...">click to download</a>` anchors — those are GET navigations with the nonce in the URL, not POSTs with a JSON body. The sibling `ICalHandler` works via `ntdstAPI.download()` (JS-driven POST + blob handoff), not via a direct anchor. Whenever an admin page presents download buttons as clickable links rather than JS-bound buttons, `wp_ajax_*` with `?action=…&_wpnonce=…` in the URL is the right tool, not drift.
+**Why it isn't drift:** `NTDST_Actions` registers `/wp-json/ntdst/v1/action` as **POST-only** with a separately-fetched nonce (see `ntdst-core/api/Actions.php`). The whole `ntdst/api_data/*` filter chain runs only inside that POST handler. That makes the path incompatible with `<a href="...">click to download</a>` anchors — those are GET navigations with the nonce in the URL, not POSTs with a JSON body. The sibling `ICalHandler` works via `ntdstAPI.download()` (JS-driven POST + blob handoff), not via a direct anchor. Whenever an admin page presents download buttons as clickable links rather than JS-bound buttons, `wp_ajax_*` with `?action=…&_wpnonce=…` in the URL is the right tool, not drift.
 
 **Example from a real audit:** `Stride/Handlers/AnnualReportHandler.php:28-29` flagged as Cat-3 drift in the 2026-05-19 Handlers audit, with the suggested fix being migration to `ntdst/api_data/stride_annual_report_pdf` modelled on `ICalHandler`. The fix was wrong — `AnnualReportPage` renders the PDF/CSV buttons as plain `<a href>` anchors (see `Modules/Reporting/Admin/AnnualReportPage.php:127-132`). Resolution was a docblock on the handler explaining the choice, not a migration.
+
+> **SUPERSEDED 2026-08-20 — see the entry below.** ntdst-core has shipped a GET
+> download surface since v2.3.0, so exception (c) no longer holds.
 
 **Updated exception rule:** When flagging Cat-3 (`wp_ajax_*` instead of `ntdst/api_data/*`), **check how the endpoint is invoked from the frontend** before suggesting migration. If the admin page or template renders a direct `<a href="…admin-ajax.php?action=…">` anchor (`grep -rn "admin-ajax\.php?action=<the_action>"` plus a glance at the template), the migration is incompatible — `ntdst/api_data/*` requires a POST + JSON body, which an anchor can't provide. Surface as documented Cat-3 exception: ask the human to add a docblock explaining the choice rather than to migrate. The sibling-handler analogy ("ICalHandler does it via ntdst/api_data, so AnnualReportHandler can too") is invalid when the sibling is JS-invoked and the new one is anchor-invoked — verify the invocation path, not just the response shape.
 
 Auxiliary note: this composes with the earlier Cat-3 exception language. The full set of legitimate `wp_ajax_*` reasons is now (a) admin-area POST routing (`admin_post_*` is its own tool), (b) responses needing headers a JSON-filter wrapper precludes, AND (c) direct-anchor downloads as documented here. (a) is uncommon; (b) is rare (the framework's `download()` handles standard download headers); (c) is the one to expect in real codebases.
+
+---
+
+### 2026-08-20 — direct-anchor downloads are NO LONGER a `wp_ajax_*` exception (supersedes 2026-05-19)
+
+**What changed in the framework:** ntdst-core added a GET download surface —
+`GET /wp-json/ntdst/v1/download`, dispatching `ntdst/api_download/{action}`. It
+exists for exactly the case the 2026-05-19 lesson excused: a plain
+`<a href="…">` navigation, which sends no body and no `Origin` header. The
+per-action nonce carried in the URL is that surface's CSRF gate, and
+`check_download_permission()` deliberately skips the Origin check for it. The
+handler emits with `ntdst_download()` / `ntdst_inline()` and exits.
+
+**So the reasoning inverts.** "The `ntdst/api_data` path is POST-only, therefore
+an anchor download must use `wp_ajax_*`" was true when written and is false now.
+A raw `wp_ajax_*` download handler IS drift again, and the suggested fix is real:
+`add_filter('ntdst/api_download/{action}', …)` + `ntdst_download()`.
+
+**Why it matters beyond tidiness:** `ntdst_download()` sets
+`X-Content-Type-Options: nosniff` on the response. A hand-rolled block
+(`nocache_headers()` + `Content-Type` + `Content-Disposition` +
+`fopen('php://output')`) usually does not — and a consumer shipped exactly that,
+losing nosniff on an attacker-authored CSV body.
+
+**Updated exception rule:** the legitimate `wp_ajax_*` reasons are now (a)
+admin-area POST routing where `admin_post_*` does not fit, and (b) a response
+needing headers the framework surfaces preclude — both uncommon. (c)
+direct-anchor downloads is **retired**: check for `ntdst/api_download/{action}`
+first, and flag the raw handler.
+
+**Verify before flagging:** the download surface exists from ntdst-core v2.3.0.
+On a project pinned below that, the old exception still applies — read the
+consumer's `composer.json` constraint before deciding.

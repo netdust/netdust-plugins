@@ -1,6 +1,6 @@
 # API Endpoints Reference (same-origin AJAX)
 
-> **Scope: this is the same-origin, nonce-gated `ntdst/api_data/{action}` dispatcher — in-page JS talking to its own site.** It is NOT for cross-origin callers: an anonymous WP nonce is a shared, non-origin-bound token that authenticates nothing for a cookie-less cross-origin request. For a headless/SPA/third-party client on another domain, use `ntdst_router()->rest()` + `NTDST_Cors_Policy` — see `rest-cors.md`.
+> **Scope: this is the same-origin, nonce-gated `ntdst/api_data/{action}` dispatcher — in-page JS talking to its own site.** It is NOT for cross-origin callers: an anonymous WP nonce is a shared, non-origin-bound token that authenticates nothing for a cookie-less cross-origin request. For a headless/SPA/third-party client on another domain, use `ntdst_rest()` (core ships no CORS handling — read the CORS gap in `rest-cors.md` before designing one).
 
 ## Architecture
 
@@ -14,14 +14,17 @@ Two-step nonce flow via WordPress REST API:
    → {success: true, data: {...}}
 ```
 
-`ntdst_endpoints()` is instantiated unconditionally by the core loader — there is no `ALLOW_RESTAPI_AJAX` gate (that requirement is obsolete; ignore any older doc that mentions it).
+`ntdst_actions()` is instantiated unconditionally by the core loader — there is no `ALLOW_RESTAPI_AJAX` gate (that requirement is obsolete; ignore any older doc that mentions it).
 
-The class is `NTDST_Endpoints` (formerly unprefixed `Endpoints`). `class_alias('NTDST_Endpoints', 'Endpoints')` is kept for back-compat — new code should reference `NTDST_Endpoints::class`. The REST namespace constant is `REST_NAMESPACE` (formerly `NAMESPACE`).
+The class is `NTDST_Actions`, in `api/Actions.php` (formerly unprefixed `Endpoints`, in `api/Endpoints.php`). **There is no back-compat alias** — ntdst-core calls `class_alias()` nowhere, so `Endpoints::` is a fatal and `api/Endpoints.php` is a path that no longer exists. Reference `NTDST_Actions::class`. The REST namespace constant is `REST_NAMESPACE` (formerly `NAMESPACE`).
+
+The `ntdst/api_data/{action}` FILTER name is deliberately unchanged from v2: adopters' handlers hang off it, and renaming it would silently unmount every one of them while the code still looked correct.
 
 ## Registering Actions
 
 ```php
-// In a service constructor or via $theme->apiAction():
+// In a service constructor. (`$theme->apiAction()` is RETIRED — NTDST_Theme has
+// no such method or mixin, and its __call() throws BadMethodCallException.)
 add_filter('ntdst/api_data/get_artworks', function($data, $params) {
     // 1. Extract & sanitize
     $medium   = sanitize_text_field($params['medium'] ?? '');
@@ -51,20 +54,39 @@ add_filter('ntdst/api_data/get_artworks', function($data, $params) {
 ### Via Theme API
 
 ```php
-$theme->apiAction('get_artworks', function($data, $params) {
+ntdst_actions()->register('get_artworks', function($data, $params) {
     // ... same handler
     return ['artworks' => $artworks];
 });
 
-// With capability check — note that on failure this now returns a WP_Error,
-// which Endpoints::handle_action converts to a proper error response.
-// (Old behavior wrapped the failure as an array, which looked like a success
-// body to the client.)
-$theme->apiAction('delete_artwork', function($data, $params) {
+// With a capability floor — on failure the floor returns WP_Error('forbidden',
+// …, ['status' => 403]) BEFORE your handler runs, and NTDST_Actions::handle_action()
+// converts it to a proper error response. (Old behavior wrapped the failure as an
+// array, which looked like a success body to the client.)
+//
+// `cap_type` is the type-DERIVED form and the one to prefer; a literal
+// `capability` is correct only while that type's capability_type is 'post'.
+ntdst_actions()->register('delete_artwork', function($data, $params) {
     $id = absint($params['id'] ?? 0);
     return ntdst_data()->get('artwork')->delete($id);
-}, ['capability' => 'delete_others_posts']);
+}, ['cap_type' => 'artwork']);
 ```
+
+`register(string $action, callable $handler, array $opts = [])` takes exactly four
+opts — `public`, `cap_type`, `capability`, `priority`:
+
+| Opt | Effect |
+|---|---|
+| `'public' => true` | Adds the action to `ntdst/api/public_actions`. **Public wins and is NEVER floored** — anonymous reachability is not conditional on a capability |
+| `'cap_type' => 'artwork'` | Floor derived from the post type via `ntdst_api_floor_cap()` |
+| `'capability' => 'edit_others_posts'` | Literal floor |
+| `'priority' => 10` | Filter priority |
+
+The floor bites at DISPATCH, ahead of the handler, and **fails closed**: an empty or
+unresolvable capability denies everyone, administrators included. It is ALONGSIDE the
+handler's own per-row check, never a replacement. With neither opt the action is
+login-required — the router already refuses anonymous callers for anything not on
+`public_actions`.
 
 > **Capability choice, not just presence.** The `edit_posts` / `delete_posts` family means
 > "may act on MY OWN posts" and is held by Contributors and Authors. A handler acting on
@@ -78,14 +100,14 @@ $theme->apiAction('delete_artwork', function($data, $params) {
 ## Public vs Protected Actions
 
 ```php
-// Public actions are listed in NTDST_Endpoints::$public_actions and
+// Public actions are listed in NTDST_Actions::$public_actions and
 // extensible via the `ntdst/api/public_actions` filter. A public action
 // only means "no auth required for nonce generation" — handlers must
 // NOT assume the caller is authenticated and must treat all input as
 // untrusted.
 //
 // The framework ships NO public actions and no data actions at all.
-// $public_actions is EMPTY: NTDST_Endpoints is a router (origin, rate limit,
+// $public_actions is EMPTY: NTDST_Actions is a router (origin, rate limit,
 // nonce, auth gate, dispatch) with no opinion about anyone's data. Anonymous
 // exposure is a per-site decision, made only via this filter.
 
@@ -143,7 +165,9 @@ ntdstAPI.call('get_artworks', { medium: 'oil', per_page: 20 })
 > non-browser client simply omits both headers and is admitted. **Public actions are
 > internet-facing**, and must carry their own authorization (the post-type gate below,
 > plus an in-handler capability check for anything sensitive).
+- **Registration first (4.0.0)**: the gate establishes that an action is REGISTERED before it does anything else — before the rate bucket key is built, before the nonce check. Registered means listed in `ntdst/api/public_actions`, or having a handler mounted on the dispatch filter. An unregistered action is refused with a bare `false` (401, same as an auth denial), gets **no rate bucket at all**, and cannot obtain a nonce from `/get_nonce`. Until 4.0.0 the raw `action` parameter went straight into the bucket key, so varying it per request bought a fresh bucket every time and defeated the throttle entirely.
 - **Rate limiting**: default 30 requests per 60 seconds, per-action, **per `(user_id, action)`** for logged-in users and **per `(ip, action)`** for anonymous. The user-id keying avoids false positives for users behind shared NAT (offices, schools, mobile carriers) — they no longer share a bucket.
+- **Counting anything else**: `NTDST_RateLimiter::attempt($key, $limit, $window, $memoScope)` is the one counter — build the key yourself, pass finished numbers, it resolves no identity of its own. `NTDST_RateLimiter::reset($key)` clears a bucket, which is what a **failure counter** needs (a lockout clears on the first success) as opposed to a request budget that only decays with its window.
 - **Trusted proxies**: `X-Forwarded-For` is honored only when `REMOTE_ADDR` is in the trusted-proxy list.
 
 ### Per-action rate limits
@@ -187,7 +211,7 @@ unwraps the outer layer only.
 
 ### Custom allowed origins
 
-> This filter widens the **same-origin CSRF gate**'s `Origin`/`Referer` allow-list for the `api_data` path — it does NOT turn `Endpoints` into a cross-origin JSON API. A real cross-origin endpoint (CORS preflight, `Access-Control-*` headers, cookie-less caller) is `ntdst_router()->rest()` + `NTDST_Cors_Policy` — see `rest-cors.md`.
+> This filter widens the **same-origin CSRF gate**'s `Origin`/`Referer` allow-list for the `api_data` path — it does NOT turn `Endpoints` into a cross-origin JSON API. A real cross-origin endpoint (CORS preflight, `Access-Control-*` headers, cookie-less caller) belongs on `ntdst_rest()` (core ships no CORS handling — read the CORS gap in `rest-cors.md` before designing one).
 
 ```php
 add_filter('ntdst/api/allowed_origins', function($origins) {
@@ -255,7 +279,7 @@ the same claim the deleted gates were computing the hard way.
 ## Caching
 
 **There is none, and that is deliberate.** The endpoints layer registers no
-cache-invalidation hooks, and `ntdst_endpoints()->clear_post_cache()`,
+cache-invalidation hooks, and `ntdst_actions()->clear_post_cache()`,
 `NTDST_Query_Cache`, `ntdst_clear_posts_cache()` and `ntdst_invalidate_post_type()` are
 all **DELETED**. Core already invalidates its post, `post_meta` and object-term entries
 on save, delete and trash — including for writes that never went through the model, which
