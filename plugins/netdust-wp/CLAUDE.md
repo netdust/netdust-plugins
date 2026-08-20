@@ -2,11 +2,15 @@
 
 You are working on a Netdust **WordPress** project. This plugin layers on top of `netdust-core` (which defines the memory/dev-stack conventions, server management, and cross-domain skills) and `netdust-agent` (which provides the coding harness — `harnessed-development`, `planning`, `building`, `testing-workflow`, the reviewer agents, the `/integration` and `/shakeout` gate commands, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard). If `netdust-core` is not enabled, install it first — `/deploy` won't work otherwise.
 
-## Read `site.yml` FIRST
+## `site.yml` is the operating context — not the entry point
+
+**The entry point for any code-changing request is `netdust-agent:harnessed-development`**,
+which classifies the work and routes it. That is unchanged here and this file does not
+compete with it. `site.yml` is what you read to ACT correctly once routed — and before
+running anything path-dependent or destructive, at any stage.
 
 Every Netdust WP project has a `site.yml` in its root. It is the single source of
-truth for how that site is built, hosted and deployed — **read it before running
-anything path-dependent or destructive.** Do not infer these from the tree.
+truth for how that site is built, hosted and deployed. Do not infer these from the tree.
 
 | Field | Why it decides your next command |
 |---|---|

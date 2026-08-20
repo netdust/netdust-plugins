@@ -18,6 +18,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.."   # plugins/netdust-wp
 python3 - "${1:-evals/behavioral-lessons.json}" "${2:-evals/outputs/correctness-results.json}" <<'PY'
 import json, subprocess, sys, os, re, pathlib
+from concurrent.futures import ThreadPoolExecutor
 
 cases = json.load(open(sys.argv[1], encoding="utf-8"))["cases"]
 out_path = sys.argv[2]
@@ -105,40 +106,43 @@ FAIL"""
 
 results=[]
 runnable=[c for c in cases if "context_after" in c]
-print(f"running {len(runnable)} cases x 2 arms\n")
-for c in runnable:
+print(f"running {len(runnable)} cases x 2 arms, in parallel\n")
+
+def run_case(c):
+    """Both arms of one case, then its judge. Cases run concurrently — 24 serial
+    claude -p calls with 35KB of context each took ~20 minutes."""
     sha = (c.get("baseline_ref") or "").split()[0] or None
-    before_ctx = load(c["context_before"], sha)
-    after_ctx  = load(c["context_after"])
     tmpl = "Reference documentation:\n\n{ctx}\n\n---\n\nUsing that documentation, answer:\n\n{q}"
-    a_before = ask(tmpl.format(ctx=before_ctx, q=c["prompt"]))
-    a_after  = ask(tmpl.format(ctx=after_ctx,  q=c["prompt"]))
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        fb = ex.submit(ask, tmpl.format(ctx=load(c["context_before"], sha), q=c["prompt"]))
+        fa = ex.submit(ask, tmpl.format(ctx=load(c["context_after"]),      q=c["prompt"]))
+        a_before, a_after = fb.result(), fa.result()
     if a_before.startswith("ERROR:") or a_after.startswith("ERROR:"):
-        print(f"ERROR       {c['id']:<36} before={a_before[:60] if a_before.startswith('ERROR:') else 'ok'} after={a_after[:60] if a_after.startswith('ERROR:') else 'ok'}")
-        results.append(dict(id=c["id"], error=True, answer_before=a_before, answer_after=a_after))
-        json.dump(results, open(out_path,"w"), indent=1); continue
+        return dict(id=c["id"], error=True, answer_before=a_before, answer_after=a_after)
     must, mustnt = c.get("must_contain",[]), c.get("must_not_contain",[])
     pb, pa = probe(a_before,must,mustnt), probe(a_after,must,mustnt)
     j = ask(JUDGE.format(q=c["prompt"], sig=c["with_skill_assertion"], a=a_after[:6000]), 180)
-    judge_pass = j.strip().upper().startswith("PASS")
-    discriminates = (not pb["clean"]) and pa["clean"]
-    results.append(dict(id=c["id"], baseline_ref=c.get("baseline_ref"),
-        before=pb, after=pa, discriminates=discriminates,
-        judge="PASS" if judge_pass else "FAIL", judge_raw=j[:300],
+    return dict(id=c["id"], baseline_ref=c.get("baseline_ref"), before=pb, after=pa,
+        discriminates=(not pb["clean"]) and pa["clean"],
+        judge="PASS" if j.strip().upper().startswith("PASS") else "FAIL", judge_raw=j[:300],
         before_len=len(a_before), after_len=len(a_after),
-        # The ANSWERS, in full. skill-eval: every flagged match must be read by
-        # a human — a probe cannot tell "use apiAction()" from "apiAction() is
-        # retired, do not use it". Without these, a violation count is an
-        # opinion, not a diagnosis.
-        answer_before=a_before, answer_after=a_after))
-    mark = "PASS " if discriminates else ("BOTH-CLEAN" if pa["clean"] else "FAIL ")
-    print(f"{mark:<11} {c['id']:<36} before_clean={pb['clean']!s:<5} after_clean={pa['clean']!s:<5} judge={'PASS' if judge_pass else 'FAIL'}")
+        answer_before=a_before, answer_after=a_after)
+
+with ThreadPoolExecutor(max_workers=4) as ex:
+    results = list(ex.map(run_case, runnable))
+
+for r in results:
+    if r.get("error"):
+        print(f"ERROR       {r['id']:<36} (no answer from one arm)"); continue
+    pb, pa = r["before"], r["after"]
+    mark = "PASS " if r["discriminates"] else ("BOTH-CLEAN" if pa["clean"] else "FAIL ")
+    print(f"{mark:<11} {r['id']:<36} before_clean={pb['clean']!s:<5} after_clean={pa['clean']!s:<5} judge={r['judge']}")
     if pb["violations"]: print(f"              before taught (in code): {pb['violations']}")
-    if pb.get("prose_mentions"): print(f"              before prose-mentions: {pb['prose_mentions']}  <- READ THESE")
-    if pa.get("prose_mentions"): print(f"              after  prose-mentions: {pa['prose_mentions']}  <- READ THESE")
     if pa["violations"]: print(f"              AFTER STILL TEACHES: {pa['violations']}")
     if pa["missing"]:    print(f"              after missing: {pa['missing']}")
-    json.dump(results, open(out_path,"w"), indent=1)
+    if pb.get("prose_mentions"): print(f"              before prose-mentions: {pb['prose_mentions']}  <- READ THESE")
+    if pa.get("prose_mentions"): print(f"              after  prose-mentions: {pa['prose_mentions']}  <- READ THESE")
+json.dump(results, open(out_path,"w"), indent=1)
 
 err=[r for r in results if r.get("error")]
 scored=[r for r in results if not r.get("error")]

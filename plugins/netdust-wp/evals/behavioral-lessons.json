@@ -1,5 +1,5 @@
 {
-  "_readme": "Behavioral eval cases pinning lessons.md entries (netdust-wp skills). Methodology per netdust-agent/evals/EVAL-PLAN.md: baseline (skill off) vs with-skill on the prompt; assertion = the signature behavior appears with-skill. Each case names the lesson it regression-pins. Cases carrying a `baseline_ref` pin a CORRECTNESS re-anchor rather than a lessons.md entry: the baseline is the named commit's skill text, which taught the failure verbatim, so fail-before is a property of the tree and is checkable with the `discriminator` grep rather than argued. NB: run every `discriminator` grep with --exclude-dir=evals — this file quotes the very strings it counts, so including it inflates the `now` column and hides a regression.",
+  "_readme": "Behavioral eval cases pinning lessons.md entries (netdust-wp skills). Methodology per netdust-agent/evals/EVAL-PLAN.md: baseline (skill off) vs with-skill on the prompt; assertion = the signature behavior appears with-skill. Each case names the lesson it regression-pins. Cases carrying a `baseline_ref` pin a CORRECTNESS re-anchor rather than a lessons.md entry: the baseline is the named commit's skill text, which taught the failure verbatim, so fail-before is a property of the tree and is checkable with the `discriminator` grep rather than argued. NB: run every `discriminator` grep with --exclude-dir=evals — this file quotes the very strings it counts, so including it inflates the `now` column and hides a regression. context_before paths resolve from the case's `baseline_ref` COMMIT and must be spelled as they were at that commit; context_after resolves from the working tree. The two diverged permanently on 2026-08-21 when ntdst-architecture + ntdst-data merged into ntdst-framework.",
   "cases": [
     {
       "id": "api-rate-budget",
@@ -27,8 +27,8 @@
       "with_skill_assertion": "Registers with ntdst_pages()->path('share/exhibitions/:slug', $cb) and never names ntdst_router(), ntdst_route() or NTDST_Router. Pairs the route with an add_rewrite_rule + query_vars registration, and says WHY both are needed: NTDST_Pages matches on REQUEST_URI, so the rewrite exists only to stop WordPress 404ing the URL first. Uses path()'s THIRD argument for any non-GET method rather than ->post() / ->get(), which do not exist.",
       "discriminator": "grep -c 'ntdst_router()->' — 45 pre-sweep, 0 now; 'ntdst_pages()->path(' — 0 pre-sweep, 15 now",
       "context_before": [
-        "skills/ntdst-framework/SKILL.md",
-        "skills/ntdst-framework/references/traps.md"
+        "skills/ntdst-architecture/SKILL.md",
+        "skills/ntdst-architecture/references/router.md"
       ],
       "context_after": [
         "skills/ntdst-framework/SKILL.md",
@@ -43,8 +43,7 @@
         "NTDST_Router",
         "ntdst_pages()->post(",
         "ntdst_pages()->get("
-      ],
-      "baseline_note": "Context paths were re-pointed at the merged ntdst-framework skill on 2026-08-21. The baseline commit still has the OLD paths, so the runner's git-show of context_before now misses — re-baseline this case against the merge commit before trusting a run."
+      ]
     },
     {
       "id": "rest-cors-option",
@@ -56,12 +55,13 @@
       "with_skill_assertion": "Registers through ntdst_rest('ns/v1')->post() with a REQUIRED callable 'permission', and declares CORS via the 'cors' route option (ntdst-core 4.1.0) with the app's exact origin — NOT NTDST_Cors_Policy, which does not exist, and NOT a hand-rolled Access-Control-* header or rest_pre_serve_request filter. Does not reach for '*'. Bonus if it notes credentials are off unless asked, or that the option is opt-in so routes without it keep WordPress's reflect-any default.",
       "discriminator": "grep -ro 'NTDST_Cors_Policy' --include='*.md' — 18 pre-sweep, 2 now (retirement notes only); \"'cors' =>\" — 1 pre-sweep (as a NTDST_Cors_Policy instance), 2 now (the real option, both in rest-cors.md). Run with --exclude-dir=evals.",
       "context_before": [
-        "skills/ntdst-framework/SKILL.md",
-        "skills/ntdst-framework/references/traps.md"
+        "skills/ntdst-architecture/SKILL.md",
+        "skills/ntdst-architecture/references/rest-cors.md"
       ],
       "context_after": [
         "skills/ntdst-framework/SKILL.md",
-        "skills/ntdst-framework/references/traps.md"
+        "skills/ntdst-framework/references/traps.md",
+        "skills/ntdst-framework/references/baseline.md"
       ],
       "must_contain": [
         "ntdst_rest(",
@@ -73,8 +73,7 @@
         "NTDST_Rest_Registrar",
         "max_body_bytes",
         "Access-Control-Allow-Origin"
-      ],
-      "baseline_note": "Context paths were re-pointed at the merged ntdst-framework skill on 2026-08-21. The baseline commit still has the OLD paths, so the runner's git-show of context_before now misses — re-baseline this case against the merge commit before trusting a run."
+      ]
     },
     {
       "id": "service-disable-filter",
@@ -86,8 +85,8 @@
       "with_skill_assertion": "Names ntdst_service_admin_ui_enabled — the framework-owned, slug-keyed hook — and no project prefix. Derives the slug correctly (AdminUIService -> admin_ui: 'Service' stripped, a run of capitals kept as one token), rather than lowercasing the class name. States that the filter is a DENY filter that fails open, so a misspelled slug boots the service. Offers the three levels (metadata enabled:false / the filter / the ntdst_service_{slug} option) rather than only one.",
       "discriminator": "grep -c '{project}_{slug}_enabled' — 3 pre-sweep, 3 post-sweep, 0 now; 'ntdst_service_' — 2 pre-sweep, 11 post-sweep, 31 now",
       "context_before": [
-        "skills/ntdst-framework/SKILL.md",
-        "skills/ntdst-framework/references/traps.md"
+        "skills/ntdst-architecture/SKILL.md",
+        "skills/ntdst-architecture/references/services.md"
       ],
       "context_after": [
         "skills/ntdst-framework/SKILL.md",
@@ -97,8 +96,7 @@
         "ntdst_service_admin_ui_enabled",
         "ntdst_service_admin_ui_config"
       ],
-      "must_not_contain": [],
-      "baseline_note": "Context paths were re-pointed at the merged ntdst-framework skill on 2026-08-21. The baseline commit still has the OLD paths, so the runner's git-show of context_before now misses — re-baseline this case against the merge commit before trusting a run."
+      "must_not_contain": []
     },
     {
       "id": "theme-facade-retired",
@@ -110,8 +108,9 @@
       "with_skill_assertion": "Uses ntdst_actions()->register('delete_artwork', $handler, [...]) and does not call any method on $theme outside the five wired mixins (data, pages, response, log, mail). Prefers 'cap_type' over a literal 'capability', giving the reason: the floor is derived from the post type, so a per-type capability map narrows the gate — a literal is correct only while capability_type is still 'post'. States that the floor bites at dispatch ahead of the handler, fails closed on an empty or unresolvable cap, and does not replace the handler's own per-row check.",
       "discriminator": "grep -c 'theme->apiAction(' — 9 pre-sweep, 9 post-sweep, 0 live calls now (5 remaining mentions are all 'RETIRED' notes)",
       "context_before": [
-        "skills/ntdst-framework/SKILL.md",
-        "skills/ntdst-framework/references/traps.md"
+        "skills/ntdst-architecture/SKILL.md",
+        "skills/ntdst-architecture/references/theme-api.md",
+        "skills/ntdst-architecture/references/api-endpoints.md"
       ],
       "context_after": [
         "skills/ntdst-framework/SKILL.md",
@@ -122,8 +121,7 @@
       ],
       "must_not_contain": [
         "apiAction"
-      ],
-      "baseline_note": "Context paths were re-pointed at the merged ntdst-framework skill on 2026-08-21. The baseline commit still has the OLD paths, so the runner's git-show of context_before now misses — re-baseline this case against the merge commit before trusting a run."
+      ]
     },
     {
       "id": "rest-handler-return",
@@ -135,8 +133,8 @@
       "with_skill_assertion": "Explains that NTDST_Rest wraps only the permission callback; the handler is registered as a plain WP REST callback, so WP core serializes whatever it returns and there is NO automatic envelope — an NTDST_Response object is serialized as its public state. Fixes it with the static builders NTDST_Response::apiSuccessResponse($data) / ::apiErrorResponse($msg, $code, $status), which return a real WP_REST_Response carrying the envelope AND the status. Does not suggest toRestResponse(), and does not suggest calling the protected jsonPayload().",
       "discriminator": "grep -c 'toRestResponse' — 4 pre-sweep, 4 post-sweep, 1 now (the 'there is no toRestResponse()' note)",
       "context_before": [
-        "skills/ntdst-framework/SKILL.md",
-        "skills/ntdst-framework/references/traps.md"
+        "skills/ntdst-architecture/references/rest-cors.md",
+        "skills/ntdst-architecture/references/response.md"
       ],
       "context_after": [
         "skills/ntdst-framework/SKILL.md",
@@ -147,8 +145,7 @@
       ],
       "must_not_contain": [
         "toRestResponse"
-      ],
-      "baseline_note": "Context paths were re-pointed at the merged ntdst-framework skill on 2026-08-21. The baseline commit still has the OLD paths, so the runner's git-show of context_before now misses — re-baseline this case against the merge commit before trusting a run."
+      ]
     },
     {
       "id": "route-response-refuses",
@@ -160,8 +157,7 @@
       "with_skill_assertion": "Identifies the branch, not a bug: resolveRouteResult() splits on getStatus() — 2xx clears the pre-set 404 and renders; >= 400 sends the status, leaves is_404 intact and hands WordPress its OWN not-found template, whether or not the Response names one. States this is deliberate (the route refuses through the output class instead of hand-rolling status_header) and offers the real options — customise the WP 404 template, or return a 2xx Response if a denied page must render from the route.",
       "discriminator": "post-sweep pages.md Return-Values has ONE NTDST_Response row and no '>= 400'; now it has two rows keyed on status",
       "context_before": [
-        "skills/ntdst-framework/SKILL.md",
-        "skills/ntdst-framework/references/traps.md"
+        "skills/ntdst-architecture/references/pages.md"
       ],
       "context_after": [
         "skills/ntdst-framework/SKILL.md",
@@ -170,8 +166,7 @@
       "must_contain": [
         "400"
       ],
-      "must_not_contain": [],
-      "baseline_note": "Context paths were re-pointed at the merged ntdst-framework skill on 2026-08-21. The baseline commit still has the OLD paths, so the runner's git-show of context_before now misses — re-baseline this case against the merge commit before trusting a run."
+      "must_not_contain": []
     },
     {
       "id": "router-decides-brainstorm",
@@ -193,8 +188,7 @@
         "brainstorm",
         "planning"
       ],
-      "must_not_contain": [],
-      "baseline_note": "Context paths were re-pointed at the merged ntdst-framework skill on 2026-08-21. The baseline commit still has the OLD paths, so the runner's git-show of context_before now misses — re-baseline this case against the merge commit before trusting a run."
+      "must_not_contain": []
     },
     {
       "id": "router-decides-brainstorm-control",
@@ -212,13 +206,13 @@
         "CLAUDE.md"
       ],
       "must_contain": [
-        "Class E"
+        "Class"
       ],
       "must_not_contain": [
         "brainstorming"
       ],
       "inverted": true,
-      "baseline_note": "Context paths were re-pointed at the merged ntdst-framework skill on 2026-08-21. The baseline commit still has the OLD paths, so the runner's git-show of context_before now misses — re-baseline this case against the merge commit before trusting a run."
+      "probe_note": "must_contain is deliberately loose. Run 8 scored this FAIL because the answer wrote 'Class: E' and the probe looked for 'Class E' — the answer was exactly right (Class E, zero brainstorm mentions, and it argued why not Class D). The CLASS LETTER is the judge's job; the mechanical half only needs to see that a class was assigned and no brainstorming happened."
     },
     {
       "id": "limiter-exceeded-not-attempt",
@@ -230,8 +224,8 @@
       "with_skill_assertion": "Uses NTDST_RateLimiter::exceeded($key, $limit) for the CHECK — explicitly because it spends nothing and attempt() would make the check cause the lockout it is checking for — increments on the failure path only, and calls reset($key) on success. Does NOT re-implement the >= boundary at the call site (it lives in exceeded()). Bonus if it notes a limit of <= 0 is switched off and can never be exceeded.",
       "discriminator": "grep -c 'exceeded(' on the skills — 0 at 01e982b, >0 now. The three-verb table is new; before it only attempt() and reset() were named.",
       "context_before": [
-        "skills/ntdst-framework/SKILL.md",
-        "skills/ntdst-framework/references/traps.md"
+        "skills/ntdst-architecture/SKILL.md",
+        "skills/ntdst-architecture/references/api-endpoints.md"
       ],
       "context_after": [
         "skills/ntdst-framework/SKILL.md",
@@ -240,8 +234,7 @@
       "must_contain": [
         "exceeded("
       ],
-      "must_not_contain": [],
-      "baseline_note": "Context paths were re-pointed at the merged ntdst-framework skill on 2026-08-21. The baseline commit still has the OLD paths, so the runner's git-show of context_before now misses — re-baseline this case against the merge commit before trusting a run."
+      "must_not_contain": []
     }
   ]
 }

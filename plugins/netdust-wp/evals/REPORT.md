@@ -99,3 +99,65 @@ right, and looked authoritative doing it.
 - The two lessons.md-pinning cases (`api-rate-budget`, `data-default-key`) carry no
   `baseline_ref` and were not run; they need the no-skill baseline the netdust-agent
   runner provides.
+
+
+---
+
+# Re-baseline after the collapse — 2026-08-21
+
+`ntdst-architecture` + `ntdst-data` merged into `ntdst-framework`, so every case's
+`context_before` pointed at paths that no longer exist. Re-baselined: **`context_before`
+is now spelled as its own `baseline_ref` COMMIT spelled it**, `context_after` reads the
+working tree. All 33 paths verified to resolve before running. Runner parallelised —
+**2m37s**, down from ~20 minutes serial.
+
+## The collapse cut four things it should not have
+
+The run found them; the greps could not have. All four are now restored in SKILL.md:
+
+1. **A custom URL needs BOTH a rewrite rule and a route.** Dropped entirely — the model
+   then called the pairing "drift" and rejected it. `NTDST_Pages` matches on
+   `REQUEST_URI`; the rewrite exists only so WordPress does not 404 first.
+2. **`path()`'s third argument** for non-GET. Gone with it.
+3. **The `cors` route option (4.1.0).** The collapsed contract named `ntdst_rest()` as a
+   door and nothing else, so the model *denied any route option existed* and refused to
+   give a CORS answer at all — one release after core shipped one.
+4. **`ntdst_actions()->register()`'s opts** (`public` / `cap_type` / `capability` /
+   `priority`) and the dispatch-floor reasoning. The model hand-resolved the capability
+   inside the handler instead, losing the fail-closed gate.
+
+Plus one tension I introduced: CLAUDE.md's "Read `site.yml` FIRST" competed with
+`harnessed-development` being the entry point, and the model put site.yml ahead of the
+router. Reconciled — site.yml is the operating context, not the entry point.
+
+Judge score across the three runs: **5/9 → 8/9** once those were restored.
+
+## Read this before trusting a single run
+
+| run | discriminate | judge |
+|---|---|---|
+| A — re-baselined | 7/9 | 5/9 |
+| B — after restorations | 5/9 | 8/9 |
+| C — after probe fix | 7/9 | 7/9 |
+
+The **mechanical** signal is stable at 7/9. The **judge** oscillates by ±2 between
+identical inputs, and cases swap which side they fail on. That is single-sample LLM
+judging, not the skills moving — `skill-eval` says 5+ reps per variant and it is right.
+Treat one judge FAIL as a prompt to READ the answer, never as a result.
+
+The two cases that never discriminate are understood, not outstanding:
+`router-decides-brainstorm` (both arms answer correctly; the CLAUDE.md fix is confirmed
+by its grep, not by this prompt) and `router-decides-brainstorm-control`, where
+both-clean **is** the pass — it is inverted, and it proves the fix did not make every WP
+task brainstorm.
+
+Two probe lessons, both of which produced a wrong number first:
+
+- A violation counts only inside a code fence, because prose that WARNS against a symbol
+  is the desired behaviour. But that opens the reverse hole — a baseline recommending
+  `toRestResponse()` in prose scores clean — so `prose_mentions` is reported separately
+  and read by hand. No probe removes that step.
+- `must_contain` on a literal is brittle: the control scored FAIL for writing
+  **`Class: E`** when the probe wanted `Class E`. The answer was right. Class-letter
+  judgement is the judge's job; the mechanical half only checks that a class was
+  assigned and no brainstorming happened.

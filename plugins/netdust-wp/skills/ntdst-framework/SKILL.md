@@ -54,6 +54,36 @@ against one.
 Never reach for `ntdst/api_data` for a cross-origin caller: an anonymous WP nonce is
 a shared, non-origin-bound token that authenticates nothing for a cookie-less client.
 
+**A custom URL needs BOTH a rewrite rule and a route.** `NTDST_Pages` matches on
+`REQUEST_URI`; the rewrite exists only so WordPress does not 404 the URL before
+routing runs. The query var's name is yours and is never read.
+
+```php
+add_rewrite_rule('^share/items/([^/]+)/?$', 'index.php?myproject_route=1', 'top');
+add_filter('query_vars', fn($v) => [...$v, 'myproject_route']);
+ntdst_pages()->path('share/items/:slug', $cb);          // GET
+ntdst_pages()->path('share/items', $cb, 'POST');        // method is the THIRD arg
+```
+
+Flush after adding rules: `ddev wp rewrite flush`. There is no `->get()`/`->post()`.
+
+**`ntdst_actions()->register($action, $handler, $opts)`** takes exactly four opts —
+`public`, `cap_type`, `capability`, `priority`. `'public' => true` puts the action on
+`ntdst/api/public_actions` and is **never floored**: anonymous reachability is not
+conditional on a capability. A `cap_type` floor is DERIVED from the post type and is
+the one to prefer; a literal `capability` is correct only while that type's
+`capability_type` is still `'post'`. Either floor bites at **dispatch**, ahead of the
+handler, **fails closed** on an empty or unresolvable cap, and sits ALONGSIDE the
+handler's own per-row check — never replacing it. With neither opt the action is
+login-required.
+
+**`ntdst_rest($ns)->post($route, $handler, $opts)`** consumes exactly `permission`,
+`rate_limit`, `rate_window` and `cors`, and passes `args`, `schema`, `show_in_index`,
+`allow_batch` to WordPress. `permission` is **required and must be callable** or the
+route is refused. **`cors` (4.1.0) is the real CORS answer** — declare the exact
+origin there; do not hand-roll `Access-Control-*` headers and do not reach for
+`NTDST_Cors_Policy`, which has never existed in any version.
+
 ## Boot
 
 `plugin-config.php` returns the config; Bootstrap reads only these keys under
@@ -92,6 +122,11 @@ add_filter("ntdst_service_{$slug}_enabled", '__return_false');
 update_option("ntdst_service_{$slug}", '0');
 apply_filters("ntdst_service_{$slug}_config", $defaults);   // in YOUR service
 ```
+
+Resolved, for `AdminUIService` (slug `admin_ui`): `ntdst_service_admin_ui_enabled`,
+`ntdst_service_admin_ui_config`, option `ntdst_service_admin_ui`. `plugin-config.php`'s
+`services.overrides.admin_ui` is hung on the `_config` hook by Bootstrap at priority 1 —
+so a service applying any other name **never receives its own override**.
 
 The slug is a pure function of the class: `Service` stripped, camelCase →
 snake_case, a run of capitals kept as one token — `AdminUIService` → `admin_ui`.
