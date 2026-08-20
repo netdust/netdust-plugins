@@ -28,7 +28,7 @@ to `public_actions` is reachable by anyone with caller-supplied params. Read
 
 For a cross-origin / headless / third-party client, this is the wrong tool: an anonymous
 WP nonce is a shared, non-origin-bound token that authenticates nothing for a cookie-less
-request. Use `ntdst_rest()` (core ships no CORS handling — read the CORS gap in `rest-cors.md` before designing one) instead.
+request. Use `ntdst_rest()` with a `cors` route option (ntdst-core 4.1.0 — see `rest-cors.md`) instead.
 
 ### Key Features
 
@@ -449,7 +449,7 @@ carry their own authorization **in the handler** — core's post-type gate was d
 along with the actions that needed it, so there is nothing underneath you.
 
 This filter widens the **same-origin** allow-list. It does not turn `NTDST_Actions` into
-a cross-origin JSON API; that is `ntdst_rest()` (core ships no CORS handling — read the CORS gap in `rest-cors.md` before designing one).
+a cross-origin JSON API; that is `ntdst_rest()` with a `cors` route option (ntdst-core 4.1.0 — see `rest-cors.md`).
 
 ### Nonce Verification
 
