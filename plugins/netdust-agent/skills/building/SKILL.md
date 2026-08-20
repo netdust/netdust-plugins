@@ -83,9 +83,3 @@ is the implementer's law — RED first, watched, never weakened). Netdust adds:
 `/loop` + `hooks/loop-gate.py` may drive Stage 2 unattended: the ledger
 (`bin/loop-check.py`) derives FINISHED from checked boxes PLUS green evidence, never
 assertion. The loop changes nothing above — gates apply exactly as written.
-
-**Flow-harnessed repos (`.flow/` at the repo root): the armed loop is the road's.**
-`/loop` refuses there and the work routes through `/flow` instead (see
-`harnessed-development`) — the netdust-flow walker drives the whole delivery, seals
-included, and this hook stands down mechanically: a marker carrying flow fields is
-not ours and is left untouched. One marker path, one driver.

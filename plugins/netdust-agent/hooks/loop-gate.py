@@ -90,15 +90,15 @@ def main() -> None:
 
     marker = json.loads(marker_path.read_text())
 
-    # A netdust-flow marker (written by /flow arm) carries flow fields;
-    # this plugin's marker (written by /loop) never does. Same path, two
-    # drivers — and in a flow-harnessed repo the driver is the flow
-    # walker's own Stop hook, not this one. Acting on a flow marker here
-    # would double-drive the stop: this hook could BLOCK a stop the
-    # walker deliberately allowed for a human seal yield. Not ours →
-    # leave it untouched, exactly as flow's hook does in reverse.
+    # One marker path, potentially more than one driver. This plugin's
+    # marker (written by /loop) never carries `flow`/`node` fields; a
+    # marker that does was written by some other driver with its own Stop
+    # hook. Acting on it here would double-drive the stop — this hook
+    # could BLOCK a stop the other driver deliberately allowed. Not ours
+    # → leave it untouched. Defensive only: nothing in this plugin writes
+    # or routes to such a marker.
     if "flow" in marker or "node" in marker:
-        log(f"flow marker — not ours, deferring to the flow walker cwd={cwd}")
+        log(f"foreign marker — not ours, standing down cwd={cwd}")
         return
 
     feature_dir = cwd / marker.get("feature_dir", "")
