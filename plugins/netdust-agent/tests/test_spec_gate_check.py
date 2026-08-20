@@ -1540,6 +1540,60 @@ TASKS_BEHAVIOUR_OUTSIDE = """# Tasks: x
 """
 
 
+# ── suffixed task ids (T03b, T07b, T09b) ─────────────────────────────────────
+# Found live on todai-client 2026-08-20: `(T\d+)\b` cannot match `T07b`, because
+# `T\d+` stops at the digit and `\b` then demands a boundary between two word
+# characters. Every b-suffixed task was therefore INVISIBLE — skipped by the tier,
+# files, test-author, proven-by and unit-test checks, and uncounted by the <=4
+# cluster-size rule. A FULL-tier security spec had three such tasks and still
+# read GATE: PASS. That is INV-4's own failure mode: green while a named check
+# never ran.
+TASKS_SUFFIXED_ID_NO_TIER = """# Tasks: x
+
+### Cluster C1  (2 tasks · provisional tier: STANDARD)
+- [ ] T01 [Tier B] a  (files: a.php)
+      Test-author: solo — Tier B
+      Proven by: machine gate — gate exit 0
+      Unit test: no unit test: Tier B, glue
+- [ ] T01b the suffixed task that carries NO tier  (files: b.php)
+      Test-author: solo — Tier B
+      Proven by: machine gate — gate exit 0
+      Unit test: no unit test: Tier B, glue
+
+Integration gate: gate exit 0
+
+── REVIEW GATE ── STANDARD
+"""
+
+TASKS_SUFFIXED_ID_OVERSIZED = """# Tasks: x
+
+### Cluster C1  (5 tasks · provisional tier: STANDARD)
+- [ ] T01 [Tier B] a  (files: a.php)
+      Test-author: solo — Tier B
+      Proven by: machine gate — gate exit 0
+      Unit test: no unit test: Tier B, glue
+- [ ] T01b [Tier B] b  (files: b.php)
+      Test-author: solo — Tier B
+      Proven by: machine gate — gate exit 0
+      Unit test: no unit test: Tier B, glue
+- [ ] T02 [Tier B] c  (files: c.php)
+      Test-author: solo — Tier B
+      Proven by: machine gate — gate exit 0
+      Unit test: no unit test: Tier B, glue
+- [ ] T02b [Tier B] d  (files: d.php)
+      Test-author: solo — Tier B
+      Proven by: machine gate — gate exit 0
+      Unit test: no unit test: Tier B, glue
+- [ ] T03 [Tier B] e  (files: e.php)
+      Test-author: solo — Tier B
+      Proven by: machine gate — gate exit 0
+      Unit test: no unit test: Tier B, glue
+
+Integration gate: gate exit 0
+
+── REVIEW GATE ── STANDARD
+"""
+
 def _run(files: dict) -> tuple[int, str]:
     with tempfile.TemporaryDirectory() as d:
         for name, content in files.items():
@@ -2600,6 +2654,16 @@ def run():
                      and "Cluster A" in proc.stdout,
                     "seam: specs/deliverable-first self-hosts the grammar — exit 0, "
                     "✓ naming Cluster A"))
+
+    # 26. suffixed task ids are VISIBLE to every per-task check. Regression for the
+    # live todai-client miss: b-suffixed tasks were skipped wholesale, so a spec could
+    # omit a tier on one and still read GATE: PASS, and a 6-task cluster counted as 4.
+    rc, out = _run({"tasks.md": TASKS_SUFFIXED_ID_NO_TIER})
+    results.append((rc == 1 and "task-tier" in out and "T01b" in out,
+                    "a b-suffixed task missing its test tier FAILS and is named"))
+    rc, out = _run({"tasks.md": TASKS_SUFFIXED_ID_OVERSIZED})
+    results.append((rc == 1 and "review-cluster" in out,
+                    "b-suffixed tasks count toward the <=4 cluster-size rule"))
 
     return results
 

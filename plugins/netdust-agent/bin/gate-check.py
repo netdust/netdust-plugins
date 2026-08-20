@@ -31,7 +31,7 @@ from pathlib import Path
 # ── section / line helpers ────────────────────────────────────────────────────
 
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
-TASK_LINE = re.compile(r"^- \[[ xX]\]\s+(T\d+)\b(.*)$")
+TASK_LINE = re.compile(r"^- \[[ xX]\]\s+(T\d+[a-z]?)\b(.*)$")
 CLUSTER_HEADING = re.compile(r"^###\s+Cluster\b(.*)$", re.IGNORECASE)
 
 
