@@ -38,7 +38,7 @@ request. Use `ntdst_rest()` (core ships no CORS handling — read the CORS gap i
 | Rate limiting | 30 requests per 60 seconds, per-action, filterable |
 | CSRF protection | Origin/referer verification — **fails open with no Origin, no Referer and no auth cookie** |
 | Auth gate | Anonymous callers may only dispatch actions in `public_actions` |
-| Post-type gate | `canQueryPostType()` decides which types a caller may query at all |
+| ~~Post-type gate~~ | **DELETED.** `canQueryPostType()`, `filterQueryablePostTypes()`, `canQueryUnpublishedMedia()` and `nonViewableMediaParentIds()` are all gone — they existed only because a framework-shipped action let an anonymous caller name the type to query, and that action was retired. **A public handler of yours gets no post-type gate from core.** |
 | Filter-based | Actions registered via WordPress filters |
 
 > **No caching.** The endpoints layer registers no cache-invalidation hooks and owns no
@@ -149,10 +149,14 @@ add_filter('ntdst/api_data/get_portfolio', function ($data, $params) {
 }, 10, 2);
 ```
 
-### Via Theme Helper
+### Via `ntdst_actions()->register()`
+
+> **`$theme->apiAction()` is RETIRED.** `NTDST_Theme` has no such method and no such
+> mixin, and its `__call()` throws `BadMethodCallException`. The capability-floor idiom
+> it carried was reconciled onto this one path.
 
 ```php
-$theme->apiAction('my_action', function ($data, $params) {
+ntdst_actions()->register('my_action', function ($data, $params) {
     // Handler code using Data Manager
     $items = ntdst_data()->get('portfolio')
         ->where('featured', true)
@@ -166,12 +170,21 @@ $theme->apiAction('my_action', function ($data, $params) {
 ### With Capability Check
 
 ```php
-$theme->apiAction('admin_action', function ($data, $params) {
-    // Only runs if the capability check passed; otherwise apiAction() returns
+ntdst_actions()->register('admin_action', function ($data, $params) {
+    // Only runs if the floor passed; otherwise register() returns
     // WP_Error('forbidden', …, ['status' => 403]) before your callback runs.
     return ['admin' => 'data'];
-}, ['capability' => 'edit_others_posts']);
+}, ['cap_type' => 'release']);   // type-derived floor — prefer this
+
+// A literal floor is the fallback, correct only while that type's
+// capability_type is still 'post':
+// }, ['capability' => 'edit_others_posts']);
 ```
+
+`$opts` accepts exactly `public`, `cap_type`, `capability`, `priority`. **`public` wins
+and is never floored** — anonymous reachability is not conditional on a capability. The
+floor **fails closed**: an unresolvable or empty capability denies everyone, admins
+included.
 
 > **Do not use `edit_posts` here as a read gate.** It means "may create and edit MY OWN
 > posts" and **Contributors and Authors hold it**. See
@@ -399,8 +412,11 @@ async function loadPosts() {
 - **Storage:** WordPress transients
 - **Filterable per action:** `ntdst/api/rate_limit/{action}` and
   `ntdst/api/rate_window/{action}`. A limit of `0` disables it for that action.
-- `X-Forwarded-For` is honoured **only** when `REMOTE_ADDR` is in the trusted-proxy list
-  (`netdust_trusted_proxies` — a historical filter name; don't propagate the prefix).
+- `X-Forwarded-For` is honoured **only** when `REMOTE_ADDR` is in the trusted-proxy list.
+  `NTDST_ClientIp::detect()` applies **`ntdst/trusted_proxies`** (the current name — use
+  this one) and then the historical `netdust_trusted_proxies` over its result. The
+  historical name still bites, so a listener on it is not dead; just don't propagate the
+  `netdust_` prefix into new code.
 
 ```php
 // Magic-link send: 3 per hour. Without this an attacker POSTs it 30x/minute
@@ -429,10 +445,11 @@ That last branch is the one to internalise: **a request with no headers and no s
 passes.** The control protects a *logged-in* user's browser from cross-site
 request-forgery; it is not an authentication gate and never was. A non-browser client
 (curl, a script) simply omits both headers and is admitted. Public actions must therefore
-carry their own authorization — see the post-type gate above.
+carry their own authorization **in the handler** — core's post-type gate was deleted
+along with the actions that needed it, so there is nothing underneath you.
 
-This filter widens the **same-origin** allow-list. It does not turn `Endpoints` into a
-cross-origin JSON API; that is `ntdst_rest()` (core ships no CORS handling — read the CORS gap in `rest-cors.md` before designing one).
+This filter widens the **same-origin** allow-list. It does not turn `NTDST_Actions` into
+a cross-origin JSON API; that is `ntdst_rest()` (core ships no CORS handling — read the CORS gap in `rest-cors.md` before designing one).
 
 ### Nonce Verification
 
@@ -640,7 +657,7 @@ gate stack be deleted rather than fixed.
 needs public data, it registers its own handler that knows what its rows mean,
 projects its output to an explicit allow-list, and states its own status and
 capability rules. Older project copies may still carry the retired actions until
-ported — check that project's `api/Endpoints.php`.
+ported — check that project's `api/Actions.php` (it was `api/Endpoints.php` before v3).
 
 
 ## Anti-Patterns

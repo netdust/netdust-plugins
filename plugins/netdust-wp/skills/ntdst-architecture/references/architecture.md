@@ -83,7 +83,7 @@ Soft caps. Treat as warnings, not hard rules — if exceeding the cap is the cle
 | Logger | `ntdst_log('channel')` | `NTDST_Logger` |
 | Mailer | `ntdst_mail()` / `ntdst_notify()` | `NTDST_Mailer` / `void` |
 | Metabox | `ntdst_metabox()` | `NTDST_MetaboxGenerator` |
-| Endpoints | `ntdst_actions()` | `NTDST_Actions` (aliased as `Endpoints` for back-compat) |
+| Commands (AJAX) | `ntdst_actions()` | `NTDST_Actions` — **no `Endpoints` alias.** ntdst-core defines no `class_alias()` at all |
 
 > **There is no cache helper.** `ntdst_query_cache()` and `NTDST_Query_Cache` are
 > **DELETED**, along with `$model->cache(N)`, `ntdst_clear_posts_cache()` and

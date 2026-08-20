@@ -158,15 +158,19 @@ add_filter('ntdst/api/public_actions', function ($actions) {
 Adding an action here means an **anonymous** caller may both mint a nonce for it and
 dispatch it. Anything the handler can reach is then internet-reachable.
 
-If the handler queries a **caller-supplied post type**, route it through the same gate
-the built-in actions use — `canQueryPostType()` in `api/Endpoints.php` — and **refuse
-the request when nothing requested is queryable**, rather than querying first and
-filtering the rows afterwards. Core's `post-queries` cache keys on the query args and
-the generated SQL, never on who asked, so a post-hoc filter lets one actor's answer be
-served to another. The gate admits a type that is `public && !exclude_from_search`
-outright; otherwise it requires BOTH the type's own `edit_posts` AND
-`edit_others_posts`, read off the type object, failing closed on an empty or non-string
-capability.
+**Do not take the post type from the caller at all.** There is no framework gate left to
+lean on: `canQueryPostType()`, `filterQueryablePostTypes()`, `canQueryUnpublishedMedia()`
+and `nonViewableMediaParentIds()` were all DELETED in the v2.4/3.0 sweep, together with
+the framework-shipped actions that needed them. Core ships **no data actions**, so a
+caller-parameterised query action is now entirely yours to defend, in the handler.
+
+Pin the type in the handler. If a caller genuinely must choose, resolve it against a
+closed allow-list you own and **refuse the request when nothing requested is
+queryable**, rather than querying first and filtering the rows afterwards: core's
+`post-queries` cache keys on the query args and the generated SQL, never on who asked,
+so a post-hoc filter lets one actor's answer be served to another. Where a capability
+decides, read it OFF THE TYPE OBJECT (`$type->cap->edit_others_posts`) and fail closed
+on an empty or non-string value — never a literal.
 
 ## Sanitization Reference
 

@@ -32,7 +32,7 @@ Use when creating data models, custom post types, field definitions, metaboxes, 
 > | `search_posts` | retired → `relation_search` on `NTDST_RelationField`, non-public | present, and public |
 > | `getFormattedPosts()` on a protected post | withholds `content`/`excerpt`, sets `protected` | served the body a post password withholds |
 >
-> **Still verify against the project's own `api/Data.php` and `api/Endpoints.php`
+> **Still verify against the project's own `api/Data.php` and `api/Actions.php`
 > before writing.** This skill is a map, not the territory — it drifted from the
 > code for six weeks (2026-06-23 → 2026-08-06) describing a deleted API, and the
 > fix is always to read the source.
@@ -373,7 +373,8 @@ filtering `->fields`:
 
 ```php
 $declared = [];
-foreach (array_keys($this->getFields()) as $field) {
+// getSchema() is the model's schema accessor. There is no getFields().
+foreach (array_keys($model->getSchema()) as $field) {
     $declared[$field] = $formatted[$field] ?? null;
 }
 return array_merge($declared, [

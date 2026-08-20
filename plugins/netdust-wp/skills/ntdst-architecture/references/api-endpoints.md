@@ -16,12 +16,15 @@ Two-step nonce flow via WordPress REST API:
 
 `ntdst_actions()` is instantiated unconditionally by the core loader — there is no `ALLOW_RESTAPI_AJAX` gate (that requirement is obsolete; ignore any older doc that mentions it).
 
-The class is `NTDST_Actions` (formerly unprefixed `Endpoints`). `class_alias('NTDST_Actions', 'Endpoints')` is kept for back-compat — new code should reference `NTDST_Actions::class`. The REST namespace constant is `REST_NAMESPACE` (formerly `NAMESPACE`).
+The class is `NTDST_Actions`, in `api/Actions.php` (formerly unprefixed `Endpoints`, in `api/Endpoints.php`). **There is no back-compat alias** — ntdst-core calls `class_alias()` nowhere, so `Endpoints::` is a fatal and `api/Endpoints.php` is a path that no longer exists. Reference `NTDST_Actions::class`. The REST namespace constant is `REST_NAMESPACE` (formerly `NAMESPACE`).
+
+The `ntdst/api_data/{action}` FILTER name is deliberately unchanged from v2: adopters' handlers hang off it, and renaming it would silently unmount every one of them while the code still looked correct.
 
 ## Registering Actions
 
 ```php
-// In a service constructor or via $theme->apiAction():
+// In a service constructor. (`$theme->apiAction()` is RETIRED — NTDST_Theme has
+// no such method or mixin, and its __call() throws BadMethodCallException.)
 add_filter('ntdst/api_data/get_artworks', function($data, $params) {
     // 1. Extract & sanitize
     $medium   = sanitize_text_field($params['medium'] ?? '');
@@ -51,20 +54,39 @@ add_filter('ntdst/api_data/get_artworks', function($data, $params) {
 ### Via Theme API
 
 ```php
-$theme->apiAction('get_artworks', function($data, $params) {
+ntdst_actions()->register('get_artworks', function($data, $params) {
     // ... same handler
     return ['artworks' => $artworks];
 });
 
-// With capability check — note that on failure this now returns a WP_Error,
-// which Endpoints::handle_action converts to a proper error response.
-// (Old behavior wrapped the failure as an array, which looked like a success
-// body to the client.)
-$theme->apiAction('delete_artwork', function($data, $params) {
+// With a capability floor — on failure the floor returns WP_Error('forbidden',
+// …, ['status' => 403]) BEFORE your handler runs, and NTDST_Actions::handle_action()
+// converts it to a proper error response. (Old behavior wrapped the failure as an
+// array, which looked like a success body to the client.)
+//
+// `cap_type` is the type-DERIVED form and the one to prefer; a literal
+// `capability` is correct only while that type's capability_type is 'post'.
+ntdst_actions()->register('delete_artwork', function($data, $params) {
     $id = absint($params['id'] ?? 0);
     return ntdst_data()->get('artwork')->delete($id);
-}, ['capability' => 'delete_others_posts']);
+}, ['cap_type' => 'artwork']);
 ```
+
+`register(string $action, callable $handler, array $opts = [])` takes exactly four
+opts — `public`, `cap_type`, `capability`, `priority`:
+
+| Opt | Effect |
+|---|---|
+| `'public' => true` | Adds the action to `ntdst/api/public_actions`. **Public wins and is NEVER floored** — anonymous reachability is not conditional on a capability |
+| `'cap_type' => 'artwork'` | Floor derived from the post type via `ntdst_api_floor_cap()` |
+| `'capability' => 'edit_others_posts'` | Literal floor |
+| `'priority' => 10` | Filter priority |
+
+The floor bites at DISPATCH, ahead of the handler, and **fails closed**: an empty or
+unresolvable capability denies everyone, administrators included. It is ALONGSIDE the
+handler's own per-row check, never a replacement. With neither opt the action is
+login-required — the router already refuses anonymous callers for anything not on
+`public_actions`.
 
 > **Capability choice, not just presence.** The `edit_posts` / `delete_posts` family means
 > "may act on MY OWN posts" and is held by Contributors and Authors. A handler acting on

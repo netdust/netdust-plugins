@@ -2,7 +2,7 @@
 
 Auto-generates WordPress metaboxes from field definitions.
 
-**Location:** `mu-plugins/ntdst-core/api/MetaboxGenerator.php` (under the project's
+**Location:** `mu-plugins/ntdst-core/admin/MetaboxGenerator.php` (under the project's
 content dir — `web/app/` on Bedrock, `app/content/` elsewhere).
 
 ## Automatic Generation
@@ -248,7 +248,7 @@ ntdst_data()->register('portfolio', [
 > and it should do so **under this exact key and shape**, so the work converges on
 > the framework's contract and can be upstreamed into ntdst-core later instead of
 > becoming per-project drift. Verify before relying on it:
-> `grep -c condition <project>/…/ntdst-core/api/MetaboxGenerator.php`
+> `grep -c condition <project>/…/ntdst-core/admin/MetaboxGenerator.php`
 
 Show/hide fields based on other field values:
 

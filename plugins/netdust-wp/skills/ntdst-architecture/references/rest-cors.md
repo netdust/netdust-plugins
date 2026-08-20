@@ -71,7 +71,7 @@ no automatic `{success,data}` envelope:
 | `WP_REST_Response` | passed through as-is — **the explicit choice** |
 | `array` | serialized as-is by WP core, status 200. No envelope |
 | `WP_Error` | WP-native error JSON — **the message reaches the wire**; log the detail, return a generic message |
-| an `NTDST_Response` object | **not handled** — WP serializes the object's public state. Call `->toRestResponse()` yourself |
+| an `NTDST_Response` object | **not handled** — WP serializes the object's public state. There is no `toRestResponse()`; use the static builders below |
 
 To emit the `{success,data}` envelope the `ntdstAPI` JS client reads, return
 `NTDST_Response::apiSuccessResponse($data)` / `::apiErrorResponse($msg, $code,

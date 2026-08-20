@@ -24,11 +24,12 @@ ntdst_pages()->path('api/items/:id', function($params, $template) {
     return ntdst_response()->with('item', $item)->template('item/detail');
 });
 
-// POST route
-ntdst_pages()->post('api/items', function($params, $template) {
+// POST route — the METHOD is path()'s third argument. There is no ->post()
+// (nor ->get(), nor ->register()); path() is the only pattern-route entry point.
+ntdst_pages()->path('api/items', function($params, $template) {
     // Handle POST request
     return ['success' => true];
-});
+}, 'POST');
 ```
 
 ### Pattern compilation
@@ -148,7 +149,8 @@ A route callback's return value drives what NTDST_Pages does next. The contract 
 | `null` or `true` | Callback handled output itself — the request is `exit`ed |
 | `false` | Fall through to the next matching route (or default WP behavior) |
 | String (existing file path) | Used as the resolved template |
-| `NTDST_Response` | Response is rendered and the request exits — **now recognized on `get()`/`post()`/`register()` pattern routes too**, not only template-hook callbacks (a Response returned from a pattern route used to silently fall through to the default template; that latent bug is fixed) |
+| `NTDST_Response`, status **2xx** | The 404 WordPress pre-set is cleared, the Response is rendered, and the request exits — on `path()` pattern routes as well as template-hook callbacks (a Response returned from a pattern route used to silently fall through to the default template; that latent bug is fixed) |
+| `NTDST_Response`, status **>= 400** | **REFUSE.** The status is sent, WordPress's not-found state is left intact and **its own 404 template renders** — your Response's template is NOT used. This is how a route says "no" through the output class instead of hand-rolling `status_header()`. Do not expect an error page you named here to appear |
 | Anything else | Fall through to the next matching route (unrecognized types continue scanning, matching the original loop behavior) |
 
 > A common footgun: a callback that forgets to return anything implicitly returns `null`, which **exits the request**. If you see a blank page from a route that "isn't running", check for missing `return` statements first.
@@ -190,10 +192,14 @@ $theme->page('contact', function($post) {
 
 ```php
 ntdst_pages()->path('api/search/:term', function($params) {
-    $results = ntdst_data()->get('post')
-        ->search($params['term'])
-        ->limit(20)
-        ->get();
+    // NB: the chain API has NO search() method — there is no full-text
+    // search on the model. Free-text goes through WP_Query's own `s`, which
+    // ntdst_get_formatted_posts() passes straight through.
+    $results = ntdst_get_formatted_posts([
+        's'              => $params['term'],
+        'post_type'      => 'post',
+        'posts_per_page' => 20,
+    ]);
 
     return ntdst_response()
         ->with('results', $results)
