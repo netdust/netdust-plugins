@@ -18,12 +18,9 @@ Preconditions — refuse to arm (say why) if any fails:
 2. **Class A/B only.** C/D/E are single cycles; nothing to loop.
 3. **Stage 1.5 green:** run `python3 <plugin>/bin/gate-check.py <feature-dir>`
    — exit 0 required. A loop on a gate-failing plan grinds a defective plan.
-4. **Not a flow-harnessed repo.** If `.flow/` exists at the repo root, the
-   armed loop is the netdust-flow road's — refuse and route to
-   `/flow <feature-dir> <road>` (see `harnessed-development`). One marker
-   path, one driver; and if `tasks/.harness-loop.json` already exists with
-   flow fields (`flow`/`node`), a road is armed RIGHT NOW — never overwrite
-   it.
+4. **No marker already armed.** If `tasks/.harness-loop.json` already exists
+   and was not written by this loop, something else is driving RIGHT NOW —
+   never overwrite it. One marker path, one driver.
 
 Then:
 

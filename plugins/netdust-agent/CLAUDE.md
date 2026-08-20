@@ -12,7 +12,7 @@ One idea, decided 2026-08-10 (the re-thinning):
 
 | Skill | Adds to | What it adds |
 |---|---|---|
-| `harnessed-development` | intake | the class dial (A–F, priced by open decisions) + the stakes dial; routes, does no stage work. Flow-harnessed repos (`.flow/` at root): A/B routes to the netdust-flow road, C–E behind `floor-check.py` |
+| `harnessed-development` | intake | the class dial (A–F, priced by open decisions) + the stakes dial; routes, does no stage work. |
 | `planning` | `superpowers:brainstorming` + `writing-plans` | the plan-time gates: Source: per FR, threat model, invariants, ground-truth, stakes, deliverable-first, task shaping, behaviour clusters — all checked by `bin/gate-check.py`; stops at the seam |
 | `building` | `superpowers:subagent-driven-development` / `executing-plans` + `test-driven-development` | the seam precondition, ground-truth per dispatch, the evidence contract the stop hook parses, feature tests after each cluster, review gates with independent reviewers |
 | `testing-workflow` | `superpowers:test-driven-development` | the tier decision (A/B, evidence ladder) and the WP runners — Brain Monkey / wp-phpunit via the netdust-wp-manager template, which superpowers doesn't know |
