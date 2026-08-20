@@ -2,22 +2,60 @@
 
 You are working on a Netdust **WordPress** project. This plugin layers on top of `netdust-core` (which defines the memory/dev-stack conventions, server management, and cross-domain skills) and `netdust-agent` (which provides the coding harness — `harnessed-development`, `planning`, `building`, `testing-workflow`, the reviewer agents, the `/integration` and `/shakeout` gate commands, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard). If `netdust-core` is not enabled, install it first — `/deploy` won't work otherwise.
 
+## Read `site.yml` FIRST
+
+Every Netdust WP project has a `site.yml` in its root. It is the single source of
+truth for how that site is built, hosted and deployed — **read it before running
+anything path-dependent or destructive.** Do not infer these from the tree.
+
+| Field | Why it decides your next command |
+|---|---|
+| `structure.type` | `bedrock` \| `custom-app` \| `custom-site` — sets `wpcli_path`, the webroot, and whether `config/environments/` exists |
+| `structure.wpcli_path` | what `--path` every WP-CLI call needs (`web/wp`, `app/wp`, or `.`) |
+| `structure.theme_flavour` | `yootheme` \| `custom` \| `tbd` — there is no default theme base on this fleet |
+| `site.risk` | `high` means triple-check every destructive operation |
+| `hosting.provider` | `ploi` \| `combell` \| other — different SSH and deploy shape |
+| `deploy.method` | one of the canonical 9; `/deploy` dispatches on it |
+
+Then `memory/STATE.md` for where the project actually stands.
+
+## Where knowledge lives (three layers, do not conflate)
+
+- **A — atomic recall**: `~/.claude/projects/<slug>/memory/`, injected at session start.
+- **B — fleet / business**: `~/Sites/netdust-wp-manager/memory/` — cross-site
+  priorities, deals, cross-project rules, `GLOBAL.md`, `projects/<site>/STATE.md`.
+  **Stefan writes this by hand.** Update it only when something *fleet-level*
+  changed, and commit from that workspace.
+- **C — per-project**: `<project>/memory/STATE.md` · `lessons.md` — written
+  automatically by the Stop hook from `DECISION:`/`RISK:`/`LESSON:`/`TODO:` tags.
+
+A single site's decision is Layer C and lands by itself. Do not hand-write it into B.
+
+`netdust-wp-manager` is the toolbox workspace and the site registry — shared scripts
+and the fleet brain. Per-project config and memory live in the project, never there.
+
 ## Default assumptions (project `CLAUDE.md` can override)
 
-- **Stack**: Bedrock / Composer / PHP 8.2+ / MariaDB (the common case)
-- **Non-Bedrock WP** also supported via `site.yml`'s `structure.type: custom-app` — `wp-cli.yml` adjusts the `--path`
-- **Framework**: ntdst-core conventions (`mu-plugins/<project>-core/Modules/`, `Stride\Modules\…` namespaces) — see `ntdst-architecture` and `ntdst-patterns`
-- **Common plugins**: LearnDash on Stride family, YOOtheme Pro on marketing sites, FluentCRM/FluentForms where forms are needed
-- **Standards**: WordPress Coding Standards (WPCS) via PHPCS
+- **Stack**: Bedrock / Composer / PHP 8.2+ / MariaDB is the common case, not the only
+  one — `structure.type` decides.
+- **Framework**: ntdst-core (4.2.0) **and** ntdst-baseline (2.0.0), both mu-plugins,
+  both Composer-managed. See `ntdst-framework`.
+- **Local**: DDEV, always.
+- **Standards**: WordPress Coding Standards via PHPCS.
 
 ## What this plugin adds on top of netdust-core
 
-- **WP discipline skills** — `wp-security`, `wp-database`, `bedrock-composer` (each with RED tests)
-- **WP reference skills** — `wp-frontend`, `wp-testing`, `wp-infra`
-- **WP plan gate** — `wp-plan-requirements` (fired by `harnessed-development` Stage 1; injects the four security pillars + ntdst-core drift categories into the plan as per-task requirements)
-- **ntdst-core framework skills** — `ntdst-architecture`, `ntdst-data`, `ntdst-patterns`, `ntdst-yootheme`
-- **WP commands** — `/wp-new-project`, `/scaffold-plugin`, `/sync-db`, `/setup-tests`
-- **Templates** — `Makefile.tmpl` with Bedrock-shaped deploy variants
+- **`ntdst-framework`** — the ntdst-core + ntdst-baseline contract: boot, services,
+  handlers, CPTs, routing, templates, assets, the four output surfaces, and
+  `references/traps.md` (what the source will not tell you).
+- **`ntdst-patterns`** — where files go, plus the four golden-path archetypes.
+- **`ntdst-yootheme`** — the YOOtheme Pro stack.
+- **Discipline** — `wp-security`, `wp-database`, `bedrock-composer` (each with RED tests).
+- **Reference** — `wp-frontend`, `wp-testing`, `wp-infra`.
+- **Plan gate** — `wp-plan-requirements`, fired at `harnessed-development` Stage 1.
+- **Drift review** — the `ntdst-drift-reviewer` agent, which checks BOTH packages are
+  used consistently: no repository bypass, no pass-through, no raw `wp_ajax_*`, and
+  nothing re-implementing what an ntdst-baseline module already owns.
 
 ## What lives in netdust-core / netdust-agent (not here)
 
@@ -38,7 +76,7 @@ For these, see `netdust-core/CLAUDE.md` and `netdust-agent/CLAUDE.md`:
 `netdust-agent:harnessed-development` is the stack-agnostic **intake router**: it classifies the work (Class A–F, priced by open decisions) and routes it to `planning` or `building`. It does not sequence stages itself, and it is the first action for **any** code-changing request on this stack. It defers to the loaded stack sub-plugin for stack-specific tools. On a WordPress project, those overrides are:
 
 - **Design.** Whether the work brainstorms at all is the ROUTER's decision, never a stack carve-out — Class A/B routes to `planning`, which invokes `superpowers:brainstorming`; Class C/D/E go straight to `building` and brainstorm nothing. Do not skip brainstorming on the grounds that this is WordPress.
-- **What the WP skills own inside that.** They **layer on** brainstorming, they do not replace it. Brainstorming + the human own INTENT — what we are building and why. `ntdst-architecture` (service lifecycle, DI, boundaries), `ntdst-data` (data layer, CPTs, repositories, REST) and `ntdst-patterns` (where files live) own the TECHNICAL DESIGN SHAPE on this stack. A netdust skill that restates upstream superpowers content is a defect, not thoroughness.
+- **What the WP skills own inside that.** They **layer on** brainstorming, they do not replace it. Brainstorming + the human own INTENT — what we are building and why. `ntdst-framework` (service lifecycle, DI, boundaries), `ntdst-framework` (data layer, CPTs, repositories, REST) and `ntdst-patterns` (where files live) own the TECHNICAL DESIGN SHAPE on this stack. A netdust skill that restates upstream superpowers content is a defect, not thoroughness.
 - **Plan-time security/data gates.** The `netdust-agent:threat-modeling` + `netdust-agent:architecture-invariants` gates still fire per their triggers; on WP, `wp-security` and `wp-database` self-trigger on PHP edits and reinforce them.
 - **Testing (Stage 2).** Already automatic — `netdust-agent:testing-workflow` picks the tier and the runner; `wp-testing` self-triggers on `phpunit.unit.xml` / `bin/gate.sh` / `Cest` / `WPTestCase` and routes to the right stack. **The gate stack is primary** (Brain Monkey unit + wp-phpunit integration + Vitest + Playwright, under `composer gate`); Codeception/wp-browser is the LEGACY stack, Stride family only.
 - **Shake-out / review (Stage 3).** `/shakeout` detects WP and adds `netdust-wp:ntdst-drift-reviewer` to the panel.

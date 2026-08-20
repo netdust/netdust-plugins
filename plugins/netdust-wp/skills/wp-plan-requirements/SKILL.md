@@ -61,7 +61,7 @@ Every flow MUST account for all four pillars (validate / sanitize / escape / aut
 
 ### Block 2 — `## ntdst-core layering requirements`
 
-List the framework-pattern obligations the feature's new classes must meet. This list is the **same nine drift categories** the `ntdst-drift-reviewer` agent checks — so plan-requirement and review-check are one list fired at two ends. The canonical category definitions live in `netdust-wp:ntdst-architecture` (`references/anti-patterns.md`) and the drift-reviewer agent; reference them, don't restate.
+List the framework-pattern obligations the feature's new classes must meet. This list is the **same nine drift categories** the `ntdst-drift-reviewer` agent checks — so plan-requirement and review-check are one list fired at two ends. The canonical category definitions live in `netdust-wp:ntdst-framework` (`references/anti-patterns.md`) and the drift-reviewer agent; reference them, don't restate.
 
 ```
 ## ntdst-core layering requirements
@@ -73,7 +73,7 @@ List the framework-pattern obligations the feature's new classes must meet. This
 - [ ] Data API vocabulary is registered (WP_COLUMNS) — no unregistered keys
 - [ ] No hardcoded meta prefix — use `$this->repository->getMetaPrefix()`
 - [ ] Correct module layering (Modules / Handlers / Admin / Integrations / Contracts / Domain / Infrastructure)
-- [ ] Service lifecycle / DI per NTDST_Service_Meta (see ntdst-architecture)
+- [ ] Service lifecycle / DI per NTDST_Service_Meta (see ntdst-framework)
 ```
 
 Keep only the rows that apply to what the feature actually builds; delete the rest so the list is real, not boilerplate.
@@ -112,6 +112,6 @@ That sentence is what earns the one-round convergence. Without a named target, r
 | `netdust-agent:harnessed-development` | Fires this at Stage 1 on WP projects via the stack-override rule (sibling to threat-modeling). |
 | `netdust-agent:threat-modeling` | The general-purpose twin; this is the WP-specific plan injector. Both run at Stage 1; they compose. |
 | `netdust-wp:wp-security` | Canonical source for the four pillars + sanitize/escape/authorize functions. Block 1 references it. |
-| `netdust-wp:ntdst-architecture` / `ntdst-data` / `ntdst-patterns` | Canonical source for the layering/Data-API/Service-lifecycle rules. Block 2 references them. |
+| `netdust-wp:ntdst-framework` / `ntdst-framework` / `ntdst-patterns` | Canonical source for the layering/Data-API/Service-lifecycle rules. Block 2 references them. |
 | `netdust-wp:ntdst-patterns` → `golden-paths/` | The worked vertical slices Block 0 names. The plan builds to the slice; deviations are named here. |
 | `ntdst-drift-reviewer` (agent) | The review-time enforcer of the same nine categories Block 2 names. Plan-requirement ↔ review-check are one list. |

@@ -5,7 +5,7 @@ Cases where the agent flagged something that turned out NOT to be drift, OR rule
 ## Curation rules
 
 - **Manual review only.** The agent suggests entries in its report; the human decides what lands here. The agent does not append to this file.
-- **Size cap: ~15 entries.** When over, either: (a) promote a long-standing exception to a permanent rule in `ntdst-architecture/references/anti-patterns.md`, or (b) prune entries that are no longer relevant (the drifted file got refactored).
+- **Size cap: ~15 entries.** When over, either: (a) promote a long-standing exception to a permanent rule in `ntdst-framework/references/traps.md`, or (b) prune entries that are no longer relevant (the drifted file got refactored).
 - **What goes in:** patterns that LOOK like drift but aren't, or rule nuances neither the agent prompt nor the skill references captured. Each entry must generalize beyond a single file — if it's "this one file in stride does X for a stride reason," it belongs in the project's memory directory, not here.
 - **What does NOT go in:** project-specific exceptions (those go in `~/.claude/projects/<project>/memory/`), positive calibration ("the audit was clean"), or stylistic disagreements.
 
@@ -67,7 +67,7 @@ Auxiliary note: when a service holds a raw `$wpdb->get_results(... meta_key = 'l
 
 ### 2026-05-19 — Constructor-injection vs in-method `ntdst_get()` when at the 5-param soft cap
 
-**Pattern that looked like drift:** A service calls `ntdst_get(QuoteService::class)` / `ntdst_get(EnrollmentCompletion::class)` inside multiple methods rather than constructor-injecting. Surface reading: should be constructor-injected per `ntdst-architecture/references/architecture.md`; in-method `ntdst_get` is the thin-handler pattern, not the service pattern.
+**Pattern that looked like drift:** A service calls `ntdst_get(QuoteService::class)` / `ntdst_get(EnrollmentCompletion::class)` inside multiple methods rather than constructor-injecting. Surface reading: should be constructor-injected per `ntdst-framework/SKILL.md`; in-method `ntdst_get` is the thin-handler pattern, not the service pattern.
 
 **Why it isn't necessarily drift:** The architecture reference treats the 5-param constructor cap as a soft warning meaning "the class is doing too much, split it." When the constructor already sits at or near the cap, adding 2 more deps pushes well past it. The right alternative — splitting the class — is a separate, larger refactor. In-method `ntdst_get()` is the pragmatic middle ground that preserves DI testability (the test container resolves the dep) while not bloating the constructor.
 

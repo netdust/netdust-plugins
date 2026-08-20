@@ -133,7 +133,20 @@ DDEV exposes 5173 via its router.
 
 ## Custom-app variant (non-Bedrock)
 
-A handful of legacy Netdust sites (some VAD subsites) use the `custom-app` structure where the WP core lives at `app/wp/` and content at `app/content/`. `site.yml` `structure.type: custom-app` flags this. `wp-cli.yml` has `path: app/wp`. The `Makefile` paths are shifted accordingly. Everything else (Composer rules, WP-CLI, Vite) works the same.
+`site.yml`'s `structure.type` names one of **three** layouts, and it is the field to
+read before running any path-dependent command:
+
+| `structure.type` | WP core | content | `wpcli_path` |
+|---|---|---|---|
+| `bedrock` | `web/wp/` | `web/app/` | `web/wp` |
+| `custom-app` | `app/wp/` | `app/content/` | `app/wp` |
+| `custom-site` | site root | `wp-content/` | `.` |
+
+`custom-app` is a handful of legacy sites (some VAD subsites). `custom-site` is a
+plain WordPress tree with no Composer webroot split — no `config/environments/`, so
+per-env config lives wherever that site put it; check before assuming Bedrock's
+answer. `wp-cli.yml` mirrors `wpcli_path` in every case, and the `Makefile` paths
+shift with it. Composer rules, WP-CLI and Vite work the same across all three.
 
 ## Anti-patterns
 
@@ -152,6 +165,6 @@ A handful of legacy Netdust sites (some VAD subsites) use the `custom-app` struc
 - `bedrock-composer` — Bedrock layout fundamentals, Composer dependency rules
 - `wp-frontend` — theme.json, blocks, asset pipeline details
 - `wp-security` / `wp-database` — discipline skills for WP-specific work
-- `ntdst-architecture` / `ntdst-patterns` / `ntdst-data` — the framework conventions inside `<project>-core`
+- `ntdst-framework` / `ntdst-patterns` / `ntdst-framework` — the framework conventions inside `<project>-core`
 - `/deploy` — slash command that dispatches per `site.yml`'s `deploy.method`
 - `memory/deploy-patterns.md` (in netdust-core) — the 9 deploy methods catalog

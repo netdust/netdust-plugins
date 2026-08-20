@@ -20,7 +20,7 @@ This is the framework way: a single service owns page registration, asset enqueu
 | `assets/js/admin/settings.js` | Frontend | Alpine component; `ntdstAPI.call()` per-tab save |
 | `assets/css/admin/settings.css` | Style | Page layout |
 
-Governing reference: **`ntdst-architecture/references/services.md`** (service lifecycle), **`netdust-wp:wp-security`** (the save's four pillars). This doc shows the settings-specific shape.
+Governing reference: **`ntdst-framework/SKILL.md`** (service lifecycle), **`netdust-wp:wp-security`** (the save's four pillars). This doc shows the settings-specific shape.
 
 ---
 
@@ -255,7 +255,7 @@ function {project}SettingsApp() {
 
 ## Cross-references
 
-- Governing references: `ntdst-architecture/references/services.md`, `netdust-wp:wp-security` (the save's four pillars), `references/response.md` (when a settings *action* needs a routed template).
+- Governing references: `ntdst-framework/SKILL.md`, `netdust-wp:wp-security` (the save's four pillars), `references/response.md` (when a settings *action* needs a routed template).
 - Anti-patterns this slice satisfies: `anti-patterns.md` → *Missing Capability Checks*, *Unsanitized Input*, *Unescaped Output*, *Manual fetch()*, *Echo in Services* (the service delegates rendering to a template, doesn't echo markup itself).
 - Drift categories satisfied: **3** (framework AJAX path), **4** (the include is the documented exception, not `ob_start` capture). Maps to `wp-plan-requirements` Blocks 1 + 2.
 - The settings *save* is itself a form/data-flow — see `golden-paths/form-data-flow.md` for the pillar-by-pillar AJAX contract this reuses.

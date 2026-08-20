@@ -21,7 +21,7 @@ Genericised `Stride` → `{Project}`, `vad_edition` → `{type}`, `_ntdst_` → 
 | `Domain/{Type}Status.php` | Value object | Status enum; `tryFrom()` coercion lives here |
 | `themes/{theme}/single-{type}.php` | Frontend template | Single-object render — resolves the repo via `ntdst_get()` |
 
-Governing reference: **`ntdst-architecture/references/services.md`** (service lifecycle), **`ntdst-data/references/data-orm.md`** (Data API + repository contract). This doc does not restate those rules — it shows the shape they produce.
+Governing reference: **`ntdst-framework/SKILL.md`** (service lifecycle), **`ntdst-framework/SKILL.md`** (Data API + repository contract). This doc does not restate those rules — it shows the shape they produce.
 
 ---
 
@@ -355,7 +355,7 @@ echo esc_html($venue);
 
 ## Cross-references
 
-- Governing references: `ntdst-architecture/references/services.md`, `.../pages.md`, `ntdst-data/references/data-orm.md`.
+- Governing references: `ntdst-framework/SKILL.md`, `.../pages.md`, `ntdst-framework/SKILL.md`.
 - Anti-patterns this slice satisfies: `anti-patterns.md` → *Direct Meta Access in Services*, *Pure Pass-Through Method*, *CPT Data Access Outside the Repository*, *Wrong Data API Vocabulary*, *Manual template_include*.
 - Drift categories satisfied (per `ntdst-drift-reviewer`): **1** (ntdst_data outside repo), **2** (pass-through), **6** (Data API vocab), **7** (hardcoded prefix), **8** (raw post access), **9** (template_include), **10** (over-injected service).
 - The admin edit/list screen for this CPT is its own slice — see `golden-paths/admin-settings-page.md` for the framework-clean admin pattern (Stride's `Edition/Admin/` subfolder is drifted; do not copy it).

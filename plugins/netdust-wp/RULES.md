@@ -22,7 +22,7 @@
 8. **i18n always.** All user-facing strings through `__()` / `_e()` / `esc_html__()` with the project text domain. No hardcoded English (or Dutch).
 9. **Prefix everything.** Custom actions, filters, functions, options, post types, taxonomies, meta keys → `netdust_*`, `stride_*`, or project-specific prefix. No bare `wp_*` overrides.
 10. **Namespaces preferred** in plugins (`Netdust\StrideLMS\…`, `Stride\Modules\Edition\…`). Procedural style allowed in theme template files only.
-11. **ntdst-core conventions** apply to all new Netdust WP work — Modules / Handlers / Admin / Integrations / Contracts / Domain / Infrastructure layering. See `ntdst-architecture` and `ntdst-patterns`.
+11. **ntdst-core conventions** apply to all new Netdust WP work — Modules / Handlers / Admin / Integrations / Contracts / Domain / Infrastructure layering. See `ntdst-framework` and `ntdst-patterns`.
 
 ## Database
 

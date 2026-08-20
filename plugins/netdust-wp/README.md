@@ -8,7 +8,7 @@ WordPress layer of the Netdust harness for Claude Code. Layers on top of [`netdu
 |---|---|
 | **WP discipline skills** | `wp-security`, `wp-database`, `bedrock-composer` (each with RED tests) |
 | **WP reference skills** | `wp-frontend`, `wp-testing`, `wp-infra` |
-| **ntdst-core framework skills** | `ntdst-architecture`, `ntdst-data`, `ntdst-patterns`, `ntdst-yootheme` |
+| **ntdst-core framework skills** | `ntdst-framework`, `ntdst-patterns`, `ntdst-yootheme` |
 | **WP commands** | `/wp-new-project`, `/scaffold-plugin`, `/sync-db`, `/setup-tests` |
 | **Templates** | `Makefile.tmpl` with Bedrock-shaped deploy variants |
 | **Identity** | `CLAUDE.md` (WP-specific defaults), `RULES.md` (WP-specific rules — universal rules come from netdust-core) |
@@ -61,25 +61,26 @@ Both imports — core for memory conventions/cross-stack, wp for WP-specific def
 │   ├── sync-db.md
 │   └── wp-new-project.md
 │
-├── skills/                          ← 11 WP skills, flat layout
+├── skills/                          ← 10 WP skills, flat layout
 │   ├── bedrock-composer/            (discipline + RED tests)
-│   ├── ntdst-architecture/          (+ references/, templates/)
-│   ├── ntdst-data/                  (+ references/, templates/)
+│   ├── ntdst-framework/             ntdst-core + ntdst-baseline contract
+│   │                                  SKILL.md · references/traps.md
+│   │                                  references/baseline.md · lessons.md
 │   ├── ntdst-patterns/              (+ golden-paths/)
 │   ├── ntdst-yootheme/              (+ references/, scripts/, templates/)
 │   ├── wp-database/                 (discipline + RED tests)
 │   ├── wp-frontend/
-│   ├── wp-infra/                    (WP-CLI, Vite-for-WP, Bedrock Makefile patterns)
+│   ├── wp-infra/
 │   ├── wp-plan-requirements/        (the Stage-1 plan gate)
 │   ├── wp-security/                 (discipline + RED tests)
 │   └── wp-testing/
 │
 ├── agents/                          ← ntdst-drift-reviewer, ntdst-core-gaps
-├── evals/                           ← behavioral-lessons.json
+├── evals/                           ← behavioral-lessons.json + runner
 ├── memory/                          ← STATE.md, lessons.md
 │
 └── templates/
-    ├── Makefile.tmpl                (Bedrock variants: makefile, git-push, git-bundle-makefile)
+    ├── Makefile.tmpl
     ├── project-CLAUDE.md.tmpl
     └── site.yml.tmpl
 ```

@@ -182,6 +182,6 @@ Notice: every dynamic value goes through `prepare`. The only thing interpolated 
 ## See also
 
 - `wp-security` for the broader four-pillar framework (this skill is the database pillar).
-- `ntdst-data` for the Data Manager pattern that wraps `$wpdb` with type safety.
+- `ntdst-framework` for the Data Manager pattern that wraps `$wpdb` with type safety.
 - `red-tests.md` in this skill folder — pressure scenarios.
 - WordPress codex: [Data Validation](https://developer.wordpress.org/apis/security/data-validation/).

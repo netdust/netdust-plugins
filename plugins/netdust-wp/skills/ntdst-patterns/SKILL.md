@@ -1,11 +1,11 @@
 ---
 name: ntdst-patterns
-description: Use when scaffolding new Netdust WordPress projects, creating new mu-plugins, organizing themes, adding domain modules, deciding where new files go, or onboarding to an existing Netdust codebase. Triggers on questions like "where does this go", "what should I name this folder", "is this in the right place". Activates on keywords stride-core, ntdst-core, mu-plugins, Modules, Handlers, Domain, Infrastructure, themes, child theme, file structure, project layout, scaffolding, where do I put. Symptoms include adding a new feature module, creating a new service, deciding between mu-plugin vs plugin vs theme, setting up a child theme, structuring assets. Companion to ntdst-architecture (which covers the DI container + service lifecycle) — this skill is about WHERE files live, not HOW classes wire together.
+description: Use when scaffolding new Netdust WordPress projects, creating new mu-plugins, organizing themes, adding domain modules, deciding where new files go, or onboarding to an existing Netdust codebase. Triggers on questions like "where does this go", "what should I name this folder", "is this in the right place". Activates on keywords stride-core, ntdst-core, mu-plugins, Modules, Handlers, Domain, Infrastructure, themes, child theme, file structure, project layout, scaffolding, where do I put. Symptoms include adding a new feature module, creating a new service, deciding between mu-plugin vs plugin vs theme, setting up a child theme, structuring assets. Companion to ntdst-framework (which covers the DI container + service lifecycle) — this skill is about WHERE files live, not HOW classes wire together.
 ---
 
 # NTDST Patterns — folder & file structure
 
-This skill covers WHERE things go in a Netdust WordPress project. For HOW classes wire together (DI container, bootstrap, routing), see `ntdst-architecture`. For data + APIs, see `ntdst-data`. For deploy + infra, see `wp-infra` (this plugin) and `dev-stack` (netdust-core).
+This skill covers WHERE things go in a Netdust WordPress project. For HOW classes wire together (DI container, bootstrap, routing), see `ntdst-framework`. For data + APIs, see `ntdst-framework`. For deploy + infra, see `wp-infra` (this plugin) and `dev-stack` (netdust-core).
 
 **Canonical implementation: `~/Sites/stride/`.** When in doubt, copy what Stride does.
 
@@ -40,7 +40,7 @@ project/
         ├── plugins/                      ← Composer-managed (gitignored)
         ├── themes/
         │   ├── stridence/                ← custom child theme (committed)
-        │   └── kadence/                  ← parent theme (Composer-managed, may be gitignored)
+        │   └── <parent>/                 ← parent theme, if any (Composer-managed, may be gitignored)
         ├── mu-plugins/
         │   ├── netdust-loader.php        ← explicit require_once entry (committed)
         │   ├── <project>-core/           ← business logic (committed) — the NTDST core layer
@@ -80,7 +80,7 @@ Namespace pattern: `<Project>\Modules\<Module>\<Class>`, e.g. `Stride\Modules\En
 ## Theme structure
 
 ```
-themes/<project>ence/                     ← child theme of Kadence (or similar)
+themes/<project>/                         ← the site's own theme (child, if there is a parent)
 ├── style.css, functions.php
 ├── templates/                            ← block templates (.html) for FSE
 ├── parts/                                ← block parts
@@ -158,8 +158,8 @@ Activated/deactivated per environment via the loader.
 
 ## See also
 
-- `ntdst-architecture` — DI container, service lifecycle, routing, templating
-- `ntdst-data` — data models, repositories, REST API
+- `ntdst-framework` — DI container, service lifecycle, routing, templating
+- `ntdst-framework` — data models, repositories, REST API
 - `wp-infra` — WP-CLI, Vite-for-WP, Bedrock Makefile patterns
 - `dev-stack` (netdust-core) — generic DDEV, git, Makefile verbs, .env
 - `ntdst-yootheme` — YOOtheme variant (when project uses YOOtheme Pro instead of FSE/block theme)

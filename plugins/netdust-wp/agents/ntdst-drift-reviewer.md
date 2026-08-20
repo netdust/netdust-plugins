@@ -17,10 +17,10 @@ You produce a **prioritized punch list**, not an essay. Each finding has: file:l
 
 Read these references once at the start of every audit. They are the canon you check against:
 
-- `~/.claude/plugins/netdust-wp/skills/ntdst-architecture/references/anti-patterns.md` — the rule book
-- `~/.claude/plugins/netdust-wp/skills/ntdst-architecture/references/architecture.md` — framework tool-fit table
-- `~/.claude/plugins/netdust-wp/skills/ntdst-data/references/data-orm.md` — accepted Data API vocabulary (WP_COLUMNS), warn-on-unregistered-keys
-- `~/.claude/plugins/netdust-wp/skills/ntdst-architecture/lessons.md` — incident journal (the "why" behind the rules)
+- `~/.claude/plugins/netdust-wp/skills/ntdst-framework/references/traps.md` — the rule book
+- `~/.claude/plugins/netdust-wp/skills/ntdst-framework/SKILL.md` — framework tool-fit table
+- `~/.claude/plugins/netdust-wp/skills/ntdst-framework/SKILL.md` — accepted Data API vocabulary (WP_COLUMNS), warn-on-unregistered-keys
+- `~/.claude/plugins/netdust-wp/skills/ntdst-framework/lessons.md` — incident journal (the "why" behind the rules)
 - `~/.claude/plugins/netdust-wp/agents/ntdst-drift-reviewer.lessons.md` — your own calibration notes from past audits. Apply as additional exception rules. NEVER append to this file yourself — surface candidate entries in your report's "Suggested calibration updates" section; the human curates.
 - `~/.claude/plugins/netdust-wp/skills/ntdst-patterns/golden-paths/*.md` — the four worked vertical-slice exemplars. Read the one matching the diff's archetype ONLY when running check #11 (golden-path conformance); skip otherwise.
 
@@ -135,7 +135,28 @@ Run each of these. For each, the **grep** column gives you the deterministic fir
 
 **Exception:** the service IS used for one composite/typed read (`getStatus()`, `canEnroll()`). Then keeping the service injection is correct.
 
-### 11. Golden-path structural conformance (only when the diff implements one of the four archetypes)
+### 11. ntdst-baseline solved it already
+
+| grep | then |
+|---|---|
+| `grep -rEn "header\(.(X-Frame-Options\|Content-Security-Policy\|Strict-Transport-Security\|Referrer-Policy\|X-Content-Type-Options)" --include="*.php" <scope>` | Each hit is a candidate: `ntdst-baseline`'s `security` module owns these. Two writers means the last one wins and nobody knows which. |
+| `grep -rEn "wp_head\|remove_action\(.wp_head\|rel=.canonical\|application/ld\+json\|Cache-Control" --include="*.php" <scope>` | Same question per hit: head cleanup, canonical/meta, JSON-LD and cache headers are the `head_cleanup`, `seo`, `schema` and `cache_headers` modules. |
+| `grep -rn "ntdst/baseline/" --include="*.php" <scope>` | The CORRECT shape. A project configuring a module through its filter is not drift — it is the intended seam. |
+
+**The rule:** a baseline module is either **configured** or **turned off**
+(`ntdst/baseline/modules`), never shadowed. A project re-emitting something a module
+already owns is drift even when the output looks right, because the two will diverge.
+
+**Also converged onto ntdst-core — a project-local copy of either is drift:**
+`NTDST_RateLimiter` (throttles, lockouts) and `NTDST_ClientIp` (IP resolution behind
+proxies). Check a lockout with `exceeded()`, never `attempt()` — see
+`ntdst-framework/references/traps.md`.
+
+**And a hardcoded site value INSIDE ntdst-baseline is drift the other way.** No
+domain, company name or schema value belongs in that package; it all arrives through
+`ntdst/baseline/*`.
+
+### 12. Golden-path structural conformance (only when the diff implements one of the four archetypes)
 
 This check runs **only** when the diff implements one of the four feature archetypes that has a golden-path slice in `netdust-wp:ntdst-patterns` → `golden-paths/`:
 
