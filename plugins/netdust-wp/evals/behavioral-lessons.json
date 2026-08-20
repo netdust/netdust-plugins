@@ -28,14 +28,14 @@
       "discriminator": "grep -c 'ntdst_router()->' — 45 pre-sweep, 0 now; 'ntdst_pages()->path(' — 0 pre-sweep, 15 now"
     },
     {
-      "id": "rest-cors-gap",
+      "id": "rest-cors-option",
       "skill": "ntdst-architecture",
-      "lesson": "The CORS reference was fiction and its advice silently unregistered the route (re-anchor 2026-08-20)",
-      "baseline_ref": "ffcd179 — pre-sweep skill text",
+      "lesson": "The CORS reference was fiction — NTDST_Cors_Policy never existed and its advice silently unregistered the route (re-anchor 2026-08-20). ntdst-core 4.1.0 then landed a real `cors` route option.",
+      "baseline_ref": "ffcd179 — pre-sweep skill text; superseded assertion re-cut for ntdst-core 4.1.0",
       "prompt": "We're building a headless front-end on a different origin that needs to POST submissions to this WordPress site. Add the REST endpoint and lock the CORS down to just our app's origin.",
-      "baseline_expected_failure": "Invents NTDST_Cors_Policy (named 18 times pre-sweep) and passes a 'cors' option to the route. Neither exists — and because NTDST_Rest REFUSES any route carrying an option it does not know, the route is never registered at all: it logs _doing_it_wrong and is simply absent from the API. The endpoint 'works' in review and 404s on the wire.",
-      "with_skill_assertion": "Registers through ntdst_rest('ns/v1')->post() with a REQUIRED callable 'permission', and passes ONLY options from the closed list (permission, rate_limit, rate_window, args, schema, show_in_index, allow_batch). Names no NTDST_Cors_Policy and no 'cors' option. States plainly that ntdst-core 4.x ships NO CORS handling, that WP core's default rest_send_cors_headers() reflects any Origin with Allow-Credentials, and does NOT hand-roll Access-Control-* headers — it surfaces the gap as a design decision rather than filling it.",
-      "discriminator": "grep -c 'NTDST_Cors_Policy' — 18 pre-sweep, 2 now (both retirement notes); \"'cors' =>\" — 1 pre-sweep, 0 now; 'no CORS' — 1 pre-sweep, 9 now"
+      "baseline_expected_failure": "Invents NTDST_Cors_Policy (named 18 times pre-sweep) and passes it as the route's 'cors' option. That class has never existed in any version, and pre-4.1.0 'cors' was not an accepted option either — NTDST_Rest refuses any route carrying an option it does not know, so the route was never registered at all: it logs _doing_it_wrong and is absent from the API. The endpoint 'works' in review and 404s on the wire.",
+      "with_skill_assertion": "Registers through ntdst_rest('ns/v1')->post() with a REQUIRED callable 'permission', and declares CORS via the 'cors' route option (ntdst-core 4.1.0) with the app's exact origin — NOT NTDST_Cors_Policy, which does not exist, and NOT a hand-rolled Access-Control-* header or rest_pre_serve_request filter. Does not reach for '*'. Bonus if it notes credentials are off unless asked, or that the option is opt-in so routes without it keep WordPress's reflect-any default.",
+      "discriminator": "grep -ro 'NTDST_Cors_Policy' --include='*.md' — 18 pre-sweep, 2 now (retirement notes only); \"'cors' =>\" — 1 pre-sweep (as a NTDST_Cors_Policy instance), 2 now (the real option, both in rest-cors.md). Run with --exclude-dir=evals."
     },
     {
       "id": "service-disable-filter",

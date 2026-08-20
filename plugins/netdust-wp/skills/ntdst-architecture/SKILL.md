@@ -40,7 +40,7 @@ description: >
 | `references/pages.md` | URL routes, template hooks, rewrite rules, return values |
 | `references/response.md` | Template rendering, JSON output, email HTML, template resolution |
 | `references/api-endpoints.md` | Same-origin AJAX actions (`ntdst/api_data`), nonce flow, JS client, rate limiting, security |
-| `references/rest-cors.md` | **Resource routes** — `ntdst_rest()`, the closed option list, required-permission default, the double-permission quirk, and **the CORS gap** (core ships none) |
+| `references/rest-cors.md` | **Resource routes** — `ntdst_rest()`, the closed option list, required-permission default, the double-permission quirk, and the `cors` option |
 | `references/logger.md` | Logging levels, channels, database persistence, custom handlers |
 | `references/mailer.md` | Email templates, queuing, attachments, event notifications |
 | `references/anti-patterns.md` | What NOT to do — data, security, performance, services, YOOtheme |

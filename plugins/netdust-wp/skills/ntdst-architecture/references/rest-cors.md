@@ -1,13 +1,12 @@
-# REST registration (`NTDST_Rest`) — and the CORS gap
+# REST registration and CORS (`NTDST_Rest`)
 
-> **READ THIS FIRST — re-anchored on ntdst-core 4.x, 2026-08-20.**
-> This file used to describe `NTDST_Rest_Registrar` and `NTDST_Cors_Policy`,
-> with `cors`, `max_body_bytes` and `max_json_depth` route options. **Neither
-> class exists in ntdst-core, and none of those three options do.** `NTDST_Rest`
-> refuses to register any route carrying an option it does not know, so a route
-> copied from the old version of this file **does not go live at all** — it logs
-> `_doing_it_wrong` and is simply absent from the API.
-> **Core has no CORS story in 4.x.** Do not hand-roll one; see *The CORS gap*.
+> **Re-anchored on ntdst-core 4.1.0, 2026-08-20.**
+> This file once described `NTDST_Rest_Registrar` and `NTDST_Cors_Policy` with
+> `cors`, `max_body_bytes` and `max_json_depth` options. **Those two classes
+> never existed in ntdst-core**, and `max_body_bytes` / `max_json_depth` still
+> do not — `NTDST_Rest` refuses any route carrying an option it does not know,
+> so a route copied from that version never went live at all.
+> **`cors` IS real as of 4.1.0** — the shape below, not the old one.
 
 The framework has **three** output-producing surfaces, separated by auth model
 and request lifecycle:
@@ -106,29 +105,50 @@ permission (a rate-limit counter) runs once, not twice. Per-wrapper, not
 per-instance: a shared map would leak one route's verdict to another route hit
 by the same request. Unmemoized, every configured limit halves on the wire.
 
-## The CORS gap
+## CORS — the `cors` route option (4.1.0)
 
-**ntdst-core 4.x ships no CORS handling.** No policy class, no route option, no
-filter. That is a gap, not a design — and it matters, because WP core's default
-is actively wrong:
+WP core's default is actively wrong: `rest_send_cors_headers()` (priority 10)
+**reflects any `Origin`** and sets `Access-Control-Allow-Credentials: true` —
+the reflection-plus-credentials anti-pattern, so any origin can read
+authenticated responses. It also never sends `Access-Control-Allow-Headers`, so
+a cross-origin JSON POST fails its preflight out of the box.
 
-`rest_send_cors_headers()` (priority 10) **reflects any `Origin`** and sets
-`Access-Control-Allow-Credentials: true` — the reflection-plus-credentials
-anti-pattern. Any origin can read authenticated responses.
+**Never hand-roll `Access-Control-*` headers.** Declare the policy:
 
-Until core grows an answer:
+```php
+ntdst_rest('my/v1')->post('/thing', $handler, [
+    'permission' => $permission,
+    'cors'       => ['https://app.example.com'],   // exact origins
+]);
 
-- **Do not hand-roll `Access-Control-*` headers** in a consumer as a one-off.
-  It has been paid for twice already, and both times the bug was invisible to
-  unit tests.
-- Whatever eventually lands must run **after** core (priority 20+), match the
-  origin **byte-exactly** against full `scheme://host[:port]` strings (never
-  substring, never case-folded, never `*`), strip
-  `Access-Control-Allow-Credentials`, send `Vary: Origin`, and on a non-match
-  **remove** `Access-Control-Allow-Origin` so core's reflection cannot survive.
-  `Origin: null` and `''` never match.
+// full form
+'cors' => [
+    'origins'     => ['https://app.example.com'],  // or fn(string $o): bool
+    'headers'     => ['Content-Type', 'X-Tenant'], // default: Content-Type, Authorization, X-WP-Nonce
+    'credentials' => true,                         // default FALSE
+    'max_age'     => 600,
+],
+```
 
-Two traps to carry into that design, both bought with real incidents:
+What it guarantees, so you do not re-derive it:
+
+- byte-exact match on the full `scheme://host[:port]` — never a substring,
+  never case-folded;
+- `Origin: null` (a `file://` page, a sandboxed iframe) is **never** allowed,
+  even if a policy lists it;
+- credentials are OFF unless asked, and only ever granted beside an exact match;
+- `Vary: Origin` is sent — without it a shared cache serves one origin the
+  response computed for another;
+- on a NON-match core's grant is actively **removed**, which is the whole point;
+- a policy naming `'*'` **refuses the route**, the same as a missing
+  `permission`. It is a misconfiguration, not a shorthand.
+
+**Opt-in.** A route declaring no `cors` keeps WordPress's default — meaning it
+is exactly as exposed as any other WP REST route. Core does not make that worse
+and does not fix it unless asked.
+
+Two traps the option already absorbs, both bought with real incidents — listed
+because a consumer scoping its OWN filters still has to avoid them:
 
 1. **A route-scope check must be case-INSENSITIVE.** WP matches routes with
    `preg_match('@^…$@i')`. A consumer scoped two filters with `str_starts_with()`

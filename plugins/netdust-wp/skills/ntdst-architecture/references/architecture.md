@@ -105,7 +105,7 @@ A helper's name doesn't tell you when it's the wrong tool. Before refactoring "u
 | URL pattern → callback | `ntdst_pages()->path('pattern/:param', $cb)` | Raw `add_action('parse_request', ...)` |
 | Pre-query interception (rewrite query vars BEFORE WP runs the query) | Raw `add_action('parse_request', ...)` — `ntdst_pages()` fires too late | `ntdst_pages()` |
 | Same-origin AJAX endpoint | `add_filter('ntdst/api_data/{action}', ...)` (nonce + rate-limit + origin check handled — **authorization is still yours**) | `add_action('wp_ajax_*', ...)` |
-| Cross-origin / headless REST | `ntdst_rest()` — **but core ships no CORS**; see `rest-cors.md` | `ntdst/api_data/*` — its nonce authenticates nothing for a cookie-less caller |
+| Cross-origin / headless REST | `ntdst_rest()` + its `cors` route option; see `rest-cors.md` | `ntdst/api_data/*` — its nonce authenticates nothing for a cookie-less caller |
 | Send email | `ntdst_mail()->to()->template()->send()` | `wp_mail()` |
 | Log structured events | `ntdst_log('channel')->level(...)` | `error_log()`, swallowed `WP_Error` |
 | Read/write CPT | per-domain Repository | `ntdst_data()` direct, raw `wp_insert_post` / `get_post_meta` |
