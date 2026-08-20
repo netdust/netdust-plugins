@@ -76,6 +76,16 @@
       "baseline_expected_failure": "Hunts for a route-matching or registration-order bug, or blames the template path — the Return-Values table said an NTDST_Response is simply 'rendered and the request exits', with no status branch, so the observed behaviour looks like the route never ran.",
       "with_skill_assertion": "Identifies the branch, not a bug: resolveRouteResult() splits on getStatus() — 2xx clears the pre-set 404 and renders; >= 400 sends the status, leaves is_404 intact and hands WordPress its OWN not-found template, whether or not the Response names one. States this is deliberate (the route refuses through the output class instead of hand-rolling status_header) and offers the real options — customise the WP 404 template, or return a 2xx Response if a denied page must render from the route.",
       "discriminator": "post-sweep pages.md Return-Values has ONE NTDST_Response row and no '>= 400'; now it has two rows keyed on status"
+    },
+    {
+      "id": "router-decides-brainstorm",
+      "skill": "netdust-wp (plugin CLAUDE.md)",
+      "lesson": "A stack plugin must not carve itself out of the router's decisions (2026-08-20)",
+      "baseline_ref": "200682b — plugin CLAUDE.md line 40, which said WP work does NOT use superpowers:brainstorming",
+      "prompt": "We want to add a proper booking flow to this WordPress site — visitors pick a slot, pay a deposit, get a confirmation mail, and the studio sees it in wp-admin. Nothing exists yet. Where do we start?",
+      "baseline_expected_failure": "Skips brainstorming and goes straight to the framework design skills, because the plugin's CLAUDE.md said WP work does not use superpowers:brainstorming and that ntdst-architecture / ntdst-data / ntdst-patterns 'replace it'. The session starts deciding service boundaries and CPT shape for a feature whose INTENT — what a slot is, whether a deposit is refundable, who the studio is — was never established with the human. It is also a stack plugin overriding a decision that belongs to netdust-agent's router.",
+      "with_skill_assertion": "Enters through netdust-agent:harnessed-development FIRST and states a Class and Stakes. Classifies this as Class A (a new multi-task feature with real open decisions — payment, cancellation, notification, admin surface) and therefore routes to `planning`, which invokes superpowers:brainstorming BEFORE any design. Does not claim WordPress is exempt from brainstorming. Positions ntdst-architecture / ntdst-data / ntdst-patterns as layering ON that — they own the technical design shape (service boundaries, CPT/repository shape, file placement), while intent stays with brainstorming and the human. Stops at the seam (an approved tasks.md + gate-check GREEN) rather than beginning to build.",
+      "discriminator": "grep -c 'does \\*\\*not\\*\\* use generic `superpowers:brainstorming`' plugins/netdust-wp/CLAUDE.md — 1 at 200682b, 0 now; 'invokes `superpowers:brainstorming`' — 0 then, 1 now. Negative control: the same prompt reduced to 'change the confirmation mail subject line' must classify Class E and brainstorm NOTHING — the fix must not make every WP task brainstorm."
     }
   ]
 }

@@ -15,3 +15,31 @@ Built four golden-path docs (`ntdst-patterns/golden-paths/`) by extracting verif
 - **Verify candidates with the actual drift greps, don't trust the survey.** The Explore survey called Stride's settings "clean"; the greps confirmed `StrideSettingsService` clean but caught the Edition admin drift the survey glossed, and the one frontend drift line. Run the reviewer's own grep set against every candidate before citing it.
 - **A "missing" archetype is a finding, not a failure.** Stride has zero YOOtheme (FSE stack); the clean exemplar was in Rossi. Flagging the origin and sourcing from the gallery site beat synthesising fake Stride code.
 - **Plan-time injection (`wp-plan-requirements` Block 0) and review-time check (drift-reviewer #11) must name the SAME slice.** Same convergence discipline as the four pillars: a named golden path lets the reviewer flag "deviates from archetype X at layer Y" instead of re-discovering scattered cat-1 hits. An *unnamed* deviation is the finding; a named+justified one is permitted.
+
+### 2026-08-20 — A stack plugin must not carve itself out of the router's decisions
+Correction from Stefan during the ntdst-core 4.x re-anchor. This plugin's `CLAUDE.md`
+said "WP work does **not** use generic `superpowers:brainstorming` — the framework
+design skills replace it."
+
+**Why it's wrong:** `harnessed-development` is always the entry point, and IT decides
+whether the work brainstorms — by CLASS. Class A/B routes to `planning`, which invokes
+brainstorming; C/D/E go straight to `building` and brainstorm nothing. A stack plugin
+asserting "WP never brainstorms" pre-empts a decision that is not its to make, and gets
+it wrong in both directions at once: it skips brainstorming on a Class A feature that
+needed it, and implies a design stage on the Class E tweak that didn't.
+
+**The general shape:** a stack plugin describes what it LAYERS ON at each point the
+router reaches, never whether the router reaches it. Intent stays with brainstorming +
+the human; the stack skills own the technical design shape on that stack. Restating or
+replacing upstream superpowers content is the duplication drift that bloated 0.17 —
+`netdust-agent` 0.18 was the re-thinning that removed it, and this line survived it.
+
+**Second thing the same paragraph got wrong:** it described `harnessed-development` as
+the skill that "sequences the full harness (design → plan → execute → shake-out →
+finish)". It has not been a stage-sequencer since 0.18 — it is an intake ROUTER that
+classifies and hands off. A doc that describes the old shape teaches a session to look
+for stages that the skill no longer has.
+
+**Check when editing any stack plugin's CLAUDE.md:** does a sentence decide something
+the router decides (whether to plan, whether to brainstorm, which class this is)? If so
+it belongs in `netdust-agent`, or nowhere.

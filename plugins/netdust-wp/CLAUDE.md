@@ -35,14 +35,15 @@ For these, see `netdust-core/CLAUDE.md` and `netdust-agent/CLAUDE.md`:
 
 ## How this plugin plugs into `harnessed-development`
 
-`netdust-agent:harnessed-development` is the stack-agnostic entry skill that sequences the full harness (design → plan + gates → execute + tests → shake-out → finish). It defers to the loaded stack sub-plugin for stack-specific tools. On a WordPress project, those overrides are:
+`netdust-agent:harnessed-development` is the stack-agnostic **intake router**: it classifies the work (Class A–F, priced by open decisions) and routes it to `planning` or `building`. It does not sequence stages itself, and it is the first action for **any** code-changing request on this stack. It defers to the loaded stack sub-plugin for stack-specific tools. On a WordPress project, those overrides are:
 
-- **Design stage (Stage 0/1).** WP work does **not** use generic `superpowers:brainstorming`. The framework design skills replace it: `ntdst-architecture` (service lifecycle, DI, boundaries — self-triggers on "add a service" and is "MUST be consulted during implementation planning"), `ntdst-data` (data layer, CPTs, repositories, REST), and `ntdst-patterns` (where files live). Invoke these to design before planning.
+- **Design.** Whether the work brainstorms at all is the ROUTER's decision, never a stack carve-out — Class A/B routes to `planning`, which invokes `superpowers:brainstorming`; Class C/D/E go straight to `building` and brainstorm nothing. Do not skip brainstorming on the grounds that this is WordPress.
+- **What the WP skills own inside that.** They **layer on** brainstorming, they do not replace it. Brainstorming + the human own INTENT — what we are building and why. `ntdst-architecture` (service lifecycle, DI, boundaries), `ntdst-data` (data layer, CPTs, repositories, REST) and `ntdst-patterns` (where files live) own the TECHNICAL DESIGN SHAPE on this stack. A netdust skill that restates upstream superpowers content is a defect, not thoroughness.
 - **Plan-time security/data gates.** The `netdust-agent:threat-modeling` + `netdust-agent:architecture-invariants` gates still fire per their triggers; on WP, `wp-security` and `wp-database` self-trigger on PHP edits and reinforce them.
 - **Testing (Stage 2).** Already automatic — `netdust-agent:testing-workflow` picks the tier and the runner; `wp-testing` self-triggers on `phpunit.unit.xml` / `bin/gate.sh` / `Cest` / `WPTestCase` and routes to the right stack. **The gate stack is primary** (Brain Monkey unit + wp-phpunit integration + Vitest + Playwright, under `composer gate`); Codeception/wp-browser is the LEGACY stack, Stride family only.
 - **Shake-out / review (Stage 3).** `/shakeout` detects WP and adds `netdust-wp:ntdst-drift-reviewer` to the panel.
 
-There is no `ntdst-brainstorm` skill (it was never built). For WP design, use the three framework skills above.
+There is no `ntdst-brainstorm` skill and there should not be one — `superpowers:brainstorming` is the workhorse, reached through the router. The three framework skills above are what gets layered on top of it.
 
 ## WP-specific rules
 
