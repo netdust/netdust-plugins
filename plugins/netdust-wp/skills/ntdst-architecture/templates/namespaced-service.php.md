@@ -1,6 +1,8 @@
 # Template: Namespaced Service
 
-For services in sector subdirectories (gallery/, artist/, printshop/, etc.)
+For services in a subdirectory (gallery/, artist/, printshop/, etc.). A
+subdirectory is organisation only — it is never auto-discovered, so the class
+is always listed explicitly in the bootstrap config.
 
 ```php
 <?php
@@ -9,9 +11,9 @@ For services in sector subdirectories (gallery/, artist/, printshop/, etc.)
  *
  * {Description}
  *
- * @package ntdstheme\services\{sector}
+ * @package ntdstheme\services\{group}
  */
-namespace ntdstheme\services\{sector};
+namespace ntdstheme\services\{group};
 
 defined('ABSPATH') || exit;
 
@@ -30,8 +32,6 @@ class {ServiceName}Service implements \NTDST_Service_Meta
             'admin_only' => false,
             'enabled' => true,
             'priority' => 15,
-            // Optional: restrict to specific sectors
-            'sectors' => ['{sector}' => 'essential'],
         ];
     }
 
@@ -74,14 +74,14 @@ class {ServiceName}Service implements \NTDST_Service_Meta
 | Placeholder | Replace With |
 |-------------|--------------|
 | `{ServiceName}` | PascalCase name |
-| `{sector}` | Subdirectory name (gallery, artist, printshop) |
+| `{group}` | Subdirectory name (gallery, artist, printshop) |
 | `{Display Name}` | Human-readable name |
 | `{Description}` | Brief description |
 | `{slug}` | lowercase_underscore |
 
 ## Location
 
-`app/content/themes/ntdstheme/services/{sector}/{ServiceName}Service.php`
+`app/content/themes/ntdstheme/services/{group}/{ServiceName}Service.php`
 
 ## Required Registration
 
@@ -90,14 +90,14 @@ Namespaced services must be registered in `theme-config.php`:
 ```php
 'services' => [
     'core' => [
-        'ntdstheme\\services\\{sector}\\{ServiceName}Service',
+        'ntdstheme\\services\\{group}\\{ServiceName}Service',
     ],
 ],
 ```
 
-## Sector Tiers
+## Making it switchable
 
-| Tier | Use For |
-|------|---------|
-| `essential` | Core features required by all users |
-| `professional` | Premium features for paying users |
+There are no sector tiers in ntdst-core 4.x. A service that must be
+switchable per site uses the three-level enable/disable control:
+`metadata()['enabled']`, the `ntdst_service_{slug}_enabled` filter, or the
+`ntdst_service_{slug}` option.

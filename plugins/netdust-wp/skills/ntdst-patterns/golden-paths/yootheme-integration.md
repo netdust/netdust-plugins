@@ -50,7 +50,6 @@ class {Type}SourcesService implements \NTDST_Service_Meta
             'admin_only' => false,
             'enabled'    => true,
             'priority'   => 21,                         // AFTER YOOthemeDynamicContentService (20)
-            'sectors'    => ['{sector}' => 'essential'], // sector-gated loading (omit if not multi-sector)
         ];
     }
 
@@ -155,7 +154,7 @@ function attach_post_meta($post)
 
 ## Registration — `theme-config.php`
 
-Services are listed with full namespace strings; the loader respects `priority` and `sectors` metadata.
+Services are listed with full namespace strings; the loader respects `priority` metadata.
 
 ```php
 // {theme}/theme-config.php
@@ -163,7 +162,7 @@ Services are listed with full namespace strings; the loader respects `priority` 
     // YOOtheme integration (framework — the engine, always needed)
     '{theme}\\services\\yootheme\\YOOthemeDynamicContentService',   // priority 20 — the engine
     '{theme}\\services\\yootheme\\YOOthemeAssetControlService',
-    // Your sector sources (priority 21+, sector metadata gates loading)
+    // Your own sources (priority 21+)
     '{theme}\\services\\yootheme\\{Type}SourcesService',            // priority 21
 ],
 ```
@@ -177,7 +176,7 @@ Services are listed with full namespace strings; the loader respects `priority` 
 2. **Query field name + label/group** — what shows in the builder's Dynamic Content dropdown.
 3. **Resolver query** — `get_posts()` args (single vs list, filters, ordering).
 4. **listOf vs single** — single type to expose repeater sub-fields; `['listOf' => 'Type']` for a collection (Grid/List of many items).
-5. **Sector gating** — `sectors` metadata if the theme is multi-tenant; omit for single-sector.
+5. **Enable/disable** — the `ntdst_service_{slug}_enabled` filter or the `ntdst_service_{slug}` option, if the source must be switchable per site.
 6. **Priority** — 21+ for a normal source; nudge higher only if ordering against another custom source matters.
 
 **Never changes:**

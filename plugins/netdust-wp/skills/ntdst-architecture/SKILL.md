@@ -21,19 +21,26 @@ description: >
 
 > **Reference files** live in `references/` next to this SKILL.md.
 > Read the relevant reference before implementing — don't guess at APIs.
+>
+> **Anchored on ntdst-core 4.x** (2026-08-20). v3.0.0 renamed the whole routing
+> surface with no aliases and no shims, and 4.0.0 removed the sector system —
+> a caller of a retired symbol gets a fatal, deliberately. If you meet
+> `ntdst_router()`, `ntdst_route()`, `NTDST_Endpoints`, `ntdst_api_action()`,
+> `NTDST_SectorRegistry` or `NTDST_Cors_Policy` in a project, that project is
+> on an older core or was written against one — none of them exist now.
 
 ## Reference Index
 
 | File | Read when... |
 |------|-------------|
 | `references/architecture.md` | Core principles, PHP standards, size limits, design patterns, project structure |
-| `references/services.md` | Creating services — when to/not to, lifecycle, sectors, priorities, config, discovery |
+| `references/services.md` | Creating services — when to/not to, lifecycle, priorities, config, discovery, enable/disable |
 | `references/container.md` | DI container, autowiring, bootstrap lifecycle, functions.php wiring, `plugin-config.php` (mu-plugins) / `theme-config.php` (themes) |
 | `references/data-layer.md` | Model registration (**private by default**), field types, CRUD, `find()`'s status argument, query builder, metaboxes, and why the layer keeps no cache |
-| `references/router.md` | URL routes, template hooks, rewrite rules, return values |
+| `references/pages.md` | URL routes, template hooks, rewrite rules, return values |
 | `references/response.md` | Template rendering, JSON output, email HTML, template resolution |
 | `references/api-endpoints.md` | Same-origin AJAX actions (`ntdst/api_data`), nonce flow, JS client, rate limiting, security |
-| `references/rest-cors.md` | **Cross-origin REST** — `ntdst_router()->rest()` registrar, `NTDST_Cors_Policy`, required-permission default, the 3 WP-core quirks (INV-11 convergence point) |
+| `references/rest-cors.md` | **Resource routes** — `ntdst_rest()`, the closed option list, required-permission default, the double-permission quirk, and **the CORS gap** (core ships none) |
 | `references/logger.md` | Logging levels, channels, database persistence, custom handlers |
 | `references/mailer.md` | Email templates, queuing, attachments, event notifications |
 | `references/anti-patterns.md` | What NOT to do — data, security, performance, services, YOOtheme |
@@ -91,8 +98,10 @@ Dependencies are resolved via DI autowiring when a service injects them. They ne
 | Pure domain logic (rules, math, classification) | **Business class** | Alongside the service |
 | Stateless utility | **Helper** (plain functions) | `helpers/` |
 | Data model + CRUD | **Model** via `ntdst_data()->register()` | Inside a service's `init()` |
-| Custom URL | **Route** via `ntdst_route()` | Inside a service |
-| REST API action | **Filter** on `ntdst/api_data/{action}` | Inside a service |
+| Custom URL | **Route** via `ntdst_pages()->path()` | Inside a service |
+| Command (same-origin AJAX) | `ntdst_actions()->register()` | Inside a service |
+| Resource route (REST) | `ntdst_rest('ns/v1')->get()` / `->post()` | Inside a service |
+| File bytes to the browser | Filter on `ntdst/api_download/{action}` + `ntdst_download()` | Inside a service |
 | Template output | **Response** via `ntdst_response()` | Never raw `echo` in services |
 | Standalone plugin (not ntdst-core) | **Plugin scaffold** | See `plugin-scaffold.md` |
 
@@ -120,7 +129,7 @@ Dependencies are resolved via DI autowiring when a service injects them. They ne
 | `echo` in a service | `ntdst_response()->render()` / `->json()` |
 | `add_action()` scattered across methods | Group in `registerHooks()` / `init()` |
 | `return false` on error | `return new WP_Error(...)` |
-| Manual `template_include` filter | `ntdst_router()->single()` / `->archive()` |
+| Manual `template_include` filter | `ntdst_pages()->single()` / `->archive()` |
 | `wp_mail()` directly | `ntdst_mail()->to()->template()->send()` |
 
 → For the full list including YOOtheme, security, and performance, read `anti-patterns.md`.
@@ -140,8 +149,7 @@ When writing-plans generates tasks for NTDST projects, every task MUST:
 - **Enforce size limits**: soft cap ~400 lines/service, ~30 lines/method, 5 constructor params. `init()` is the natural longest method. Admin controllers under `Admin/` are a documented exception — orchestrators (e.g., `TrajectoryAdminController` in Stride at ~1500 lines) can exceed the cap when the alternative is fragmenting closely-coupled UI assembly
 - **Use Data Manager** for all data ops — never raw meta/SQL
 - **Use Response** for output — never raw `echo`
-- **Route via Router** — never manual `template_include`
+- **Route via `ntdst_pages()`** — never manual `template_include`
 - **Return WP_Error** on failure — never `false`/`null`
 - **Classify before implementing**: only classes that hook into WordPress at boot time (e.g., `admin_menu`, `rest_api_init`, `wp_enqueue_scripts`) should implement `NTDST_Service_Meta` and be listed in `services`. Pure dependencies (repositories, calculators, stores, executors, bridges) are plain classes resolved lazily via DI autowiring — never make them services
-- **Specify sector requirements** if platform-specific
 - **Use config filter** pattern: `apply_filters('{project}_{slug}_config', $defaults)` where `{project}` is the project slug (e.g., `stride_edition_config`, `vad_intake_config`). Framework-internal hooks under `ntdst/*` are for ntdst-core itself; per-project services use the project prefix

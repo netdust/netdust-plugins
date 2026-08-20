@@ -11,7 +11,7 @@ Complete guide to creating and managing services in the NTDST WordPress framewor
 3. [Lifecycle Phases](#lifecycle-phases)
 4. [Dependency Injection](#dependency-injection)
 5. [Enable/Disable Control](#enabledisable-control)
-6. [Sector Awareness](#sector-awareness)
+6. [Sectors are gone](#sectors-are-gone-ntdst-core-4x)
 7. [Priority Guidelines](#priority-guidelines)
 8. [Configuration](#configuration)
 9. [Service Discovery](#service-discovery)
@@ -336,7 +336,7 @@ class ExampleService implements NTDST_Service_Meta
 
 ### Namespaced Service Template
 
-For services in subdirectories (e.g., `services/gallery/`):
+For services in subdirectories (e.g., `services/gallery/`) — organisational only, and always listed explicitly in config:
 
 ```php
 <?php
@@ -352,7 +352,6 @@ class ArtistService implements \NTDST_Service_Meta
             'name' => 'Gallery Artists',
             'description' => 'Artist management for galleries',
             'priority' => 15,
-            'sectors' => ['gallery' => 'essential'], // Sector requirement
         ];
     }
 
@@ -394,7 +393,6 @@ $bootstrap->register();
 - Services added to DI container
 - No instantiation yet
 - Filters for enable/disable checked
-- Sector requirements validated
 
 ### Phase 2: Boot Core (after_setup_theme:5)
 
@@ -541,18 +539,44 @@ public static function metadata(): array
 
 ### Level 2: Filter (Runtime)
 
-Override at runtime:
+Override at runtime. **The filter name is framework-owned:**
+`ntdst_service_{slug}_enabled` — not the project prefix. (The project prefix
+belongs on a service's own *config* filter, which is a different hook.)
 
 ```php
 // In plugin-config.php / theme-config.php or functions.php.
-// Use the project's own prefix — e.g. stride_example_enabled, vad_example_enabled.
-add_filter('project_example_enabled', '__return_false');
+add_filter('ntdst_service_example_enabled', '__return_false');
 
 // Or dynamically
-add_filter('project_example_enabled', function($enabled) {
+add_filter('ntdst_service_example_enabled', function($enabled) {
     return current_user_can('administrator');
 });
 ```
+
+> This filter is a **deny** filter and it FAILS OPEN: if you misspell the slug,
+> the service boots. Get `{slug}` right — see below.
+
+### What `{slug}` actually is
+
+`{slug}` is not the class name lowercased. With no declared name, Bootstrap
+strips **every** occurrence of `Service` and converts the rest camelCase →
+snake_case, keeping a run of consecutive capitals together as one token:
+
+| Class | Slug |
+|---|---|
+| `ProfileService` | `profile` |
+| `AdminUIService` | `admin_ui` |
+| `APIRouterService` | `api_router` |
+| `CacheHeadersService` | `cache_headers` |
+| `ServiceService` | `` — an EMPTY slug. Declare a name instead |
+
+**To pin a slug, declare `metadata()['name']`** — it is whitespace-split and
+lowercased (`'Todai Ping'` → `todai_ping`) and takes precedence over the
+derivation. Before 4.0.0 that promise was broken: the slug was resolved from
+the class name and cached before anything metadata-aware ran, so a declared
+name never reached the filter or the option. It works now — which also means
+a service that declares a name whose slug differs from its class-derived one
+**changes filter and option key** on the 4.0.0 upgrade.
 
 ### Level 3: Database Option (UI Control)
 
@@ -576,65 +600,19 @@ Database option '0' → Service never loads
 
 ---
 
-## Sector Awareness
+## Sectors are gone (ntdst-core 4.x)
 
-Services can be conditionally loaded based on enabled platform sectors.
+`NTDST_SectorRegistry`, `ntdst_sectors()` and the `sectors` metadata key were
+**removed in 4.0.0**. They defined "independent platforms" (gallery, artist,
+musician) with per-sector enable/tier options — product domain, not framework,
+and no project on the fleet used them. A `sectors` key left in a service's
+metadata is now inert data: it gates nothing and loads nothing.
 
-### Available Sectors
-
-- `gallery` - Gallery platform features
-- `artist` - Artist portfolio features
-- `musician` - Musician platform features (future)
-
-### Sector Tiers
-
-Each sector has tiers that determine available features:
-
-- `essential` - Basic features
-- `professional` - Advanced features
-- `premium` - All features (gallery only)
-
-### Defining Sector Requirements
-
-```php
-public static function metadata(): array
-{
-    return [
-        'name' => 'Artist Portfolio',
-        'sectors' => [
-            'artist' => 'professional',  // Requires artist sector at professional tier
-        ],
-    ];
-}
-```
-
-### Multiple Sector Support
-
-```php
-'sectors' => [
-    'gallery' => 'essential',   // OR
-    'artist' => 'professional', // Loads if either condition is met
-],
-```
-
-### Checking Sectors at Runtime
-
-```php
-$sectors = ntdst_sectors();
-
-// Check if sector enabled
-if ($sectors->isEnabled('gallery')) {
-    // Gallery features available
-}
-
-// Check tier
-$tier = $sectors->getTier('artist'); // 'essential', 'professional', or null
-
-// Check tier meets minimum
-if ($sectors->hasTier('artist', 'professional')) {
-    // Artist at professional or higher
-}
-```
+If you need per-site feature gating, the three-level enable/disable control
+above is the answer — metadata, then the `ntdst_service_{slug}_enabled` filter,
+then the `ntdst_service_{slug}` option. If you need genuinely different site
+TYPES from one codebase, that is a consumer-side module with a named consumer,
+not a framework concern.
 
 ---
 
@@ -750,19 +728,23 @@ Services in `services/*.php` are auto-discovered when:
 
 **Pattern matched:** `*Service.php`
 
-### Sector Auto-Discovery
+### Subdirectories are NOT auto-discovered
 
-Services in sector directories are auto-discovered when that sector is enabled:
+Auto-discovery scans the root of each `discovery_paths` entry and nothing
+below it. Services in subdirectories are namespaced and must be listed
+explicitly — see below.
 
 ```
 services/
-├── gallery/        # Auto-discovered when gallery enabled
+├── gallery/        # NOT scanned — list these in config
 │   ├── ArtistService.php
 │   └── ArtworkService.php
-├── artist/         # Auto-discovered when artist enabled
-│   └── PortfolioService.php
-└── SeoService.php  # Always auto-discovered (root)
+└── SeoService.php  # auto-discovered (root)
 ```
+
+Until 4.0.0 a subdirectory could be picked up by sector discovery, which ran
+on **every** boot even with `auto_discover` off, and fell back to scanning
+whatever theme happened to be active. Both are gone with the sector system.
 
 ### Explicit Registration
 
@@ -1126,7 +1108,6 @@ private function getDefaultConfig(): array
 - [ ] Constructor calls `$this->init()`
 - [ ] Uses `apply_filters()` for default config
 - [ ] Appropriate priority (1-9 core, 10-19 features, 20+ UI)
-- [ ] Sector requirements if applicable
 - [ ] Namespaced services registered in the bootstrap config file (`plugin-config.php` for mu-plugins, `theme-config.php` for themes)
 
 ### Key Functions
@@ -1135,7 +1116,7 @@ private function getDefaultConfig(): array
 ntdst_get(Service::class)      // Get service singleton
 ntdst_make(Service::class)     // Create fresh instance
 ntdst_container()              // Access DI container
-ntdst_sectors()->isEnabled()   // Check sector status
+ntdst_set(Service::class)      // Bind into the container
 ```
 
 ### Hook Conventions

@@ -258,7 +258,7 @@ class {Type}Service extends AbstractService implements EditionQueryInterface
 
 ## 4. Router — `{Type}Router.php`
 
-A plain class (not a service) wired by the service. Uses `parse_request` — **the documented exception to drift cat 9**: it needs pre-query timing to redirect before WP resolves the query, which is too early for `ntdst_router()->template()`.
+A plain class (not a service) wired by the service. Uses `parse_request` — **the documented exception to drift cat 9**: it needs pre-query timing to redirect before WP resolves the query, which is too early for `ntdst_pages()->template()`.
 
 ```php
 <?php
@@ -295,8 +295,8 @@ final class {Type}Router
 ```
 
 > **If your feature has NO pre-query redirect logic** (most CPTs), skip the router and register a template through the framework instead:
-> `ntdst_router()->single('{type}', fn($post) => ntdst_response()->with('project', $post)->template('{type}/single'));`
-> See `anti-patterns.md` → *Manual template_include* and `references/router.md`.
+> `ntdst_pages()->single('{type}', fn($post) => ntdst_response()->with('project', $post)->template('{type}/single'));`
+> See `anti-patterns.md` → *Manual template_include* and `references/pages.md`.
 
 ---
 
@@ -340,7 +340,7 @@ echo esc_html($venue);
 5. **Domain queries** — which `findByX()` methods the repository needs (delete the ones you don't).
 6. **Status enum** — the `Domain/{Type}Status.php` cases + which are "active".
 7. **Service hooks** — which `add_action()`/events the service fires in `init()`.
-8. **Routing** — router with `parse_request` *only* if you need pre-query redirects; otherwise `ntdst_router()->single()`.
+8. **Routing** — router with `parse_request` *only* if you need pre-query redirects; otherwise `ntdst_pages()->single()`.
 
 **Never changes (the framework spine):**
 - Data access goes through the repository; `ntdst_data()->get()` appears **only** in `*Repository.php`.
@@ -355,7 +355,7 @@ echo esc_html($venue);
 
 ## Cross-references
 
-- Governing references: `ntdst-architecture/references/services.md`, `.../router.md`, `ntdst-data/references/data-orm.md`.
+- Governing references: `ntdst-architecture/references/services.md`, `.../pages.md`, `ntdst-data/references/data-orm.md`.
 - Anti-patterns this slice satisfies: `anti-patterns.md` → *Direct Meta Access in Services*, *Pure Pass-Through Method*, *CPT Data Access Outside the Repository*, *Wrong Data API Vocabulary*, *Manual template_include*.
 - Drift categories satisfied (per `ntdst-drift-reviewer`): **1** (ntdst_data outside repo), **2** (pass-through), **6** (Data API vocab), **7** (hardcoded prefix), **8** (raw post access), **9** (template_include), **10** (over-injected service).
 - The admin edit/list screen for this CPT is its own slice — see `golden-paths/admin-settings-page.md` for the framework-clean admin pattern (Stride's `Edition/Admin/` subfolder is drifted; do not copy it).

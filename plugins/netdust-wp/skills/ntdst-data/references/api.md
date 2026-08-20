@@ -28,7 +28,7 @@ to `public_actions` is reachable by anyone with caller-supplied params. Read
 
 For a cross-origin / headless / third-party client, this is the wrong tool: an anonymous
 WP nonce is a shared, non-origin-bound token that authenticates nothing for a cookie-less
-request. Use `ntdst_router()->rest()` + `NTDST_Cors_Policy` instead.
+request. Use `ntdst_rest()` (core ships no CORS handling — read the CORS gap in `rest-cors.md` before designing one) instead.
 
 ### Key Features
 
@@ -42,7 +42,7 @@ request. Use `ntdst_router()->rest()` + `NTDST_Cors_Policy` instead.
 | Filter-based | Actions registered via WordPress filters |
 
 > **No caching.** The endpoints layer registers no cache-invalidation hooks and owns no
-> cache; `NTDST_Query_Cache` and `ntdst_endpoints()->clear_post_cache()` are gone. Core
+> cache; `NTDST_Query_Cache` and `ntdst_actions()->clear_post_cache()` are gone. Core
 > invalidates its post / `post_meta` / term entries on save, delete and trash by itself.
 
 ### Architecture
@@ -211,7 +211,7 @@ shipped once. `WP_Error` is the shape `handle_action` unwraps.
 private array $public_actions = [];
 ```
 
-Empty, and the framework never adds to it. `NTDST_Endpoints` is a router —
+Empty, and the framework never adds to it. `NTDST_Actions` is a router —
 origin, rate limit, nonce, auth gate, dispatch — with no opinion about anyone's
 data. Anonymous exposure is a per-site decision made in exactly one place, the
 `ntdst/api/public_actions` filter.
@@ -432,7 +432,7 @@ request-forgery; it is not an authentication gate and never was. A non-browser c
 carry their own authorization — see the post-type gate above.
 
 This filter widens the **same-origin** allow-list. It does not turn `Endpoints` into a
-cross-origin JSON API; that is `ntdst_router()->rest()` + `NTDST_Cors_Policy`.
+cross-origin JSON API; that is `ntdst_rest()` (core ships no CORS handling — read the CORS gap in `rest-cors.md` before designing one).
 
 ### Nonce Verification
 

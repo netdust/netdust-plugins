@@ -10,7 +10,7 @@ Wired in constructor — access via `$theme->`:
 
 ```php
 $theme->data()      // → ntdst_data()      NTDST_Data_Manager
-$theme->router()    // → ntdst_router()    NTDST_Router
+$theme->pages()     // → ntdst_pages()     NTDST_Pages
 $theme->response()  // → ntdst_response()  NTDST_Response
 $theme->log()       // → ntdst_log()       NTDST_Logger
 $theme->mail()      // → ntdst_mail()      NTDST_Mailer

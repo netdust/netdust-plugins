@@ -296,7 +296,7 @@ returns true when there is no Origin, no Referer and no auth cookie. It fails op
 Treat every public handler as internet-facing.
 
 **The framework ships NO public actions and no data actions at all.**
-`$public_actions` is empty; `NTDST_Endpoints` is a router — origin, rate limit,
+`$public_actions` is empty; `NTDST_Actions` is a router — origin, rate limit,
 nonce, auth gate, dispatch — with no opinion about anyone's data. Anonymous
 exposure is a per-site decision made in exactly one place:
 
