@@ -90,6 +90,7 @@ Known traps: WPTestCase reset doesn't roll back transients in object cache (flus
 ## See also
 
 - `netdust-agent:testing-workflow` — stack/runner detection, per-task tier decision (it locates; this skill teaches)
-- `netdust-agent:test-effectiveness` / `netdust-agent:shake-out` — audit-time and spec-complete gates
+- `netdust-agent:building` — the build overlay that dispatches this skill into every WP task, and owns the review + feature-test gates
+- `/shakeout` (netdust-agent command) — the spec-complete gate: `shakeout-qa` drives the artifact, then the reviewer panel runs on the branch diff
 - Gate stack reference: the project's `README-testing.md` + `tests/` (canonical template: github netdust/bedrock)
 - Legacy reference: `~/Sites/stride/codeception.yml` + `~/Sites/stride/tests/`

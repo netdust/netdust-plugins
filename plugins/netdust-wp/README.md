@@ -61,20 +61,27 @@ Both imports — core for memory conventions/cross-stack, wp for WP-specific def
 │   ├── sync-db.md
 │   └── wp-new-project.md
 │
-├── skills/                          ← 10 WP skills, flat layout
+├── skills/                          ← 11 WP skills, flat layout
 │   ├── bedrock-composer/            (discipline + RED tests)
-│   ├── ntdst-architecture/
-│   ├── ntdst-data/
-│   ├── ntdst-patterns/
-│   ├── ntdst-yootheme/
+│   ├── ntdst-architecture/          (+ references/, templates/)
+│   ├── ntdst-data/                  (+ references/, templates/)
+│   ├── ntdst-patterns/              (+ golden-paths/)
+│   ├── ntdst-yootheme/              (+ references/, scripts/, templates/)
 │   ├── wp-database/                 (discipline + RED tests)
 │   ├── wp-frontend/
 │   ├── wp-infra/                    (WP-CLI, Vite-for-WP, Bedrock Makefile patterns)
+│   ├── wp-plan-requirements/        (the Stage-1 plan gate)
 │   ├── wp-security/                 (discipline + RED tests)
 │   └── wp-testing/
 │
+├── agents/                          ← ntdst-drift-reviewer, ntdst-core-gaps
+├── evals/                           ← behavioral-lessons.json
+├── memory/                          ← STATE.md, lessons.md
+│
 └── templates/
-    └── Makefile.tmpl                (Bedrock variants: makefile, git-push, git-bundle-makefile)
+    ├── Makefile.tmpl                (Bedrock variants: makefile, git-push, git-bundle-makefile)
+    ├── project-CLAUDE.md.tmpl
+    └── site.yml.tmpl
 ```
 
 ## Relationship to netdust-core + netdust-agent
@@ -87,12 +94,13 @@ netdust-wp depends on netdust-core for:
 - **`dev-stack` skill** (DDEV, git, Makefile verbs, `.env` discipline — generic)
 - **`secure-server` + `ploi` skills + ploi MCP** (server management)
 - **`research`, `market-research`, `brand-voice`, `marketing`** (cross-domain)
-- **`/skill-audit`, `/pattern-miner`, `/red-test`**
+- **`/memory-audit`, `/pattern-miner`** (`/skill-audit` lives in netdust-agent)
 
 …and on netdust-agent for:
 
-- **The coding harness** — `harnessed-development`, `testing-workflow`, `shake-out`, `test-effectiveness`, `threat-modeling`, `architecture-invariants`, `feature-acceptance`, `compounding` (cross-stack workflow)
-- **The 8 coding reviewer agents** — code review is done by the `reviewer` agent + the specialist reviewers
+- **The coding harness** — `harnessed-development` (the intake router), `planning` and `building` (the two overlays), `testing-workflow`, `threat-modeling`, `architecture-invariants`, `convergence`, `compounding` (cross-stack workflow)
+- **The gate commands** — `/integration` at a task-group boundary, `/shakeout` at spec-complete, `/converge`, `/skill-audit`
+- **The 7 harness agents** — `implementer` and `test-author` build; `reviewer`, `security-sentinel`, `code-simplicity-reviewer` and `invariant-auditor` review; `shakeout-qa` drives the built artifact
 
 You can technically use netdust-wp without these, but you'll miss memory, observability, deploy, server management, the coding harness, and review agents. The dependency is soft — nothing enforces it at install time.
 
