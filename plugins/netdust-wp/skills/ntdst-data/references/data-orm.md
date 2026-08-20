@@ -752,6 +752,8 @@ and `wysiwyg` were advertised but never implemented and fell through to
 is lying about its own vocabulary, so the vocabulary was made real. Use the type that
 means what you mean.
 
+> **`absint()` strips the sign — use `signed_int` for anything that can go negative.** A discount in cents, a balance adjustment, a delta: declared as `integer` they silently store the absolute value, and nothing fails. That was the original bug (Stride 744b5b05) and `signed_int` exists to prevent it — it casts with `(int)` and returns 0 for an array.
+
 **An unrecognised type name now throws `InvalidArgumentException` at registration.** A
 typo that silently became `sanitize_text_field` is how a `wysiwig` field loses its markup
 with nothing failing.
@@ -773,7 +775,8 @@ with nothing failing.
 
 | Type | Sanitizer (write) | Read cast |
 |------|-------------------|-----------|
-| `integer` / `int` | `absint` | `int` |
+| `integer` / `int` | `absint` — **strips the sign** | `int` |
+| `signed_int` | `(int)` cast; 0 for an array | `int` |
 | `float` / `double` | `floatval` | `float` |
 | `boolean` / `bool` | `sanitizeBoolean()` — `wp_validate_boolean`, so the string `"false"` is `false` | `bool` |
 

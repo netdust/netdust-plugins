@@ -50,16 +50,18 @@ a **plain text input** — it is not an error, just silently the wrong control.
 | `gallery` | Media library picker with drag-reorder |
 | `repeater` | Sortable rows |
 | `callback` | Your own callable renders everything |
-| **`html` / `content`** | **No case — falls to a plain text input.** Use `wysiwyg` for the editor. |
-| **`image`, `file`, `person`, `post_relation`** | **No case — plain text input.** They sanitize correctly, they just have no control. |
+| `image` / `file` | **Media-picker cell** (`render_repeater_media_cell()`, reused verbatim from the repeater arm). Storage stays an INT — `sanitizeAttachmentId()` returns 0 for nothing, not the repeater arm's empty-string marker. |
+| **`person`, `post_relation`** | **No case — plain text input.** They sanitize correctly, they just have no control. |
+| **`html` / `content`** | **No case — plain text input.** Use `wysiwyg` for the editor. |
+| **`number`** | **No case at top level — plain text input.** `number` is a REPEATER SUB-FIELD type only. Use `integer` or `float` on a top-level field. |
 
 ### The two vocabularies are not the same set
 
 The **registerable** vocabulary is `NTDST_Data_Model::getDefaultSanitizer()`; the
 **renderable** one is this switch. They overlap but neither contains the other.
 
-`string`, `longtext`, `decimal`, `number`, `datetime` and `callback` render fine but are
-**not** in the sanitizer map — `register()` now **throws `InvalidArgumentException`** on
+`string`, `longtext`, `decimal`, `datetime` and `callback` render fine but are
+**not** in the sanitizer map (`number` renders only as a repeater sub-field) — `register()` now **throws `InvalidArgumentException`** on
 an unknown type, so declaring one of them fails at registration unless the field config
 also supplies its own `'sanitizer' => fn($v) => …` (which short-circuits the lookup).
 
@@ -106,9 +108,20 @@ also supplies its own `'sanitizer' => fn($v) => …` (which short-circuits the l
 ]
 ```
 
-`required` is a **save-time validation rule**, not a UI affordance — it is checked in
-`NTDST_Data_Model::validateData()`, and only on `create()`. `update()` is a partial
-write, so a field absent from the payload keeps its existing value rather than failing.
+`required` is enforced in TWO places, and they are not the same control.
+
+**Save-time (the contract):** `NTDST_Data_Model::validateData()`, and only on `create()`.
+`update()` is a partial write, so a field absent from the payload keeps its existing
+value rather than failing.
+
+**Render-time (the affordance):** the metabox DOES mark it. `render_field()` emits a
+`*` marker in the label and, where the browser can honour it, the native `required`
+attribute plus `aria-required="true"` on the control. Native validation is withheld —
+marker and `aria-required` on the wrapper only — for a `readonly` field and for
+`MARKER_ONLY_REQUIRED_TYPES`: `boolean`, `bool`, `wysiwyg`, `relation`, `gallery`,
+`repeater`, `image`, `file`. Those are controls the browser cannot focus, or that do not
+carry the value themselves, so a native `required` on them blocks the form with nothing
+the editor can click.
 
 ### Default Values — NOT IMPLEMENTED
 
@@ -352,4 +365,4 @@ read-cast per type. Do not maintain a second copy here; the two lists diverging 
 - **Defense-in-depth escaping at render.** `$field_id`, `$field_name`, and the derived label are `esc_attr`/`esc_html`'d. Field-config keys are developer-controlled, but defensive escaping prevents a typo'd or third-party CPT registration from introducing an XSS path.
 - **Nonce reads use `wp_unslash`** before `wp_verify_nonce` (WP does this internally too; explicit for clarity).
 - **JSON-decode failures don't log the payload.** Stride users paste personal data into form fields; logging the raw value would write PII to plaintext logs. The save handler routes through `ntdst_log('metabox')->error()` with the error message only.
-- **`isDataModel()` checks the MetaboxGenerator's own registry** rather than calling `ntdst_data()->get($name)`. That call auto-creates a phantom empty model as a side effect. When iterating post types from your own code, use `ntdst_data()->isRegistered($name)` for the same reason.
+- **`isDataModel()` checks the MetaboxGenerator's own registry** rather than calling `ntdst_data()->get($name)` — asking a question should not be a registration. `get()` no longer creates a phantom (it returns an unstored empty model on a miss, and a CLONE on a hit), but it still answers "yes, here is a model" for a name nobody registered. When iterating post types from your own code, use `ntdst_data()->isRegistered($name)`, which is the only one that distinguishes them.

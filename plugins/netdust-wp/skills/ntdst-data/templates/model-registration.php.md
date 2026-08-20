@@ -122,7 +122,8 @@ Every entry is genuinely sanitized. **An unrecognised type name now throws
 | `url` | `esc_url_raw` | string | URLs, links |
 | `html` / `content` | `wp_kses_post` | string | Rich content |
 | `wysiwyg` | `wp_kses_post` | string | Rich content **with a WP editor in the metabox** |
-| `int` / `integer` | `absint` | int | Numbers, counts |
+| `int` / `integer` | `absint` — **strips the sign** | int | Counts, ids, anything non-negative |
+| `signed_int` | `(int)` cast; 0 for an array | int | **Anything that can be negative** — deltas, adjustments, discounts |
 | `float` / `double` | `floatval` | float | Decimals, prices |
 | `bool` / `boolean` | `sanitizeBoolean()` | bool | Yes/No, toggles |
 | `date` | `sanitizeDate()` → `Y-m-d`, junk → `''` | string | Dates |
@@ -139,9 +140,10 @@ Every entry is genuinely sanitized. **An unrecognised type name now throws
 the sanitizer map — registering one throws unless you also supply your own
 `'sanitizer' => fn($v) => …` in the field config (which bypasses the throw).
 
-**`html`/`content`, `image`, `file`, `person`, `post_relation` have no dedicated
+`image` and `file` DO have a renderer — the media-picker cell, storing a plain
+attachment-ID int. **`html`/`content`, `person` and `post_relation` have no dedicated
 metabox renderer** — they fall to the `default` arm, a plain text input. Use `wysiwyg`
-when you want the WP editor.
+when you want the WP editor. `number` renders only as a repeater sub-field.
 
 ## Validation Options
 

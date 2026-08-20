@@ -263,9 +263,9 @@ Location: `app/content/themes/ntdstheme/services/{ServiceName}Service.php`
  *
  * {Description of what this service does}
  *
- * Available filters:
- * - {project}_{slug}_config - Customize service configuration (e.g. stride_example_config)
- * - {project}_{slug}_enabled - Enable/disable the service
+ * Available filters — BOTH framework-owned, both keyed on the service slug:
+ * - ntdst_service_{slug}_config  - Customize service configuration
+ * - ntdst_service_{slug}_enabled - Enable/disable the service (DENY filter)
  *
  * @package ntdstheme
  */
@@ -294,9 +294,11 @@ class ExampleService implements NTDST_Service_Meta
 
     private function getDefaultConfig(): array
     {
-        // Filter allows plugin-config.php / theme-config.php to override.
-        // Replace 'project' below with your project slug (e.g. stride_example_config).
-        return apply_filters('project_example_config', [
+        // The hook name is FRAMEWORK-OWNED and keyed on this service's slug.
+        // Bootstrap adds its own listener to exactly this name when
+        // plugin-config.php declares `services.overrides.example`; a
+        // project-prefixed name would never receive that override.
+        return apply_filters('ntdst_service_example_config', [
             'option1' => 'default_value',
             'option2' => true,
         ]);
@@ -654,11 +656,19 @@ Priority determines boot order (lower = earlier):
 
 ### Default Config Pattern
 
+> **The config hook is framework-owned: `ntdst_service_{slug}_config`.** It is not
+> project-prefixed. `netdust_{slug}_config` and `netdust_{slug}_enabled` were the OLD
+> names, retired in the S9/T02 rename with **no shim** — a listener on either is now
+> silently inert, and because `_enabled` is a DENY filter that rename FAILS OPEN.
+> The name matters for more than convention: when `plugin-config.php` declares
+> `services.overrides.{slug}`, Bootstrap registers its override listener on
+> `ntdst_service_{slug}_config` at priority 1. A service that applies any other name
+> **never sees its own config override** — and nothing reports it.
+
 ```php
 private function getDefaultConfig(): array
 {
-    // Project prefix, not 'netdust_' — replace with your project slug.
-    return apply_filters('project_myservice_config', [
+    return apply_filters('ntdst_service_myservice_config', [
         'option1' => 'default',
         'option2' => true,
         'nested' => [
@@ -688,7 +698,7 @@ Bootstrap registers a filter at priority 1 that merges these values:
 
 ```php
 // Automatic - you don't need to write this
-add_filter('project_myservice_config', function($defaults) {
+add_filter('ntdst_service_myservice_config', function($defaults) {
     return array_merge($defaults, $moduleConfig);
 }, 1);
 ```
@@ -1088,10 +1098,10 @@ private function getConfig(): array
     ];
 }
 
-// CORRECT - Filter allows customization
+// CORRECT - Filter allows customization, on the framework-owned hook name
 private function getDefaultConfig(): array
 {
-    return apply_filters('project_myservice_config', [
+    return apply_filters('ntdst_service_myservice_config', [
         'option' => 'value',
     ]);
 }
@@ -1127,10 +1137,11 @@ Framework internals (ntdst-core's own events) use `ntdst/*`. Project-level servi
 // Framework hooks (ntdst-core internals)
 do_action('ntdst/services_registered', $bootstrap);
 
-// Project-level service config — replace {project} with the project slug
-// (e.g. stride_edition_config, vad_intake_config, atelier296_artwork_config).
-apply_filters('{project}_{slug}_config', $defaults);
-add_filter('{project}_{slug}_enabled', '__return_false');
+// Service config + enable — FRAMEWORK-owned names, keyed on the service slug.
+// Not project-prefixed: `netdust_{slug}_*` was the retired shape, and there
+// is no shim, so a listener on the old name is silently inert.
+apply_filters('ntdst_service_{slug}_config', $defaults);
+add_filter('ntdst_service_{slug}_enabled', '__return_false');
 
 // Project-level domain events — plain associative arrays as payloads.
 // e.g. do_action('stride/registration/created', ['user_id' => ..., 'edition_id' => ...])

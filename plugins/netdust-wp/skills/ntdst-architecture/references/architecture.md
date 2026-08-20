@@ -138,16 +138,26 @@ do_action('ntdst/services_registered', $bootstrap);
 apply_filters('ntdst/{post_type}/fields', $fields);
 add_filter('ntdst/api_data/{action}', $handler);  // or ntdst_actions()->register()
 
-// PROJECT-level service hooks (use the project's own prefix, NOT netdust_/ntdst_)
-// Replace {project} with the project slug: stride, vad, atelier296, etc.
-apply_filters('{project}_{slug}_config', $defaults);     // e.g. stride_edition_config
-apply_filters('{project}_{slug}_enabled', true);         // e.g. stride_edition_enabled
+// SERVICE hooks — FRAMEWORK-owned, keyed on the service slug. Not project-prefixed.
+apply_filters('ntdst_service_{slug}_config', $defaults);
+apply_filters('ntdst_service_{slug}_enabled', true);     // DENY filter; FAILS OPEN
+get_option('ntdst_service_{slug}', '1');                 // the third level
 
-// PROJECT-level domain events
+// PROJECT-level domain events — these ARE the project's own prefix
 do_action('{project}/{domain}/{action}', $array_payload);  // e.g. stride/registration/created
 ```
 
-The `netdust_` prefix is **not** a framework reservation — it was an old placeholder. Real projects use their own slug: Stride uses `stride_*` / `stride/*`, VAD Vormingen uses `vad_*` / `vad/*`, etc. Use whatever the project's `mu-plugins/<project>-core/` directory implies.
+**The service hooks are the framework's, not the project's.** `netdust_{slug}_config` and
+`netdust_{slug}_enabled` were the framework names before the S9/T02 rename and are now
+`ntdst_service_{slug}_*`. There is **no shim**: a listener on a retired name — or on a
+project-prefixed invention — is silently inert, and because `_enabled` is a DENY filter
+that failure FAILS OPEN, so the service boots. When `plugin-config.php` declares
+`services.overrides.{slug}`, Bootstrap registers its override listener on
+`ntdst_service_{slug}_config`; a service applying any other name never receives it.
+
+DOMAIN events are a different question and do use the project's own slug: Stride uses
+`stride/*`, VAD Vormingen `vad/*`. Use whatever the project's
+`mu-plugins/<project>-core/` directory implies.
 
 Domain event payloads are **plain associative arrays**, not event-object classes — `do_action('stride/registration/created', ['user_id' => $uid, 'edition_id' => $eid])`, not `do_action(..., new RegistrationCreated($uid, $eid))`.
 

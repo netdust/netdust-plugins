@@ -78,7 +78,8 @@ becoming text.
 | `textarea` | `sanitize_textarea_field` | `(string)` |
 | `html` / `content` | `wp_kses_post` | `(string)` |
 | `wysiwyg` | `wp_kses_post` | `(string)` |
-| `int` / `integer` | `absint` | `(int)` |
+| `int` / `integer` | `absint` — **strips the sign** | `(int)` |
+| `signed_int` | `(int)` cast; 0 for an array | `(int)` |
 | `float` / `double` | `floatval` | `(float)` |
 | `bool` / `boolean` | `sanitizeBoolean()` (`wp_validate_boolean`) | `bool` |
 | `email` | `sanitize_email` | `(string)` |
@@ -95,9 +96,10 @@ becoming text.
 **Metabox-only aliases are not registerable.** `string`, `longtext`, `decimal`, `number`,
 `datetime` and `callback` render in `MetaboxGenerator` but are absent from the sanitizer
 map, so `register()` throws on them unless the field config supplies its own
-`'sanitizer'`. Conversely `html`/`content`, `image`, `file`, `person` and
-`post_relation` sanitize correctly but have **no metabox control** — they fall to a plain
-text input. Use `wysiwyg` when you want the WP editor.
+`'sanitizer'`. `number` is a repeater SUB-FIELD type only — at top level it falls to a text input.
+Conversely `image` and `file` DO have a control (the media-picker cell), while
+`html`/`content`, `person` and `post_relation` sanitize correctly but have **no metabox
+control** — they fall to a plain text input. Use `wysiwyg` when you want the WP editor.
 
 The repeater sub-field key is **`sub_fields`**, not `fields`; a repeater declared with
 `fields` sanitizes every sub-value as text and renders no rows.
