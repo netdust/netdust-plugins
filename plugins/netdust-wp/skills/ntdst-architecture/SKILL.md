@@ -22,12 +22,19 @@ description: >
 > **Reference files** live in `references/` next to this SKILL.md.
 > Read the relevant reference before implementing — don't guess at APIs.
 >
-> **Anchored on ntdst-core 4.x** (2026-08-20). v3.0.0 renamed the whole routing
+> **Anchored on ntdst-core 4.2.0** (2026-08-20). v3.0.0 renamed the whole routing
 > surface with no aliases and no shims, and 4.0.0 removed the sector system —
 > a caller of a retired symbol gets a fatal, deliberately. If you meet
 > `ntdst_router()`, `ntdst_route()`, `NTDST_Endpoints`, `ntdst_api_action()`,
 > `NTDST_SectorRegistry` or `NTDST_Cors_Policy` in a project, that project is
 > on an older core or was written against one — none of them exist now.
+>
+> **What each 4.x release added**, so a project one release behind is legible:
+> **4.1.0** — CORS as a declared `cors` route option on `ntdst_rest()`
+> (`references/rest-cors.md`). Before it, core shipped no CORS at all.
+> **4.2.0** — `NTDST_RateLimiter::exceeded()`, the read that does not consume
+> (`references/api-endpoints.md`). Before it, checking a failure counter meant
+> `attempt()`, which spends on every question.
 
 ## Reference Index
 

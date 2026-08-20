@@ -167,7 +167,17 @@ ntdstAPI.call('get_artworks', { medium: 'oil', per_page: 20 })
 > plus an in-handler capability check for anything sensitive).
 - **Registration first (4.0.0)**: the gate establishes that an action is REGISTERED before it does anything else — before the rate bucket key is built, before the nonce check. Registered means listed in `ntdst/api/public_actions`, or having a handler mounted on the dispatch filter. An unregistered action is refused with a bare `false` (401, same as an auth denial), gets **no rate bucket at all**, and cannot obtain a nonce from `/get_nonce`. Until 4.0.0 the raw `action` parameter went straight into the bucket key, so varying it per request bought a fresh bucket every time and defeated the throttle entirely.
 - **Rate limiting**: default 30 requests per 60 seconds, per-action, **per `(user_id, action)`** for logged-in users and **per `(ip, action)`** for anonymous. The user-id keying avoids false positives for users behind shared NAT (offices, schools, mobile carriers) — they no longer share a bucket.
-- **Counting anything else**: `NTDST_RateLimiter::attempt($key, $limit, $window, $memoScope)` is the one counter — build the key yourself, pass finished numbers, it resolves no identity of its own. `NTDST_RateLimiter::reset($key)` clears a bucket, which is what a **failure counter** needs (a lockout clears on the first success) as opposed to a request budget that only decays with its window.
+- **Counting anything else**: `NTDST_RateLimiter` is the one counter — build the key yourself, pass finished numbers, it resolves no identity of its own. **Three verbs, and picking the wrong one is a real bug:**
+
+  | Call | Does | Use for |
+  |---|---|---|
+  | `attempt($key, $limit, $window, $memoScope)` | spend a unit AND decide | a **request budget** — every question IS a request |
+  | `exceeded($key, $limit)` *(4.2.0)* | ask, spend **nothing** | a **failure counter** — asked far more often than incremented |
+  | `reset($key)` | forgive | the caller succeeded; clears the bucket |
+
+  **Do not check a lockout with `attempt()`.** It spends on every question, so the check causes the lockout it is checking for. That is not hypothetical: a login lockout consults `isLockedOut()` twice per attempt (once in the `authenticate` filter, once re-asserting after core auth) while the failure path increments once — asking with `attempt()` locks a user out for trying to log in correctly. `exceeded()` exists for exactly this and is why `reset()` alone was not enough.
+
+  **The `>= $limit` boundary lives IN `exceeded()`.** Do not re-implement it as `$count >= $max` at the call site: a duplicated boundary drifts, and `>` in one of two places turns a three-strike lockout into a four-strike one silently. A limit of `<= 0` is switched OFF and can never be exceeded — `exceeded()` returns `false`, agreeing with `attempt()`, which treats it as always-allow.
 - **Trusted proxies**: `X-Forwarded-For` is honored only when `REMOTE_ADDR` is in the trusted-proxy list.
 
 ### Per-action rate limits

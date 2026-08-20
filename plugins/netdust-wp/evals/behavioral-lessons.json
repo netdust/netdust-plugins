@@ -211,6 +211,28 @@
         "brainstorming"
       ],
       "inverted": true
+    },
+    {
+      "id": "limiter-exceeded-not-attempt",
+      "skill": "ntdst-architecture",
+      "lesson": "attempt() spends on every question — a lockout CHECK must use exceeded() (ntdst-core 4.2.0)",
+      "baseline_ref": "01e982b — skills anchored on 4.0.0, documenting only attempt() and reset()",
+      "prompt": "Add a login lockout to this ntdst site: three failed passwords and the account is locked for 15 minutes. I hook the `authenticate` filter to check whether they're locked, and `wp_login_failed` to count a failure. Note the authenticate check runs twice per login attempt — once at priority 10 and again after core auth re-asserts.",
+      "baseline_expected_failure": "Checks the lockout with NTDST_RateLimiter::attempt(), because attempt() and reset() were the only verbs documented and reset() was framed as 'what a failure counter needs'. attempt() SPENDS a unit per call, and the prompt states the check runs twice per attempt while the failure path increments once — so the check itself drives the counter and locks out a user who is typing the correct password. Likely also re-implements the boundary as `$count >= $max` at the call site.",
+      "with_skill_assertion": "Uses NTDST_RateLimiter::exceeded($key, $limit) for the CHECK — explicitly because it spends nothing and attempt() would make the check cause the lockout it is checking for — increments on the failure path only, and calls reset($key) on success. Does NOT re-implement the >= boundary at the call site (it lives in exceeded()). Bonus if it notes a limit of <= 0 is switched off and can never be exceeded.",
+      "discriminator": "grep -c 'exceeded(' on the skills — 0 at 01e982b, >0 now. The three-verb table is new; before it only attempt() and reset() were named.",
+      "context_before": [
+        "skills/ntdst-architecture/SKILL.md",
+        "skills/ntdst-architecture/references/api-endpoints.md"
+      ],
+      "context_after": [
+        "skills/ntdst-architecture/SKILL.md",
+        "skills/ntdst-architecture/references/api-endpoints.md"
+      ],
+      "must_contain": [
+        "exceeded("
+      ],
+      "must_not_contain": []
     }
   ]
 }
