@@ -155,6 +155,30 @@ A route callback's return value drives what NTDST_Pages does next. The contract 
 
 > A common footgun: a callback that forgets to return anything implicitly returns `null`, which **exits the request**. If you see a blank page from a route that "isn't running", check for missing `return` statements first.
 
+### Rendering your OWN denied page
+
+The `>= 400` branch is how a route REFUSES; it is not a way to name an error page.
+A Response carrying both a 4xx status and a template gets the status honoured and the
+template dropped. Two clean options, in order of preference:
+
+```php
+// 1. WP owns the denial. Return the >= 400 Response; WordPress renders its own
+//    not-found template. Customise 404.php if the denial needs to read differently.
+return ntdst_response()->error('Not yours', 403);
+
+// 2. YOUR page, through the output class. Return a 2xx Response naming your
+//    template — the 2xx arm clears the pre-set 404 and renders it. The page says
+//    "denied"; the STATUS says 200, which is the trade you are making.
+return ntdst_response()->with('reason', 'not_yours')->template('errors/denied');
+```
+
+**Do not hand-roll `status_header()` in the callback.** That is precisely what the
+status split exists to remove — it was the old shape, where a route had to send 404
+back after a premature 200. If you genuinely need a 403 status AND your own body,
+you are asking for something the return contract does not express: render and exit
+inside the callback (`->render()` exits) and accept that you now own the status
+yourself, with nothing checking that status and page agree.
+
 ## Route Priority
 
 Routes are matched in order of registration. More specific routes should be registered first:

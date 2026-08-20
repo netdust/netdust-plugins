@@ -25,7 +25,25 @@
       "prompt": "ntdst-core site, need a shareable card at /share/exhibitions/<slug> that renders a template. Right now it 404s. Write the service — I want the rewrite rule and the route registration, and I need it to actually work on this site, we're on the current ntdst-core.",
       "baseline_expected_failure": "Reaches for ntdst_router()->get() / ntdst_route() / NTDST_Router — the pre-sweep skills named them 45 times and named ntdst_pages()->path() zero times. v3.0.0 removed all three outright with no forwarder, so every one is a fatal at the call site.",
       "with_skill_assertion": "Registers with ntdst_pages()->path('share/exhibitions/:slug', $cb) and never names ntdst_router(), ntdst_route() or NTDST_Router. Pairs the route with an add_rewrite_rule + query_vars registration, and says WHY both are needed: NTDST_Pages matches on REQUEST_URI, so the rewrite exists only to stop WordPress 404ing the URL first. Uses path()'s THIRD argument for any non-GET method rather than ->post() / ->get(), which do not exist.",
-      "discriminator": "grep -c 'ntdst_router()->' — 45 pre-sweep, 0 now; 'ntdst_pages()->path(' — 0 pre-sweep, 15 now"
+      "discriminator": "grep -c 'ntdst_router()->' — 45 pre-sweep, 0 now; 'ntdst_pages()->path(' — 0 pre-sweep, 15 now",
+      "context_after": [
+        "skills/ntdst-architecture/SKILL.md",
+        "skills/ntdst-architecture/references/pages.md"
+      ],
+      "context_before": [
+        "skills/ntdst-architecture/SKILL.md",
+        "skills/ntdst-architecture/references/router.md"
+      ],
+      "must_contain": [
+        "ntdst_pages()->path("
+      ],
+      "must_not_contain": [
+        "ntdst_router(",
+        "ntdst_route(",
+        "NTDST_Router",
+        "ntdst_pages()->post(",
+        "ntdst_pages()->get("
+      ]
     },
     {
       "id": "rest-cors-gap",
@@ -35,17 +53,48 @@
       "prompt": "We're building a headless front-end on a different origin that needs to POST submissions to this WordPress site. Add the REST endpoint and lock the CORS down to just our app's origin.",
       "baseline_expected_failure": "Invents NTDST_Cors_Policy (named 18 times pre-sweep) and passes a 'cors' option to the route. Neither exists — and because NTDST_Rest REFUSES any route carrying an option it does not know, the route is never registered at all: it logs _doing_it_wrong and is simply absent from the API. The endpoint 'works' in review and 404s on the wire.",
       "with_skill_assertion": "Registers through ntdst_rest('ns/v1')->post() with a REQUIRED callable 'permission', and passes ONLY options from the closed list (permission, rate_limit, rate_window, args, schema, show_in_index, allow_batch). Names no NTDST_Cors_Policy and no 'cors' option. States plainly that ntdst-core 4.x ships NO CORS handling, that WP core's default rest_send_cors_headers() reflects any Origin with Allow-Credentials, and does NOT hand-roll Access-Control-* headers — it surfaces the gap as a design decision rather than filling it.",
-      "discriminator": "grep -c 'NTDST_Cors_Policy' — 18 pre-sweep, 2 now (both retirement notes); \"'cors' =>\" — 1 pre-sweep, 0 now; 'no CORS' — 1 pre-sweep, 9 now"
+      "discriminator": "grep -c 'NTDST_Cors_Policy' — 18 pre-sweep, 2 now (both retirement notes); \"'cors' =>\" — 1 pre-sweep, 0 now; 'no CORS' — 1 pre-sweep, 9 now",
+      "context_after": [
+        "skills/ntdst-architecture/SKILL.md",
+        "skills/ntdst-architecture/references/rest-cors.md"
+      ],
+      "context_before": [
+        "skills/ntdst-architecture/SKILL.md",
+        "skills/ntdst-architecture/references/rest-cors.md"
+      ],
+      "must_contain": [
+        "ntdst_rest(",
+        "permission"
+      ],
+      "must_not_contain": [
+        "NTDST_Cors_Policy",
+        "NTDST_Rest_Registrar",
+        "'cors'",
+        "max_body_bytes"
+      ]
     },
     {
       "id": "service-disable-filter",
       "skill": "ntdst-architecture",
       "lesson": "The service enable/disable filter is framework-owned and FAILS OPEN on a wrong name (re-anchor 2026-08-20)",
       "baseline_ref": "67e883f — post-sweep skill text, which still taught the project prefix in 3 places",
-      "prompt": "The AdminUIService on this ntdst site is loading on the front end and I want it off in staging only. Where do I switch it off, and what exactly do I write in plugin-config.php?",
-      "baseline_expected_failure": "Writes a project-prefixed filter — add_filter('stride_admin_ui_enabled', '__return_false') or similar. The pre-sweep AND post-sweep trees both taught {project}_{slug}_enabled in the service template, the hook reference and architecture.md. netdust_{slug}_enabled was the framework's OLD name, retired in the S9/T02 rename with no shim, so any such listener is inert. Worse: it is a DENY filter with a `true` default, so the wrong name FAILS OPEN and the service the user asked to disable keeps booting, silently.",
-      "with_skill_assertion": "Names ntdst_service_admin_ui_enabled — the framework-owned, slug-keyed hook — and no project prefix. Derives the slug correctly (AdminUIService -> admin_ui: 'Service' stripped, a run of capitals kept as one token), rather than lowercasing the class name. States that the filter is a DENY filter that fails open, so a misspelled slug boots the service. Offers the three levels (metadata enabled:false / the filter / the ntdst_service_{slug} option) rather than only one.",
-      "discriminator": "grep -c '{project}_{slug}_enabled' — 3 pre-sweep, 3 post-sweep, 0 now; 'ntdst_service_' — 2 pre-sweep, 11 post-sweep, 31 now"
+      "prompt": "The AdminUIService on this ntdst site is loading on the front end and I want it off in staging only. I also want to override one of its config defaults (its menu position) from plugin-config.php. Where do both of those go, and what exactly do I write?",
+      "baseline_expected_failure": "Gets the ENABLED filter right — the post-sweep prose already named it — but writes the CONFIG override as a project-prefixed hook, because the post-sweep service template, Default Config Pattern and hook reference all taught {project}_{slug}_config with no correct counterpart, and the prose actively asserted 'the project prefix belongs on a service's config filter, which is a different hook'. Bootstrap hangs plugin-config.php's services.overrides.{slug} on ntdst_service_{slug}_config at priority 1, so the override is silently never received. Measured: the baseline answer repeats that wrong sentence verbatim.",
+      "with_skill_assertion": "Names BOTH framework-owned hooks — ntdst_service_admin_ui_enabled and ntdst_service_admin_ui_config — with no project prefix on either. Derives the slug correctly (AdminUIService -> admin_ui). States the enabled filter is a DENY filter that FAILS OPEN on a misspelled slug. Routes the config override through services.overrides.admin_ui in plugin-config.php and/or the framework config hook, not an invented name.",
+      "discriminator": "Run 3 measured: the ENABLED half does NOT discriminate (both arms correct — prose already won). The CONFIG half is where the fix bites. grep '{project}_{slug}_config' — 3 pre-sweep, 3 post-sweep, 0 now.",
+      "context_after": [
+        "skills/ntdst-architecture/SKILL.md",
+        "skills/ntdst-architecture/references/services.md"
+      ],
+      "context_before": [
+        "skills/ntdst-architecture/SKILL.md",
+        "skills/ntdst-architecture/references/services.md"
+      ],
+      "must_contain": [
+        "ntdst_service_admin_ui_enabled",
+        "ntdst_service_admin_ui_config"
+      ],
+      "must_not_contain": []
     },
     {
       "id": "theme-facade-retired",
@@ -54,8 +103,24 @@
       "baseline_ref": "67e883f — post-sweep skill text, which still taught apiAction() in 9 places incl. the copy-me template",
       "prompt": "Add an AJAX action 'delete_artwork' to our ntdst theme that the admin JS calls. It has to be locked to people who can edit other people's artworks — an Author must not be able to delete someone else's. Wire it up the framework way.",
       "baseline_expected_failure": "Writes $theme->apiAction('delete_artwork', $cb, ['capability' => 'delete_others_posts']). Both the api-handler TEMPLATE and container.md called it live. NTDST_Theme has no such method and no such mixin, and its __call() raises BadMethodCallException for any unknown name — so this throws on boot. Likely also reaches for $theme->register() / $theme->taxonomy() / $theme->module(), all retired the same way.",
-      "with_skill_assertion": "Uses ntdst_actions()->register('delete_artwork', $handler, [...]) and does not call any method on $theme outside the five wired mixins (data, pages, response, log, mail). Prefers 'cap_type' over a literal 'capability', giving the reason: the floor is derived from the post type, so a per-type capability map narrows the gate — a literal is correct only while capability_type is still 'post'. States that the floor bites at dispatch ahead of the handler, fails closed on an empty or unresolvable cap, and does not replace the handler's own per-row check.",
-      "discriminator": "grep -c 'theme->apiAction(' — 9 pre-sweep, 9 post-sweep, 0 live calls now (5 remaining mentions are all 'RETIRED' notes)"
+      "with_skill_assertion": "Uses ntdst_actions()->register('delete_artwork', $handler, [...]) and does NOT call $theme->apiAction(), $theme->register(), $theme->taxonomy() or $theme->module() — all retired, all throwing BadMethodCallException. (Real NTDST_Theme methods ARE fine: on, filter, style, script, when, templatePath, single, page, archive, mixin, get_config — so $theme->on('admin_enqueue_scripts', ...) is correct, not a violation.) Prefers 'cap_type' over a literal 'capability', giving the reason: the floor is DERIVED from the post type, so a per-type capability map narrows the gate — a literal is correct only while capability_type is still 'post'. States the floor bites at dispatch ahead of the handler, fails closed on an empty or unresolvable cap, and does not replace the handler's own per-row check.",
+      "discriminator": "grep -c 'theme->apiAction(' — 9 pre-sweep, 9 post-sweep, 0 live calls now (5 remaining mentions are all 'RETIRED' notes)",
+      "context_after": [
+        "skills/ntdst-architecture/SKILL.md",
+        "skills/ntdst-architecture/references/theme-api.md",
+        "skills/ntdst-architecture/references/api-endpoints.md"
+      ],
+      "context_before": [
+        "skills/ntdst-architecture/SKILL.md",
+        "skills/ntdst-architecture/references/theme-api.md",
+        "skills/ntdst-architecture/references/api-endpoints.md"
+      ],
+      "must_contain": [
+        "ntdst_actions()->register("
+      ],
+      "must_not_contain": [
+        "apiAction"
+      ]
     },
     {
       "id": "rest-handler-return",
@@ -65,7 +130,21 @@
       "prompt": "Our ntdst_rest() endpoint returns the right rows but the JS client keeps reading response.success as undefined. The handler ends with `return ntdst_response()->withData($rows);`. What's wrong?",
       "baseline_expected_failure": "Tells the caller to add ->toRestResponse(). That method does not exist on NTDST_Response anywhere in ntdst-core — 'Call to undefined method' — so the fix replaces a wrong shape with a fatal. May also assert that NTDST_Rest applies a {success,data} envelope automatically, which it does not.",
       "with_skill_assertion": "Explains that NTDST_Rest wraps only the permission callback; the handler is registered as a plain WP REST callback, so WP core serializes whatever it returns and there is NO automatic envelope — an NTDST_Response object is serialized as its public state. Fixes it with the static builders NTDST_Response::apiSuccessResponse($data) / ::apiErrorResponse($msg, $code, $status), which return a real WP_REST_Response carrying the envelope AND the status. Does not suggest toRestResponse(), and does not suggest calling the protected jsonPayload().",
-      "discriminator": "grep -c 'toRestResponse' — 4 pre-sweep, 4 post-sweep, 1 now (the 'there is no toRestResponse()' note)"
+      "discriminator": "grep -c 'toRestResponse' — 4 pre-sweep, 4 post-sweep, 1 now (the 'there is no toRestResponse()' note)",
+      "context_after": [
+        "skills/ntdst-architecture/references/rest-cors.md",
+        "skills/ntdst-architecture/references/response.md"
+      ],
+      "context_before": [
+        "skills/ntdst-architecture/references/rest-cors.md",
+        "skills/ntdst-architecture/references/response.md"
+      ],
+      "must_contain": [
+        "apiSuccessResponse"
+      ],
+      "must_not_contain": [
+        "toRestResponse"
+      ]
     },
     {
       "id": "route-response-refuses",
@@ -75,7 +154,17 @@
       "prompt": "On our ntdst_pages()->path() route for /invoices/:id, when the visitor doesn't own the invoice I return ntdst_response()->error('Not yours', 403)->template('errors/denied'). They get a plain WordPress 404 page instead of my denied template. Is the route not matching?",
       "baseline_expected_failure": "Hunts for a route-matching or registration-order bug, or blames the template path — the Return-Values table said an NTDST_Response is simply 'rendered and the request exits', with no status branch, so the observed behaviour looks like the route never ran.",
       "with_skill_assertion": "Identifies the branch, not a bug: resolveRouteResult() splits on getStatus() — 2xx clears the pre-set 404 and renders; >= 400 sends the status, leaves is_404 intact and hands WordPress its OWN not-found template, whether or not the Response names one. States this is deliberate (the route refuses through the output class instead of hand-rolling status_header) and offers the real options — customise the WP 404 template, or return a 2xx Response if a denied page must render from the route.",
-      "discriminator": "post-sweep pages.md Return-Values has ONE NTDST_Response row and no '>= 400'; now it has two rows keyed on status"
+      "discriminator": "post-sweep pages.md Return-Values has ONE NTDST_Response row and no '>= 400'; now it has two rows keyed on status",
+      "context_after": [
+        "skills/ntdst-architecture/references/pages.md"
+      ],
+      "context_before": [
+        "skills/ntdst-architecture/references/pages.md"
+      ],
+      "must_contain": [
+        "400"
+      ],
+      "must_not_contain": []
     },
     {
       "id": "router-decides-brainstorm",
@@ -85,7 +174,42 @@
       "prompt": "We want to add a proper booking flow to this WordPress site — visitors pick a slot, pay a deposit, get a confirmation mail, and the studio sees it in wp-admin. Nothing exists yet. Where do we start?",
       "baseline_expected_failure": "Skips brainstorming and goes straight to the framework design skills, because the plugin's CLAUDE.md said WP work does not use superpowers:brainstorming and that ntdst-architecture / ntdst-data / ntdst-patterns 'replace it'. The session starts deciding service boundaries and CPT shape for a feature whose INTENT — what a slot is, whether a deposit is refundable, who the studio is — was never established with the human. It is also a stack plugin overriding a decision that belongs to netdust-agent's router.",
       "with_skill_assertion": "Enters through netdust-agent:harnessed-development FIRST and states a Class and Stakes. Classifies this as Class A (a new multi-task feature with real open decisions — payment, cancellation, notification, admin surface) and therefore routes to `planning`, which invokes superpowers:brainstorming BEFORE any design. Does not claim WordPress is exempt from brainstorming. Positions ntdst-architecture / ntdst-data / ntdst-patterns as layering ON that — they own the technical design shape (service boundaries, CPT/repository shape, file placement), while intent stays with brainstorming and the human. Stops at the seam (an approved tasks.md + gate-check GREEN) rather than beginning to build.",
-      "discriminator": "grep -c 'does \\*\\*not\\*\\* use generic `superpowers:brainstorming`' plugins/netdust-wp/CLAUDE.md — 1 at 200682b, 0 now; 'invokes `superpowers:brainstorming`' — 0 then, 1 now. Negative control: the same prompt reduced to 'change the confirmation mail subject line' must classify Class E and brainstorm NOTHING — the fix must not make every WP task brainstorm."
+      "discriminator": "grep -c 'does \\*\\*not\\*\\* use generic `superpowers:brainstorming`' plugins/netdust-wp/CLAUDE.md — 1 at 200682b, 0 now; 'invokes `superpowers:brainstorming`' — 0 then, 1 now. Negative control: the same prompt reduced to 'change the confirmation mail subject line' must classify Class E and brainstorm NOTHING — the fix must not make every WP task brainstorm.",
+      "context_after": [
+        "CLAUDE.md"
+      ],
+      "context_before": [
+        "CLAUDE.md"
+      ],
+      "must_contain": [
+        "Class A",
+        "brainstorm",
+        "planning"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "router-decides-brainstorm-control",
+      "skill": "netdust-wp (plugin CLAUDE.md)",
+      "lesson": "NEGATIVE CONTROL for router-decides-brainstorm — the fix must not make every WP task brainstorm",
+      "baseline_ref": "200682b — plugin CLAUDE.md before the router fix",
+      "prompt": "The booking confirmation email on this WordPress site says 'Your booking is confirmed' and the studio wants it to say 'See you soon!'. Change the subject line.",
+      "baseline_expected_failure": "n/a — this case exists to catch the OVER-correction. It fails if the fixed text makes the session brainstorm or plan a one-line copy change.",
+      "with_skill_assertion": "Classifies this Class E (small self-contained change, no open decisions) and routes straight to `building` — one TDD cycle, no plan, no brainstorming, no shake-out. Must NOT invoke superpowers:brainstorming and must NOT produce a plan or task breakdown.",
+      "discriminator": "Inverted: PASSES when brainstorming is ABSENT. Both arms brainstorming means the fix over-corrected.",
+      "context_after": [
+        "CLAUDE.md"
+      ],
+      "context_before": [
+        "CLAUDE.md"
+      ],
+      "must_contain": [
+        "Class E"
+      ],
+      "must_not_contain": [
+        "brainstorming"
+      ],
+      "inverted": true
     }
   ]
 }
