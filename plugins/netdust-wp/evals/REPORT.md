@@ -8,7 +8,7 @@ Six runs; runs 1–4 were harness debugging, run 6 is the result.
 | case | discriminates | judge |
 |---|---|---|
 | pages-custom-route | PASS — baseline emitted `ntdst_router(` + `NTDST_Router` in code | PASS |
-| rest-cors-gap | PASS — baseline emitted `NTDST_Cors_Policy`, `'cors'`, `max_body_bytes` | PASS |
+| rest-cors-option | PASS — baseline emitted `NTDST_Cors_Policy` + `max_body_bytes` | PASS |
 | service-disable-filter | PASS | PASS |
 | theme-facade-retired | PASS — baseline emitted `apiAction` in code | PASS |
 | rest-handler-return | PASS — baseline emitted `toRestResponse` in code | PASS |
@@ -66,6 +66,25 @@ Four harness/test defects. Recording them because each produced a confident wron
    method on `$theme` outside the five wired mixins", which wrongly condemned
    `$theme->on('admin_enqueue_scripts', …)` — `on()` is a real `NTDST_Theme` method.
    The assertion, not the answer, was wrong.
+
+## Superseded after the run: ntdst-core 4.1.0 landed CORS
+
+Run 6 scored a case called `rest-cors-gap`, whose assertion was that the session must
+surface "core ships no CORS" and NOT pass a `cors` route option. **ntdst-core tagged
+v4.1.0 with a real `cors` option**, so that assertion inverted: passing `cors` is now the
+correct answer. The case was re-cut on main as `rest-cors-option` (commit `d80aafa`) and
+this branch takes that version.
+
+The run 6 PASS still stands for what it measured — the baseline emitted
+`NTDST_Cors_Policy` (a class that has never existed in ANY version) and `max_body_bytes`,
+and the current text emits neither. What no longer stands is the "no CORS" half. The
+re-cut probes drop `'cors'` from `must_not_contain` and keep `NTDST_Cors_Policy`,
+`max_body_bytes` and a hand-rolled `Access-Control-Allow-Origin`. **Not re-run since the
+re-cut** — the CORS row above is from the pre-4.1.0 assertion.
+
+The general lesson, worth more than the case: an eval that pins an ABSENCE has a shelf
+life measured in releases. `rest-cors-gap` would have failed a future session for being
+right, and looked authoritative doing it.
 
 ## Open
 

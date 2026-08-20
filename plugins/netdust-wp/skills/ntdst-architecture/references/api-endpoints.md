@@ -1,6 +1,6 @@
 # API Endpoints Reference (same-origin AJAX)
 
-> **Scope: this is the same-origin, nonce-gated `ntdst/api_data/{action}` dispatcher — in-page JS talking to its own site.** It is NOT for cross-origin callers: an anonymous WP nonce is a shared, non-origin-bound token that authenticates nothing for a cookie-less cross-origin request. For a headless/SPA/third-party client on another domain, use `ntdst_rest()` (core ships no CORS handling — read the CORS gap in `rest-cors.md` before designing one).
+> **Scope: this is the same-origin, nonce-gated `ntdst/api_data/{action}` dispatcher — in-page JS talking to its own site.** It is NOT for cross-origin callers: an anonymous WP nonce is a shared, non-origin-bound token that authenticates nothing for a cookie-less cross-origin request. For a headless/SPA/third-party client on another domain, use `ntdst_rest()` with a `cors` route option (ntdst-core 4.1.0 — see `rest-cors.md`).
 
 ## Architecture
 
@@ -211,7 +211,7 @@ unwraps the outer layer only.
 
 ### Custom allowed origins
 
-> This filter widens the **same-origin CSRF gate**'s `Origin`/`Referer` allow-list for the `api_data` path — it does NOT turn `Endpoints` into a cross-origin JSON API. A real cross-origin endpoint (CORS preflight, `Access-Control-*` headers, cookie-less caller) belongs on `ntdst_rest()` (core ships no CORS handling — read the CORS gap in `rest-cors.md` before designing one).
+> This filter widens the **same-origin CSRF gate**'s `Origin`/`Referer` allow-list for the `api_data` path — it does NOT turn `Endpoints` into a cross-origin JSON API. A real cross-origin endpoint (CORS preflight, `Access-Control-*` headers, cookie-less caller) belongs on `ntdst_rest()` with a `cors` route option (ntdst-core 4.1.0 — see `rest-cors.md`).
 
 ```php
 add_filter('ntdst/api/allowed_origins', function($origins) {
