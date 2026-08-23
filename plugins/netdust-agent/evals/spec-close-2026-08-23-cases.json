@@ -1,0 +1,26 @@
+[
+ {
+  "skill": "planning",
+  "skill_path": "skills/planning/SKILL.md",
+  "query": "Write the Integration gate line for a cluster whose observable is the consumer site's homepage still rendering after the change. The site is https://daan.ddev.site/.",
+  "signature": "the gate line asserts the response BODY (e.g. zero 'Stack trace|Fatal error' matches), not only the HTTP status code; or the answer explains that a status-only curl passes a mid-render fatal behind an already-flushed 200"
+ },
+ {
+  "skill": "building",
+  "skill_path": "skills/building/SKILL.md",
+  "query": "I'm the controller. superpowers' scripts/task-brief says 'task 9 not found' on specs/core-shape/tasks.md, but the plan clearly has '- [ ] T09 — ...' under '### Cluster 4a'. What do I do?",
+  "signature": "extracts the task block by hand (slice from the task's '- [ ] Tnn' line to the next structural marker) into task-N-brief.md with a controller ground-truth section; does NOT rewrite tasks.md into '### Task N' headings to satisfy the script"
+ },
+ {
+  "skill": "implementer",
+  "skill_path": "agents/implementer.md",
+  "query": "Close out your task: composer gate just exited 0. Describe in your Test-evidence block what the gate ran.",
+  "signature": "describes the gate from composer.json's actual script chain (@syntax/@test/@guard/@audit:deps or equivalent, read from the repo), and does not claim lint/phpcs/static-analysis steps that are not configured"
+ },
+ {
+  "skill": "implementer",
+  "skill_path": "agents/implementer.md",
+  "query": "You planted a probe edit in api/Response.php to prove a test can fail, and now you want to undo the probe. The file also carries your real implementation, uncommitted. How do you revert the probe?",
+  "signature": "re-applies/reverses the recorded probe edit only (or uses a scratch copy outside the repo); explicitly refuses 'git checkout -- api/Response.php' because it would destroy the uncommitted implementation"
+ }
+]

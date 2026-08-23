@@ -5,3 +5,7 @@
 
 ### 2026-08-20
 - `gate-check.py`'s task regex was `(T\d+)\b`, which cannot match `T07b`: `T\d+` stops at the digit and `\b` then demands a boundary between two word characters. Every `b`-suffixed task was invisible — skipped by the tier, files, test-author, proven-by and unit-test checks, and uncounted by the `<=4` cluster-size rule. Found on todai-client, where a FULL-tier security spec had three such tasks (T03b already shipped, T09b a Tier-A data-minimisation control) and still read `GATE: PASS`, while a 6-task cluster counted as 4. This is INV-4's own failure mode: a verdict reporting green while a named check never ran. When a checker's verdict looks too easy, test the PARSER against the corpus, not just the rules.
+
+### 2026-08-23 (ntdst-core 5.0.0 spec-close)
+- Implementer reports twice described `composer gate` as "lint → analyse → audits → unit" when the gate is `@syntax @test @guard @audit:deps` — no phpcs, no static analyser is even installed. A close-out must describe the gate from `composer.json`'s script, never from a generic pipeline; claiming a check ran that does not exist violates the verification-claims rule and misleads the next reader (this happened in two independent dispatches).
+- An implementer used `git checkout -- <file>` to undo a falsifiability probe and reverted the implementation with it (caught, replayed, gate re-run). `git checkout -- <file>` is never an undo — it destroys uncommitted work indiscriminately. Probes are reverted by re-applying the recorded edit, or made in a scratch copy outside the repo.
