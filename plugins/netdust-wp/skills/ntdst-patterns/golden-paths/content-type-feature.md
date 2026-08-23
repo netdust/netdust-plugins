@@ -4,7 +4,7 @@
 
 **Read this before planning a CPT-backed domain object.** Build to this slice, not to the nearest sibling file (siblings drift — see `lessons.md`). Deviations are allowed but must be *named* in the plan.
 
-5.0.0 closed the field vocabulary to **17 names**: `int` · `float` · `bool` · `text` · `textarea` · `html` · `email` · `url` · `date` · `select` · `array` · `json` · `relation` · `gallery` · `image` · `file` · `repeater`. No aliases, no filter, no registration method — a name outside this list is a fatal at `register()`. It also moved field-level publication from a whole-model flag to a per-field opt-in: **`show_in_rest => true` on the field**, not on the model.
+5.0.0 closed the field vocabulary — see `ntdst-framework/SKILL.md` `## Data declares, WordPress reads` for the list. A name outside it fatals at `register()`, and the exception names the valid set for you (`api/FieldTypes.php:101-103`), so there is nothing to memorise. 5.0.0 also moved field-level publication from a whole-model flag to a per-field opt-in: **`show_in_rest => true` on the field**, not on the model.
 
 ---
 
@@ -45,18 +45,18 @@ final class EditionCPT
             'label'       => 'Edities',
             'labels'      => [ /* singular_name, add_new, edit_item, … */ ],
 
-            // PRIVATE BY DEFAULT (5.0.0) — register() merges 'public' => false
-            // over whatever is not stated. Opt IN explicitly.
-            'public'             => true,
+            'public'             => true,   // private by default (SKILL.md) — opt in below
             'publicly_queryable' => true,
             'show_ui'            => true,
             'show_in_menu'       => '{project}-dashboard',
             'menu_icon'          => 'dashicons-calendar-alt',
             'rewrite'            => ['slug' => 'edities', 'with_front' => false],
 
-            // rest_base names the /wp/v2 collection this type reads through —
-            // 'edities' here, so plain reads go to /wp/v2/edities.
-            'rest_base' => 'edities',
+            // THE TYPE ITSELF must be in REST, or WordPress mounts no route and
+            // every field flag below publishes nothing. These two travel together:
+            // show_in_rest opens /wp/v2/<rest_base>, rest_base names it.
+            'show_in_rest' => true,
+            'rest_base'    => 'edities',
 
             'fields' => self::getFields(),
         ]);
@@ -96,7 +96,9 @@ final class EditionCPT
 }
 ```
 
-**Why declare `show_in_rest` per field, deliberately, and not "on everything":** `custom-fields` support is per TYPE, not per key — one declared field turns it on for the whole post type, and WordPress then also emits every OTHER key some unrelated code registered globally with `register_post_meta('post', …, 'show_in_rest' => true)`, plus the editor's Custom Fields panel for anyone holding `edit_post`. `notes` above stays off `show_in_rest` on purpose: it is internal, and the model constructor still refuses a `json`/`array` field that claims it (neither ever publishes — no closed schema names their keyed values), so the vocabulary catches the mistake you cannot make by accident, only the one you make on purpose.
+**Why declare `show_in_rest` per field, deliberately, and not "on everything":** one declared field turns `custom-fields` support on for the whole post type, which widens the response beyond your declaration — `ntdst-framework/references/traps.md` `## Fails quiet` has the mechanism and what to assert. The global widening it names is the SUBTYPE-LESS call, `register_meta('post', …, 'show_in_rest' => true)` — that registry is merged into every post type's REST fields (`class-wp-rest-meta-fields.php:455-458`). The `register_post_meta()` wrapper is NOT it: that one sets `object_subtype`, so it scopes to the one post type you name (`wp-includes/post.php:2724-2727`).
+
+`notes` above stays off `show_in_rest` on purpose: it is internal. **Nothing fatals if you get this wrong.** A `json` or `array` field claiming `show_in_rest` is not refused by the constructor — it simply publishes nothing (neither type has a closed schema for its keyed values), and the ONLY signal is one warning per model in `logs/data-*.log` naming the offending fields (`api/Data.php:213-228`). Grep that log after a registration change; a silent, unpublished field looks exactly like a working one from the front end.
 
 ---
 
@@ -110,6 +112,14 @@ declare(strict_types=1);
 
 namespace Acme\Modules\Editions;
 
+use WP_Error;
+use WP_Post;
+
+/**
+ * CRUD forwarding INSIDE a repository is the mediator boundary, not a
+ * pass-through: find/create/update fix the model name, the status default and
+ * the one place validation lands later. Hand-write them; no base class.
+ */
 final class EditionRepository
 {
     public function findByCourse(int $courseId): array
@@ -122,27 +132,24 @@ final class EditionRepository
             ->get();
     }
 
-    /** @return object|\WP_Error no native union declared: `object` already encompasses `WP_Error`, so PHP refuses that as a return TYPE. */
-    public function find(int $id)
+    public function find(int $id): WP_Post|WP_Error
     {
         return ntdst_data()->get(EditionCPT::POST_TYPE)->find($id);
     }
 
-    /** @return object|\WP_Error */
-    public function create(array $data)
+    public function create(array $data): WP_Post|WP_Error
     {
         return ntdst_data()->get(EditionCPT::POST_TYPE)->create($data);
     }
 
-    /** @return object|\WP_Error */
-    public function update(int $id, array $data)
+    public function update(int $id, array $data): WP_Post|WP_Error
     {
         return ntdst_data()->get(EditionCPT::POST_TYPE)->update($id, $data);
     }
 }
 ```
 
-**Reads are publish-only by default** — `find()` and `getMeta()` alike. An admin screen that wants a draft says `find($id, 'any')` explicitly; the repository does not decide that for its callers.
+`WP_Post|WP_Error` is the precise return type and it is legal: `find()` hands back the `WP_Post` from `get_post()` with `->meta` and `->fields` attached, or a `WP_Error` (`api/Data.php:761-795`), and `create()` returns `find($id, 'any')` (`api/Data.php:663`). Do not widen it to `object` — `object|WP_Error` is the one union PHP refuses.
 
 ---
 
@@ -181,16 +188,22 @@ final class EditionService
 
 ## 4. Reads go to `/wp/v2/{type}` — never a custom route for a plain list
 
-A declared field's `show_in_rest => true` is the WHOLE of what a plain collection needs. WordPress serves it on `/wp/v2/{rest_base}`; core shapes no response of its own.
+A declared field's `show_in_rest => true` is NECESSARY but not SUFFICIENT: the TYPE must be in REST too. Without `'show_in_rest' => true` in the `register()` args, WordPress mounts no `/wp/v2/edities` route at all, and core logs that the declaration goes nowhere (`api/Data.php:2068-2076`). With both, WordPress serves the collection; core shapes no response of its own.
 
 ```js
 // theme JS — a plain, unfiltered collection read
 const editions = await wp.apiFetch({ path: '/wp/v2/edities?per_page=20' });
 ```
 
+The meta keys on the wire are **prefixed** — `registerRestMeta()` registers each field under `prefixMetaKey($field)` (`api/Data.php:191`), so the declared `start_date` with `'meta_prefix' => '_acme_'` reads back as:
+
+```js
+// each item: { id, title: {…}, meta: { _acme_start_date: '2026-09-01', … } }
+```
+
 ### When `/wp/v2` is not enough
 
-A custom route through `ntdst_rest()` earns its place only for logic the collection cannot express — an aggregate, a cross-type join, a computed field no schema names. **A single meta-key filter is not that case.** Do not hand-roll `rest_{type}_collection_params` + `rest_{type}_query`, and do not add a list route whose only job is "filtered by one meta key" — read `ntdst-core/docs/parked/rest-query.md`: a filterable field over `/wp/v2/{type}` is a parked core feature waiting for its first real consumer, not a site hand-roll.
+A custom route through `ntdst_rest()` earns its place only for logic the collection cannot express — an aggregate, a cross-type join, a computed field no schema names. **A single meta-key filter is not that case:** that is the parked `rest_query` feature, and `ntdst-framework/SKILL.md` `## Data declares, WordPress reads` says what to do instead of hand-rolling it.
 
 ```php
 <?php

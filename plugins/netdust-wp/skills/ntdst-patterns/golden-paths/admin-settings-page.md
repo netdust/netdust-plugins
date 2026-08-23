@@ -25,6 +25,8 @@ The code below is one worked example (`Acme\Admin\AcmeSettingsService`) so it is
 
 ## The service — `{Project}SettingsService.php`
 
+The save route is an ordinary internal write, and `golden-paths/form-data-flow.md` teaches that shape in full — this file does not repeat it. What is settings-specific is the `$tab` branch and its second capability check.
+
 A **plain class** (not a service that hooks `NTDST_Service_Meta` — unless it also needs its own lifecycle priority) instantiated by its owning module. Option keys are **named constants**, never inline literals.
 
 ```php
@@ -54,10 +56,9 @@ final class AcmeSettingsService
         add_action('admin_menu', [$this, 'registerSettingsPage'], 20);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
 
-        // SAVE — a capability-gated ntdst_rest() route, the same ONE HTTP
-        // surface every write in the project goes through.
+        // SAVE — an ordinary internal write (form-data-flow.md).
         ntdst_rest('{project}/v1')->post('/settings', [$this, 'handleSave'], [
-            'permission' => self::CAPABILITY,   // internal write — capability, not a posture
+            'permission' => self::CAPABILITY,
         ]);
     }
 
@@ -81,34 +82,17 @@ final class AcmeSettingsService
         );
     }
 
-    // ── ASSET ENQUEUE (only on this page) ──
+    // ── ASSET ENQUEUE ──
     public function enqueueAssets(string $hook): void
     {
         if (!str_contains($hook, self::SETTINGS_SLUG)) {
-            return;   // never enqueue globally — gate on the page hook
+            return;   // gate on the page hook — never enqueue globally
         }
 
-        wp_enqueue_script('alpinejs',
-            'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js', [], '3', ['strategy' => 'defer']);
-
-        $basePath = dirname(__DIR__);
-        $jsFile   = $basePath . '/assets/js/admin/settings.js';
-
-        if (file_exists($jsFile)) {
-            // settings.js loads BEFORE Alpine so the component factory exists
-            // when Alpine boots. 'wp-api-fetch' is the dependency — the save
-            // path uses wp.apiFetch, so no manual nonce plumbing.
-            wp_enqueue_script('{project}-settings',
-                plugins_url('assets/js/admin/settings.js', $basePath . '/{project}-core.php'),
-                ['wp-api-fetch'], (string) filemtime($jsFile), false);
-        }
-
-        wp_localize_script('{project}-settings', '{project}Settings', $this->getLocalizedData());
-    }
-
-    private function getLocalizedData(): array
-    {
-        return ['company' => self::getCompanyDetails()];
+        // Plain WordPress enqueue from here: wp_enqueue_script() with
+        // 'wp-api-fetch' as a dependency (that is what removes the nonce
+        // plumbing), then wp_localize_script() for the initial state.
+        // Nothing framework-specific — see netdust-wp:wp-frontend.
     }
 
     // ── RENDER — via html(), never render() ──
@@ -118,8 +102,8 @@ final class AcmeSettingsService
             return;
         }
 
-        // html() RETURNS a string instead of echoing-and-exiting — render()
-        // would exit before WordPress prints the admin footer/scripts.
+        // html() RETURNS a string instead of echoing-and-exiting.
+        // with('tabs', …) arrives in the template as $args['tabs'].
         echo ntdst_response()
             ->with('tabs', ['general' => 'Algemeen', 'company' => 'Bedrijf'])
             ->html('admin/settings');
@@ -161,6 +145,10 @@ final class AcmeSettingsService
 
 ## The page shell — `templates/admin/settings.php`
 
+**Data from `with()`/`html()` arrives as `$args`.** `html()` hands the merged array to WordPress's own `load_template($file, false, $data)`, and `load_template()` does not unpack it into loose variables — it stays in scope under that one name (`api/Response.php:176-200`; `wp-includes/template.php:778`). Read `$args['tabs']`; a bare `$tabs` is undefined here. Worse, `load_template()` DOES `extract($wp_query->query_vars)`, so a loose `$name`, `$s` or `$post_type` silently reads WordPress's query var instead of yours.
+
+An `add_submenu_page` callback that ECHOES markup `html()` built is not the `ob_start` + `include` rendering drift the drift-reviewer flags: the loader rendered it, through WordPress's own template include. The drift is hand-buffering a raw `include` yourself.
+
 Alpine `x-data` shell, tab nav, conditional `include` of each tab partial. Every echoed value is escaped (`esc_attr` for attributes, `esc_html` for text).
 
 ```php
@@ -176,7 +164,7 @@ $templateDir = __DIR__ . '/settings';
         <p x-text="message"></p>            <!-- x-text, not innerHTML — no XSS sink -->
     </div>
     <nav class="settings__nav">
-        <?php foreach ($tabs as $tabKey => $label): ?>
+        <?php foreach (($args['tabs'] ?? []) as $tabKey => $label): ?>
             <button type="button"
                     :class="{ 'is-active': activeTab === '<?php echo esc_attr($tabKey); ?>' }"
                     @click="switchTab('<?php echo esc_attr($tabKey); ?>')">
@@ -226,7 +214,7 @@ function {project}SettingsApp() {
 2. **Capability** — the `CAPABILITY` constant (`manage_options` for site-wide, a custom cap for scoped access).
 3. **Menu placement** — parent slug in `add_submenu_page`.
 4. **Tabs + fields** — the tabs array, the `match($tab)` arms, and the per-field sanitisers.
-5. **Sanitisers** — one per field by type (`sanitize_text_field` / `sanitize_email` / `esc_url_raw` / `sanitize_title`).
+5. **Sanitisers** — one per field, matching its type (see the handler above).
 
 **Never changes:**
 - Save runs through a capability-gated `ntdst_rest()` route — never the retired AJAX dispatcher, never a hand-rolled `admin-post.php` handler.

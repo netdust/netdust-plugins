@@ -28,13 +28,13 @@ There is no `class_alias()` and no shim anywhere in the package. A renamed HOOK 
 
 **The command dispatcher — there is ONE HTTP surface now:** `ntdst_actions()` · `NTDST_Actions` · `ntdst/api_data/{action}` · `ntdst/api/public_actions` · `ntdst/api/allowed_origins` · `ntdst/api/rate_limit/{action}` · `ntdst/api/rate_window/{action}` · `ntdst_api_floor_cap()` · `POST /ntdst/v1/get_nonce` · `assets/js/ntdst-api.js` · `window.ntdstAPI` · `ntdst_enqueue_api_client()`.
 
-**Route surface:** `'permission' => 'public'` (the STRING — `->public()` is the one door) · per-route `'cors'` · `before_dispatch` · `corsFor()` · `corsDecisionFor($route, $origin)` · `chargePreflight` · `surface()` · `publicSurface()` · `opaqueSurface()` · `forgetSurface()` · `$surface` · `public_fields` · `publicRows` · `publicRow` · `getPublicShape` · `restSubFields()` · `restSchemaFor()`.
+**Route surface:** `'permission' => 'public'` (the STRING — `->public()` is the one door) · per-route `'cors'` · `before_dispatch` · `corsFor()` · the TWO-ARGUMENT `corsDecisionFor($route, $origin)` — the method survives, with ONE argument: `corsDecisionFor(?string $origin)` · `chargePreflight` · `surface()` · `publicSurface()` · `opaqueSurface()` · `forgetSurface()` · `$surface` · `public_fields` · `publicRows` · `publicRow` · `getPublicShape` · `restSubFields()` · `restSchemaFor()`.
 
-**Response and templates:** `apiSuccess()` · `apiError()` · `apiSuccessResponse()` · `apiErrorResponse()` · `json()` · `jsonPayload()` · `render()` · `renderError()` · `getErrorHtml()` · `commitRenderStatus()` · `$mimeTypes` · `getMimeType()` · `registerMimeType()` · `ntdst_redirect()` · `NTDST_Response::addPath()` · `NTDST_Template_Loader::templateInclude()`.
+**Response and templates** (core-trim T09/T10 and core-shape T11/T12 — verify landed at re-anchor)**:** `apiSuccess()` · `apiError()` · `apiSuccessResponse()` · `apiErrorResponse()` · `json()` · `jsonPayload()` · `render()` · `renderError()` · `getErrorHtml()` · `commitRenderStatus()` · `$mimeTypes` · `getMimeType()` · `registerMimeType()` · `ntdst_redirect()` · `NTDST_Response::addPath()` · `NTDST_Template_Loader::templateInclude()`.
 
 **Field types — 13 names, each a fatal at `register()` naming its canonical:** `integer`, `signed_int`, `number` → `int` · `double`, `decimal` → `float` · `boolean` → `bool` · `string` → `text` · `longtext` → `textarea` · `wysiwyg`, `content` → `html` · `datetime` → `date` · `person`, `post_relation` → `relation`. With them: `getDefaultSanitizer()` · `sanitizeBoolean()` · `sanitizeDate()` · `sanitizeJson()` · `sanitizeRepeater()` · `sanitizeNestedArray()` · `sanitizeAttachmentId()` · `MARKER_ONLY_REQUIRED_TYPES` · `render_repeater_media_cell()` · `NTDST_RelationField::metadata()`.
 
-**Boot:** `discoverServices()` · `discoverServicesInPath()` · `getClassNameFromFile()` · `isInConditionalConfig()` · `services.auto_discover` · `services.discovery_paths` · `services.handlers` · `isServiceEnabled()` · `getServiceConfig()` · `getServices()` · `getBootedServices()` · `hasService()` · `isBooted()` · option `ntdst_service_{slug}` · filter `ntdst_service_{slug}_enabled` (**it FAILED OPEN** — a service kept off through it BOOTS after the upgrade) · filters `netdust_{slug}_config` and `ntdst_service_{slug}_config`, both now `ntdst/service/{slug}/config` · slug `admin_u_i`, now `admin_ui`.
+**Boot:** `discoverServices()` · `discoverServicesInPath()` · `getClassNameFromFile()` · `isInConditionalConfig()` · `services.auto_discover` · `services.discovery_paths` · `services.handlers` · `isServiceEnabled()` · `getServiceConfig()` · `getServices()` · `getBootedServices()` · `hasService()` · `isBooted()` · option `ntdst_service_{slug}` · filter `ntdst_service_{slug}_enabled` · filters `netdust_{slug}_config` and `ntdst_service_{slug}_config`, both now `ntdst/service/{slug}/config` · slug `admin_u_i`, now `admin_ui`.
 
 **Container:** `ntdst_make()` · `make()` · `call()` · `forget()` · `flush()` · `keys()`.
 
@@ -46,9 +46,9 @@ There is no `class_alias()` and no shim anywhere in the package. A renamed HOOK 
 
 **Scheduler, gone from core:** `NTDST_Scheduler` · `ntdst_scheduler()` · `ntdst_schedule_recurring()` · `ntdst_clear_recurring()`.
 
-**Mailer, moved to `netdust-mail`:** `NTDST_Mailer` · `ntdst_mail()` · `ntdst_send_mail()` · `ntdst_notify()` · `ntdst_wrap_email_in_layout()` · `queue()` · `toArray()` · `header()` · cron `ntdst_send_queued_mail` (**a pending event survives the upgrade with no listener; queued mail is dropped silently**) · `ntdst_wrap_all_emails` · `ntdst_mail_attachment_bases` · `ntdst_email_layout_paths` · `ntdst_mail_before_send` · `ntdst_mail_sent` · the `ntdst_notification*` hooks · `templates/emails/`.
+**Mailer, moved to `netdust-mail`:** `NTDST_Mailer` · `ntdst_mail()` · `ntdst_send_mail()` · `ntdst_notify()` · `ntdst_wrap_email_in_layout()` · `queue()` · `toArray()` · `header()` · cron `ntdst_send_queued_mail` · `ntdst_wrap_all_emails` · `ntdst_mail_attachment_bases` · `ntdst_email_layout_paths` · `ntdst_mail_before_send` · `ntdst_mail_sent` · the `ntdst_notification*` hooks · `templates/emails/`.
 
-**Theme:** `mixin()` · `__call()` · `wireMixins()` · `$theme->mail()` · `Theme::when()` · `templatePath()` · `Theme::style()` · `Theme::script()` · `Theme::single()` · `Theme::page()` · `Theme::archive()`. These are the THEME's copies only — `NTDST_Pages` keeps its own `single()`, `page()`, `archive()`, `template()` and `when()`, which are a different thing and stay. `$theme->style()` has no replacement on the theme: enqueue with WordPress's own functions.
+**Theme** (core-trim T09/T10 and core-shape T11/T12 — verify landed at re-anchor)**:** `mixin()` · `__call()` · `wireMixins()` · `$theme->mail()` · `Theme::when()` · `templatePath()` · `Theme::style()` · `Theme::script()` · `Theme::single()` · `Theme::page()` · `Theme::archive()`. These are the THEME's copies only — `NTDST_Pages` keeps its own `single()`, `page()`, `archive()`, `template()` and `when()`, which are a different thing and stay. `$theme->style()` has no replacement on the theme: enqueue with WordPress's own functions.
 
 ## Pick the door
 
@@ -58,7 +58,7 @@ There is no `class_alias()` and no shim anywhere in the package. A renamed HOOK 
 | `ntdst_rest($ns)` with a capability | A command, or a list WordPress's collection cannot express. Rule: the caller asks for an ACTION, or for rows `/wp/v2` cannot select — INV-2, INV-3. |
 | `ntdst_pages()->path()` | A URL that is not a post. Rule: a human types it and expects HTML, and no post type owns it — INV-6. |
 
-Three doors, and no fourth. There is no command dispatcher and no `admin-ajax` handler. A route whose permission is decided anywhere but its own registration is the bypass INV-2 catches.
+Three doors, and no fourth. There is no command dispatcher and no `admin-ajax` handler. A route whose permission is decided anywhere but its own registration is the bypass INV-2 catches — that clause is INV-2's, about the SURFACE. The POSTURE rule (internal by default, a write names a capability) is INV-3's.
 
 ## Data declares, WordPress reads
 
@@ -78,7 +78,7 @@ Three doors, and no fourth. There is no command dispatcher and no `admin-ajax` h
 
 **All CPT data access goes through the domain's repository.** A service, template or handler reaching for `ntdst_data()` directly is drift: it bypasses the repository's validation and vocabulary, and it is how one query ends up written four ways. Templates have no constructor DI, so they resolve `ntdst_get(FooRepository::class)`.
 
-**A pass-through method is drift, not abstraction.** A repository method that only forwards to `ntdst_data()` with no added meaning hides the real call site.
+**A pass-through method is drift, not abstraction.** The rule targets a SERVICE method that forwards to a repository — any class forwarding to another with no added meaning hides the real call site. **The one carve-out is CRUD inside the repository itself:** its own `find`/`create`/`update`/`delete` forwarding into `ntdst_data()` IS the mediator boundary — they fix the model name, the status default, and the one place validation lands later — so hand-write them and do not factor them into a base class.
 
 **Never swallow a `WP_Error`.** Every `create`/`update`/`delete` returns one on failure. `return false` loses the reason.
 
@@ -118,12 +118,13 @@ ntdst_pages()->path('/card', $cb, 'POST');          // method is the THIRD arg
 
 `path()` compiles `:param` placeholders into `add_rewrite_rule()` plus registered query vars, and dispatches on `template_redirect` reading `get_query_var()`. You write no rewrite rule and no `query_vars` filter yourself — that was the v4 shape.
 
-- **The callback returns a template path, `null`, or `false`.** A path goes to WordPress; `null` does nothing; `false` is a refusal and calls `$wp_query->set_404()` so WordPress's own 404 runs. A callback never exits inside a filter (INV-6).
+- **What the callback returns IS the contract** — README's own table, the load-bearing rows: `null` or `true` means "I answered this request myself", and the DISPATCHER then ENDS the request, so nothing of WordPress's render follows the bytes you sent; `false` refuses, with `$wp_query->set_404()` plus `status_header(404)` and no warning. A string that IS an existing file becomes the template through one `template_include` filter; a string that is not a file, an object, an int, an array or `''` gets a `_doing_it_wrong` naming it, then the same 404. A callback never exits — the dispatcher does, on `null`/`true` (INV-6's named exception).
+- **A matched rule answers only its own verb.** A route matched with the wrong method 404s rather than falling through, and a `:param` that did not come from the rule — hand-written onto the URL, since the query vars are public — 404s too.
 - **A pattern whose first segment is a placeholder is refused** with `_doing_it_wrong` and adds no rule. `/:slug` would shadow every URL on the site.
-- **Rules flush when their hash changes**, not on every request.
+- **Rules flush on TWO triggers**, never per request: the rule-set hash moved, OR this router's rules are missing from the live rewrite option (a Permalinks save, another plugin's flush on a request where you had not registered yet).
 - **`template()` · `single()` · `page()` · `archive()` · `when()`** stay as filter wraps whose callback returns a path.
 
-**One loader.** `NTDST_Template_Loader::locate()` is the only search over the registry and `addPath()` the only registration. `html()` returns a string; `page()` plus `ntdst_page_data()` is the one way data reaches a template. `download()` and `inline()` send bytes with WordPress's own MIME table (`wp_check_filetype()` + `wp_get_mime_types()`) and `send_nosniff_header()`. Name files the way WordPress names them — `single-gig.php`, `page-about.php`; `{$type}_template_hierarchy` is the candidate list core reads.
+**One loader.** `NTDST_Template_Loader::locate()` is the only search over the registry and `addPath()` the only registration. `html()` returns a string; `page()` plus `ntdst_page_data()` is the one way data reaches a template. **Data from `with()`/`html()` arrives in the template as `$args`** — core hands it to WordPress's own `load_template($file, false, $data)`, which puts the array in scope under that one name and unpacks nothing else of yours. Read `$args['tabs']`, never a loose `$tabs`; `load_template()` DOES extract `$wp_query->query_vars`, so a loose `$name`, `$s` or `$post_type` silently reads WordPress's query var instead of your value. `download()` and `inline()` send bytes with WordPress's own MIME table (`wp_check_filetype()` + `wp_get_mime_types()`) and `send_nosniff_header()`. Name files the way WordPress names them — `single-gig.php`, `page-about.php`; `{$type}_template_hierarchy` is the candidate list core reads.
 
 ## Boot: you load, core resolves
 
