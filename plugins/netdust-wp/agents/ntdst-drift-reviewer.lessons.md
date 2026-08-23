@@ -157,6 +157,12 @@ consumer's `composer.json` constraint before deciding.
 
 ### 2026-08-22 — four categories the 5.0.0 scan found that no drift review had ever flagged
 
+> **Stamp — entries above this line predate ntdst-core 5.0.0.** Where one names
+> `ntdst/api_data`, `ntdst/api_download` or `ntdstAPI` as the framework path, Part 2 #3
+> supersedes it: there is ONE HTTP surface now and it is `ntdst_rest($ns)` with a capability.
+> The entries are kept unrewritten because the reasoning in them is still how to think about
+> an exception — only the destination changed.
+
 **What happened:** the core-shape scan swept the fleet against ntdst-core 5.0.0 and
 surfaced four things in code that had been through drift reviews. Every one of them
 reads, in hindsight, as "this should have been picked up by drift reviewers."
