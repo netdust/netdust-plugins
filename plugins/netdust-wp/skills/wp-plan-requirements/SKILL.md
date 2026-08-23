@@ -34,7 +34,7 @@ Inject the line, naming any planned departure from the slice:
 ## Golden path: <archetype> (deviations must be named and justified in the plan)
 - [ ] Built to `golden-paths/<archetype>.md` — read before task breakdown.
 - [ ] Deviations from the slice (each named + justified, or "none"):
-      e.g. "settings save uses WP Settings API not the ntdst/api_data filter — flat
+      e.g. "settings save uses the WP Settings API, not an ntdst_rest() route — flat
             option set, no Alpine UI" / "frontend rendered via ntdst_pages()->single()
             not a parse_request router — no pre-query redirect needed"
 ```
@@ -61,7 +61,7 @@ Every flow MUST account for all four pillars (validate / sanitize / escape / aut
 
 ### Block 2 — `## ntdst-core layering requirements`
 
-List the framework-pattern obligations the feature's new classes must meet. This list is the **same nine drift categories** the `ntdst-drift-reviewer` agent checks — so plan-requirement and review-check are one list fired at two ends. The canonical category definitions live in `netdust-wp:ntdst-framework` (`references/anti-patterns.md`) and the drift-reviewer agent; reference them, don't restate.
+List the framework-pattern obligations the feature's new classes must meet. This list is what `ntdst-drift-reviewer` **Part 1 (core's invariants)** and **Part 2 (consumer checks)** check — so plan-requirement and review-check are one list fired at two ends. The canonical definitions live in the drift-reviewer agent itself and `netdust-wp:ntdst-framework`; reference them, don't restate.
 
 ```
 ## ntdst-core layering requirements
@@ -84,7 +84,7 @@ Every module-touching task in the breakdown gets this acceptance criterion, so t
 
 ```
 Acceptance: drift pre-check clean — `/drift-reviewer <touched path>` returns no findings
-(the nine categories), and the per-flow security line above is satisfied in the diff.
+(Part 1 + Part 2), and the per-flow security line above is satisfied in the diff.
 ```
 
 ## The convergence contract
@@ -114,4 +114,4 @@ That sentence is what earns the one-round convergence. Without a named target, r
 | `netdust-wp:wp-security` | Canonical source for the four pillars + sanitize/escape/authorize functions. Block 1 references it. |
 | `netdust-wp:ntdst-framework` / `ntdst-framework` / `ntdst-patterns` | Canonical source for the layering/Data-API/Service-lifecycle rules. Block 2 references them. |
 | `netdust-wp:ntdst-patterns` → `golden-paths/` | The worked vertical slices Block 0 names. The plan builds to the slice; deviations are named here. |
-| `ntdst-drift-reviewer` (agent) | The review-time enforcer of the same nine categories Block 2 names. Plan-requirement ↔ review-check are one list. |
+| `ntdst-drift-reviewer` (agent) | The review-time enforcer of Part 1 + Part 2, the same list Block 2 names. Plan-requirement ↔ review-check are one list. |
