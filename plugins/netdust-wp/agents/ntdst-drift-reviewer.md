@@ -68,7 +68,7 @@ Call the directory holding it `$CORE_ROOT`. You need the directory and not just 
 **If nothing is found, print exactly this line and nothing else for Part 1:**
 
 ```
-Part 1 skipped — no ARCHITECTURE-INVARIANTS.md under <project> (core < 4.x?)
+Part 1 skipped — no ARCHITECTURE-INVARIANTS.md under <project> (tried web/app/mu-plugins/ntdst-core, app/content/mu-plugins/ntdst-core, vendor/netdust/ntdst-core, then find — core < 4.x?)
 ```
 
 Then go straight to Part 2. An absent document is a SKIP and **never a pass** — not "0
@@ -188,12 +188,17 @@ core's own package and its own `CONSUMER_ROOTS`. There is no consumer analogue, 
 
 ```
 INV-9 · expected: 0 · actual: not run — core-only (bin/zero-readers.sh sweeps core's package, not this scope) → Part 2 #13 covers the consumer side
+       cmd: bash bin/zero-readers.sh — not executed
 ```
 
 **Never write `actual: 0 hit(s)` for a command you did not run** — a not-run check is never a
 pass. `0` and `not run` are different answers and only one of them is true. Any other check whose
 target turns out to be a core-only EXECUTABLE gets the same shape, and names the Part 2 check that
 covers the consumer side.
+
+**A command that fails to EXECUTE is the third honest shape:** `actual: errored — <reason>` (a bad
+substitution, a missing binary, a permission denial). It is not `0` and it is not `not run`; it
+names the thing to fix before the check can answer.
 
 **Spelling, because `grep` here is ugrep.** ugrep prints a recursive hit as `api/Data.php` where
 GNU grep prints `./api/Data.php`, so an exclusion anchored `^\./` matches nothing and the check
@@ -219,7 +224,12 @@ not what the expectation says:
 
 ```
 INV-n · expected: <operative clause, verbatim> · actual: N hit(s)
+       cmd: <the command exactly as you ran it, after substitution>
 ```
+
+**Every line carries the `cmd:` it was answered by** — the command AS EXECUTED, after the
+substitution table rewrote it and the exclusion pipe was appended, one `cmd:` per ordinal on a
+multi-command check, and on a `not run` or `errored` line the command it would have run.
 
 A check with more than one command tags BOTH halves with the same ordinals, so a reader can pair
 them: `expected: → empty (1) / → ten hits… (2) / → empty (3) · actual: 0 hit(s) (1) / 12 hit(s)
@@ -228,7 +238,7 @@ answer belongs to which command.
 
 **The expectation is core's answer for CORE's tree. It is the calibration, not the consumer's
 target.** A different number in a consumer is a question, not automatically a finding — you answer
-it by reading the hits. Two rules make that judgement:
+it by reading the hits. Two rules make that judgement, and two checks need a word of their own:
 
 - An expectation of **empty / EMPTY / 0** is a hard one. Core's convergence point for that
   property lives in core, so every hit in consumer code is a candidate bypass and goes in the
@@ -237,9 +247,26 @@ it by reading the hits. Two rules make that judgement:
   `INV-4`'s three, `INV-5`, `INV-6`, `INV-8`'s 51/1) is a calibration. Core's number describes
   core's files and means nothing about the consumer's. Read the consumer's hits and judge each
   one; report the count so the next audit can compare, and flag only what you can name.
+- **`INV-3`'s four terms are not one answer in a consumer.** `__return_true`, `=> 'public'` and
+  `public_actions` stay hard — each of them bypasses the one resolver wherever it appears.
+  `->public()` does not: in a consumer it is the DOCUMENTED anonymous READ door, and a `GET` that
+  uses it is the framework working. It is a finding on a WRITE verb — core refuses that route, so
+  the endpoint is ABSENT while it reviews as protected (`traps.md` `## Rest`) — or when the data
+  behind the read should not be anonymous at all. Read the verb, then read what the route returns,
+  before you write it up.
+- **`INV-10`'s (1) expects `0` for CORE's two files, not for a consumer's tree.** `glob(` and
+  `file_get_contents(` are ordinary consumer code; once the substitution table re-aims that command
+  at `<scope>`, its hits are candidates to read, not a hard empty. And `-c` under `-r` prints ONE
+  COUNT PER FILE — sum them before you write `actual: N hit(s)`, or you report the first file's
+  count as the whole check's.
 
 Part 1 findings lead the punch list, keyed `INV-n`, and cite the invariant's TITLE from the
 vendored document rather than a line number — line numbers move on the next core release.
+
+**Severity for a Part 1 hit.** A candidate you cannot yet name is **Borderline**. A hit you CAN name
+as one of the shapes the invariant's own `**Bypass smell:**` field lists is **Critical**. Part 1
+entries count in `## Findings: <N total>` like any other — they are findings, not a preamble to
+them.
 
 ---
 
@@ -292,12 +319,6 @@ repository itself:** its own `find`/`create`/`update`/`delete` forwarding into `
 mediator boundary — they fix the model name, the status default, and the one place validation lands
 later — so hand-write them and do not factor them into a base class."
 
-**So the direction matters, and it is the thing to get right.** A repository's own
-`find`/`create`/`update`/`delete` forwarding into the data chain is the mediator boundary — the
-named exception, never a finding, and never something to "de-duplicate" into a base class. A
-SERVICE method (or any other class's method) forwarding to a repository or to another class with no
-added meaning is the drift.
-
 **Suggested fix:** delete the method; point callers at the repository. Past ~10 callers, propose a
 phased removal: `@deprecated` docblock naming the repository method, and an entry in the project's
 open-drift list.
@@ -313,22 +334,22 @@ grep -rnE "add_action\( *['\"]wp_ajax_|add_action\( *['\"]admin_post|admin-ajax\
     --include=*.php --include=*.js <scope>
 ```
 
-**Then:** each hit is a candidate.
-
-**`wp_ajax_*`, `admin-post`, or `register_rest_route()` outside `ntdst_rest()` → the framework path
-is `ntdst_rest($ns)->…` with a capability.** `ntdst_actions()` and the v3 command dispatcher are
-retired and fatal on 5.0.0 — a hit on those is a build break, not a style note, so raise it Critical.
+**Then:** each hit is a candidate. **`wp_ajax_*`, `admin-post`, or `register_rest_route()` outside
+`ntdst_rest()` → the framework path is `ntdst_rest($ns)->…` with a capability.** A `_nopriv`
+handler is asking for anonymous reach, and the framework spelling of that ask is
+`->get('/thing', $cb)->public()` — a READ. An anonymous WRITE has no posture to ask with: it hands
+over its own callable, because `->public()` on a `POST` is refused and the route never registers.
+`ntdst_actions()` and the v3 command dispatcher are retired and fatal on 5.0.0 — Critical on a
+consumer pinned to 5.x; on `≤4.x` the same hit is migration debt to schedule, not a build break, so
+read the `composer.json` constraint before you set the severity.
 
 **Rule:** `SKILL.md` `## Pick the door` and `## Rest is the one surface`; core's `INV-2`.
 
-**Suggested fix:** `ntdst_rest('ns/v1')->post('/thing', $cb, ['permission' => 'edit_things'])`. Reads
-are `GET`/`HEAD`/`OPTIONS`; every other verb is a write and must name a capability or hand over its
-own callable, or the route does not register at all. Client side is `wp.apiFetch`, which sends the
-`wp_rest` nonce.
+**Suggested fix:** `ntdst_rest('ns/v1')->post('/thing', $cb, ['permission' => 'edit_things'])` — see
+`SKILL.md` `## Rest is the one surface` for the write-verb and nonce rules.
 
-**Read `traps.md` before you write the finding:** a route carrying an option core does not know is
-not registered AT ALL — one `_doing_it_wrong`, and the endpoint 404s on the wire while reviewing as
-protected. `permission_callback` is not one of the options; `permission` is.
+**Then read `traps.md` `## Rest` and `## Fails quiet (the dangerous class)` before you write the
+finding** — it changes what counts as fixed.
 
 **Exception:** a genuine WordPress admin FORM POST (`admin_post_*` from a `<form>` with a nonce
 field) is WordPress's own door and is not a REST call. Say so rather than migrating it.
@@ -347,10 +368,8 @@ retired output-and-exit method is gone in 5.0.0 — do not suggest it.
 
 **Rule:** `SKILL.md` `## Pages on rewrite rules`; core's `INV-6`.
 
-**Then read `traps.md`:** data from `with()`/`html()` arrives in the template as `$args`, because
-core hands it to WordPress's own `load_template($file, false, $data)`. A migration that leaves the
-template reading a loose `$tabs` silently reads a WordPress query var instead. Flag that in the same
-finding.
+**Then read `SKILL.md` `## Pages on rewrite rules` before you write the finding** — it changes what
+counts as fixed.
 
 **Exception:** a PDF/archive generator wrapping a library that needs its own buffer.
 
@@ -371,9 +390,11 @@ literal `|`, and an `-E` spelling of it is the alternation bug this file opens w
 
 **Suggested fix:** `if (is_wp_error($result)) { ntdst_log('channel')->error('…', [...]); return; }`.
 
+**Then read `traps.md` `## Reversed or non-obvious defaults` before you write the finding** — it
+changes what counts as fixed.
+
 **Exception:** a `WP_Error` used as a routine flow state on an internal path where that branch is
-expected. And per `traps.md`, a not-found row and a wrong-status row return the SAME `WP_Error` — so
-a caller distinguishing them by message is the finding, not the caller that logs and returns.
+expected.
 
 ### #6 Friendly column vocabulary
 
@@ -415,9 +436,8 @@ sanitization.
 
 **Suggested fix:** `$repo->create()` / `getField()` / `updateMeta()`.
 
-**Then read `traps.md`:** `updateMeta()` and `updateMetaBatch()` never validate, so a migration to
-them can blank a required field quietly. If the raw call was doing its own validation, say that the
-move needs the model's `validate` rule to exist first.
+**Then read `traps.md` `## Admin fields` before you write the finding** — it changes what counts as
+fixed.
 
 **Exception:** `*Repository.php` itself; one-off bulk scripts under `scripts/` where raw access is a
 deliberate performance choice.
@@ -428,8 +448,7 @@ deliberate performance choice.
 grep -rnE "add_filter\( *['\"]template_include" --include=*.php <scope>
 ```
 
-**Then:** a callback that gates on a post type and returns a path is drift. The pattern covers both
-quote spellings; core's own document warns that a single-quoted-only pattern misses the other half.
+**Then:** a callback that gates on a post type and returns a path is drift.
 
 **`add_filter('template_include'` → `ntdst_pages()->path()` or `->template()`.** `path()` is for a
 URL no post type owns — it compiles `:param` placeholders into a rewrite rule plus query vars.
@@ -438,9 +457,8 @@ returns a path.
 
 **Rule:** `SKILL.md` `## Pages on rewrite rules`; core's `INV-6`.
 
-**Then read `traps.md`:** a callback never exits — it returns. `null`/`true` mean "I answered this
-myself" and the DISPATCHER ends the request; `false` refuses with a 404. A migrated callback that
-still calls `exit` is a new finding, not a fixed one.
+**Then read `traps.md` `## Routing` before you write the finding** — it changes what counts as
+fixed.
 
 **Exception:** the callback does pre-query work needing `parse_request` timing. `template_include`
 fires too late for that, and so does `ntdst_pages()`.
@@ -529,9 +547,8 @@ grep -rn -e "->NAME(" -e "::NAME(" -e "ntdst_NAME(" --include=*.php --include=*.
 grep -rnF "\$this, 'NAME'" --include=*.php <project>
 ```
 
-**Then:** the first command finds the definition inside `<scope>`. The other two count READERS, and
-they sweep **`<project>`, not `<scope>`** — a reader in the theme, in another mu-plugin or in a
-sibling module still counts, and a sweep confined to the audited module invents zero-reader findings
+**Then:** the other two commands count READERS, and they sweep **`<project>`, not `<scope>`** — a
+reader in the theme, in another mu-plugin or in a sibling module still counts, and a sweep confined to the audited module invents zero-reader findings
 for symbols that have perfectly good callers next door. Subtract the defining file's own lines. Zero
 readers outside it means the symbol is not an API: it is a thing that must keep working, keep being
 tested and be understood by the next reader, in exchange for nothing.
@@ -557,7 +574,10 @@ not answerable this way — say so and skip it rather than guessing.
 grep -rnE "public function |^ *function ntdst_" --include=*.php <scope>
 ```
 
-**Then:** list the public entry points the module added, then read each body for the repository
+**Then:** #2 and this check share ONE enumeration — both sweep `public function`, so run it once and
+answer both. Reduce it before you read: auditing a DIFF, enumerate only the methods the diff touches
+(`git diff --name-only`); otherwise only the module's own public surface, never its dependencies'.
+List the public entry points the module added, then read each body for the repository
 method or the WordPress call it ends at. Two public entry points whose bodies reach the SAME
 repository method or the SAME WordPress call are a second API for a job that already had one.
 
@@ -591,9 +611,11 @@ real load-order bug (core installed as a regular plugin rather than an mu-plugin
 **Suggested fix:** delete the guard and call the helper. If the code genuinely runs before core can
 be loaded, that is a load-order finding to fix at the boot site, not a branch to keep.
 
-**Exception:** a guard around a helper from an OPTIONAL package the project does not require
-(`netdust-mail`, a plugin the site may not have). Name the package and check `composer.json`: if it
-is a hard dependency, the guard is still drift.
+**Exception:** a guard around a helper from an OPTIONAL package the project does not require —
+`\Netdust\Mail\Mailer` from `netdust-mail`, which left core at 5.0.0 and is a separate install. Name
+the package and check `composer.json`: if it is a hard dependency, the guard is still drift. And a
+guard around a RETIRED core symbol is dead code, not an exception — the branch it protects can never
+run again, so delete both.
 
 ---
 
@@ -610,8 +632,10 @@ Files scanned: <count>
 
 ## Part 1 — core's invariants (from <path to the vendored ARCHITECTURE-INVARIANTS.md>)
 INV-1 · expected: … · actual: N hit(s)
+       cmd: <the command as executed, after substitution — one per ordinal>
 …
 INV-10 · expected: … · actual: N hit(s)
+       cmd: …
 
 (or the single "Part 1 skipped" line)
 

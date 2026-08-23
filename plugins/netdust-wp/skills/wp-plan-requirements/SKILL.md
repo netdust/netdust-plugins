@@ -67,13 +67,16 @@ List the framework-pattern obligations the feature's new classes must meet. This
 ## ntdst-core layering requirements
 - [ ] Data access goes through a Repository — no direct `ntdst_data()->get(...)` outside *Repository.php
 - [ ] No pure pass-through Service methods (Service adds validation/transformation/events, or callers use the repo)
-- [ ] No raw `wp_ajax_*` handlers — register through the framework's AJAX/Handler layer
+- [ ] No raw `wp_ajax_*`/`admin-post` handlers and no `register_rest_route()` — register through `ntdst_rest($ns)` naming a permission
 - [ ] No `ob_start()+include` rendering — use the framework's templating
 - [ ] No swallowed `WP_Error` — propagate or handle explicitly
 - [ ] Data API vocabulary is registered (WP_COLUMNS) — no unregistered keys
 - [ ] No hardcoded meta prefix — use `$this->repository->getMetaPrefix()`
 - [ ] Correct module layering (Modules / Handlers / Admin / Integrations / Contracts / Domain / Infrastructure)
 - [ ] Service lifecycle / DI per NTDST_Service_Meta (see ntdst-framework)
+- [ ] No zero-reader public symbol — every new public method or `ntdst_*` function has a reader outside its own file, or it is private
+- [ ] No second API for a solved job — two entry points must not land on the same repository method or WP call
+- [ ] No `function_exists('ntdst_…')` guard around a core helper — core is the base mu-plugin, so a missing helper is a load-order bug
 ```
 
 Keep only the rows that apply to what the feature actually builds; delete the rest so the list is real, not boilerplate.

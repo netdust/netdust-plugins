@@ -25,6 +25,12 @@ Cases where the agent flagged something that turned out NOT to be drift, OR rule
 
 ---
 
+> **Stamp — every dated entry below predates ntdst-core 5.0.0, except the last one
+> (2026-08-22 — the 5.0.0 scan itself).** Where one names `ntdst/api_data`, `ntdst/api_download`
+> or `ntdstAPI` as the framework path, Part 2 #3 supersedes it: there is ONE HTTP surface now and
+> it is `ntdst_rest($ns)` with a capability. The entries are kept unrewritten because the reasoning
+> in them is still how to think about an exception — only the destination changed.
+
 ### 2026-05-19 — Custom-table repositories override `AbstractRepository::find()` and return `?object`, not `WP_Post|WP_Error`
 
 **Pattern that looked like drift:** `if (!$registration)` checks after `RegistrationRepository::find($id)` flagged as "Swallowed WP_Error treated as falsy null" — i.e. the agent assumed any `Repository::find()` follows the AbstractRepository signature `WP_Post|WP_Error`, where a `WP_Error` would silently pass the `!` check.
@@ -156,12 +162,6 @@ consumer's `composer.json` constraint before deciding.
 ---
 
 ### 2026-08-22 — four categories the 5.0.0 scan found that no drift review had ever flagged
-
-> **Stamp — entries above this line predate ntdst-core 5.0.0.** Where one names
-> `ntdst/api_data`, `ntdst/api_download` or `ntdstAPI` as the framework path, Part 2 #3
-> supersedes it: there is ONE HTTP surface now and it is `ntdst_rest($ns)` with a capability.
-> The entries are kept unrewritten because the reasoning in them is still how to think about
-> an exception — only the destination changed.
 
 **What happened:** the core-shape scan swept the fleet against ntdst-core 5.0.0 and
 surfaced four things in code that had been through drift reviews. Every one of them

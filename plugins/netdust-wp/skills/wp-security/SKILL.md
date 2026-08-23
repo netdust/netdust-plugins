@@ -51,10 +51,17 @@ Always `wp_unslash()` first on `$_POST`/`$_GET`/`$_REQUEST`/`$_COOKIE` — WP ap
 ### Authorize
 
 - **Capability**: `current_user_can( 'edit_posts' )`. Never use `is_admin()` for permission — it is a context flag, not an authorization check.
-- **Nonce**: every state-changing action. `wp_create_nonce()` → `wp_verify_nonce()` or `check_admin_referer()`.
+- **Nonce**: every state-changing action. `wp_create_nonce()` → `wp_verify_nonce()` or `check_admin_referer()`. On an `ntdst_rest()` route this is `wp.apiFetch`'s job — see below.
 - **Legacy AJAX (`wp_ajax_*` / `wp_ajax_nopriv_*`)**: `check_ajax_referer()` is **required per handler**.
-- **REST**: routes register through `ntdst_rest()` **only**. The gate is `permission` — a capability string, `->public()` (the one door to anonymous), or a callable. `permission` absent is the internal default (`is_user_logged_in`) — a READ that names nothing is logged-in-only, never open; a WRITE that names nothing does not register at all (structural enforcement, not a review catch). A hand-written `permission_callback => '__return_true'` (a raw `register_rest_route()` call that bypasses `ntdst_rest()`) is still the canonical security bug. A write verb — anything but `GET`/`HEAD`/`OPTIONS` — carrying only a posture (no capability, no callable) does not register. See `ntdst-framework/SKILL.md`.
-- **Cookie-authenticated REST callers**: authenticate with the `wp_rest` nonce in the `X-WP-Nonce` header, sent by `wp.apiFetch` (which also refreshes a stale one). Core mints no nonce and runs no origin check for this — `rest_cookie_check_errors()` is WordPress's own CSRF rule. A nonce is a CSRF token, never access control.
+- **REST**: `permission_callback` is required on every route; `__return_true` is the canonical bug. WordPress itself checks nothing else for you.
+- **Cookie-authenticated REST callers**: authenticate with the `wp_rest` nonce in the `X-WP-Nonce` header, sent by `wp.apiFetch` (which also refreshes a stale one). `rest_cookie_check_errors()` is WordPress's own CSRF rule. A nonce is a CSRF token, never access control.
+
+### NTDST projects (ntdst-core 5.x)
+
+On a project running ntdst-core 5.x, the four pillars above are unchanged — the door they are applied at is not.
+
+- **Routes register through `ntdst_rest()` only.** The gate is `permission` — a capability string, `->public()` (the one door to anonymous), or a callable. `permission` absent is the internal default (`is_user_logged_in`) — a READ that names nothing is logged-in-only, never open; a WRITE that names nothing does not register at all (structural enforcement, not a review catch). A hand-written `permission_callback => '__return_true'` is the bug above reached by bypassing `ntdst_rest()` with a raw `register_rest_route()`. See `ntdst-framework/SKILL.md`.
+- **The nonce is WordPress's, not core's.** ntdst-core mints no `wp_rest` nonce and runs no origin check of its own, so the `X-WP-Nonce` rule above is what a cookie-authenticated caller satisfies — `wp.apiFetch` on the client, nothing hand-rolled.
 - **Cross-origin (CORS)**: WP core's default reflects any `Origin` **and** sets `Access-Control-Allow-Credentials: true` (the reflection+credentials anti-pattern), so any origin can read authenticated responses. The answer is `cors()` on `ntdst_rest()` — origins are ADDED to WordPress's own `allowed_http_origins`, scoped to REST requests only (`admin-ajax.php` and other cookie-auth surfaces keep WordPress's defaults), and `'*'` is refused outright as an allow-list entry. **Never hand-roll `Access-Control-*` headers or a `rest_pre_serve_request` hook.** Note it is OPT-IN: a route declaring no `cors` is exactly as exposed as any other WP REST route. See `ntdst-framework/SKILL.md`.
 - **`show_in_rest` on a Data-API field**: `'show_in_rest' => true` makes the field readable by anyone on `/wp/v2/<type>` — WordPress's own REST controller, no separate gate. A mis-declaration is a disclosure, not a bug a reviewer catches later.
 
@@ -64,7 +71,7 @@ Any dynamic value into a query → `$wpdb->prepare()`. No exceptions. See `skill
 
 ## One excellent example
 
-A custom AJAX handler that updates a post meta from a form:
+A custom AJAX handler that updates a post meta from a form. On ntdst-core 5.x this handler is drift — the same four pillars apply over an `ntdst_rest()` route instead:
 
 ```php
 add_action( 'wp_ajax_netdust_update_meta', 'netdust_update_meta_handler' );
@@ -107,7 +114,7 @@ All four pillars present. Notice: `wp_unslash()` before `sanitize_text_field()`,
 | "I'll add the nonce later" | "Later" = "the next commit, in two weeks, after a CSRF report". Add it now. |
 | "Frontend-only public form, no nonce needed" | CSRF works on logged-out users too. Public state-changing forms need a nonce or equivalent. |
 | "It's just an int — `(int) $_POST['id']` is fine" | `(int)` strips the trailing junk but accepts negatives. Use `absint()` for IDs. |
-| "REST endpoint, WordPress handles auth" | Only if `permission_callback` is set. `__return_true` is the bug. |
+| "REST endpoint, WordPress handles auth" | Only if `permission_callback` is set. `__return_true` is the bug. On `ntdst_rest()` the option is `permission`: a route OPTION named `permission_callback` is one core does not know, and the route is refused outright (`ntdst-framework/references/traps.md`). |
 | "Trusted client JS sends this value" | The browser is not trusted. Anyone can curl your endpoint with any payload. |
 | "It's a quick fix, ship it" | Quick fixes are how every WP breach happens. 30 seconds for a nonce is not the bottleneck. |
 | "The user is logged in, so they're trusted" | Authentication ≠ authorization. Logged-in subscribers can still hit admin endpoints. |
