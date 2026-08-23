@@ -175,6 +175,15 @@ $model->scope('upcoming')->limit(10)->get();
 Resolution is **model-first, then global** — a model shadows a global of the same
 name. An unknown scope throws.
 
+**A filterable field over `/wp/v2/<type>` is a parked core feature, not a site
+hand-roll.** When a site wants `GET /wp-json/wp/v2/gigs?venue_city=Ghent`, do not
+write `rest_{type}_collection_params` + `rest_{type}_query` in the site and do not
+add a list route whose only job is "filtered by one meta key". Read
+`ntdst-core/docs/parked/rest-query.md`: the design (`'rest_query' => true` on the
+field, `register()` hands it to WordPress) is waiting for exactly this consumer —
+the site IS the named consumer §6.1 of `philosophy.md` asks for. Open the one-task
+spec in core; the site declares the key once core ships it.
+
 ## Templates and assets
 
 `ntdst_response()` is the one place the `{success,…}` envelope is built.

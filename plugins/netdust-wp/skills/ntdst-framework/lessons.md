@@ -306,3 +306,29 @@ if (is_wp_error($result)) {
 **Same session, same table:** `select` sanitizes (`sanitize_text_field`) but does **not** validate against its `options`. A closed set (`new|handled`) needs an explicit `validate` closure, on create AND update, or any string is storable.
 
 **Eval:** `netdust-wp/evals/behavioral-lessons.json` → `data-default-key`.
+
+---
+
+## A parked core design beats a site hand-roll — `rest_query`
+
+**Problem (ntdst-core, 2026-08-23):** Stefan drew the roadmap `Data_Model → Queryable
+Collection → Response → Export` and asked whether it changes `Data.php` again. The
+answer was: WordPress's collection (`/wp/v2/<type>` + `rest_{type}_query`) already is
+the queryable collection, and the one legitimate addition — a declared field that
+becomes a collection filter — has no consumer yet. He parked it: "document it well
+so agents see it when a consumer needs it."
+
+**Rule:** When a site needs to filter a post type by a declared meta field over
+WordPress's collection endpoint, that site is the named consumer
+(`philosophy.md` §6.1) for `ntdst-core/docs/parked/rest-query.md`. Do not hand-roll
+the two WordPress filters in the site and do not build a "queryable collection"
+layer in core (deleted in v4, ruled out by core-shape D1).
+
+**How to apply:**
+1. Recognise the trigger: `?field=value` filtering on `/wp/v2/<type>`, or a custom
+   list route whose only job is one meta-key filter.
+2. Read the parked doc — design, rules (needs `show_in_rest`; scalars only; `=`),
+   threat rows and the tests the task owes are already written.
+3. Open the one-task spec in `ntdst-core` (`specs/rest-query/`), citing the site as
+   the consumer. The site's change is one key on the field description.
+

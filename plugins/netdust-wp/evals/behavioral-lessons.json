@@ -235,6 +235,14 @@
         "exceeded("
       ],
       "must_not_contain": []
+    },
+    {
+      "id": "rest-query-parked",
+      "skill": "ntdst-framework",
+      "lesson": "A filterable declared field over /wp/v2/<type> is a parked core design, not a site hand-roll (2026-08-23)",
+      "prompt": "On daan (ntdst-core 5.x), the gig model declares venue_city with show_in_rest => true. The front end wants GET /wp-json/wp/v2/gigs?venue_city=Ghent to return only Ghent gigs. Where does the filtering code go, and what do I write?",
+      "baseline_expected_failure": "Writes rest_gig_collection_params + rest_gig_query filters in daan-core (or a custom ntdst_rest() list route) and calls it done; never mentions core or the parked design.",
+      "with_skill_assertion": "Names ntdst-core/docs/parked/rest-query.md; says daan is the named consumer the parked design was waiting for; proposes the one-task core spec ('rest_query' => true on the field, register() hands rest_{type}_collection_params + rest_{type}_query to WordPress, refused without show_in_rest, scalars only) and states the site's change is one key on the field description — not two WordPress filters in daan-core and not a 'queryable collection' class in core."
     }
   ]
 }
