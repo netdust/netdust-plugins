@@ -152,3 +152,48 @@ first, and flag the raw handler.
 **Verify before flagging:** the download surface exists from ntdst-core v2.3.0.
 On a project pinned below that, the old exception still applies — read the
 consumer's `composer.json` constraint before deciding.
+
+---
+
+### 2026-08-22 — four categories the 5.0.0 scan found that no drift review had ever flagged
+
+**What happened:** the core-shape scan swept the fleet against ntdst-core 5.0.0 and
+surfaced four things in code that had been through drift reviews. Every one of them
+reads, in hindsight, as "this should have been picked up by drift reviewers."
+
+**1. Eight type tables.** Eight separate places re-spelled the field-type vocabulary —
+a `$sanitizers` map built from literals, a metabox `sanitize_field()` switch, a
+per-caller copy of the row-key rule, a hand-written default type. None tripped a check,
+because the old checklist had no category for "a second table of something core already
+keeps one table of." A `match`/`switch`/`===` over a TYPE NAME, and a literal map keyed
+on type names, are both the shape: `$sanitizers = ['int' => 'intval']` looks like
+ordinary config and is a second vocabulary free to disagree with the registry.
+This is now covered from BOTH sides: core's `INV-8` runs live in Part 1, and #14
+(a second API for a solved job) names the general case.
+
+**2. Zero-reader public symbols.** Public methods and `ntdst_*` globals with no reader
+anywhere — added beside their only caller, or added because the shape looked symmetrical
+(an `inline()` beside a `download()`). core-trim deleted ~45 of them. The old checklist
+had no category at all; a symbol with no reader is not an API, it is a maintenance
+obligation with nothing on the other side. Now check #13. Note the counting rules there:
+a name search is receiver-blind, so `register` or `init` is not answerable this way —
+say so rather than guessing, and count `[$this, 'NAME']` as a reader.
+
+**3. Load-order guards.** `if (!function_exists('ntdst_actions')) { return; }` wrapped
+around core calls, in four services in one consumer. It reads as defensive and it is the
+opposite: `ntdst-core.php` is the BASE mu-plugin, so a missing helper means the site is
+broken, and the guard turns that into a feature that silently stops existing. It also
+hid a real load-order bug — core installed as a regular plugin rather than an mu-plugin.
+Now check #15.
+
+**4. A second API for a solved job.** Two public entry points whose bodies reached the
+same repository method. Neither was a pass-through in the #2 sense (both did a little
+work), so #2 never fired, and neither was a bypass, so #1 never fired. The finding lives
+between the two old categories. Now check #14.
+
+**Calibration rule this adds:** when a check returns clean, ask what the checklist has no
+category FOR before writing "clean" in the report. All four of these lived in the gaps
+between categories, and a report that says "clean" about a gap is worse than one that
+says nothing — it certifies the space it never looked at. The same instinct is why Part 1
+must print `Part 1 skipped` or `not run — core-only` rather than a zero: the honest
+answer to "I did not look" is never "I found nothing."
