@@ -34,7 +34,7 @@ Integration gate: `cd ~/.claude/plugins/marketplaces/netdust-plugins/plugins/net
 
 Stakes: standard — the reviewer's Part 1 must never read a skipped invariant as a pass; a wrong security line teaches an open posture.
 
-- [ ] T03 — ntdst-drift-reviewer: Part 1 runs core's invariants live, Part 2 is the consumer-only list [Tier A]  (files: agents/ntdst-drift-reviewer.md, agents/ntdst-drift-reviewer.lessons.md)
+- [x] T03 — ntdst-drift-reviewer: Part 1 runs core's invariants live, Part 2 is the consumer-only list [Tier A]  (files: agents/ntdst-drift-reviewer.md, agents/ntdst-drift-reviewer.lessons.md)
   Satisfies: FR-4, SC-4
   Test-author: solo — an agent definition; the denial path (absent doc → "skipped", never a pass) is pinned by a dry run
   Proven by: machine gate — three dry runs with the rewritten agent: (a) `~/Sites/daan` scope `web/app/mu-plugins/daan-core` → Part 1 prints exactly 10 `INV-` lines each with `expected:` and `actual:`; (b) a scratch directory with two PHP files and no vendored core → the single line `Part 1 skipped — no ARCHITECTURE-INVARIANTS.md under <scope>`; (c) run (a)'s Part 2 findings compared with the prior agent's run on the same working copy (`git stash`-free: run the old agent text from `391eb0f` via a temporary copy) → 0 repository-bypass findings lost
