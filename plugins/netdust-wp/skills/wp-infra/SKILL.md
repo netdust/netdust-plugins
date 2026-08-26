@@ -94,12 +94,19 @@ Beyond the generic verbs in `dev-stack`, WP/Bedrock projects add:
 
 | Target | What |
 |---|---|
-| `make deploy-staging` | git bundle → SSH push → `composer install --no-dev --optimize-autoloader` on server |
-| `make deploy-production` | Same, with explicit confirmation |
-| `make backup` | `ddev wp db export backups/$(date +%F).sql.gz` |
-| `make wp CMD="<wp-cli args>"` | Pass-through to `ddev wp $CMD` (some setups need the variable form) |
+| `make deploy env=<name>` | Gate, transport, stamp. Transport is `deploy.method` in site.yml: `rsync` or `git-push` |
+| `make deploy-test env=<name>` | The same path with `--dry-run` — shows what would change, changes nothing |
+| `make ship` | Production: gate first, then DB + payload backup, then a typed confirmation |
+| `make deployed` | Which commit runs on each environment, read from the server-side ledger |
+| `make rollback env=<name>` | Redeploy the previously stamped commit, from a local worktree |
+| `make refresh env=<name>` | Copy production's DB, uploads and third-party plugins DOWN to a non-prod environment |
+| `make pull env=<name>` | Same, down to local DDEV |
+| `make gate` | The project's own suite (`commands.gate` in site.yml) |
 
-The `Makefile.tmpl` in this plugin's `templates/` has Bedrock-shaped variants for `makefile`, `git-push`, and `git-bundle-makefile` deploy methods.
+`templates/Makefile` + `templates/scripts/` are copied verbatim — the Makefile
+carries no project-specific value and needs no substitution. The retired
+git-bundle variants required a `.git` on the deploy target; production rarely
+had one, so those deploys silently never worked.
 
 ## Asset pipeline (Vite in a WP theme)
 
