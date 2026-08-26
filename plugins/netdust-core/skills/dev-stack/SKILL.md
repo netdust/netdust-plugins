@@ -73,6 +73,57 @@ Every Netdust project's `Makefile` exposes the same top-level verbs, regardless 
 | `make gate` | The project's own suite (`commands.gate` in `site.yml`). |
 | `make rollback` | Revert production to previous deployment marker. |
 
+## What gets said, and what to run
+
+Read the environment names and branches from `site.yml` — never hardcode them:
+`scripts/site environments`, `scripts/site environments.<env>.branch`,
+`scripts/site deploy.method`, `make deployed`.
+
+| Said | Run | Lands on |
+|---|---|---|
+| "we work on X" | `make feature name=X` | nothing yet |
+| "put it on dev", "test this" | `make finish`, then `make deploy env=development` | development |
+| "push to staging", "ready for review" | merge up, then `make deploy env=staging` | staging |
+| "just feature X is ready" | `make promote name=X`, then `make deploy env=staging` | staging |
+| "fix", "we have a bug", "hotfix X" | `make hotfix name=X` | nothing yet |
+| "that's fixed" (on a hotfix branch) | `make finish` | production + back down |
+| "ship it", "go live" | `make ship` | **production** |
+| "release" | `make release`, then `make ship` | **production** |
+| "what's on prod", "what's live" | `make deployed` | — |
+| "what isn't live yet" | `git diff deployed/production` | — |
+| "roll it back" | `make rollback env=<name>` | — |
+| "sync from live", "staging is stale" | `make refresh env=<name>` | staging or development |
+| "pull the database" | `make pull env=production` | local DDEV |
+
+**Always run `make deploy-test env=<name>` first** and read the output,
+especially deletions.
+
+### The rule that matters most
+
+**A bug fix branches from the production branch**, never from the integration or
+review branch — branching elsewhere ships every unfinished change sitting there.
+`make hotfix` does this correctly. Afterwards `make finish` merges it back down,
+or the next release reverts the fix.
+
+### Production
+
+**Never run `make ship` unless the user asked for it in that turn.** Not because
+it follows from an earlier plan, not because the work looks finished. The typed
+confirmation is the user's — never pipe input into it.
+
+### WordPress specifics
+
+- `deploy.payload` is a closed list; a new custom plugin or theme must join it or
+  it never deploys. Every payload path must exist locally **and be tracked in
+  git** — an untracked one deploys as an empty directory and a rollback
+  `--delete`s it off the server. `make test` asserts this.
+- **Never add `*.map` to `deploy.exclude`** — font-encoding tables are not
+  JavaScript source maps.
+- Before `make refresh`, run `make block-mail env=<name>`. FluentSMTP's
+  `simulate_emails` lives in the database, so an import overwrites it; the
+  mu-plugin is file-based and survives. Production databases carry real
+  addresses and working SMTP credentials.
+
 On WordPress projects these come from one shared Makefile
 (`netdust-wp/templates/`) that carries no project-specific value — layout,
 hosts, branches, transport and payload all resolve from `site.yml`. Only
