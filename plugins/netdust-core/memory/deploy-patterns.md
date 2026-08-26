@@ -6,14 +6,14 @@ Catalog of deploy methods `/deploy` knows about. **Per-site deploy method lives 
 
 | Method | Description | When to use |
 |---|---|---|
-| `makefile` | Make targets (`make deploy-staging`, `make deploy-production`) that wrap git bundles + rsync. No GitHub required. | Bedrock + custom-app on managed hosts where you control the deploy pipeline. |
+| `rsync` | The shared Makefile (`netdust-wp/templates/`) moves a closed payload over SSH, behind a gate and a server-side ledger. `make deploy env=<name>` / `make ship`. | WordPress on managed hosts — Combell, custom-app. The default. |
 | `git-push` | Push to a remote branch; Ploi auto-deploys. | Bedrock on Ploi when Ploi handles the deploy hook. |
 | `rsync` | Direct rsync from local to remote path. | Static sites or simple Combell/Webhosting setups without git. |
 | `manual` | No automation — direct edits via Combell file manager or SSH. | Legacy sites, low-touch maintenance, sites scheduled for migration. |
 | `ftp` | PhpStorm auto-upload via FTP. | Sites where the host only offers FTP. |
 | `autogit` | Combell autogit — symlinks `checkout/master/current/www`. | Combell-specific shared hosting pattern. |
-| `rsync-staging-only` | Nested `staging: rsync` / `production: rsync` with separate commands. | VAD-style multi-environment Combell hosting. |
-| `git-bundle-makefile` | Makefile uses git bundle push (no GitHub required). | Netdust/VAD pattern — direct local→server, no central repo. |
+| ~~`rsync-staging-only`~~ | **Retired.** Multiple environments are now `environments:` entries in site.yml, one command for all of them. | Migrate to `rsync`. |
+| ~~`git-bundle-makefile`~~ | **Retired 2026-08-26.** Required a `.git` on the deploy target; production usually had none, so the deploy failed or silently never ran — on VAD Vormingen every production change went out by hand for months while `make ship` looked correct. | Migrate to `rsync`. |
 | `tbd` | Not yet decided. | New projects pre-launch. |
 
 ## Finding the deploy method for a specific site

@@ -1,5 +1,5 @@
 ---
-description: Deploy current project via site.yml's deploy.method (9 methods supported). Never deploys to prod without explicit confirmation.
+description: Deploy current project via site.yml's deploy.method. Projects with the shared Makefile deploy through it (gate + ledger); the rest print instructions. Never deploys to prod without explicit confirmation.
 allowed_tools: ["Bash", "Read", "AskUserQuestion"]
 ---
 
@@ -15,21 +15,47 @@ Deploy the current project. Read `site.yml` first — it has the deploy method, 
 
 ## Dispatch by `deploy.method`
 
+**If the project has the shared `Makefile` and `scripts/site` (check first), use
+them.** They carry the gate and the ledger, which no ad-hoc command does:
+
 | Method | Action |
 |---|---|
-| `makefile` | Run the `staging_command` or `production_command` from site.yml. Dry-run preview first (`make -n <target>`), then confirm, then execute. |
-| `git-push` | Confirm the current branch is pushed to the right remote. Run `git push <remote> <branch>` after confirmation. Mention Ploi's auto-deploy hook will fire. |
-| `rsync` | Read the command from site.yml's `deploy.command`. Show it. Ask for confirmation. Then run with `--dry-run` first to preview file changes. Then run for real. |
-| `rsync-staging-prod` | Nested config: `deploy.staging.command` / `deploy.production.command`. Same dry-run-then-real flow. |
-| `manual` | Print: "This site uses `method: manual`. No automation. SSH to the server or use Combell's file manager: `<from site.yml note>`. I will not act." Stop. |
+| `rsync` | `make deploy-test env=<env>` first — always. Show the itemised output, especially deletions. Then `make deploy env=<env>`, or `make ship` for production (it takes a DB + payload backup and prompts for a typed `yes`). |
+| `git-push` | `make deploy-test env=<env>`, then `make deploy env=<env>`. The Makefile pushes, pulls on the server, and runs `deploy.post_deploy_hooks`. |
+
+Afterwards run `make deployed` and read the sha back. The stamp is the evidence,
+not the absence of an error message.
+
+**A push alone does NOT deploy on Ploi.** Do not tell the user "Ploi's
+auto-deploy hook will fire" — verified false on `daan` 2026-08-19: Ploi reported
+`has_repository=False`, there is no webhook, and POSTing the deploy endpoint
+returns "queued" then does nothing. Worse, PHP-FPM commonly runs
+`opcache.validate_timestamps=0`, so a `git pull` stays **invisible** until FPM is
+reloaded — static assets update while PHP does not, which looks like a cache bug
+and is not. Those steps belong in `deploy.post_deploy_hooks`.
+
+**If the project has no shared Makefile:**
+
+| Method | Action |
+|---|---|
+| `rsync` | Read the command from `site.yml`. Show it. Run with `--dry-run` first, always — `--delete` can wipe files. Then confirm, then run for real. Offer to install the shared Makefile (`netdust-wp/templates/`), which makes this repeatable and recorded. |
+| `manual` | Print: "This site uses `method: manual`. No automation. SSH to the server or use the host's file manager: `<from site.yml note>`. I will not act." Stop. |
 | `ftp` | Print: "This site uses `method: ftp` via PhpStorm auto-upload. Use PhpStorm's Deployment menu. I will not run an FTP command from here." Stop. |
-| `autogit` | Print: "This site uses Combell autogit. Push to `master` branch — Combell's hook will rebuild the symlinks. Confirm before push." Then ask + push. |
-| `git-bundle-makefile` | Treat like `makefile` — Makefile wraps the git bundle creation + push. |
+| `autogit` | Print: "This site uses Combell autogit. Push to the watched branch — Combell's hook rebuilds the symlinks. Confirm before push." Then ask + push. |
 | `tbd` | Print: "Deploy method is `tbd`. Update `site.yml` first." Stop. |
+
+Retired: `makefile`, `git-bundle-makefile` and `rsync-staging-prod`. The
+git-bundle deploy required a `.git` on the deploy target. Production usually had
+none, so those deploys failed or silently never ran — on VAD Vormingen every
+production change went out by hand for months while `make ship` looked correct.
+If you meet one of these in an old `site.yml`, migrate it to `rsync`.
 
 ## Post-deploy hooks (run after the actual deploy command succeeds)
 
-If `site.yml` has a `deploy.post_deploy_hooks` array, run each entry in order **on the target environment** (via the SSH alias from `hosting.ssh_<env>`).
+With the shared Makefile these run automatically as part of `git-push`. Only run
+them by hand for a project that has no Makefile: each entry in order **on the
+target environment**, in the environment's path, via the SSH alias from
+`environments.<env>.ssh_host` (falling back to `deploy.ssh_host`).
 
 ```yaml
 deploy:
@@ -44,7 +70,9 @@ Use this for stack-specific finishing steps:
 
 - **Statamic projects** (Peak/Statamic 6): `php please stache:warm` after deploy. Editors see stale fields otherwise.
 - **Laravel projects**: `php artisan config:cache && php artisan route:cache`.
-- **WP projects** (Bedrock on Ploi auto-deploy): Ploi handles `composer install --no-dev` automatically; usually no post-deploy hooks needed.
+- **WP projects** (Bedrock on Ploi): `composer install --no-dev --no-interaction`
+  AND an FPM reload (`sudo service php8.4-fpm reload`). Do not assume Ploi runs
+  these — see above; on `daan` Ploi has never deployed the site at all.
 - **Custom**: anything project-specific that must run server-side after files land.
 
 If `deploy.post_deploy_hooks` is empty or missing, skip this phase. Don't invent hooks.
@@ -59,5 +87,6 @@ If `deploy.post_deploy_hooks` is empty or missing, skip this phase. Don't invent
 
 - **Never** deploy to production without explicit "production" answer to the env question.
 - **Never** skip the dry-run preview for rsync (you can wipe files with `--delete`).
+- **Never** pipe a confirmation into `make ship`. The prompt is the human's.
 - **Never** assume the current branch is the right one for the target env.
 - If anything in `site.yml` is missing or `tbd`, stop and ask — do not guess.
