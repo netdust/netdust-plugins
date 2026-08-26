@@ -472,7 +472,7 @@ _deploy-gitpush:
 	if [ -n "$(dryrun)" ]; then \
 		echo "$(YELLOW)  would: git push origin $$BRANCH$(RESET)"; \
 		echo "$(YELLOW)  would: ssh $$HOST 'cd $$REMOTE && git pull --ff-only origin $$BRANCH'$(RESET)"; \
-		$(SITE) deploy.post_deploy 2>/dev/null | while read -r c; do \
+		$(SITE) deploy.post_deploy_hooks 2>/dev/null | while read -r c; do \
 			[ -n "$$c" ] && echo "$(YELLOW)  would: ssh $$HOST 'cd $$REMOTE && $$c'$(RESET)"; \
 		done; \
 		exit 0; \
@@ -481,7 +481,7 @@ _deploy-gitpush:
 	git push --quiet origin "$$BRANCH" || exit 1; \
 	echo "$(BLUE)  → pull on $$ENV$(RESET)"; \
 	ssh -qn "$$HOST" "cd $$REMOTE && git pull --ff-only origin $$BRANCH" || exit 1; \
-	$(SITE) deploy.post_deploy 2>/dev/null | while read -r c; do \
+	$(SITE) deploy.post_deploy_hooks 2>/dev/null | while read -r c; do \
 		[ -z "$$c" ] && continue; \
 		echo "$(BLUE)  → $$c$(RESET)"; \
 		ssh -qn "$$HOST" "cd $$REMOTE && $$c" || exit 1; \

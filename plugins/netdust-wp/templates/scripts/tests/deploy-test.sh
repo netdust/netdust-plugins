@@ -145,7 +145,7 @@ case "$M" in
   *)              FAIL=$((FAIL+1)); printf '  FAIL deploy.method is "%s" (expected rsync or git-push)\n' "$M";;
 esac
 if [ "$M" = "git-push" ]; then
-  assert_nonempty "git-push declares post_deploy steps" "$(scripts/site deploy.post_deploy)"
+  assert_nonempty "git-push declares post_deploy steps" "$(scripts/site deploy.post_deploy_hooks)"
 fi
 
 echo

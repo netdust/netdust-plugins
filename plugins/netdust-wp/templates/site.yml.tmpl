@@ -79,7 +79,7 @@ deploy:
   # git-push only. A push alone does NOT deploy: Ploi may have no repository
   # connected, and PHP-FPM often runs opcache.validate_timestamps=0, so the
   # pull stays invisible until FPM is reloaded. Declare the steps here.
-  post_deploy: []
+  post_deploy_hooks: []
   #  - composer install --no-dev --no-interaction
   #  - sudo service php8.4-fpm reload
 
