@@ -40,9 +40,14 @@ Scaffold a new Netdust WordPress project in the current working directory using 
    `deployed/<env>` tags, `make rollback`), and the promotion path. Only the
    transport differs.
 
-   Copy `templates/Makefile` and `templates/scripts/` into the project verbatim —
-   the Makefile carries NO project-specific value and needs no substitution. Then
-   fill `site.yml`'s `environments:` and `deploy:` blocks.
+   Copy `templates/Makefile`, `templates/scripts/` and
+   `templates/skills/wp-workflow/` (to `.claude/skills/wp-workflow/`) into the
+   project verbatim — none of them carry a project-specific value, so nothing is
+   substituted. Then fill `site.yml`'s `environments:` and `deploy:` blocks.
+
+   The skill is what makes "fix this", "push to staging" and "ship it" resolve to
+   the right make target. Without it the Makefile still works, but only if
+   someone remembers the target names.
 
    | Method | Scaffold action |
    |---|---|
