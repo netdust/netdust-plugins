@@ -45,8 +45,12 @@ against the parent theme's source. Detail in `yootheme-site-model.md`.
    widgets for header CTAs and mobile panels — that is the answer to "how do I
    put arbitrary content in the header without touching `header.php`".
 4. **The official demos register every CPT, taxonomy and field through ACF** —
-   no custom plugin code. YOOtheme auto-generates the queryable source from
-   ACF's location rules. Reach for PHP only when that runs out.
+   no custom plugin code, because YOOtheme auto-generates the queryable source
+   from ACF's location rules. **This is NOT the netdust route, and it is not an
+   option to weigh.** On this fleet content types are ntdst-core Data Manager
+   models in a `<project>-core` mu-plugin, and the YOOtheme source is written
+   against them (see `references/yootheme.md`). Read the ACF material to
+   understand what a demo is doing; never propose ACF for a netdust build.
 5. **Templates scale, pages don't.** Oakville renders a whole municipal portal
    from 5 pages + 35 templates; the brochure demo is 13 pages + 4 templates.
    "A page for each X" usually means one CPT + two templates.
@@ -340,7 +344,7 @@ For a complete, verified end-to-end source slice (service + resolver + `attach_p
 
 | Requirement | Built-in answer |
 |---|---|
-| New content type with editable fields | ACF post type + field group (`yootheme-content-binding.md`) |
+| New content type with editable fields | An ntdst-core Data Manager model in `<project>-core`, plus a source (`references/yootheme.md`). NOT ACF — see orientation fact 4. |
 | Listing of posts, filtered/sorted/paginated | Bind a `grid`/`list` container to a `custom<Type>s` query |
 | Sort or date-filter by a custom field | `order: "field:<name>"`, `date_column: "field:<name>"` |
 | Different layout per category | A second template of the same type, ordered before the catch-all |
