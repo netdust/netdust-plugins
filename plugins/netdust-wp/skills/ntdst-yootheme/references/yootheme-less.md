@@ -255,8 +255,13 @@ UIkit already has a desktop/mobile split. Don't hand-roll `clamp()`:
 - `@button-text-transform: uppercase` and a small button font size
 - `@base-blockquote-font-style: italic`
 
-UIkit exposes no per-heading `letter-spacing` or `font-weight` variable, so those
-are the rare rules (not variable assignments) that belong in section 2.
+Per-heading `color`, `font-family`, `font-weight`, `letter-spacing` and
+`text-transform` ARE variables — `@base-h1-color` … `@base-h6-color`,
+`@base-h*-letter-spacing` and friends, in `master/typo/base.less`, each
+defaulting to the matching `@base-heading-*`. Branded headings and per-heading
+tracking therefore need no rules at all. `@article-title-color` is a separate
+variable defaulting to `@global-emphasis-color`; set it too, or article titles
+stay ink while every other heading is branded.
 
 ### Optional section 3 — emit CSS custom properties
 

@@ -70,8 +70,13 @@ Type: Flat
 @prj-primary-hover:  darken(@prj-primary, 8%);
 
 // ---------- Typography ----------
-// The FILES are loaded via Customizer → Theme → Style → Fonts (YOOtheme
-// self-hosts them). These stacks only NAME the families + fallbacks.
+// These stacks only NAME the families + fallbacks; they never load a file.
+// ⚠ Customizer → Theme → Style → Fonts reaches GOOGLE FONTS ONLY (it downloads
+// and self-hosts those). It cannot fetch a Typekit/Adobe kit, a licensed woff2,
+// or anything self-hosted — for those the theme enqueues the kit or writes its
+// own @font-face, and the family names here must be the ones that source
+// actually declares (Adobe serves SLUGS, e.g. `dunbar-text`, not "Dunbar Text").
+// A family name that matches no declared face falls back SILENTLY.
 // ⚠ A design tool may report optical-size CUTS as families ("Inter 18pt",
 // "Fraunces 72pt SuperSoft"). The CSS family name is the plain one.
 @prj-font-body:      "<Body>", system-ui, -apple-system, sans-serif;
@@ -159,9 +164,21 @@ Type: Flat
 @base-h3-font-size:           @prj-t-h3;
 @base-h4-font-size:           @prj-t-h4;
 
-// UIkit exposes no per-heading letter-spacing/weight variable, so these are
-// the rare RULES (not assignments) that belong here. Delete if not needed.
-// h1, .uk-h1 { font-weight: 300; letter-spacing: -0.03em; }
+// Per-heading colour, family, weight, tracking and transform are ALL variables
+// in the master theme (master/typo/base.less): @base-h1-color … @base-h6-color,
+// @base-h*-font-family, @base-h*-font-weight, @base-h*-letter-spacing,
+// @base-h*-text-transform — each defaulting to the @base-heading-* value above.
+// So a design with, say, a green H1 over purple H2-H4 and a tracked H1 needs
+// ZERO rules: set the common value on @base-heading-color and override the odd
+// one out here.
+// @base-h1-color:            @prj-primary;
+// @base-h1-letter-spacing:   -0.03em;
+// @base-h1-font-weight:      300;
+
+// ⚠ @article-title-color is SEPARATE and defaults to @global-emphasis-color, so
+// branded headings leave blog/article titles at the ink colour — which reads as
+// "the blog layout is unstyled" rather than "one variable is unset".
+// @article-title-color:      @base-heading-color;
 
 // ---------- Buttons ----------
 // ⚠ The master theme forces uppercase + a small font size. Override if the
@@ -179,13 +196,36 @@ Type: Flat
 @button-default-hover-background:   @prj-ink;
 @button-default-hover-color:        @prj-bg;
 
-// UIkit has no global button-radius variable.
-.uk-button { border-radius: @prj-r-md; }
+// The pill/rounded button is a VARIABLE, not a rule. @button-border-radius
+// (master/border-radius/button.less) defaults to 0 and the master theme guards
+// the rule with `when not (@button-border-radius = 0)` — so a square button is
+// an UNSET VARIABLE, which presents as "this theme has no radius option".
+// The -small/-large pairs are separate variables; set them or the size
+// modifiers stay square. Square buttons are a DECISION here — write `0`, so the
+// next reader can tell it was chosen rather than never looked at.
+@button-border-radius:              @prj-r-md;
+@button-small-border-radius:        @prj-r-md;
+@button-large-border-radius:        @prj-r-md;
 
 // ---------- Cards / forms / navbar / containers ----------
+// Cards ship FLAT: @card-border-radius defaults to 0 and @card-default-box-shadow
+// to none, both guarded the same way as the button radius above. A rounded,
+// lifted card is two values, not a rule. Flat cards are a DECISION: write `0`
+// and `none` rather than deleting these lines.
 @card-default-background:      @prj-bg-alt;
+@card-border-radius:           @prj-r-md;
+@card-default-box-shadow:      @prj-shadow-md;
 @card-body-padding-horizontal: @prj-s-8;
 @card-body-padding-vertical:   @prj-s-8;
+
+// ⚠ PIN ALL THREE PANEL RADII TO ONE TOKEN. @border-rounded-border-radius is a
+// DIFFERENT variable (default 5px) — the one behind the column "Round corners"
+// checkbox — so rounded columns come out visibly tighter than every card until
+// it agrees. Tiles have no radius variable at all (border-radius/ ships no
+// tile.less), so that one needs the hook.
+@border-rounded-border-radius: @prj-r-md;
+.hook-tile()       { border-radius: @prj-r-md; }
+.hook-tile-muted() { border-radius: @prj-r-md; }
 
 @form-background:              @prj-bg-alt;
 @form-border:                  @prj-line;
