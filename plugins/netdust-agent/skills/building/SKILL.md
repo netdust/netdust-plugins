@@ -47,12 +47,23 @@ is the implementer's law — RED first, watched, never weakened). Netdust adds:
   (its `Behaviour:`/`Observable:` block, or its integration-gate line), driven through the
   real harness, denial paths included. Features get independent tests; tasks get the
   implementer's own TDD. Then run the cluster's `Integration gate:` line.
+- **A user-facing cluster's integration gate closes on a COMPARISON, not a look.** Name
+  the source of truth (the design file, the spec's acceptance rows, the reference
+  implementation), enumerate the properties it constrains, and check each against values
+  read from the RUNNING artifact — committed as a test, not observed once. Record
+  `Artifact-diff: <source> → <n> properties checked, <n> divergent`. Build-output evidence
+  (it compiled; the values are in the bundle) never closes this gate — it cannot see a
+  different variable winning, a guard skipping the rule, or a stale file on disk. Any
+  value deferred to a later cluster is named HERE as "will still look wrong", never left
+  for the human to find (`compiled-not-rendered`).
 
 ## The review gate (every `── REVIEW GATE ──` marker is a hard stop)
 
 - **Artifact first**: before any reviewer is dispatched on a user-facing cluster, load the
   artifact once — page, screen, or command — and record `Artifact-load: <what> → <seen>`.
-  Ten seconds of looking beats a dispatch of reasoning about markup.
+  Ten seconds of looking beats a dispatch of reasoning about markup. This is the
+  reviewer's cheap prior, NOT the correctness check — that happened at the integration
+  gate above.
 - **Independent reviewers, tier-scaled**: LIGHT — one generalist `reviewer`; STANDARD —
   `reviewer` + `code-simplicity-reviewer`; FULL (any security surface, invariant, or
   data-layer/migration touch) — add `security-sentinel`, and `invariant-auditor` whenever

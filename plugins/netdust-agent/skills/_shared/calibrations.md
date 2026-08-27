@@ -43,6 +43,7 @@ coverage-of-the-dangerous-path escapes. Full per-mode stories:
 
 | Slug | Date | Lesson (one line) | Full story |
 |---|---|---|---|
+| `compiled-not-rendered` | 08-27 | edushare: a cluster declared the plan's First working version on BUILD-OUTPUT evidence — lessc exit 0, stylesheet md5 changed, all 6 brand hex values present in the compiled CSS. Every claim true; the page had grey headings and square buttons, 5 divergences, 2 of them values the same task had deleted. The artifact WAS loaded and recorded — loading is not comparing. Close a user-facing integration gate on computed values from the running artifact vs the design's own numbers, committed as a test. | `skills/building/lessons.md` + `skills/building/SKILL.md` (Stage 2 integration gate) |
 | `stale-fixture-f11` | 05-27 | `author` slug→id changed server-side; legacy fixtures kept three broken UI surfaces green (mode 1). | failure-modes.md mode 1 |
 | `migrate-at-boot` | 05-25 | Migration green in the fresh-DB harness, 500 on the long-lived dev DB (mode 2). | failure-modes.md mode 2 |
 | `refetch-toggle-blank-editor` | 06-01 | React Query flipped `doc` to `undefined` mid-session; the draft buffer blanked the editor — jsdom never reproduced the toggle (mode 3; also edge class 1, empty/zero). | failure-modes.md mode 3; `skills/feature-acceptance/SKILL.md` edge 1 |
