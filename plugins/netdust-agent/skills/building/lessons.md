@@ -29,3 +29,45 @@ This is the same family as the already-known "HALTs on fix-shaped clusters" mis-
 2. **Relabelling the stakes to lift the ceiling.** Quieter and therefore worse — it silently re-decides the dial the whole harness reads downstream. Raising stakes is legitimate *only* when the work really is riskier than the plan said, and it happens in the open as a plan-correction commit.
 
 **Also worth stating plainly:** a simplicity reviewer dispatched at that gate found ~6% trimmable (moving 1.44× → ~1.41×) and led with *"this does not rescue the budget and must not be done for that reason."* That is the right framing. Trimming is a readability decision; it is not a budget remedy.
+
+---
+
+## "The compiled artifact has the right values" is not "the page looks right"
+
+**Problem (edushare, 2026-08-27):** A Cluster A close declared the plan's
+`## First working version` reached, on this evidence: `lessc` exits 0, the
+Customizer recompile changed the stylesheet's md5, and all six brand hex values
+are present in the compiled CSS. Every one of those was true. The human opened
+the page and found grey titles where the design has green and purple, and square
+buttons where the design has pills. The audit that followed found **five**
+divergences, two of them introduced by the very task that declared success.
+
+The gate's `Artifact-load:` rule was satisfied — the page WAS loaded, and what
+was seen was recorded. That is what makes this worth writing down. **Loading is
+not comparing.** The artifact was read for confirmation of what had just been
+mapped, not checked against the design element by element, so everything the
+task never thought about stayed invisible. A screenshot glanced at proves the
+page renders; it does not prove the page is right.
+
+**Rule:** on a user-facing cluster, the integration gate closes on a
+**comparison against the source of truth**, not an observation of the artifact.
+Name the source (the design file, the spec's acceptance rows, the reference
+implementation), enumerate the properties it constrains, and check each one.
+Anything the source constrains that the diff never mentioned is exactly where
+the misses live.
+
+**What the check has to be made of:** computed values read from the running
+artifact, asserted against the source's own numbers, committed as a test. Not
+the compiled output, and not a look. Three separate mechanisms let a correct-
+looking build render wrong here — a different variable won, a guard mixin
+skipped the rule because the value was still `0`, and the file on disk was
+stale — and grepping the build artifact is blind to all three. In a browser they
+are one assertion each.
+
+**Corollary — the deferral that eats the gate.** Two of the five failures were
+component values a task DELETED while rewriting a section wholesale, on the
+reasoning that a later cluster owned them. Deferring a value to a later task is
+fine. Deferring it *and* declaring a working version in the same breath is not:
+the human sees the whole page, not the task boundary. If a cluster's deliverable
+is "a human can look at this", nothing visible in that frame is out of scope —
+either fix it or say plainly, at the gate, what will still look wrong and why.

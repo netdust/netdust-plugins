@@ -390,6 +390,14 @@ instead of drifting.
   (`box-shadow/card.less`), defaulting to `0` and `none` — so a rounded, lifted
   card is two values, not a rule. Roomy cards:
   `@card-large-body-padding-{horizontal,vertical}-l`, behind `panel_padding: large`.
+  **The same `when not (@<c>-border-radius = 0)` guard covers the rest of the
+  family**, which is the part that costs time: `@button-border-radius`,
+  `@label-border-radius`, `@form-border-radius` and the `-small`/`-large` button
+  pairs. A square button is an unset variable, never a rule — but it presents as
+  "this theme has no radius option". `master/border-radius/` ships one file per
+  component, so that directory listing IS the answer to "is there a variable for
+  this". Tiles are the one exception: no `tile.less` there, so a tile radius
+  really does need `.hook-tile-muted()`.
 * **`@border-rounded-border-radius` (5px) is the radius behind the column
   "Round corners" checkbox** — a DIFFERENT variable from your card and tile radii,
   so rounded columns come out visibly tighter than every other panel until you
@@ -403,6 +411,49 @@ instead of drifting.
   `uk-section-muted` band is invisible and reads as "the border never applied".
   Un-blend the design's line (see section 7) rather than assuming it is the light
   one; a 1px rule that looks grey on screen is often full ink.
+
+* **`@global-secondary-font-family` is the UI ROLE, not "the second brand face".**
+  The master theme routes h1-h3 through `@global-primary-*` and h4-h6 through
+  `@global-secondary-*` — so setting secondary to a display face to make h4 look
+  right is the obvious move, and it is wrong. That variable also feeds **18
+  files** under `master/typo/`: button, label, navbar, nav, form, tab, subnav,
+  pagination, breadcrumb, dropdown, badge, comment, description-list, text,
+  card, article, base, variables. One assignment puts the display face on every
+  control on the site — buttons in a 60px-scale serif, nav items, form labels —
+  and each of them looks like its own separate bug.
+
+  ```bash
+  grep -rl "@global-secondary-font-family" vendor/assets/uikit-themes/master/typo/
+  ```
+
+  Keep secondary on the BODY face and re-state the display face on the one or
+  two headings that ride it (`@base-h4-font-family`, `@base-h4-font-weight`).
+* **Per-heading colour, family, weight, tracking and transform are ALL variables**
+  (`master/typo/base.less`): `@base-h1-color` … `@base-h6-color`,
+  `@base-h*-font-family`, `@base-h*-font-weight`, `@base-h*-letter-spacing`,
+  `@base-h*-text-transform`, each defaulting to the `@base-heading-*` value. A
+  design with "H1 green, H2-H4 purple" and a tracked H1 therefore needs **zero
+  rules** — set `@base-heading-color` to the common one and override the odd one
+  out. The scaffold's commented-out `h1, .uk-h1 { font-weight; letter-spacing }`
+  rule is a trap: it suggests these are not settable.
+  * **`@article-title-color` is SEPARATE** and defaults to `@global-emphasis-color`.
+    On a design whose headings are branded, article titles silently stay ink-grey
+    while every other heading is correct — which reads as "the blog layout is
+    unstyled" rather than "one variable is unset".
+* **Why `references/yootheme-less.md`'s "verify names against the install" is not
+  optional: LESS does not error on an assignment nothing reads.**
+  `@buton-border-radius: 50px;` compiles clean, exits 0 and does nothing — as
+  does any name you half-remembered or that this UIkit version renamed. Nothing
+  distinguishes it from a correct line, so a style can be 90% inert and still
+  pass every check short of the browser. Same silent class as section 1, and
+  `lessc` exit 0 is not evidence. Check every name before the recompile — one
+  at a time, or a whole block at once:
+
+  ```bash
+  for v in button-border-radius label-background card-default-box-shadow; do
+    grep -rqE "^@$v:" vendor/assets/uikit{/src/less,-themes/master}/ || echo "MISSING @$v"
+  done
+  ```
 
 * Genuinely NOT settable so far: image grayscale (`blend` is a boolean "blend with
   page content", not a mode selector), image max-height, flex-centring in a card.
@@ -460,6 +511,14 @@ prove the delta is only what you intended.
   returns the identical frame, so an animated SVG looks reassuringly "stable"
   while you measure one frame repeatedly. Use `svg.pauseAnimations()` +
   `setCurrentTime(t)` across the period.
+* **If the design lives in Figma and the MCP is reachable, do not measure a
+  screenshot at all.** `get_metadata` returns exact node geometry in design units
+  and `get_design_context` returns exact radius, shadow, padding and colour — so
+  the scale is 1.0 by construction, there is no export to calibrate and no 1px
+  rule to un-blend. Prove the read anyway with two independent knowns (a page
+  gutter and a column grid that must agree), because that is what catches reading
+  the wrong frame. The masking technique below stays correct for a PNG-only
+  reference, which is the case it was written for.
 * **Measure the design, don't eyeball it.** Colour-masking a design screenshot
   gives exact numbers to build against — and catches things the eye slides over.
   On this build it produced: card inset 7.7% of the container, tool height 75%,

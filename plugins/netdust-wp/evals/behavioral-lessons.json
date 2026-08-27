@@ -243,6 +243,22 @@
       "prompt": "On daan (ntdst-core 5.x), the gig model declares venue_city with show_in_rest => true. The front end wants GET /wp-json/wp/v2/gigs?venue_city=Ghent to return only Ghent gigs. Where does the filtering code go, and what do I write?",
       "baseline_expected_failure": "Writes rest_gig_collection_params + rest_gig_query filters in daan-core (or a custom ntdst_rest() list route) and calls it done; never mentions core or the parked design.",
       "with_skill_assertion": "Names ntdst-core/docs/parked/rest-query.md; says daan is the named consumer the parked design was waiting for; proposes the one-task core spec ('rest_query' => true on the field, register() hands rest_{type}_collection_params + rest_{type}_query to WordPress, refused without show_in_rest, scalars only) and states the site's change is one key on the field description — not two WordPress filters in daan-core and not a 'queryable collection' class in core."
+    },
+    {
+      "id": "yoo-secondary-font-role",
+      "skill": "ntdst-yootheme",
+      "lesson": "@global-secondary-font-family is the UI role feeding 18 master/typo files, not the second brand face (2026-08-27)",
+      "prompt": "On a YOOtheme Pro child theme, the design sets H1-H4 in a display face (Dunbar Text Bold) and everything else in Droid Sans. I've mapped @global-primary-font-family to the display face for h1-h3. The master theme routes h4-h6 through @global-secondary-*, so I'll set @global-secondary-font-family to the display face too and be done. What actually happens on the site, and what should I set instead?",
+      "baseline_expected_failure": "Agrees this is correct, or only warns vaguely about 'check the cascade'. Does not name the components that break, so the wrong mapping ships and the buttons/nav/labels rendering in the display face read as separate unrelated bugs.",
+      "with_skill_assertion": "States that @global-secondary-* is the UI ROLE, not a second brand face: it also feeds button, label, navbar, nav, form, tab, subnav, pagination, breadcrumb, dropdown, badge, comment and description-list under master/typo (~18 files), so every control on the site renders in the display face — @button-font-family follows it directly. Prescribes keeping secondary on the BODY face and re-stating the display face only on the headings that ride it: @base-h4-font-family plus @base-h4-font-weight. Bonus: cites `grep -rl \"@global-secondary-font-family\" vendor/assets/uikit-themes/master/typo/` as the check."
+    },
+    {
+      "id": "yoo-per-heading-colour-vars",
+      "skill": "ntdst-yootheme",
+      "lesson": "Per-heading colour/tracking are variables; @article-title-color is separate and defaults to the ink (2026-08-27)",
+      "prompt": "YOOtheme Pro child theme. The design wants H1 in green (#24a289), H2/H3/H4 in purple (#82378b), and H1 tracked at -0.02em. Blog post titles should be purple too. Write me the LESS for the style's mapping section.",
+      "baseline_expected_failure": "Writes CSS rules — `h1, .uk-h1 { color: …; letter-spacing: … }` and `h2, h3 { color: … }` — because @base-heading-color looks like the only heading colour variable, and misses the article title entirely (or targets .uk-article-title with another rule).",
+      "with_skill_assertion": "Uses variables only, no rules: @base-heading-color for the common purple, @base-h1-color for the green override, @base-h1-letter-spacing for the tracking — naming master/typo/base.less as where @base-h1-color..@base-h6-color, @base-h*-letter-spacing, @base-h*-font-family and @base-h*-text-transform are declared, each defaulting to the @base-heading-* value. Separately sets @article-title-color, and states that it defaults to @global-emphasis-color so branded headings leave blog/article titles ink-grey while every other heading is right."
     }
   ]
 }
