@@ -37,18 +37,35 @@ URLs follow `https://<ddev-project>.ddev.site`. Per-project, the project name is
 
 ## Git branch strategy
 
+THREE RUNGS, one branch per environment, the same on every project:
+
 ```
-main (protected, production)
-  └── staging (active development base)
-        ├── feature/<name>     (from staging, merged back to staging)
-        └── hotfix/<name>      (from main, merged to main AND staging)
+main (protected, PRODUCTION — never worked in directly)
+  └── staging (REVIEW — what the client sees; client-visible URLs live here)
+        └── development (INTEGRATION — daily work lands here)
+              ├── feature/<name>   (from development, merged back to development)
+              └── hotfix/<name>    (from main, merged to main AND back down)
 ```
 
+- **A branch per environment, named for it.** `development` deploys to
+  development, `staging` to staging, `main` to production. Never point an
+  environment at a branch named for a different rung: a `staging:` entry whose
+  `branch:` is `main` means every push to production's branch lands on the
+  client's URL, and the promotion ladder has nothing left to promote through.
+- `development` is the working branch — daily work lives here, NOT `staging`.
+- `staging` is for review. It is client-visible, so treat a deploy there as
+  outward-facing even when the environment is nicknamed "staging".
 - All merges use `--no-ff` to preserve history.
 - Direct commits to `main` are blocked (branch protection where supported).
-- `staging` is the working branch — daily work lives here.
 - `feature/*` for non-trivial work, deleted after merge.
-- `hotfix/*` only when prod is on fire — cherry-pick back to staging too.
+- `hotfix/*` only when prod is on fire — from `main`, merged back DOWN too.
+
+**A project with fewer servers still keeps the branches.** If production is not
+provisioned yet, declare `environments.production` with its `branch: main` and
+leave `path:`/`ssh_host:` out — `make ship` refuses on a missing `path` and says
+so, while the ladder above stays true. Collapsing two rungs onto one branch to
+match the servers you happen to have today is how `staging` ends up meaning
+`main`.
 
 ## Makefile contract — Netdust convention
 
