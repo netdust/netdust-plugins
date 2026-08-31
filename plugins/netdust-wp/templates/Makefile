@@ -434,10 +434,18 @@ health: ## Fleet health: ledger, server drift, deploy guards, branch topology, p
 	done
 	@echo ""
 	@echo "$(BLUE)Deploy guards$(RESET)"
-	@for g in /memory/ /tasks/; do \
-		if $(SITE) deploy.exclude | grep -qx "$$g"; then printf "  $(GREEN)✅ %s excluded$(RESET)\n" "$$g"; \
-		else printf "  $(RED)❌ %s NOT excluded — agent notes would be published to the web root$(RESET)\n" "$$g"; fi; \
-	done
+	@M=$$($(SITE) deploy.method 2>/dev/null); \
+	if [ "$$M" = "rsync" ]; then \
+		for g in /memory/ /tasks/; do \
+			if $(SITE) deploy.exclude 2>/dev/null | grep -qx "$$g"; then printf "  $(GREEN)✅ %s excluded$(RESET)\n" "$$g"; \
+			else printf "  $(RED)❌ %s NOT in deploy.exclude — agent notes would be published to the web root$(RESET)\n" "$$g"; fi; \
+		done; \
+	else \
+		for g in memory tasks; do \
+			if [ -f .gitignore ] && grep -qE "^/?$$g/?$$" .gitignore; then printf "  $(GREEN)✅ %s/ gitignored$(RESET)\n" "$$g"; \
+			else printf "  $(RED)❌ %s/ not gitignored — a %s deploy carries it to the server$(RESET)\n" "$$g" "$$M"; fi; \
+		done; \
+	fi
 	@echo ""
 	@echo "$(BLUE)Branch topology$(RESET)"
 	@if [ "$(HAS_PROD)" = "yes" ]; then \
