@@ -411,7 +411,7 @@ health: ## Fleet health: ledger, server drift, deploy guards, branch topology, p
 	done
 	@echo ""
 	@echo "$(BLUE)Drift — has anyone edited a server by hand?$(RESET)"
-	@EXCL=""; for x in $$($(SITE) deploy.exclude); do EXCL="$$EXCL --exclude=$$x"; done; \
+	@EXCL=""; for x in $$($(SITE) deploy.exclude 2>/dev/null); do EXCL="$$EXCL --exclude=$$x"; done; \
 	for e in $$($(SITE) environments); do \
 		H=$$($(SITE) environments.$$e.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
 		R=$$($(SITE) environments.$$e.path); \
