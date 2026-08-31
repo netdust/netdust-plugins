@@ -395,6 +395,81 @@ doctor: ## Check required tools and SSH connectivity
 		else printf "  $(RED)❌ %s missing locally$(RESET)\n" "$$p"; fi; \
 	done
 
+health: ## Fleet health: ledger, server drift, deploy guards, branch topology, patched files
+	@git fetch --quiet origin 2>/dev/null || true
+	@echo "$(BLUE)Ledger — is each environment running its branch head?$(RESET)"
+	@DIR=$$($(SITE) deploy.state_dir); \
+	for e in $$($(SITE) environments); do \
+		H=$$($(SITE) environments.$$e.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
+		B=$$($(SITE) environments.$$e.branch); \
+		S=$$(ssh -qn "$$H" "cat $$DIR/$$e.json 2>/dev/null" | sed -n 's/.*"sha":"\([0-9a-f]*\)".*/\1/p'); \
+		HD=$$(git rev-parse --verify --quiet "origin/$$B" || true); \
+		if [ -z "$$S" ]; then printf "  $(YELLOW)%-12s never deployed with this tool$(RESET)\n" "$$e"; \
+		elif [ "$$S" = "$$HD" ]; then printf "  $(GREEN)%-12s in sync$(RESET)   %s\n" "$$e" "$$B"; \
+		else printf "  $(YELLOW)%-12s BEHIND$(RESET)    %s: running %.8s, head %.8s\n" "$$e" "$$B" "$$S" "$$HD"; fi; \
+	done
+	@echo ""
+	@echo "$(BLUE)Drift — has anyone edited a server by hand?$(RESET)"
+	@EXCL=""; for x in $$($(SITE) deploy.exclude); do EXCL="$$EXCL --exclude=$$x"; done; \
+	for e in $$($(SITE) environments); do \
+		H=$$($(SITE) environments.$$e.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
+		R=$$($(SITE) environments.$$e.path); \
+		B=$$($(SITE) environments.$$e.branch); \
+		git rev-parse --verify --quiet "origin/$$B" >/dev/null || { printf "  $(YELLOW)%-12s no origin/%s$(RESET)\n" "$$e" "$$B"; continue; }; \
+		TMP=$$(mktemp -d); CH=0; DEL=0; \
+		git archive "origin/$$B" | tar -x -C "$$TMP" 2>/dev/null; \
+		for pp in $$($(SITE) deploy.payload); do \
+			[ -d "$$TMP/$(WEBROOT)/$$pp" ] || continue; \
+			O=$$(rsync -az --delete -e "ssh -q" --dry-run --itemize-changes $$EXCL \
+				"$$TMP/$(WEBROOT)/$$pp/" "$$H:$$R/$$pp/" 2>/dev/null); \
+			CH=$$((CH+$$(printf '%s\n' "$$O" | grep -cE '^[<>]f.s'))); \
+			DEL=$$((DEL+$$(printf '%s\n' "$$O" | grep -c '^\*deleting'))); \
+		done; \
+		rm -rf "$$TMP"; \
+		if [ "$$CH" -eq 0 ] && [ "$$DEL" -eq 0 ]; then printf "  $(GREEN)%-12s clean$(RESET)\n" "$$e"; \
+		else printf "  $(RED)%-12s DRIFT$(RESET)  %s files differ, %s would be deleted — someone edited the server, or the branch was never deployed\n" "$$e" "$$CH" "$$DEL"; fi; \
+	done
+	@echo ""
+	@echo "$(BLUE)Deploy guards$(RESET)"
+	@for g in /memory/ /tasks/; do \
+		if $(SITE) deploy.exclude | grep -qx "$$g"; then printf "  $(GREEN)✅ %s excluded$(RESET)\n" "$$g"; \
+		else printf "  $(RED)❌ %s NOT excluded — agent notes would be published to the web root$(RESET)\n" "$$g"; fi; \
+	done
+	@echo ""
+	@echo "$(BLUE)Branch topology$(RESET)"
+	@if [ "$(HAS_PROD)" = "yes" ]; then \
+		for b in $(BR_REVIEW) $(BR_INTEG); do \
+			[ "$$b" = "$(BR_PROD)" ] && continue; \
+			N=$$(git rev-list --count "origin/$(BR_PROD)" "^origin/$$b" 2>/dev/null || echo "?"); \
+			if [ "$$N" = "0" ]; then printf "  $(GREEN)✅ %s contains %s$(RESET)\n" "$$b" "$(BR_PROD)"; \
+			else printf "  $(RED)❌ %s is missing %s commits from %s — production work can be reverted$(RESET)\n" "$$b" "$$N" "$(BR_PROD)"; fi; \
+		done; \
+	fi
+	@if [ "$(BR_REVIEW)" != "$(BR_INTEG)" ]; then \
+		N=$$(git rev-list --count "origin/$(BR_REVIEW)" "^origin/$(BR_INTEG)" 2>/dev/null || echo "?"); \
+		if [ "$$N" = "0" ]; then printf "  $(GREEN)✅ %s contains %s$(RESET)\n" "$(BR_INTEG)" "$(BR_REVIEW)"; \
+		else printf "  $(YELLOW)⚠  %s is %s commits behind %s — merge it down after a promote$(RESET)\n" "$(BR_INTEG)" "$$N" "$(BR_REVIEW)"; fi; \
+	fi
+	@for b in $$(git branch --format='%(refname:short)' | grep -vE '^(master|main)$$'); do \
+		git rev-parse --verify --quiet "origin/$$b" >/dev/null || printf "  $(YELLOW)⚠  %s exists only locally — push it or lose it$(RESET)\n" "$$b"; \
+	done
+	@echo ""
+	@echo "$(BLUE)Patched files outside the payload$(RESET)"
+	@if $(SITE) health.markers >/dev/null 2>&1; then \
+		$(SITE) health.markers | while IFS='|' read -r mp needle; do \
+			[ -n "$$mp" ] || continue; \
+			for e in $$($(SITE) environments); do \
+				H=$$($(SITE) environments.$$e.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
+				R=$$($(SITE) environments.$$e.path); \
+				N=$$(ssh -qn "$$H" "grep -c -- '$$needle' '$$R/$$mp' 2>/dev/null" | tr -dc '0-9'); \
+				if [ "$${N:-0}" -gt 0 ]; then printf "  $(GREEN)%-12s ✅$(RESET) %s\n" "$$e" "$$mp"; \
+				else printf "  $(RED)%-12s ❌ PATCH GONE$(RESET) %s — an update reverted it, re-apply\n" "$$e" "$$mp"; fi; \
+			done; \
+		done; \
+	else \
+		echo "  (none declared — add health.markers to site.yml for third-party files you patch)"; \
+	fi
+
 rollback: ## Redeploy the previously deployed commit (make rollback env=production)
 	@ENV="$(env)"; \
 	if [ -z "$$ENV" ]; then echo "$(RED)✗ Usage: make rollback env=<name>$(RESET)"; exit 1; fi; \

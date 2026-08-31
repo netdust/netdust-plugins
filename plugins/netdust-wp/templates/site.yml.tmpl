@@ -85,6 +85,14 @@ deploy:
 
   note: {{DEPLOY_NOTE}}              # anything non-obvious about this site's deploy
 
+# Files OUTSIDE deploy.payload that carry a local patch. A deploy never touches
+# these, so an upstream update silently reverts them and nothing notices.
+# `make health` asserts the needle is still present on every environment.
+# Format: path|needle  (path is relative to the environment root)
+# health:
+#   markers:
+#     - "content/plugins/some-plugin/some-file.php|MY hotfix"
+
 local:
   ddev_project: {{PROJECT_NAME}}     # DDEV project name
   url: https://{{PROJECT_NAME}}.ddev.site
