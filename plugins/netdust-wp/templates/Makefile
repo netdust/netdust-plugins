@@ -417,6 +417,8 @@ health: ## Fleet health: ledger, server drift, deploy guards, branch topology, p
 		R=$$($(SITE) environments.$$e.path); \
 		B=$$($(SITE) environments.$$e.branch); \
 		git rev-parse --verify --quiet "origin/$$B" >/dev/null || { printf "  $(YELLOW)%-12s no origin/%s$(RESET)\n" "$$e" "$$B"; continue; }; \
+		PAY=$$($(SITE) deploy.payload 2>/dev/null); \
+		if [ -z "$$PAY" ]; then printf "  $(YELLOW)%-12s n/a$(RESET)      no deploy.payload (transport: %s) — drift is only measurable for rsync\n" "$$e" "$$($(SITE) deploy.method 2>/dev/null || echo unknown)"; continue; fi; \
 		TMP=$$(mktemp -d); CH=0; DEL=0; \
 		git archive "origin/$$B" | tar -x -C "$$TMP" 2>/dev/null; \
 		for pp in $$($(SITE) deploy.payload); do \
