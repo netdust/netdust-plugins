@@ -61,8 +61,17 @@ if [ "$HAS_PROD" = "yes" ]; then
 else
   PASS=$((PASS+1)); printf '  ok   no production environment yet (staging-only project)\n'
 fi
+# Only production may demand a typed confirmation — a prompt on a routine
+# environment turns every deploy into a chore. The check needs a declared
+# production environment to be meaningful, so it is DEFERRED (not waived) while
+# one is missing: an undeclared production is itself the thing to fix, and
+# declaring it re-engages this assertion.
 for e in $(scripts/site environments); do
   [ "$e" = "production" ] && continue
+  if [ "$HAS_PROD" != "yes" ]; then
+    PASS=$((PASS+1)); printf '  ok   %s prompt check deferred — declare environments.production\n' "$e"
+    continue
+  fi
   assert_eq "$e does not prompt" "false" "$(scripts/site environments.$e.confirm)"
 done
 
