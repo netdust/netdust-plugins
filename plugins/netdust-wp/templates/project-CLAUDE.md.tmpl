@@ -40,6 +40,13 @@ start of every session. Operational config (stack, hosting, deploy, risk): `site
 6. Commit atomically per task. Update `memory/STATE.md` and `tasks/todo.md` as you go;
    at spec-close, `compounding` harvests what the session taught.
 
+7. **Every Makefile, branch or deploy action enters through `netdust-core:dev-stack`** —
+   `make` verbs, the promotion path, the deploy gate, `.env`, DDEV. Load it BEFORE the
+   first `make` call, the way rule 1 is loaded before the first edit. Name it; do not
+   wait for its description to trigger. A deploy is never `make deploy` alone: anything
+   git does not carry (a gitignored build artifact, the database, widgets) must be
+   re-applied on the target in the same sitting, or the environment ships half-updated.
+
 ## Conventions
 
 - WP rules: `~/.claude/plugins/netdust-wp/RULES.md` (sanitize/escape/nonce/cap,
