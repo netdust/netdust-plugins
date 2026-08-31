@@ -101,6 +101,7 @@ help: ## Show this help
 	@echo "$(YELLOW)🛠️  UTILITIES$(RESET)"
 	@printf "  $(GREEN)%-20s$(RESET) %s\n" "status" "Local branch + what runs on each environment"
 	@printf "  $(GREEN)%-20s$(RESET) %s\n" "doctor" "Check required tools and SSH connectivity"
+	@printf "  $(GREEN)%-20s$(RESET) %s\n" "health" "Fleet health: drift, ledger, guards, patched files"
 	@printf "  $(GREEN)%-20s$(RESET) %s\n" "test" "Run the deploy tooling tests (no server contact)"
 	@printf "  $(GREEN)%-20s$(RESET) %s\n" "gate" "Run this project's own test suite"
 	@printf "  $(GREEN)%-20s$(RESET) %s\n" "rollback env=NAME" "Redeploy the previously deployed commit"
