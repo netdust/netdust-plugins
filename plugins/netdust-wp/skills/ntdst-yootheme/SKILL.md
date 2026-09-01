@@ -1,3 +1,8 @@
+---
+name: ntdst-yootheme
+description: Use when building, styling, or extending a YOOtheme Pro site — composing pages, menus, headers and footers; building symbols and templates in the builder; wiring dynamic content sources; writing a child theme's less/theme.<slug>.less style; mapping design tokens onto UIkit variables; or extending the builder with PHP sources and custom elements. Triggers on file edits under themes/*/less/theme.*.less, on yootheme child themes, and on keywords YOOtheme, YOOtheme Pro, builder, symbol, sublayout, fragment, customizer, styler, uikit, UIkit variables, theme.<slug>.less, dynamic content, content source, element.php, layout JSON, parallax, panel-slider, tile, uk-section, recompile style. Symptoms include "my LESS style does not show up", "the builder cannot do X", a style that compiles but renders wrong, a design token that changes nothing on screen, or needing to know whether a value is a setting, a variable, a hook, or a rule. Read lessons.md FIRST — it lists the traps that silently do the wrong thing.
+---
+
 # NTDST YOOtheme Integration — Domain Knowledge
 
 Use when building, styling, or extending a YOOtheme Pro site: composing pages,
