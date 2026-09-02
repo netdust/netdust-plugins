@@ -695,4 +695,36 @@ def run() -> list[tuple[bool, str]]:
              [ln.split(" | ")[0].strip() for ln in cost_segment_rows] ==
              ["stage-enter → review-gate", "review-gate → loop-disarm-finished"])
 
+    # ── FR-12 (harness-inversion T04): per-model totals — the ladder is measured ──
+    with tempfile.TemporaryDirectory() as tmp:
+        feature = make_feature(tmp)
+        tdir = Path(tmp) / "transcripts"; tdir.mkdir()
+        write_main_session(tdir, "sess-m", [
+            assistant_line("2026-07-05T12:00:00.000Z", usage(output=1, input_=1), model="claude-opus-5")])
+        write_subagent(tdir, "sess-m", "a1", [
+            assistant_line("2026-07-05T12:00:01.000Z", usage(output=100, input_=10), model="claude-sonnet-5"),
+            assistant_line("2026-07-05T12:00:02.000Z", usage(output=50, input_=5), model="claude-sonnet-5")],
+            {"agentType": "implementer", "description": "T01"})
+        write_subagent(tdir, "sess-m", "a2", [
+            assistant_line("2026-07-05T12:00:03.000Z", usage(output=7, input_=1), model="claude-haiku-4-5")],
+            {"agentType": "Explore", "description": "ground-truth"})
+        # a dispatch whose transcript never states a model → `unknown`, never a crash
+        write_subagent(tdir, "sess-m", "a3", [
+            json.dumps({"type": "assistant", "timestamp": "2026-07-05T12:00:04.000Z",
+                        "message": {"role": "assistant", "usage": usage(output=3, input_=1)}})],
+            {"agentType": "reviewer", "description": "LIGHT"})
+        rc, out, err = run_cost(feature, transcript_dir=tdir)
+        case("per-model: exit 0", rc == 0)
+        case("per-model: the block is printed", "── per-model ──" in out)
+        case("per-model: two assistant lines of one sonnet dispatch summed into its row",
+             "claude-sonnet-5 | dispatches=1 | output=150" in out)
+        case("per-model: the haiku dispatch has its own row",
+             "claude-haiku-4-5 | dispatches=1 | output=7" in out)
+        case("per-model: a model-less transcript lands under `unknown`",
+             "unknown | dispatches=1 | output=3" in out)
+        case("per-model: every per-dispatch row carries a model= column",
+             all("model=" in ln for ln in out.splitlines()
+                 if ln and not ln.startswith(("──", "(controller)", "per-stage"))
+                 and " | dispatches=" not in ln))
+
     return results

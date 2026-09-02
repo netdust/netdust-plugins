@@ -57,14 +57,26 @@ gates require, beyond upstream's own craft:
   first 3, producing at least one non-test file) after which a human can SEE or RUN
   something, and the command/URL that shows it (`check_deliverable_first`; calibration:
   `deliverable-last` ×3).
-- **Task shaping** — every task: tier (`[Tier A|B]`), `Test-author:` mode (split only for
-  Tier-A security-boundary work at effective-high stakes), `Proven by:` evidence rung,
-  a test contract line, `(files:)`. Clusters ≤4 tasks, each closed by an
+- **The lane, per cluster** (`Lane: behaviour | contract`, checked by
+  `check_cluster_lanes`) — ask of each cluster: *does a task here encode a rule THIS
+  project chose (a role, a window, an ownership test, a threshold, untrusted parsing,
+  money, a migration), or is it configuration over a framework that already has the
+  rule?* The second is **`Lane: behaviour`** — the default, and the honest lane for CPTs,
+  field maps, templates and services wired onto ntdst-core: the cluster carries the full
+  behaviour block (`Behaviour:` / `Observable:` / `RED until: <test>` — one RED,
+  observable from OUTSIDE the file: a URL and status, a command and output, a query
+  count, never a config/array shape), an `Integration gate:` line, and members that
+  carry ONLY `(files:)`. No tier, no `Test-author:`, no `Proven by:`, no contract line,
+  no `── REVIEW GATE ──`; the file ends at one `── BRANCH REVIEW ──` marker with a tier.
+  The checker refuses `behaviour` on a member touching a security-boundary path or under
+  `high` stakes — put that task in its own **`Lane: contract`** cluster (state the reason
+  after a dash: `Lane: contract — encodes the return window`).
+- **Task shaping, contract lane** — every task: tier (`[Tier A|B]`), `Test-author:` mode
+  (split only for Tier-A security-boundary work at effective-high stakes), `Proven by:`
+  evidence rung, a test contract line, `(files:)`. Clusters ≤4 tasks, each closed by an
   `Integration gate:` line and a `── REVIEW GATE ──` marker with a provisional tier.
-  A cluster may declare a behaviour block (`Behaviour:` / `Observable:` /
-  `RED until: <test>`) — one RED per behaviour, observable from OUTSIDE the file (a URL
-  and status, a command and output, a query count — never a config/array shape); member
-  tasks may then state `covered by cluster behaviour` (`behaviour-cluster` check).
+  A contract cluster may also declare a behaviour block; member tasks may then state
+  `covered by cluster behaviour` (`behaviour-cluster` check).
 - **Acceptance flows** (`## Acceptance flows`) — required when the spec flags a
   user-facing surface: one row per intended flow, edges enumerated (empty, denied,
   re-entry, concurrent, boundary, mid-flow failure). Stage 3 drives this matrix.
@@ -87,7 +99,10 @@ in the artifact or hand back — never carry a finding into Stage 2 as a mental 
 
 ## The seam — STOP
 
-Present: plan path, tasks.md, the gate-check verdict, cluster tiers, `[HUMAN]` yield
-points. Do not dispatch anything, do not invoke `building` — the human bridges the seam.
+Present: plan path, tasks.md, the gate-check verdict, cluster lanes and tiers, `[HUMAN]`
+yield points. Under herdr (`HERDR_ENV=1`) present them where the operator reads: one
+`spec` tab in the project's workspace, unfocused, paging `plan.md` and `tasks.md` with the
+verdict, and SAY the tab exists (`skills/_shared/herdr-moments.md`, seam row). Do not
+dispatch anything, do not invoke `building` — the human bridges the seam.
 Class B (existing/external plan): run the gates against it as a freshness review,
 reconcile code samples against current source, then the same seam.

@@ -634,6 +634,43 @@ def check_cluster_stakes(plan_text: str, f: Findings) -> None:
 
 
 HAS_P = re.compile(r"\[P\]")
+
+# ── the lane (harness-inversion FR-1) ────────────────────────────────────────
+#
+# A `### Cluster` declares which verification grammar its members owe: `behaviour` —
+# ONE outside-observable RED for the cluster (the behaviour block), members carry only a
+# `(files:)` segment, no review panel at the cluster, one `── BRANCH REVIEW ──` at the
+# end of the file; `contract` — today's per-task grammar, untouched. Declared either on
+# the heading label (`… · lane: behaviour`) or as a `Lane:` line between the heading and
+# the cluster's first task. `behavior` is accepted as the same word.
+LANE_VALUES = ("behaviour", "contract")
+LANE_LINE = re.compile(
+    r"^\s*(?:[-*]\s+)?(?:\*\*)?Lane(?:\*\*)?:\s*(\S.*?)\s*$", re.IGNORECASE)
+LANE_IN_LABEL = re.compile(r"\blane:\s*([^·()\n]*)", re.IGNORECASE)
+# ANCHORED at line start: a task that MENTIONS the marker in its prose is not a marker
+# (self-hosting found three "markers" in a file carrying one).
+BRANCH_REVIEW_MARKER = re.compile(r"^\s*──\s*BRANCH REVIEW\s*──")
+
+
+def _parse_lane_value(raw: str) -> tuple[str | None, str, str]:
+    """(lane, reason, raw) — lane is the normalised value or None when unrecognised."""
+    raw = raw.strip()
+    tok = re.match(r"([A-Za-z]+)\s*(?:[—–-]\s*(.*))?$", raw)
+    if not tok:
+        return None, "", raw
+    lane = tok.group(1).lower()
+    if lane == "behavior":
+        lane = "behaviour"
+    if lane not in LANE_VALUES:
+        return None, "", raw
+    return lane, (tok.group(2) or "").strip(), raw
+
+
+def _lane_from_heading(label: str) -> tuple[str | None, str, str] | None:
+    m = LANE_IN_LABEL.search(label)
+    return _parse_lane_value(m.group(1)) if m else None
+
+
 HAS_HUMAN = re.compile(r"\[HUMAN\]", re.IGNORECASE)
 
 
@@ -683,10 +720,12 @@ def parse_clusters(tasks_text: str):
                 clusters.append(cur)
             label = cm.group(1)
             tier = REVIEW_TIER.search(label)
+            lane = _lane_from_heading(label)
             cur = {"name": ln.strip(), "tasks": [],
                    "irreversible": bool(re.search(r"irreversible|solo", label, re.IGNORECASE)),
                    "gate": False, "tier": tier.group(1) if tier else None,
-                   "integration_gate": False}
+                   "integration_gate": False,
+                   "lane": lane[0] if lane else None}
             continue
         h = heading_text(ln)
         if h and h[0] <= 2:  # phase boundary or end-of-clusters section
@@ -697,6 +736,11 @@ def parse_clusters(tasks_text: str):
         if cur is not None and INTEGRATION_GATE_LINE.match(ln):
             cur["integration_gate"] = True
             continue
+        if cur is not None and not cur["tasks"] and cur["lane"] is None:
+            lm = LANE_LINE.match(ln)
+            if lm:
+                cur["lane"] = _parse_lane_value(lm.group(1))[0]
+                continue
         if cur is not None and REVIEW_GATE_MARKER.search(ln):
             cur["gate"] = True
             if cur["tier"] is None:
@@ -723,14 +767,37 @@ def check_review_gates(tasks_text: str, f: Findings) -> None:
     clusters = parse_clusters(tasks_text)
     if not clusters:
         return  # check_clusters already reports "no `### Cluster` headings"
-    missing = [c["name"].lstrip("# ").split("(")[0].strip() for c in clusters if not c["gate"]]
+    short = lambda c: c["name"].lstrip("# ").split("(")[0].strip()
+    contract = [c for c in clusters if c["lane"] != "behaviour"]
+    behaviour = [c for c in clusters if c["lane"] == "behaviour"]
+    kind = "contract-lane " if any(c["lane"] for c in clusters) else ""  # AC-2: lane-less wording unchanged
+    missing = [short(c) for c in contract if not c["gate"]]
     if missing:
         f.add("fail", "review-gate-marker",
-              f"{len(missing)}/{len(clusters)} cluster(s) end with no `── REVIEW GATE ──` "
-              "marker, so nothing HALTs execution there: " + ", ".join(missing[:5]))
+              f"{len(missing)}/{len(contract)} {kind}cluster(s) end with no "
+              "`── REVIEW GATE ──` marker, so nothing HALTs execution there: "
+              + ", ".join(missing[:5]))
+    elif contract:
+        f.add("pass", "review-gate-marker",
+              f"all {len(contract)} {kind}cluster(s) close at a `── REVIEW GATE ──` STOP marker")
+    # FR-5 — a behaviour-lane cluster owes no panel; the file owes ONE branch review.
+    if not behaviour:
+        return
+    stray = [short(c) for c in behaviour if c["gate"]]
+    if stray:
+        f.add("warn", "review-gate-marker",
+              "behaviour-lane cluster(s) carry a `── REVIEW GATE ──` marker — the lane's "
+              "review is the branch review, a cluster panel here is paperwork: "
+              + ", ".join(stray[:5]))
+    markers = [ln for ln in strip_fenced(tasks_text).splitlines() if BRANCH_REVIEW_MARKER.search(ln)]
+    if len(markers) != 1:
+        f.add("fail", "review-gate-marker",
+              f"{len(behaviour)} behaviour-lane cluster(s) but {len(markers)} "
+              "`── BRANCH REVIEW ──` marker(s) — the file must end at exactly one, "
+              "carrying the branch tier (FULL/STANDARD/LIGHT)")
     else:
         f.add("pass", "review-gate-marker",
-              f"all {len(clusters)} cluster(s) close at a `── REVIEW GATE ──` STOP marker")
+              f"{len(behaviour)} behaviour-lane cluster(s) close at the one `── BRANCH REVIEW ──` marker")
 
 
 def check_review_tiers(tasks_text: str, f: Findings) -> None:
@@ -743,40 +810,59 @@ def check_review_tiers(tasks_text: str, f: Findings) -> None:
     clusters = parse_clusters(tasks_text)
     if not clusters:
         return
-    missing = [c["name"].lstrip("# ").split("(")[0].strip() for c in clusters if not c["tier"]]
+    contract = [c for c in clusters if c["lane"] != "behaviour"]
+    kind = "contract-lane " if any(c["lane"] for c in clusters) else ""  # AC-2: lane-less wording unchanged
+    missing = [c["name"].lstrip("# ").split("(")[0].strip() for c in contract if not c["tier"]]
     if missing:
         f.add("fail", "review-tier",
-              f"{len(missing)}/{len(clusters)} cluster(s) declare no provisional review tier "
-              "(FULL/STANDARD/LIGHT): " + ", ".join(missing[:5]))
-    else:
+              f"{len(missing)}/{len(contract)} {kind}cluster(s) declare no provisional "
+              "review tier (FULL/STANDARD/LIGHT): " + ", ".join(missing[:5]))
+    elif contract:
         f.add("pass", "review-tier",
-              "all cluster(s) carry a provisional tier: "
-              + ", ".join(f"{c['tier']}" for c in clusters[:6]))
+              f"all {kind}cluster(s) carry a provisional tier: "
+              + ", ".join(f"{c['tier']}" for c in contract[:6]))
+    if any(c["lane"] == "behaviour" for c in clusters):
+        markers = [ln for ln in strip_fenced(tasks_text).splitlines() if BRANCH_REVIEW_MARKER.search(ln)]
+        if len(markers) == 1 and not REVIEW_TIER.search(markers[0]):
+            f.add("fail", "review-tier",
+                  "the `── BRANCH REVIEW ──` marker carries no tier (FULL/STANDARD/LIGHT) — "
+                  "the branch review is the behaviour lane's only panel; it must know its size")
 
 
-def check_task_tiers(tasks_text: str, f: Findings) -> None:
+def _exempt_note(exempt: set[str] | None) -> str:
+    """The suffix every per-task check appends when behaviour-lane members were skipped."""
+    return f" ({len(exempt)} behaviour-lane member(s) exempt)" if exempt else ""
+
+
+def check_task_tiers(tasks_text: str, f: Findings, exempt: set[str] | None = None) -> None:
+    exempt = exempt or set()
     missing = []
     total = 0
     for ln in strip_fenced(tasks_text).splitlines():
         tm = TASK_LINE.match(ln)
         if tm:
+            if tm.group(1) in exempt:
+                continue
             total += 1
             if not TIER.search(tm.group(2)):
                 missing.append(tm.group(1))
-    if total == 0:
+    if total == 0 and exempt:
+        f.add("pass", "task-tier", f"no contract-lane tasks{_exempt_note(exempt)}")
+    elif total == 0:
         f.add("warn", "task-tier", "no task lines found (- [ ] T..)")
     elif missing:
         f.add("fail", "task-tier",
               f"{len(missing)}/{total} task(s) missing a [Tier A|B] marker: {', '.join(missing[:8])}")
     else:
-        f.add("pass", "task-tier", f"all {total} tasks carry a test tier")
+        f.add("pass", "task-tier", f"all {total} tasks carry a test tier{_exempt_note(exempt)}")
 
 
 TEST_AUTHOR_LINE = re.compile(r"^\s+Test-author:\s*(split|solo)\b\s*(?:[—-]\s*(.*))?$")
 TEST_AUTHOR_ANY_VALUE = re.compile(r"^\s+Test-author:\s*(\S.*)$")
 
 
-def check_test_author_mode(tasks_text: str, f: Findings) -> None:
+def check_test_author_mode(tasks_text: str, f: Findings,
+                           exempt: set[str] | None = None) -> None:
     """D1 — verify every task's `Test-author:` continuation line per the
     harness-efficiency plan's rules table (specs/harness-efficiency/plan.md
     section D1). Walks each task's continuation block via the shared
@@ -788,8 +874,11 @@ def check_test_author_mode(tasks_text: str, f: Findings) -> None:
     invalid = []          # (task_id, raw_value) — line present but doesn't match split|solo
     tier_a_solo_bare = [] # task ids: [Tier A] + solo with no reason after a dash
     tier_b_split = []     # task ids: [Tier B] + split (over-ceremony)
+    exempt = exempt or set()
 
     for task_id, task_rest, cont in task_blocks(tasks_text):
+        if task_id in exempt:
+            continue
         total += 1
         is_tier_a = bool(TIER_A.search(task_rest))
 
@@ -819,6 +908,8 @@ def check_test_author_mode(tasks_text: str, f: Findings) -> None:
     present = total - len(missing)
 
     if total == 0:
+        if exempt:
+            f.add("pass", "test-author-mode", f"no contract-lane tasks{_exempt_note(exempt)}")
         return  # nothing to say here — check_task_tiers already reports "no task lines"
 
     if present == 0:
@@ -859,7 +950,8 @@ def check_test_author_mode(tasks_text: str, f: Findings) -> None:
               + ", ".join(tier_b_split[:8]))
         return
 
-    f.add("pass", "test-author-mode", f"all {total} tasks carry a test-author mode")
+    f.add("pass", "test-author-mode",
+          f"all {total} tasks carry a test-author mode{_exempt_note(exempt)}")
 
 
 # D1's security-boundary categories, detected in TWO places with different confidence.
@@ -1226,7 +1318,7 @@ def task_proven_by(cont: list[str]) -> str | None:
     return None
 
 
-def check_proven_by(tasks_text: str, f: Findings) -> None:
+def check_proven_by(tasks_text: str, f: Findings, exempt: set[str] | None = None) -> None:
     """1d — every task names what proves its behaviour, from the evidence ladder.
 
     Retro-compat matches `test-author-mode`: a task list where NO task carries the line is a
@@ -1240,8 +1332,11 @@ def check_proven_by(tasks_text: str, f: Findings) -> None:
     """
     total = 0
     missing, bad_rung, unnamed = [], [], []
+    exempt = exempt or set()
 
     for task_id, _rest, cont in task_blocks(tasks_text):
+        if task_id in exempt:
+            continue
         total += 1
         value = task_proven_by(cont)
         if value is None:
@@ -1257,6 +1352,9 @@ def check_proven_by(tasks_text: str, f: Findings) -> None:
             if not rest:
                 unnamed.append(f"{task_id} ({rung})")
 
+    if total == 0 and exempt:
+        f.add("pass", "proven-by", f"no contract-lane tasks{_exempt_note(exempt)}")
+        return
     if total == 0:
         f.add("warn", "proven-by", "no task lines found (- [ ] T..)")
         return
@@ -1276,7 +1374,7 @@ def check_proven_by(tasks_text: str, f: Findings) -> None:
               "rung states evidence exists elsewhere but does not NAME it — an unnamed "
               "proof is the assertion this harness refuses to trust: " + ", ".join(unnamed[:6]))
     if not (missing or bad_rung or unnamed):
-        f.add("pass", "proven-by", f"all {total} tasks name their evidence rung")
+        f.add("pass", "proven-by", f"all {total} tasks name their evidence rung{_exempt_note(exempt)}")
 
 
 CONTRACT_LINE = re.compile(r"^\s+(Unit|Integration) test:\s*(\S.*)$")
@@ -1284,7 +1382,8 @@ NO_UNIT_TEST = re.compile(r"^no unit test\b", re.IGNORECASE)
 
 
 def check_unit_test_contract(tasks_text: str, f: Findings,
-                             repo_root: Path | None = None) -> None:
+                             repo_root: Path | None = None,
+                             exempt: set[str] | None = None) -> None:
     """1d — every task states the behavioral contract its test asserts.
 
     `Test-author:` says WHO writes the test; this says WHAT it must prove. Either line
@@ -1322,7 +1421,10 @@ def check_unit_test_contract(tasks_text: str, f: Findings,
     """
     total, missing, tier_a_waived, integration_parallel = 0, [], [], []
     covered_ok: set[str] | None = None  # computed lazily — only when the form appears
+    exempt = exempt or set()
     for task_id, task_rest, cont in task_blocks(tasks_text):
+        if task_id in exempt:
+            continue
         total += 1
         is_tier_a = bool(TIER_A.search(task_rest))
 
@@ -1354,6 +1456,8 @@ def check_unit_test_contract(tasks_text: str, f: Findings,
             integration_parallel.append(task_id)
 
     if total == 0:
+        if exempt:
+            f.add("pass", "unit-test-contract", f"no contract-lane tasks{_exempt_note(exempt)}")
         return  # check_task_tiers already reports "no task lines"
 
     if len(missing) == total:
@@ -1384,7 +1488,8 @@ def check_unit_test_contract(tasks_text: str, f: Findings,
               "integration-contract task(s) marked [P] — integration contracts are "
               "never parallel, serialize: " + ", ".join(integration_parallel[:8]))
     if not (missing or tier_a_waived or integration_parallel):
-        f.add("pass", "unit-test-contract", f"all {total} tasks state a test contract")
+        f.add("pass", "unit-test-contract",
+              f"all {total} tasks state a test contract{_exempt_note(exempt)}")
 
 
 # ── behaviour-cluster (FR-6/FR-7) — one RED per behaviour, observable from outside ───
@@ -1438,8 +1543,13 @@ def parse_behaviour_clusters(tasks_text: str) -> list[dict]:
         if CLUSTER_HEADING.match(ln):
             if cur is not None:
                 clusters.append(cur)
+            lane = _lane_from_heading(ln)
             cur = {"name": ln.lstrip("# ").split("(")[0].strip(),
                    "behaviour": None, "observable": None, "red_until": None,
+                   "lane": lane[0] if lane else None,
+                   "lane_reason": lane[1] if lane else "",
+                   "lane_raw": lane[2] if lane else None,
+                   "lane_conflict": None,   # (heading value, body value) when both are stated
                    "members": []}
             i += 1
             continue
@@ -1460,10 +1570,21 @@ def parse_behaviour_clusters(tasks_text: str) -> list[dict]:
             seg = FILES_SEGMENT.search(tm.group(2))
             cur["members"].append({"id": tm.group(1),
                                    "files": seg.group(1) if seg else "",
+                                   "rest": tm.group(2), "cont": cont,
                                    "covered": _covered_by_cluster(cont)})
             i = j
             continue
         if cur is not None and not cur["members"]:
+            lm = LANE_LINE.match(ln)
+            if lm:
+                if cur["lane_raw"] is None:
+                    cur["lane"], cur["lane_reason"], cur["lane_raw"] = _parse_lane_value(lm.group(1))
+                else:
+                    body = _parse_lane_value(lm.group(1))[0]
+                    if body != cur["lane"]:
+                        cur["lane_conflict"] = (cur["lane"], body)
+                i += 1
+                continue
             for key, rx in BEHAVIOUR_BLOCK_LINES.items():
                 m = rx.match(ln)
                 if m:
@@ -1606,6 +1727,175 @@ def check_behaviour_clusters(tasks_text: str, f: Findings,
         f.add("pass", "behaviour-cluster",
               f"{len(valid_names)} cluster(s) carry a valid behaviour block "
               "(one RED per behaviour): " + ", ".join(valid_names[:4]))
+
+
+def behaviour_lane_task_ids(tasks_text: str) -> set[str]:
+    """Member ids of every cluster declaring `Lane: behaviour` — the tasks the four
+    per-task checks exempt (FR-2). Only a RECOGNISED lane exempts; an unreadable one
+    is a cluster-lane FAIL and its members are graded on the contract grammar."""
+    return {m["id"] for c in parse_behaviour_clusters(tasks_text)
+            if c["lane"] == "behaviour" for m in c["members"]}
+
+
+def _cluster_key(name: str) -> str:
+    """`Cluster A — the checker` / `A — the checker` / `A` → `a`: the leading token,
+    which is how the plan's per-cluster stakes rows and the tasks headings name one."""
+    n = re.sub(r"^\s*cluster\s+", "", name.strip(), flags=re.IGNORECASE)
+    tok = re.match(r"([A-Za-z0-9._-]+)", n)
+    return tok.group(1).lower() if tok else n.lower()
+
+
+def cluster_stakes_map(plan_text: str | None) -> dict[str, str]:
+    """{cluster key → level} from the plan's per-cluster stakes table, empty when absent."""
+    out: dict[str, str] = {}
+    if not plan_text:
+        return out
+    text = strip_fenced(plan_text)
+    m = CLUSTER_STAKES_HEADING.search(text)
+    if not m:
+        return out
+    for ln in text[m.end():].splitlines():
+        stripped = ln.strip()
+        if stripped.startswith("#"):
+            break
+        if not stripped.startswith("|"):
+            continue
+        cells = [c.strip().strip("*").strip() for c in stripped.strip("|").split("|")]
+        if len(cells) < 2 or set(cells[1]) <= set("-: "):
+            continue
+        tok = STAKES_TOKEN.match(cells[1])
+        if not tok:
+            continue
+        level = tok.group(0).lower()
+        if level in STAKES_LEVELS:
+            out[_cluster_key(cells[0])] = level
+    return out
+
+
+def effective_cluster_stakes(cluster_name: str, plan_text: str | None) -> str | None:
+    """The per-cluster row when one names this cluster, else the plan-level line, else
+    None (no plan, or no readable level — the lane check then makes no stakes claim)."""
+    row = cluster_stakes_map(plan_text).get(_cluster_key(cluster_name))
+    if row:
+        return row
+    if not plan_text:
+        return None
+    level, _ = plan_stakes(plan_text)
+    return level if level in STAKES_LEVELS else None
+
+
+LANE_PAPERWORK = re.compile(r"^\s+(Test-author|Proven by|Unit test|Integration test):", re.IGNORECASE)
+
+
+def check_cluster_lanes(tasks_text: str, plan_text: str | None, f: Findings,
+                        repo_root: Path | None = None) -> None:
+    """harness-inversion FR-1/FR-3/FR-4 — the lane is declared per cluster, machine-refused
+    in the UNSAFE direction only, machine-warned in the wasteful one.
+
+      - no cluster declares a lane → silent: a pre-convention artifact reads as
+        all-contract, today's grammar byte-for-byte (AC-2);
+      - some declare, some don't → FAIL naming the bare cluster(s); an unreadable value
+        → FAIL naming it;
+      - `behaviour` with a member whose files/prose hit `_boundary_hit()` → FAIL naming
+        task and term — a security-boundary path never rides the cheap lane; the fix is
+        to move that task into a contract-lane cluster;
+      - `behaviour` under effective `high` stakes (the per-cluster row, else the plan
+        line) → FAIL — high stakes buy the contract grammar;
+      - `behaviour` must carry the FULL behaviour block, valid (`_block_status`) — the
+        cluster RED is the lane's only proof, so a partial or dangling block FAILs here
+        even when no member leans on it (the opt-in silence of check_behaviour_clusters
+        is for contract clusters);
+      - `contract` with no boundary hit under non-high stakes and no dash-reason →
+        WARN, never FAIL: a keyword is not knowledge, and a FAIL on a false positive
+        teaches people to route around the gate;
+      - a behaviour-lane member carrying per-task paperwork (`[Tier]`, `Test-author:`,
+        `Proven by:`, `Unit test:`, `Integration test:`) → one `lane-drift` WARN — the
+        lines are ignored by the per-task checks (FR-2), so they can only mislead.
+
+    The `Integration gate:` a behaviour cluster also owes is check_integration_gate's,
+    which already demands one of EVERY cluster."""
+    clusters = parse_behaviour_clusters(tasks_text)
+    declared = [c for c in clusters if c["lane_raw"] is not None]
+    if not declared:
+        return
+    bare = [c["name"] for c in clusters if c["lane_raw"] is None]
+    invalid = [f"{c['name']} (`{c['lane_raw']}`)" for c in declared if c["lane"] is None]
+    if bare:
+        f.add("fail", "cluster-lane",
+              f"{len(bare)}/{len(clusters)} cluster(s) declare no `Lane:` while siblings do "
+              "— once any cluster names its lane, every cluster must: " + ", ".join(bare[:5]))
+    if invalid:
+        f.add("fail", "cluster-lane",
+              "unreadable lane value (use `Lane: behaviour` or `Lane: contract`): "
+              + ", ".join(invalid[:5]))
+    if bare or invalid:
+        return
+    conflicts = [f"{c['name']} (heading `{c['lane_conflict'][0]}`, body `{c['lane_conflict'][1]}`)"
+                 for c in declared if c["lane_conflict"]]
+    if conflicts:
+        f.add("warn", "cluster-lane",
+              "heading label and `Lane:` line disagree — the heading wins; delete one: "
+              + ", ".join(conflicts[:4]))
+
+    # block validity uses the SAME two rungs as check_behaviour_clusters (a member's
+    # files, or a test-shaped file on disk under the repo root) — the two checks must
+    # never disagree about one cluster (self-hosting found them disagreeing).
+    boundary, high, partial, wasteful, drift = [], [], [], [], []
+    n_beh = n_con = 0
+    for c in clusters:
+        if c["lane"] == "behaviour":
+            n_beh += 1
+            for m in c["members"]:
+                term = _boundary_hit(m["rest"])
+                if term:
+                    boundary.append(f"{m['id']} ({term})")
+                if TIER.search(m["rest"]) or any(LANE_PAPERWORK.match(ln) for ln in m["cont"]):
+                    drift.append(m["id"])
+            level = effective_cluster_stakes(c["name"], plan_text)
+            if level == "high":
+                high.append(c["name"])
+            status = _block_status(c, repo_root)
+            if status != "valid":
+                missing = ", ".join(BEHAVIOUR_LABEL[k] for k in _BLOCK_KEYS if not c[k])
+                partial.append(f"{c['name']} — "
+                               + (f"missing {missing}" if missing else
+                                  f"`RED until:` binds to nothing ({status})"))
+        else:
+            n_con += 1
+            hit = any(_boundary_hit(m["rest"]) for m in c["members"])
+            level = effective_cluster_stakes(c["name"], plan_text)
+            if not hit and level != "high" and not c["lane_reason"]:
+                wasteful.append(c["name"])
+
+    if boundary:
+        f.add("fail", "cluster-lane",
+              "`Lane: behaviour` with a member on a security-boundary path — the cheap lane "
+              "never carries auth/token/parse/migration work; move the task into a "
+              "contract-lane cluster: " + ", ".join(boundary[:6]))
+    if high:
+        f.add("fail", "cluster-lane",
+              "`Lane: behaviour` under effective `high` stakes — high stakes buy the "
+              "contract grammar (or correct the stakes row in the plan): "
+              + ", ".join(high[:4]))
+    if partial:
+        f.add("fail", "cluster-lane",
+              "`Lane: behaviour` without a valid behaviour block — the cluster RED is the "
+              "lane's only proof: " + "; ".join(partial[:4]))
+    if wasteful:
+        f.add("warn", "cluster-lane",
+              "`Lane: contract` with no security-boundary member under non-high stakes and "
+              "no reason — if a rule of THIS project lives here, say which "
+              "(`Lane: contract — <reason>`); otherwise `behaviour` is the cheaper honest lane: "
+              + ", ".join(wasteful[:4]))
+    if drift:
+        f.add("warn", "lane-drift",
+              "behaviour-lane member(s) carry per-task test paperwork the lane ignores "
+              "(`[Tier]`, `Test-author:`, `Proven by:`, `Unit test:`) — delete it or move "
+              "the task to a contract cluster: " + ", ".join(drift[:6]))
+    if not (boundary or high or partial):
+        f.add("pass", "cluster-lane",
+              f"{n_beh} behaviour-lane and {n_con} contract-lane cluster(s); the behaviour "
+              "lane carries no boundary path and no high-stakes cluster")
 
 
 REQ_ID = re.compile(r"\b(FR|SC)-(\d+)\b")
@@ -1971,13 +2261,15 @@ def run_checks(spec_dir: Path) -> Findings:
         check_deliverable_first(plan_text, spec_text, tasks_text, f)  # 1j — cross-artifact
     if tasks_text is not None:
         root = repo_root_for(spec_dir)  # RED-until paths resolve against the git toplevel
-        check_task_tiers(tasks_text, f)
+        check_cluster_lanes(tasks_text, plan_text, f, repo_root=root)  # harness-inversion FR-1/3/4
+        exempt = behaviour_lane_task_ids(tasks_text)   # FR-2 — bare members skip the four
+        check_task_tiers(tasks_text, f, exempt=exempt)
         check_files_segment(tasks_text, f)
         check_human_yield(tasks_text, f)
-        check_test_author_mode(tasks_text, f)
-        check_proven_by(tasks_text, f)
+        check_test_author_mode(tasks_text, f, exempt=exempt)
+        check_proven_by(tasks_text, f, exempt=exempt)
         check_security_boundary_mode(tasks_text, f)
-        check_unit_test_contract(tasks_text, f, repo_root=root)
+        check_unit_test_contract(tasks_text, f, repo_root=root, exempt=exempt)
         check_behaviour_clusters(tasks_text, f, repo_root=root)  # FR-6/FR-7
         check_clusters(tasks_text, f)
         check_review_gates(tasks_text, f)

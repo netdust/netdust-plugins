@@ -26,6 +26,16 @@ security gate) is the dangerous direction; over-calling ceremony is how a config
 buys a three-hour session (calibration: `deliverable-last`). A security-boundary file is
 always D, never E.
 
+## The lane (decided per cluster, at plan time)
+
+Class routes the work and stakes scales its verification; **the lane prices it.**
+`planning` marks each cluster `Lane: behaviour` (config over a framework that already
+has the rule — one cluster RED, bare tasks, no panel) or `Lane: contract` (a rule this
+project chose — today's per-task grammar). `check_cluster_lanes` refuses `behaviour` on
+a security-boundary path or under `high` stakes; nothing refuses `contract`, so
+over-calling it is the cheap mistake and it merely warns. Class E work is behaviour-lane
+by construction unless it touches a boundary file, which makes it D.
+
 ## The stakes dial (independent of class)
 
 `Stakes: high | standard | low — <reason>`, by what a FAILURE costs: **high** — money,

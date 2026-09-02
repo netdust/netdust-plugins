@@ -42,7 +42,7 @@ and the fleet brain. Per-project config and memory live in the project, never th
 
 - **Stack**: Bedrock / Composer / PHP 8.2+ / MariaDB is the common case, not the only
   one — `structure.type` decides.
-- **Framework**: ntdst-core (4.2.0) **and** ntdst-baseline (2.0.0), both mu-plugins,
+- **Framework**: ntdst-core **and** ntdst-baseline, both mu-plugins,
   both Composer-managed. See `ntdst-framework`.
 - **Local**: DDEV, always.
 - **Standards**: WordPress Coding Standards via PHPCS.

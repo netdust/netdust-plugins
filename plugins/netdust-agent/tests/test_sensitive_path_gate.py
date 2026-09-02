@@ -104,6 +104,32 @@ TASKS_FENCED_SOLO = """# Tasks: demo
 """
 
 
+# harness-inversion FR-7: a `Lane: behaviour` member carries NO Test-author line;
+# the floor must still see it (a behaviour close is a solo-class close).
+TASKS_BEHAVIOUR_LANE = """# Tasks: demo
+
+### Cluster L1 — the model  (2 tasks)
+
+Lane: behaviour
+Behaviour: the model registers.
+Observable: `wp post-type list` names it.
+RED until: `tests/ModelTest.php::test_registered`
+
+- [ ] T01 wire the login guard  (files: src/auth/login.php)
+- [ ] T02 the field map  (files: src/models/case.php)
+
+**Integration gate (L1):** the observable holds.
+
+── BRANCH REVIEW ──  *(tier LIGHT)*
+"""
+TASKS_BEHAVIOUR_LABEL = TASKS_BEHAVIOUR_LANE.replace(
+    "### Cluster L1 — the model  (2 tasks)\n\nLane: behaviour\n",
+    "### Cluster L1 — the model  (2 tasks · lane: behaviour)\n\n")
+TASKS_BEHAVIOUR_SAFE_FIRST = TASKS_BEHAVIOUR_LANE.replace(
+    "- [ ] T01 wire the login guard  (files: src/auth/login.php)\n- [ ] T02 the field map  (files: src/models/case.php)",
+    "- [ ] T01 the field map  (files: src/models/case.php)\n- [ ] T02 wire the login guard  (files: src/auth/login.php)")
+
+
 def _msg(*blocks):
     return {"type": "assistant", "message": {"content": list(blocks)}}
 
@@ -385,6 +411,30 @@ def run():
                                capture_output=True, text=True, timeout=60)
             case(f"gate-check: specs/{feature_dir.name} still exits 0",
                  p.returncode == 0)
+
+    # ── harness-inversion FR-7: the floor covers behaviour-lane closes ────────
+    with tempfile.TemporaryDirectory() as tmp:
+        tp = Path(tmp)
+        _armed(tp, TASKS_BEHAVIOUR_LANE)
+        d, out = _run_hook(_green_close("src/auth/login.php"), tp)
+        case("behaviour-lane task (Lane: line, no Test-author) + edit under */auth/* → block",
+             d == "block" and "SENSITIVE" in out)
+    with tempfile.TemporaryDirectory() as tmp:
+        tp = Path(tmp)
+        _armed(tp, TASKS_BEHAVIOUR_LABEL)
+        d, out = _run_hook(_green_close("src/auth/login.php"), tp)
+        case("behaviour lane on the heading label → same block", d == "block" and "SENSITIVE" in out)
+    with tempfile.TemporaryDirectory() as tmp:
+        tp = Path(tmp)
+        _armed(tp, TASKS_BEHAVIOUR_SAFE_FIRST)
+        d, out = _run_hook(_green_close("src/models/case.php"), tp)
+        case("behaviour-lane task on a non-sensitive path → passthrough", d == "passthrough")
+    with tempfile.TemporaryDirectory() as tmp:
+        tp = Path(tmp)
+        _armed(tp, TASKS_BEHAVIOUR_SAFE_FIRST)
+        d, out = _run_hook(_green_close("src/auth/login.php"), tp)
+        case("files-segment disambiguation picks the auth task among behaviour members → block",
+             d == "block" and "SENSITIVE" in out)
 
     return results
 

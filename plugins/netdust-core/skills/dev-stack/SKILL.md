@@ -1,6 +1,6 @@
 ---
 name: dev-stack
-description: Use when working in any Netdust project — DDEV environment, git branching, Makefile workflows, generic deploy patterns, .env conventions. Triggers on file edits to Makefile, .env*, .ddev/config.yaml, package.json scripts that look like dev/build/deploy. Activates on keywords DDEV, ddev start, ddev describe, ddev wp, make dev, make save, make deploy, make ship, make feature, make finish, .env, .env.example, staging branch, git-flow, hotfix. Symptoms include setting up a new project locally, deciding what to commit, choosing a branch to start work on, deploying to staging, rolling back. Stack-agnostic — applies to WordPress, Statamic, Bun/Node, Laravel projects equally. For WP-specific infra (WP-CLI, Vite-for-WP, Bedrock Makefile patterns), see wp-infra. For stack-specific deploy variants, see the /deploy command + memory/deploy-patterns.md.
+description: Use when working in any Netdust project — DDEV environment, git branching, Makefile workflows, generic deploy patterns, .env conventions. Triggers on file edits to Makefile, .env*, .ddev/config.yaml, package.json scripts that look like dev/build/deploy. Activates on keywords DDEV, ddev start, ddev describe, ddev wp, make dev, make save, make deploy, make deploy-test, make ship, make deployed, make health, make rollback, make refresh, make pull, make feature, make hotfix, make promote, make release, make finish, .env, .env.example, staging branch, git-flow, hotfix, deploy gate, deploy ledger. Fires on how the work is actually spoken, not just target names: "we work on X", "fix this", "we have a bug", "hotfix", "put it on dev", "test this", "ready for review", "colleagues can look", "push to staging", "promote", "deploy", "ship it", "go live", "release", "roll it back", "what's on prod", "what's live", "what isn't live yet", "sync from live", "staging is stale", "pull the database". Symptoms include setting up a new project locally, deciding what to commit, choosing a branch to start work on, deploying to staging, shipping to production, rolling back, refreshing a non-production environment from live. Stack-agnostic — applies to WordPress, Statamic, Bun/Node, Laravel projects equally. For WP-specific infra (WP-CLI, Vite-for-WP, Bedrock Makefile patterns), see wp-infra. For the WordPress deploy pipeline itself (gate, ledger, transports), the shared Makefile lives in netdust-wp/templates. For other stacks see /deploy + memory/deploy-patterns.md.
 ---
 
 # Netdust dev-stack
@@ -37,18 +37,35 @@ URLs follow `https://<ddev-project>.ddev.site`. Per-project, the project name is
 
 ## Git branch strategy
 
+THREE RUNGS, one branch per environment, the same on every project:
+
 ```
-main (protected, production)
-  └── staging (active development base)
-        ├── feature/<name>     (from staging, merged back to staging)
-        └── hotfix/<name>      (from main, merged to main AND staging)
+main (protected, PRODUCTION — never worked in directly)
+  └── staging (REVIEW — what the client sees; client-visible URLs live here)
+        └── development (INTEGRATION — daily work lands here)
+              ├── feature/<name>   (from development, merged back to development)
+              └── hotfix/<name>    (from main, merged to main AND back down)
 ```
 
+- **A branch per environment, named for it.** `development` deploys to
+  development, `staging` to staging, `main` to production. Never point an
+  environment at a branch named for a different rung: a `staging:` entry whose
+  `branch:` is `main` means every push to production's branch lands on the
+  client's URL, and the promotion ladder has nothing left to promote through.
+- `development` is the working branch — daily work lives here, NOT `staging`.
+- `staging` is for review. It is client-visible, so treat a deploy there as
+  outward-facing even when the environment is nicknamed "staging".
 - All merges use `--no-ff` to preserve history.
 - Direct commits to `main` are blocked (branch protection where supported).
-- `staging` is the working branch — daily work lives here.
 - `feature/*` for non-trivial work, deleted after merge.
-- `hotfix/*` only when prod is on fire — cherry-pick back to staging too.
+- `hotfix/*` only when prod is on fire — from `main`, merged back DOWN too.
+
+**A project with fewer servers still keeps the branches.** If production is not
+provisioned yet, declare `environments.production` with its `branch: main` and
+leave `path:`/`ssh_host:` out — `make ship` refuses on a missing `path` and says
+so, while the ladder above stays true. Collapsing two rungs onto one branch to
+match the servers you happen to have today is how `staging` ends up meaning
+`main`.
 
 ## Makefile contract — Netdust convention
 
@@ -57,14 +74,106 @@ Every Netdust project's `Makefile` exposes the same top-level verbs, regardless 
 | Command | Intent |
 |---|---|
 | `make dev` | Start the local loop (DDEV up + watcher/HMR). |
-| `make save` (alias `make s`) | Commit current branch with an interactive message + push. |
-| `make feature NAME=xyz` | `git checkout staging && git pull && git checkout -b feature/xyz`. |
-| `make finish` | Merge current feature → staging with `--no-ff`, push, delete branch. |
-| `make deploy` (alias `make d`) | Deploy current branch to staging (per `site.yml`'s `deploy.method`). |
-| `make ship` | Deploy to production after merging staging → main. Requires explicit confirmation. |
+| `make save` | Commit current branch with an interactive message. |
+| `make feature name=xyz` | Branch `feature/xyz` from the integration branch. |
+| `make finish` | Merge one step up the promotion path. On a `hotfix/*` it merges to production and back down. |
+| `make hotfix name=xyz` | Branch from **`origin/<production branch>`** — never from the integration branch. |
+| `make promote name=xyz` | Send ONE feature to the review branch, leaving the others behind. |
+| `make deploy env=<name>` | Gate, transport, stamp. |
+| `make deploy-test env=<name>` | The same path with `--dry-run`. Run it first. |
+| `make release` | Merge the review branch into the production branch. |
+| `make ship` | Production: gate, DB + payload backup, typed confirmation, deploy. |
+| `make deployed` | Which commit runs on each environment. |
+| `make health` | Fleet check the deploy CANNOT do: ledger vs branch head, per-env drift (someone edited a server), the `/memory/` + `/tasks/` guards, branch topology, and `health.markers` — patched third-party files outside the payload. Read-only. **Run it after ANY third-party plugin update.** |
+| `make rollback env=<name>` | Redeploy the previously stamped commit. |
+| `make refresh env=<name>` | Copy production's data DOWN to a non-prod environment. |
+| `make pull env=<name>` | Same, down to local DDEV. |
+| `make gate` | The project's own suite (`commands.gate` in `site.yml`). |
 | `make rollback` | Revert production to previous deployment marker. |
 
-Implementations differ per stack (Bedrock git-bundle, Statamic rsync, Bun single-binary scp, etc.). The verbs are the same. See `memory/deploy-patterns.md` for the 9 actual deploy method variants.
+## What gets said, and what to run
+
+Read the environment names and branches from `site.yml` — never hardcode them:
+`scripts/site environments`, `scripts/site environments.<env>.branch`,
+`scripts/site deploy.method`, `make deployed`.
+
+| Said | Run | Lands on |
+|---|---|---|
+| "we work on X" | `make feature name=X` | nothing yet |
+| "put it on dev", "test this" | `make finish`, then `make deploy env=development` | development |
+| "push to staging", "ready for review" | merge up, then `make deploy env=staging` | staging |
+| "just feature X is ready" | `make promote name=X`, then `make deploy env=staging` | staging |
+| "fix", "we have a bug", "hotfix X" | `make hotfix name=X` | nothing yet |
+| "that's fixed" (on a hotfix branch) | `make finish` | production + back down |
+| "ship it", "go live" | `make ship` | **production** |
+| "release" | `make release`, then `make ship` | **production** |
+| "what's on prod", "what's live" | `make deployed` | — |
+| "what isn't live yet" | `git diff deployed/production` | — |
+| "roll it back" | `make rollback env=<name>` | — |
+| "sync from live", "staging is stale" | `make refresh env=<name>` | staging or development |
+| "pull the database" | `make pull env=production` | local DDEV |
+
+**Always run `make deploy-test env=<name>` first** and read the output,
+especially deletions.
+
+### The machine half of this table
+
+The verbs are the only door to a rung branch, and two machines hold that door: the
+Makefile refuses by name (no `origin`, a rung missing on origin, a commit attempted on
+a rung — never a silent branch switch), and `scripts/tests/flow-test.sh` (run by
+`make test`) proves feature, hotfix, finish and every refusal in a throwaway repo with
+a bare origin. On a machine running netdust-agent, its PreToolUse guard additionally
+DENIES a raw `git commit` / `merge` / `rebase` / `push` / `checkout -b` on a rung
+branch and any piped input into `make ship|release|promote|deploy`, naming the verb.
+A verb that fails is a finding to file, not permission to use raw git. `make status`
+and `make doctor` print the flow state first — origin, branch role, next verb.
+
+### The rule that matters most
+
+**A bug fix branches from the production branch**, never from the integration or
+review branch — branching elsewhere ships every unfinished change sitting there.
+`make hotfix` does this correctly. Afterwards `make finish` merges it back down,
+or the next release reverts the fix.
+
+### Production
+
+**Never run `make ship` unless the user asked for it in that turn.** Not because
+it follows from an earlier plan, not because the work looks finished. The typed
+confirmation is the user's — never pipe input into it.
+
+### WordPress specifics
+
+- `deploy.payload` is a closed list; a new custom plugin or theme must join it or
+  it never deploys. Every payload path must exist locally **and be tracked in
+  git** — an untracked one deploys as an empty directory and a rollback
+  `--delete`s it off the server. `make test` asserts this.
+- **Never add `*.map` to `deploy.exclude`** — font-encoding tables are not
+  JavaScript source maps.
+- Before `make refresh`, run `make block-mail env=<name>`. FluentSMTP's
+  `simulate_emails` lives in the database, so an import overwrites it; the
+  mu-plugin is file-based and survives. Production databases carry real
+  addresses and working SMTP credentials.
+
+On WordPress projects these come from one shared Makefile
+(`netdust-wp/templates/`) that carries no project-specific value — layout,
+hosts, branches, transport and payload all resolve from `site.yml`. Only
+`deploy.method` differs: `rsync` moves a closed payload, `git-push` pushes then
+pulls on the server and runs `deploy.post_deploy_hooks`.
+
+**Three guarantees hold whatever the transport:**
+
+1. **The gate.** A deploy refuses unless the tree is clean, the branch matches
+   `environments.<env>.branch`, and `HEAD` is already on `origin`. Nothing
+   uncommitted or unpushed reaches a server.
+2. **The ledger.** Each deploy stamps `<state_dir>/<env>.json` on the server
+   (outside every web root — environment directories are web-served) and moves a
+   `deployed/<env>` tag. `make deployed` answers "what is live"; `git diff
+   deployed/production` answers "what is not live yet".
+3. **Rollback.** Reads the previous stamp, checks that commit out in a throwaway
+   worktree and redeploys from it — no server-side git required.
+
+Other stacks (Statamic, Bun, Laravel) keep their own implementations; the verbs
+are the same. See `memory/deploy-patterns.md`.
 
 ## `.env` discipline
 
@@ -81,10 +190,10 @@ Implementations differ per stack (Bedrock git-bundle, Statamic rsync, Bun single
 
 ```bash
 git checkout staging && git pull
-make feature NAME=my-feature
+make feature name=my-feature
 make dev
 # ... code ...
-make save     # commit + push
+make save     # commit
 ```
 
 ### Daily cycle on staging
@@ -92,8 +201,8 @@ make save     # commit + push
 ```bash
 make dev      # start local
 # ... code ...
-make save     # commit + push to staging
-make deploy   # deploy staging branch to staging environment
+make save     # commit
+make deploy env=staging
 ```
 
 ### Ship to production
@@ -101,7 +210,8 @@ make deploy   # deploy staging branch to staging environment
 ```bash
 make finish   # if on a feature branch, merge to staging
 # verify staging.<domain> looks right
-make ship     # merge staging → main, deploy to production (with confirmation)
+make release  # merge review branch → production branch
+make ship     # deploy to production (backups + typed confirmation)
 ```
 
 ### Hotfix
@@ -112,7 +222,7 @@ git checkout -b hotfix/critical-bug
 # ... fix ...
 make save
 git checkout main && git merge --no-ff hotfix/critical-bug && git push
-make deploy ENV=production     # or `make ship`
+make ship                      # production is always `make ship`
 git checkout staging && git merge --no-ff hotfix/critical-bug && git push  # backport
 ```
 
@@ -151,7 +261,9 @@ hosting:
   remote_path_production: <path>
 
 deploy:
-  method: makefile | git-push | rsync | rsync-staging-prod | manual | ftp | autogit | git-bundle-makefile | tbd
+  method: rsync | git-push | manual | ftp | autogit | tbd
+  # retired: makefile, git-bundle-makefile, rsync-staging-prod — the bundle
+  # deploy needed a .git on the target, which production usually lacked
   # method-specific config follows...
 
 local:

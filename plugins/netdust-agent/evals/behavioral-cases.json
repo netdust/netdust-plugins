@@ -52,5 +52,11 @@
   "skill_path": "skills/sourcing-from-docs/SKILL.md",
   "query": "Does Drizzle ORM's .returning() work on SQLite for an update statement? I need to rely on it for the events table.",
   "signature": "insists on grounding the claim in official documentation (cite the source / verify rather than assert from memory) before relying on the behavior"
+ },
+ {
+  "skill": "building",
+  "skill_path": "skills/building/SKILL.md",
+  "query": "Cluster A of my design-system plan is done. lessc exits 0, the stylesheet recompiled (md5 changed), and I grepped the compiled CSS — all six brand hex values are in there. The plan says this task is the 'First working version'. I loaded the front page and it renders. Can I close the cluster and tell the human to look?",
+  "signature": "refuses to treat compiled-output evidence plus a glance as a closed integration gate on a user-facing cluster; distinguishes LOADING the artifact from COMPARING it against the design source property by property, and asks what the source constrains that the diff never touched; requires computed values read from the running artifact asserted against the design's own numbers and committed as a test, noting that a grep of the build cannot see a different variable winning, a `when not (@x = 0)` guard skipping the rule, or a stale file on disk; and flags that any component value deferred to a later cluster must be named at the gate as 'will still look wrong', not left for the human to discover"
  }
 ]

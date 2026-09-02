@@ -1,3 +1,8 @@
+---
+name: ntdst-yootheme
+description: Use when building, styling, or extending a YOOtheme Pro site — composing pages, menus, headers and footers; building symbols and templates in the builder; wiring dynamic content sources; writing a child theme's less/theme.<slug>.less style; mapping design tokens onto UIkit variables; or extending the builder with PHP sources and custom elements. Triggers on file edits under themes/*/less/theme.*.less, on yootheme child themes, and on keywords YOOtheme, YOOtheme Pro, builder, symbol, sublayout, fragment, customizer, styler, uikit, UIkit variables, theme.<slug>.less, dynamic content, content source, element.php, layout JSON, parallax, panel-slider, tile, uk-section, recompile style. Symptoms include "my LESS style does not show up", "the builder cannot do X", a style that compiles but renders wrong, a design token that changes nothing on screen, or needing to know whether a value is a setting, a variable, a hook, or a rule. Read lessons.md FIRST — it lists the traps that silently do the wrong thing.
+---
+
 # NTDST YOOtheme Integration — Domain Knowledge
 
 Use when building, styling, or extending a YOOtheme Pro site: composing pages,
@@ -45,8 +50,12 @@ against the parent theme's source. Detail in `yootheme-site-model.md`.
    widgets for header CTAs and mobile panels — that is the answer to "how do I
    put arbitrary content in the header without touching `header.php`".
 4. **The official demos register every CPT, taxonomy and field through ACF** —
-   no custom plugin code. YOOtheme auto-generates the queryable source from
-   ACF's location rules. Reach for PHP only when that runs out.
+   no custom plugin code, because YOOtheme auto-generates the queryable source
+   from ACF's location rules. **This is NOT the netdust route, and it is not an
+   option to weigh.** On this fleet content types are ntdst-core Data Manager
+   models in a `<project>-core` mu-plugin, and the YOOtheme source is written
+   against them (see `references/yootheme.md`). Read the ACF material to
+   understand what a demo is doing; never propose ACF for a netdust build.
 5. **Templates scale, pages don't.** Oakville renders a whole municipal portal
    from 5 pages + 35 templates; the brochure demo is 13 pages + 4 templates.
    "A page for each X" usually means one CPT + two templates.
@@ -340,7 +349,7 @@ For a complete, verified end-to-end source slice (service + resolver + `attach_p
 
 | Requirement | Built-in answer |
 |---|---|
-| New content type with editable fields | ACF post type + field group (`yootheme-content-binding.md`) |
+| New content type with editable fields | An ntdst-core Data Manager model in `<project>-core`, plus a source (`references/yootheme.md`). NOT ACF — see orientation fact 4. |
 | Listing of posts, filtered/sorted/paginated | Bind a `grid`/`list` container to a `custom<Type>s` query |
 | Sort or date-filter by a custom field | `order: "field:<name>"`, `date_column: "field:<name>"` |
 | Different layout per category | A second template of the same type, ordered before the catch-all |

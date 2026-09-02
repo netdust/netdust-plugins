@@ -12,16 +12,15 @@ Scaffold a new Netdust WordPress project in the current working directory using 
    - Risk level: `low` / `medium` / `high`
    - Stack type: `bedrock` / `custom-app` / `custom-site`
    - Hosting provider: `ploi` / `combell` / `other`
-   - Deploy method (the canonical 9):
-     1. `makefile` — git-bundle Makefile, no GitHub required (Stride/VAD pattern)
-     2. `git-push` — Ploi auto-deploy on push
-     3. `rsync` — direct rsync local→remote
-     4. `rsync-staging-prod` — nested staging/production rsync (VAD style)
+   - Deploy method:
+     1. `rsync` — shared Makefile moves a closed payload over SSH (Combell / custom-app)
+     2. `git-push` — shared Makefile pushes, pulls on the server, then runs
+        `deploy.post_deploy` (Ploi / Bedrock). NOT auto-deploy: a push alone
+        does nothing when Ploi has no repository connected to the site.
+     3. `ftp` — PhpStorm auto-upload via FTP
+     4. `autogit` — Combell autogit symlinks
      5. `manual` — no automation, direct edits
-     6. `ftp` — PhpStorm auto-upload via FTP
-     7. `autogit` — Combell autogit symlinks
-     8. `git-bundle-makefile` — explicit git-bundle variant (Netdust style)
-     9. `tbd` — not yet decided
+     6. `tbd` — not yet decided
 
 2. Generate `site.yml` from `~/.claude/plugins/netdust-wp/templates/site.yml.tmpl`, substituting the answers.
 
@@ -36,19 +35,26 @@ Scaffold a new Netdust WordPress project in the current working directory using 
    └── todo.md      (empty)
    ```
 
-5. Set up deploy according to the chosen method. Every one of the 9 methods has a defined outcome — never leave the user without an explanation:
+5. Set up deploy. Every project that deploys over SSH gets the SAME workflow —
+   the gate (clean tree, right branch, HEAD pushed), the ledger (`make deployed`,
+   `deployed/<env>` tags, `make rollback`), and the promotion path. Only the
+   transport differs.
+
+   Copy `templates/Makefile` and `templates/scripts/` into the project verbatim —
+   neither carries a project-specific value, so nothing is substituted. Then fill
+   `site.yml`'s `environments:` and `deploy:` blocks.
+
+   No per-project skill is needed: `netdust-core:dev-stack` maps "fix this",
+   "push to staging" and "ship it" onto the make targets for every project.
 
    | Method | Scaffold action |
    |---|---|
-   | `makefile` | Copy the **VARIANT: makefile** section from `templates/Makefile.tmpl` (the whole section between its banner and the next), substitute the `{{...}}` placeholders from `site.yml`. |
-   | `git-bundle-makefile` | Copy the **VARIANT: git-bundle-makefile** section, substitute placeholders. |
-   | `git-push` | Copy the **VARIANT: git-push** section, substitute placeholders (incl. `{{STAGING_BRANCH}}` / `{{PRODUCTION_BRANCH}}`). |
-   | `rsync` | No Makefile. Deploy is a direct `rsync` — record the exact `rsync` command in `site.yml` `deploy.staging_command` / `production_command`. Tell the user it runs via `/deploy`. |
-   | `rsync-staging-prod` | No Makefile. Same as `rsync` but with separate nested staging/production paths — record both commands in `site.yml`. |
-   | `ftp` | No Makefile. Deploy is PhpStorm/IDE FTP auto-upload — note in `site.yml` `deploy.note` that there is no CLI deploy; the IDE handles it. |
+   | `rsync` | `deploy.method: rsync`. Fill `deploy.payload` with the custom plugins/themes this project owns, plus `wp_path`, `content_dir`, `state_dir` and each environment's `path`. The environment directory is the web root. Supersedes the old `makefile`, `git-bundle-makefile` and `rsync-staging-prod` methods — the git-bundle deploy required a `.git` on the target and did not survive contact with production. |
+   | `git-push` | `deploy.method: git-push` (Ploi/Bedrock). Fill `deploy.post_deploy` with the steps a push does not perform — typically `composer install --no-dev --no-interaction` and an FPM reload. A push alone does NOT deploy when Ploi has no repository connected, and FPM with `opcache.validate_timestamps=0` keeps the pull invisible until reloaded. |
+   | `ftp` | No Makefile. Deploy is PhpStorm/IDE FTP auto-upload — note in `site.yml` `deploy.note` that there is no CLI deploy. |
    | `autogit` | No Makefile. Combell autogit symlinks handle deploy on push — note the watched branch in `site.yml`. |
-   | `manual` | No Makefile. Note in `site.yml` `deploy.note` that deploys are manual/direct edits — `/deploy` will refuse and tell the user. |
-   | `tbd` | No Makefile. Write `deploy.method: tbd` and a `deploy.note: "deploy method not yet decided — set before first ship"` so the gap is explicit, not silent. |
+   | `manual` | No Makefile. Note in `deploy.note` that deploys are manual — `/deploy` will refuse and tell the user. |
+
 
    For any "No Makefile" method, do NOT create a `Makefile`; instead make sure `site.yml` carries enough in `deploy.*` that a later session (or `/deploy`) knows what to do.
 

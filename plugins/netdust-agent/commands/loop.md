@@ -18,6 +18,9 @@ Preconditions — refuse to arm (say why) if any fails:
 2. **Class A/B only.** C/D/E are single cycles; nothing to loop.
 3. **Stage 1.5 green:** run `python3 <plugin>/bin/gate-check.py <feature-dir>`
    — exit 0 required. A loop on a gate-failing plan grinds a defective plan.
+3b. **On a `site.yml` project, the branch is `feature/*` or `hotfix/*`.** A loop on a
+   rung branch would commit every task straight onto a deploy branch; refuse and name
+   `make feature name=<x>` (the guard would deny the commits anyway — FR-24).
 4. **No marker already armed.** If `tasks/.harness-loop.json` already exists
    and was not written by this loop, something else is driving RIGHT NOW —
    never overwrite it. One marker path, one driver.
@@ -32,6 +35,9 @@ Then:
 7. Ensure `.gitignore` contains `tasks/.harness-loop.json` (runtime state,
    never committed — same treatment as the stop-hook sidecar).
 8. Emit `python3 <plugin>/bin/run-trace.py append <feature-dir> loop-armed budget=<N>`.
+8b. Under herdr (`HERDR_ENV=1`): arm the doorbell on this pane in the background so the
+   operator is rung on block and settle — `skills/_shared/herdr-moments.md`, "Unattended
+   run" row (the script and its syntax live in `netdust-core:herdr-orchestration`).
 9. Confirm to the user in two lines: armed, budget, and how the loop ends
    (FINISHED → disarms, Stage 3 runs attended · `[HUMAN]` task → yields with
    the question · budget/dry-loop → disarms · `/loop off` anytime).

@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""Read one value out of site.yml.
+
+Usage:  scripts/site environments.staging.path
+
+Scalars print on one line. Lists print one item per line. Booleans print
+true/false. A mapping prints its keys, one per line, so `scripts/site
+environments` lists the environment names. A missing key exits 1. Bad usage
+or a missing PyYAML exits 2.
+"""
+import os
+import sys
+
+try:
+    import yaml
+except ImportError:
+    sys.stderr.write("scripts/site: PyYAML is required (pip3 install --user pyyaml)\n")
+    sys.exit(2)
+
+
+def main():
+    if len(sys.argv) != 2:
+        sys.stderr.write("usage: scripts/site <dotted.key>\n")
+        return 2
+
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "site.yml")
+    with open(path) as handle:
+        node = yaml.safe_load(handle)
+
+    for part in sys.argv[1].split("."):
+        if not isinstance(node, dict) or part not in node:
+            sys.stderr.write("scripts/site: no such key: %s\n" % sys.argv[1])
+            return 1
+        node = node[part]
+
+    if node is None:
+        return 1
+    if isinstance(node, bool):
+        print("true" if node else "false")
+    elif isinstance(node, dict):
+        for key in node:
+            print(key)
+    elif isinstance(node, list):
+        for item in node:
+            print(item)
+    else:
+        print(node)
+    return 0
+
+
+sys.exit(main())
