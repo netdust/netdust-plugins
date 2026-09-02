@@ -1,12 +1,10 @@
 # YOOtheme Builder Layouts — the JSON grammar and prop vocabulary
 
-The builder's storage format is plain JSON. Knowing it lets you read a layout,
-diff two pages, script a change across a site, or hand-author a section instead
-of clicking. This file documents the grammar and the prop vocabulary **as the
-official demos actually use it** — a census over six shipped sites (7,829 nodes,
-1,781 of them dynamically bound) plus the parent theme's element definitions.
-
-Read this alongside `yootheme-site-model.md` (where layouts are stored).
+The builder's storage format is plain JSON: read a layout, diff two pages, script a
+change, or author a section in `scripts/yoo_layout.py`. Grammar and prop vocabulary as
+the official demos use it, verified against the parent's element definitions (5.0.43).
+`scripts/yoo-lint.php` checks a layout against those definitions — run it before every
+write. Where layouts are stored: `yootheme-site-model.md`; real shapes to copy: `sections/`.
 
 ---
 
@@ -42,9 +40,7 @@ layout → section → row → column → element
 ```
 
 `section` sets the full-bleed band (background, padding, height). `row` is the
-UIkit grid. `column` is a grid cell. Elements live in columns. In the census:
-317 sections, 856 rows, 1,441 columns — roughly 2.7 rows per section, 1.7
-columns per row.
+UIkit grid. `column` is a grid cell. Elements live in columns.
 
 `fragment` is the fifth structural type: a transparent group inside a column,
 used to bind a whole block to a query or a condition, and used as the root of
@@ -134,9 +130,8 @@ smaller one.
 ### Visibility and order
 
 * `visibility`: `s` · `m` · `l` · `xl` (show **from** that breakpoint) or
-  `hidden-s` · `hidden-m` · `hidden-l` · `hidden-xl` (hide from it). The demos
-  pair them to swap a desktop and a mobile variant of the same block — 167 uses
-  on `headline` alone.
+  `hidden-s` · `hidden-m` · `hidden-l` · `hidden-xl` (hide from it). Pair them to swap
+  a desktop and a mobile variant of the same block.
 * `column.order_first`: `xs` · `s` · `m` · `l` — pull a column first from that
   breakpoint up, leaving natural order below. This is the idiomatic
   "image above text on mobile, beside it on desktop".
@@ -211,16 +206,13 @@ Any element takes a `css` prop, scoped to that element:
 "css": "@media(min-width: 1200px) {\n    .el-element { margin-top: 100px; }\n}"
 ```
 
-Selectors are `.el-element` (the wrapper), plus per-element hooks —
-`.el-row`, `.el-column`, `.el-image`, `.el-title`, `.el-content`. 120+ uses
-across the demos, mostly for one-off overlaps and negative margins the prop set
-doesn't reach. **Reach for it last** — it is invisible to the style system and
-does not participate in the LESS token vocabulary.
+Selectors are `.el-element` (the wrapper), plus `.el-row`, `.el-column`, `.el-image`,
+`.el-title`, `.el-content`. **Reach for it last** — it is invisible to the style system.
 
 ### Anchors
 
 `id` on a section or row emits the DOM id — `"id": "philosophy"` — which is how
-in-page nav links (`link: "#philosophy"`) work. 47 uses.
+in-page nav links (`link: "#philosophy"`) work.
 
 ---
 
@@ -257,10 +249,9 @@ query, then dress the whole listing from the `grid`'s props.
 * Display: `heading-small` · `heading-medium` · `heading-large` · `heading-xlarge` · `heading-2xlarge` · `heading-3xlarge`
 * Body: `lead` · `large` · `small` · `default` · `meta`
 
-`title_element` is chosen **independently** of `title_style` — the demos ship
-`{"title_element":"div","title_style":"heading-2xlarge"}` constantly, keeping
-`h1`/`h2` for real document structure while any element can *look* like a
-heading. Keep that discipline: 257 of 591 headlines render as `div`.
+`title_element` is chosen **independently** of `title_style` — `{"title_element":"div",
+"title_style":"heading-2xlarge"}` keeps `h1`/`h2` for document structure while any
+element can *look* like a heading. Keep that discipline.
 
 Colours: `title_color` / `text_color` take `primary` · `secondary` · `muted` ·
 `emphasis` · `background` · `light` · `dark` — semantic slots your LESS defines,
@@ -271,52 +262,13 @@ measure — the standard way to keep body copy readable in a wide section.
 
 ---
 
-## A minimal, idiomatic section
+## A real section to copy
 
-```json
-{
-  "type": "section",
-  "props": { "style": "muted", "width": "expand",
-             "padding_top": "xlarge", "padding_bottom": "xlarge" },
-  "children": [{
-    "type": "row",
-    "props": { "layout": "1-2,1-2", "column_gap": "large", "margin_top": "remove" },
-    "children": [
-      { "type": "column",
-        "props": { "width_medium": "1-2", "vertical_align": "middle",
-                   "order_first": "m", "image_position": "center-center",
-                   "position_sticky_breakpoint": "m" },
-        "children": [
-          { "type": "headline",
-            "props": { "content": "What we do", "title_element": "h2",
-                       "title_style": "heading-large", "margin_bottom": "small",
-                       "image_align": "left", "image_margin": "xsmall" } },
-          { "type": "text",
-            "props": { "content": "<p>…</p>", "maxwidth": "large",
-                       "column_breakpoint": "m", "margin_top": "remove" } }
-        ] },
-      { "type": "column",
-        "props": { "width_medium": "1-2", "image_position": "center-center",
-                   "position_sticky_breakpoint": "m" },
-        "children": [
-          { "type": "image",
-            "props": { "image": "wp-content/uploads/2026/01/shot.jpg",
-                       "image_width": 1200, "image_svg_color": "emphasis",
-                       "margin_top": "default", "margin_bottom": "default" } }
-        ] }
-    ]
-  }]
-}
-```
-
-Note the props that look like noise but are the shipped defaults —
-`image_position` on every single column (674 of 677 are `center-center`),
-`position_sticky_breakpoint: "m"`, `image_align`/`image_margin` on headlines.
-The builder writes them whether or not they do anything. **Don't strip them**
-when hand-editing; round-tripping through the builder puts them back and you'll
-churn the diff.
-
----
+`sections/` holds six shapes lifted from a shipped site and linted clean — hero, page
+header, logo marquee, FAQ, CPT card grid, CTA band. Copy one, swap content and
+bindings, **keep every prop**: `image_position: center-center` on every column,
+`position_sticky_breakpoint: "m"`, `image_align`/`image_margin` on headlines are the
+builder's own defaults. Strip them and a builder save puts them back, churning the diff.
 
 ## Reading element definitions
 

@@ -82,22 +82,10 @@ latter scoped to `taxonomy-<tax>`).
 > template — if a query you expect is missing from the dropdown, check you are
 > editing the right template *type*.
 
-So `source.query.name` reads `"<group>.<query>"`. Counts from the six demos
-(1,781 bound nodes total):
-
-| Seen in demos | Count | Means |
-|---|--:|---|
-| `#parent` | 1274 | **the item from the enclosing repeat scope** |
-| `posts.singlePost` | 79 | the post being viewed (in a `single-post` template) |
-| `matchCats.customMatchCat` | 33 | one specific `match_cat` term |
-| `events.customEvents` | 32 | a configured list of `event` posts |
-| `customMenuItems` / `customMenuItem` | 21 / 18 | WP nav-menu items (root-level query) |
-| `search` | 21 | the search result set |
-| `teams.singleTeam`, `products.singleProduct` | 18 / 16 | current item in their `single-*` templates |
-| `site` | 12 | site-wide fields (name, URL, …) |
-
-77 distinct queries appear across the six sites. **`#parent` is 72% of all
-bindings** — the repeat/inherit mechanism below is the thing to learn.
+So `source.query.name` reads `"<group>.<query>"`. Across six demo sites 72% of all
+bindings are `#parent` — the repeat/inherit mechanism below is the thing to learn;
+`site` (site-wide fields) and `customMenuItems` (a WP menu) are the root-level queries
+worth knowing.
 
 Built-in fields on any post type (`PostType.php`): `title`, `content`, `teaser`,
 `excerpt`, `date`, `modified`, `metaString`, `categoryString`, `featuredImage`
@@ -226,10 +214,6 @@ Three idioms worth stealing, straight from the demos:
                                                                   // display a URL without its protocol
 ```
 
-By frequency across the six sites: `condition` 455 uses, `before`/`after` ~150,
-`date` ~120, `search` ~60. Conditional display is the single most-used filter —
-see `_condition` above.
-
 ### Query arguments
 
 List queries take a rich argument set (`CustomPostQueryType.php`):
@@ -330,24 +314,13 @@ size per template — not `pre_get_posts`.
 
 ---
 
-## 5. Design guidance from the demos
+## 5. Design guidance
 
-**Templates scale, pages don't.** Oakville renders a municipal portal from
-5 pages + 35 templates; Glowbar is a brochure with 13 pages + 4 templates. When
-a request sounds like "a page for each X", the shape is usually one CPT, one
-`archive-` template, one `single-` template — plus specific templates layered in
-front for the categories that need to look different.
-
-**Variants are templates, not conditionals.** Rather than one template full of
-`_condition` blocks, the demos ship several templates of the same type ordered
-by specificity — "Post 2 Columns" / "Post Gallery" / "Post Sections" / "Post".
-Reserve `_condition` for field-level presence checks (hide the address line when
-there's no address), not for whole-layout branching.
-
-**Order-by-specificity is fragile by construction.** Nothing validates it. After
-adding a template, re-check that the catch-all is still last.
-
----
+**Templates scale, pages don't** — "a page for each X" is one CPT, one `archive-` and one
+`single-` template, plus specific templates layered in front for categories that differ.
+**Variants are templates, not conditionals**: several templates of one type ordered by
+specificity, with `_condition` reserved for field-level presence. Nothing validates the
+order — after adding a template, re-check that the catch-all is still last.
 
 ## Anti-patterns
 

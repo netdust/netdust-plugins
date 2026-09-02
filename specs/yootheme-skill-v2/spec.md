@@ -183,8 +183,9 @@ As the human partner, no `memory/` appears inside a vendor tree because a sessio
   distinct finding codes and exit 1, the good fixture yields 0 findings and exit 0, and a
   `yoo_layout.py`-built section round-trips through lint with 0 findings.
 - **SC-3:** SKILL.md ≤ 7,000 bytes; lessons.md ≤ 18,000 bytes; SKILL.md + workflow.md +
-  lessons.md + yootheme-builder-json.md + yootheme-content-binding.md ≤ 45,000 bytes (88,000
-  today) — checked by `evals/yootheme-budget.sh`.
+  lessons.md + yootheme-builder-json.md + yootheme-content-binding.md ≤ 55,000 bytes (88,000
+  today; relaxed from 45,000 at T10 — the two references keep their prop tables, which are
+  the lookup an agent needs) — checked by `evals/yootheme-budget.sh`.
 - **SC-4:** 3 checks pass on `edushare.ddev.site`: `yoo-content.php page set` of a layout
   without `version` stores the root version; `yoo-measure.mjs` on `/inspirerende-verhalen/` prints ≥ 3 sections
   with non-zero rects; `yoo-recompile.mjs` changes the md5 of `css/theme.*.css` in 1 run.

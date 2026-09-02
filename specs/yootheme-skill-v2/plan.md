@@ -19,7 +19,7 @@
 - ACF appears in the skill only inside the "reading a demo package" aside (FR-2). Never as an option.
 - No script writes to the DB without the existing backup + `config.save|filter` / builder-pipeline route in `yoo-content.php` / `yoo-config.php` (unchanged).
 - Comments follow the house rule: short, "why" only; no banners.
-- SKILL.md ≤ 7,000 bytes · lessons.md ≤ 18,000 bytes · the page-build load ≤ 45,000 bytes (SC-3).
+- SKILL.md ≤ 7,000 bytes · lessons.md ≤ 18,000 bytes · the page-build load ≤ 55,000 bytes (SC-3, relaxed from 45,000 at T10).
 - Superpowers' `docs/superpowers/plans/` location is overridden by this repo's `specs/<feature>/` convention.
 
 ---

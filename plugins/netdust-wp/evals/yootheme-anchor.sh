@@ -29,10 +29,10 @@ PATTERNS=(
 
 total=0
 for p in "${PATTERNS[@]}"; do
-  n=$(grep -rnE -- "$p" "${SCOPE[@]}" 2>/dev/null | grep -v 'evals/' | wc -l)
+  n=$(grep -rnE -- "$p" "${SCOPE[@]}" 2>/dev/null | grep -v 'evals/\|yoo-lint-stubs.php' | wc -l)
   if [ "$n" -gt 0 ]; then
     printf '%4d  %s\n' "$n" "$p"
-    grep -rnE -- "$p" "${SCOPE[@]}" | head -3 | sed 's/^/        /'
+    grep -rnE -- "$p" "${SCOPE[@]}" | grep -v 'yoo-lint-stubs.php' | head -3 | sed 's/^/        /'
     total=$((total + n))
   fi
 done
