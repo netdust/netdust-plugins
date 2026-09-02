@@ -471,16 +471,31 @@ def git_commit_memory(cwd: str) -> None:
             cwd=cwd, capture_output=True,
         )
 
-        status = subprocess.run(
-            ["git", "diff", "--cached", "--quiet"],
-            cwd=cwd, capture_output=True,
-        )
-        if status.returncode == 0:
-            return  # Nothing staged
+        # Both the "is there anything to do" check and the commit are scoped to the
+        # same paths. A bare `git diff --cached` sees the WHOLE index, so an unrelated
+        # staged change made mid-session would make the hook think it had memory to
+        # capture; a bare `git commit` then writes that whole index under a
+        # memory(...) subject. That is how a mid-build `git rm` once lost 308 lines of
+        # PHP to an "auto-capture session end" commit. The hook must be structurally
+        # incapable of committing anything outside these paths.
+        # Commit the staged FILES, not the directories. Two reasons, both learned the
+        # hard way: a bare `git commit` writes the WHOLE index, which is how a
+        # mid-build `git rm` once lost 308 lines of PHP under a memory(...) subject;
+        # and a directory pathspec matching nothing is fatal for the whole command,
+        # so `-- memory/ tasks/` dies whenever one of them is empty. The staged list
+        # is exact, always non-empty here, and can name nothing outside these paths.
+        staged = subprocess.run(
+            ["git", "diff", "--cached", "--name-only", "-z", "--", *paths],
+            cwd=cwd, capture_output=True, text=True,
+        ).stdout.split("\0")
+        staged = [p for p in staged if p]
+        if not staged:
+            return  # Nothing staged under memory/ or tasks/
 
         project = Path(cwd).name
         subprocess.run(
-            ["git", "commit", "-m", f"memory({project}): auto-capture session end"],
+            ["git", "commit", "-m", f"memory({project}): auto-capture session end",
+             "--", *staged],
             cwd=cwd, capture_output=True,
         )
     except Exception as e:
