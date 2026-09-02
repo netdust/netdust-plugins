@@ -133,6 +133,14 @@ SC-6 grep at the Cluster C/D gates).
   session-review role and the dispatch-brief recipe. `herdr-moments.md` cites those by
   section and adds ONLY the mapping to harness stages. The building lesson of 2026-08-09
   (parallel dispatch in one checkout) names the exact failure FR-15 prevents.
+- **G9 — herdr vs dev-stack disagree on the base branch:**
+  `herdr-orchestration/SKILL.md` ("Decision — topology follows the checkout") shows
+  `herdr worktree create … --base master --branch fix/<name>`; `dev-stack/SKILL.md`
+  ("Git branch strategy") says features branch from `development`, hotfixes from `main`,
+  `make feature` / `make hotfix` do it correctly, and branching elsewhere "ships every
+  unfinished change sitting there". The herdr line is an example for a framework fix on a
+  master-default repo, not a rule; FR-21 makes dev-stack the authority and reads the base
+  from `site.yml`.
 - **G8 — run-cost fields:** `bin/run-cost.py` reads `message.usage` from assistant lines;
   the sibling key `message.model` is present on the same records in this box's own
   transcripts (checked on the current session's jsonl).

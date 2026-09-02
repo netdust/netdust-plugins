@@ -77,11 +77,11 @@ RED until: `plugins/netdust-agent/tests/test_spec_gate_check.py::test_lane_behav
 
 ### Cluster C — the spine texts (4 tasks · effective stakes: standard · provisional tier: LIGHT)
 
-- [ ] T07 [Tier B] `building` SKILL.md: the behaviour-lane execution path (cluster RED first, one implementer per task with no per-task RED, no post-cluster test-author, no cluster panel, close on RED-green + integration gate + `Artifact-diff:`), the contract lane stated as today's path unchanged, the Stage 3 rule (shake-out only with real acceptance flows; LIGHT branch review for all-behaviour branches under non-high stakes), dispatch sites citing `model-ladder.md` by name, and the herdr moments cited from `herdr-moments.md` (isolation rule for `[P]` and split pairs; the status tab; the branch-review pane).  (files: plugins/netdust-agent/skills/building/SKILL.md)
+- [ ] T07 [Tier B] `building` SKILL.md: the behaviour-lane execution path (cluster RED first, one implementer per task with no per-task RED, no post-cluster test-author, no cluster panel, close on RED-green + integration gate + `Artifact-diff:`), the contract lane stated as today's path unchanged, the Stage 3 rule (shake-out only with real acceptance flows; LIGHT branch review for all-behaviour branches under non-high stakes), dispatch sites citing `model-ladder.md` by name, the herdr moments cited from `herdr-moments.md` (isolation rule for `[P]` and split pairs; the status tab; the branch-review pane), and every branch decision on a `site.yml` project routed to `netdust-core:dev-stack` (`make feature` / `make hotfix` / `make finish`; worktree base = the integration branch from `site.yml`, never a hard-coded `master`).  (files: plugins/netdust-agent/skills/building/SKILL.md)
   Test-author: solo — Tier B.
   Proven by: machine gate — Cluster A's lane checks and Cluster B's tests enforce the mechanics; this text cites them by name (standing line), verified by the Cluster C grep.
   Unit test: no unit test: Tier B, skill prose over mechanics landed in T01–T06.
-  (FR-6, FR-8, FR-11, FR-15, FR-16, FR-17)
+  (FR-6, FR-8, FR-11, FR-15, FR-16, FR-17, FR-21)
 
 - [ ] T08 [Tier B] Agent bodies: `implementer` gains the `behaviour` dispatch mode (no self-authored RED, suite green except the ledger-named cluster RED, STATUS block + `HARNESS-EVIDENCE:` line, `NEEDS_CONTEXT` when the task edits a sensitive-glob path — said before the hook blocks it); `test-author` Mode 1 is scoped to contract-lane clusters and behaviour-lane cluster REDs on request; `reviewer` notes the branch-review-only posture for behaviour-lane branches and where its report lands under herdr.  (files: plugins/netdust-agent/agents/implementer.md, plugins/netdust-agent/agents/test-author.md, plugins/netdust-agent/agents/reviewer.md)
   Test-author: solo — Tier B.
@@ -95,7 +95,7 @@ RED until: `plugins/netdust-agent/tests/test_spec_gate_check.py::test_lane_behav
   Unit test: no unit test: Tier B, skill prose.
   (FR-9, FR-14)
 
-- [ ] T10 [Tier B] `skills/_shared/herdr-moments.md` (moment → primitive → when NOT to; cites `netdust-core:herdr-orchestration` sections for channels/topology/traps; no syntax), `/loop` arms `scripts/herdr-watcher.sh` on the working pane under herdr, `compounding` Pass B reads `memory/session-review/*-proposals.md`, `/shakeout` runs `shakeout-qa` only when `## Acceptance flows` is not N/A and takes the branch tier from the lane rule.  (files: plugins/netdust-agent/skills/_shared/herdr-moments.md, plugins/netdust-agent/commands/loop.md, plugins/netdust-agent/skills/compounding/SKILL.md, plugins/netdust-agent/commands/shakeout.md)
+- [ ] T10 [Tier B] `skills/_shared/herdr-moments.md` (moment → primitive → when NOT to; cites `netdust-core:herdr-orchestration` sections for channels/topology/traps and `netdust-core:dev-stack` for the worktree base rule; no syntax), `/loop` arms `scripts/herdr-watcher.sh` on the working pane under herdr, `compounding` Pass B reads `memory/session-review/*-proposals.md`, `/shakeout` runs `shakeout-qa` only when `## Acceptance flows` is not N/A and takes the branch tier from the lane rule.  (files: plugins/netdust-agent/skills/_shared/herdr-moments.md, plugins/netdust-agent/commands/loop.md, plugins/netdust-agent/skills/compounding/SKILL.md, plugins/netdust-agent/commands/shakeout.md)
   Test-author: solo — Tier B.
   Proven by: framework — command/skill prose; herdr syntax authority stays `herdr --skill` by design, so there is nothing mechanical to pin beyond SC-6's grep.
   Unit test: no unit test: Tier B, prose; SC-6 grep at the cluster gate.

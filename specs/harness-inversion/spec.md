@@ -188,6 +188,18 @@ nothing changes.
   context: the pane/tab/workspace ids and a pointer to `herdr-moments.md`. Source: invented —
   approved 2026-09-02 (cheapest possible detection, no per-skill re-checking).
 
+### dev-stack, at the same moments
+- **FR-21:** On a project carrying a `site.yml`, `building` takes every branch decision from
+  `netdust-core:dev-stack`, never from a herdr example or a superpowers default: feature
+  work starts with `make feature name=<x>` (or a worktree whose `--base` is the integration
+  branch read from `site.yml`), a Class D fix starts with `make hotfix` from the production
+  branch, atomic commits use `make save` or a plain commit on that branch, and the branch
+  finishes with `make finish` — `superpowers:finishing-a-development-branch` is subordinate
+  to dev-stack's verbs there. `herdr-moments.md` states the worktree base rule in one line
+  and cites dev-stack for the ladder. Source: "avoid git/dev stack errors" + "dev stack is
+  important" (Stefan, 2026-09-02); the conflict it resolves is ground-truthed in the plan
+  (G9).
+
 ### Record
 - **FR-20:** The plugin version bumps 0.20.0 → 0.21.0; the manifest description names the
   lane; `_shared/calibrations.md` gains `yootheme-6-of-6-tier-a` (the corpus evidence above);
