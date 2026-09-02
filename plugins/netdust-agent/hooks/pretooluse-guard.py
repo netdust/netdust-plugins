@@ -48,6 +48,7 @@ Logs to ~/.claude/logs/memory-hook.log (shared with the other hooks).
 """
 
 import json
+import subprocess
 import re
 import sys
 from pathlib import Path
@@ -98,7 +99,7 @@ DENYLIST: list[tuple[str, re.Pattern]] = [
     # `HEAD:main` or a fully-qualified `refs/heads/main`) — a branch name that
     # merely contains the word (`feature/main-nav`) must not trip the guard.
     ("git push directly to main/master",
-     re.compile(rf"(?m){_SEP}git\s+push\b[^\n]*\s(?:\S*[:/])?(?:main|master)(?=\s|$)", re.IGNORECASE)),
+     re.compile(rf"(?m){_SEP}git\s+push\b[^\n]*[\s+](?:\S*:|refs/heads/)?(?:main|master)(?=\s|$)", re.IGNORECASE)),
 
     # Attack 5 — destructive SQL as an executed statement (mysql -e '...', psql -c).
     ("destructive SQL (DROP/TRUNCATE)",
@@ -209,6 +210,230 @@ def check_upstream_floor(hook_input: dict) -> dict | None:
     }
 
 
+# ── The flow floor (harness-inversion FR-24, 2026-09-02) ─────────────────────
+#
+# On a project carrying `site.yml`, the Makefile's verbs are the only door to a rung
+# branch (the branches site.yml binds to environments). Agents routed around the flow
+# when a verb died on a git error, or simply skipped it; the last gate — the deploy
+# gate — refused hours after a commit landed on the wrong rung. This floor denies the
+# raw git writes that bypass the flow AT THE COMMAND, naming the make verb that does it
+# right. `deny`, not `ask`, on the upstream-floor reasoning: the correction is
+# agent-side and costs one tool call. `make …` commands are never inspected — the verbs
+# are the door — except when input is PIPED into a confirming verb, which is the one
+# way to run `make ship` without a human typing yes.
+#
+# Rung names: `scripts/site environments.<e>.branch` when that reader is present (the
+# project's own truth), else a dependency-free read of `branch:` lines under
+# `environments:` in site.yml, else the fleet defaults. No site.yml anywhere up to the
+# git toplevel → not a flow project → this floor does not exist. Every tooling failure
+# (git missing, unreadable cwd, a subprocess timeout) fails OPEN like the rest of the hook.
+
+FLOW_DEFAULT_RUNGS = ("main", "master", "staging", "development")
+FLOW_CONFIRMING_VERBS = r"(?:ship|release|promote|deploy)"
+# A make invocation that reaches a confirming verb (the verb must END there —
+# `deploy-test` is not `deploy`).
+FLOW_MAKE_CONFIRM = re.compile(
+    rf"\bmake\b(?:\s+[^\s|<>;&'\"]+)*\s+{FLOW_CONFIRMING_VERBS}(?=[\s'\";&|)]|$)", re.IGNORECASE)
+# …with its stdin forged: a pipe into it, ANY `<` redirect/here-doc/here-string in the
+# command, or a pty/shell wrapper. The Makefile's own `[ -t 0 ]` check is the closing
+# fix (a forged stdin is not a terminal); this is the belt.
+FLOW_STDIN_FORGERY = re.compile(
+    r"(?:\|\s*(?:[^\s|]+\s+)*?make\b|<|\b(?:expect|script|unbuffer|socat)\b|\b(?:sh|bash|zsh|dash)\s+-[a-z]*c\b)",
+    re.IGNORECASE)
+# Where a git write may start: the line, a shell separator/grouping, a command
+# substitution, a control keyword, a wrapper, or an env assignment.
+_FLOW_SEP = (r"(?:^|[;&|(){}]\s*|\$\(\s*|`\s*|\b(?:then|do|else)\s+"
+             r"|\b(?:command|time|nice|sudo|exec|env)\s+(?:\w+=\S*\s+)*|(?:\b\w+=\S*\s+)+)")
+# `git` with any global options between it and the verb (`-C path`, `-c k=v`, `--no-pager`, `-P`),
+# an escaped `\git`, and a quoted verb.
+_FLOW_GIT = r"\\?git(?:\s+(?:-[cC]\s*\S+|-[pP]\b|--[\w-]+(?:=\S+)?))*\s+['\"]?"
+FLOW_WRITE_ON_BRANCH = re.compile(
+    rf"(?m){_FLOW_SEP}{_FLOW_GIT}(commit|merge|rebase|cherry-pick|am|revert|reset|"
+    rf"checkout\s+-b|switch\s+-c|branch\s+(?:-f|--force|-M|-m)|update-ref|symbolic-ref|"
+    rf"stash\s+(?:pop|apply))(?=[\s'\"]|$)", re.IGNORECASE)
+FLOW_RESET_MOVES_REF = re.compile(r"--(?:hard|keep|merge|soft|mixed)\b|\bHEAD[~^]|@\{|\b[0-9a-f]{7,40}\b", re.IGNORECASE)
+FLOW_PUSH = re.compile(rf"(?m){_FLOW_SEP}{_FLOW_GIT}push\b([^\n;&|]*)", re.IGNORECASE)
+FLOW_FETCH = re.compile(rf"(?m){_FLOW_SEP}{_FLOW_GIT}fetch\b([^\n;&|]*)", re.IGNORECASE)
+FLOW_BRANCH_DELETE = re.compile(
+    rf"(?m){_FLOW_SEP}{_FLOW_GIT}branch\s+(?:-[dD]|--delete)(?:\s+(?:-f|--force))?\s+(\S+)", re.IGNORECASE)
+# a ref write that NAMES a rung — denied from any branch, the current one is irrelevant
+FLOW_REF_WRITE = re.compile(
+    rf"(?m){_FLOW_SEP}{_FLOW_GIT}(?:branch\s+(?:-f|--force|-M|-m)\s+(\S+)|update-ref\s+(?:refs/heads/)?(\S+))",
+    re.IGNORECASE)
+FLOW_SWITCH_TO = re.compile(
+    rf"(?m){_FLOW_SEP}{_FLOW_GIT}(?:checkout|switch)(?:\s+-(?![bBcC]\b|-orphan)[a-zA-Z-]+)*\s+(?!-)(\S+)", re.IGNORECASE)
+
+FLOW_VERB_FOR = {
+    "commit": "make feature name=<x> first (a rung is deploy-only), then commit there",
+    "merge": "make finish (feature → integration, hotfix → production and back down) or make promote name=<x>",
+    "rebase": "make finish — the rungs are merged --no-ff, never rebased",
+    "cherry-pick": "make hotfix name=<x>, then make finish",
+    "am": "make hotfix name=<x>, then make finish",
+    "revert": "make hotfix name=<x> carrying the revert, then make finish",
+    "reset": "make rollback env=<name> — a rung's history is the deploy ledger",
+    "checkout -b": "make feature name=<x> / make hotfix name=<x> — they pick the right base from site.yml",
+    "switch -c": "make feature name=<x> / make hotfix name=<x> — they pick the right base from site.yml",
+    "branch -f": "make finish — a rung pointer moves only by a --no-ff merge through the flow",
+    "update-ref": "make finish — a rung pointer moves only by a --no-ff merge through the flow",
+    "symbolic-ref": "make feature name=<x> — never re-point HEAD at a rung by hand",
+    "stash pop": "make feature name=<x>, then pop the stash there",
+    "stash apply": "make feature name=<x>, then apply the stash there",
+    "push": "make finish (it pushes the rung it merged into) or make deploy env=<name>",
+    "fetch": "make finish — a rung is updated by merging through the flow, never by a fetch refspec",
+    "branch -D": "make finish / make promote name=<x> — a rung is never deleted; the flow promotes through it",
+}
+
+
+def _rung_named(args: str, rungs: set[str]) -> str | None:
+    """A rung named as a WHOLE ref token in push/fetch args: `development`,
+    `HEAD:development`, `+development`, `refs/heads/development`, `:development`
+    (delete) — never `feature/main-nav` or `hotfix/staging-fix`."""
+    for b in rungs:
+        if re.search(rf"(?:^|[\s:+])(?:refs/heads/)?{re.escape(b)}(?=\s|$)", args):
+            return b
+    return None
+
+
+def _flow_project_root(cwd: str) -> Path | None:
+    """The nearest ancestor of cwd (inclusive) carrying site.yml, stopping at the git
+    toplevel or the filesystem root. None → not a flow project."""
+    try:
+        d = Path(cwd).resolve()
+    except Exception:
+        return None
+    for p in (d, *d.parents):
+        if (p / "site.yml").is_file():
+            return p
+        if (p / ".git").exists():
+            return None
+    return None
+
+
+def _flow_rungs(root: Path) -> set[str]:
+    """Branch names bound to environments. A dependency-free read of `branch:` lines
+    under `environments:` in site.yml FIRST — this hook fires on every Bash call, and
+    the reviewer measured ~160 ms per call when scripts/site ran N+1 interpreters;
+    the regex costs nothing. `scripts/site` (the project's own reader) only when the
+    regex finds nothing (an exotic YAML shape), then the fleet defaults."""
+    try:
+        text = (root / "site.yml").read_text()
+        m = re.search(r"(?ms)^environments:\s*\n(.*?)(?=^\S|\Z)", text)
+        if m:
+            found = {v.strip("'\"") for v in re.findall(r"^\s+branch:\s*([^\s#]+)", m.group(1), re.M)}
+            found.discard("")
+            if found:
+                return found
+    except Exception as e:  # noqa: BLE001
+        log(f"flow-floor site.yml read failed err={e}")
+    reader = root / "scripts" / "site"
+    if reader.is_file():
+        try:
+            envs = subprocess.run([sys.executable, str(reader), "environments"], cwd=root,
+                                  capture_output=True, text=True, timeout=3)
+            if envs.returncode == 0:
+                out = set()
+                for e in envs.stdout.split()[:12]:
+                    r = subprocess.run([sys.executable, str(reader), f"environments.{e}.branch"],
+                                       cwd=root, capture_output=True, text=True, timeout=3)
+                    if r.returncode == 0 and r.stdout.strip():
+                        out.add(r.stdout.strip())
+                if out:
+                    return out
+        except Exception as e:  # noqa: BLE001 — fail open to the defaults
+            log(f"flow-floor scripts/site failed err={e}")
+    return set(FLOW_DEFAULT_RUNGS)
+
+
+def _flow_current_branch(root: Path) -> str | None:
+    try:
+        r = subprocess.run(["git", "branch", "--show-current"], cwd=root,
+                           capture_output=True, text=True, timeout=3)
+        return r.stdout.strip() if r.returncode == 0 else None
+    except Exception as e:  # noqa: BLE001
+        log(f"flow-floor git failed err={e}")
+        return None
+
+
+def _flow_deny(what: str, verb: str, detail: str) -> dict:
+    return {"hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "deny",
+        "permissionDecisionReason": (
+            f"netdust-agent flow floor: {what} bypasses the branch flow this project's "
+            f"Makefile owns ({detail}). Use the verb instead: {verb}. The Makefile is the "
+            f"only door to a rung branch; nothing reaches production that did not walk "
+            f"feature → integration → review → production through it."),
+    }}
+
+
+def check_flow_floor(hook_input: dict) -> dict | None:
+    """Return a deny decision for a raw git write that bypasses the flow, else None."""
+    try:
+        tool_input = hook_input.get("tool_input") or {}
+        command = tool_input.get("command", "") if isinstance(tool_input, dict) else ""
+        if not isinstance(command, str) or not command.strip():
+            return None
+        root = _flow_project_root(hook_input.get("cwd") or "")
+        if root is None:
+            return None
+
+        m = FLOW_MAKE_CONFIRM.search(command)
+        if m and FLOW_STDIN_FORGERY.search(command):
+            return _flow_deny(f"forging stdin for `{m.group(0).strip()}`",
+                              "run the verb and type the confirmation yourself — a confirming "
+                              "verb is a human moment by design (the Makefile refuses a "
+                              "non-terminal stdin too)",
+                              "a typed confirmation is the operator's, never piped or redirected")
+
+        rungs = _flow_rungs(root)
+        current = _flow_current_branch(root)
+        switches = FLOW_SWITCH_TO.findall(command)
+        # the branch a write lands on: the LAST checkout/switch in the command, else current
+        landing = switches[-1] if switches else current
+        on_rung = landing in rungs
+        where = f"on `{landing}`"
+
+        m = FLOW_WRITE_ON_BRANCH.search(command)
+        if m and on_rung:
+            key = re.sub(r"\s+", " ", m.group(1).lower())
+            if key == "reset" and not FLOW_RESET_MOVES_REF.search(command[m.end():m.end() + 200]):
+                pass  # `git reset <paths>` unstages; the pointer does not move
+            else:
+                key = "branch -f" if key.startswith("branch") else key
+                return _flow_deny(f"`git {key}` {where}", FLOW_VERB_FOR.get(key, "the make verb"),
+                                  "a rung branch is deploy-only")
+
+        m = FLOW_REF_WRITE.search(command)
+        if m and any(t and t.split(":")[0] in rungs for t in m.groups()):
+            key = "branch -f" if "branch" in m.group(0).lower() else "update-ref"
+            return _flow_deny(f"`git {key}` re-pointing a rung", FLOW_VERB_FOR[key], "a rung pointer")
+
+        m = FLOW_PUSH.search(command)
+        if m:
+            args = m.group(1)
+            named = _rung_named(args, rungs)
+            if named or re.search(r"--(?:all|mirror)\b", args) or (
+                    on_rung and not re.search(r"\b(?:feature|hotfix)/", args)):
+                return _flow_deny(f"`git push` of a rung branch {where}", FLOW_VERB_FOR["push"],
+                                  "the flow pushes a rung only after it merged into it")
+
+        m = FLOW_FETCH.search(command)
+        if m:
+            dest = re.findall(r"\S+:(?:refs/heads/)?(\S+)", m.group(1))
+            if any(d in rungs for d in dest):
+                return _flow_deny("`git fetch` with a refspec into a rung", FLOW_VERB_FOR["fetch"],
+                                  "a rung pointer moved by a refspec")
+
+        m = FLOW_BRANCH_DELETE.search(command)
+        if m and m.group(1) in rungs:
+            return _flow_deny(f"`git branch -D {m.group(1)}`", FLOW_VERB_FOR["branch -D"],
+                              "a rung branch")
+        return None
+    except Exception as e:  # noqa: BLE001 — fail OPEN, always
+        log(f"flow-floor error err={e}")
+        return None
+
+
 def match_denylist(command: str) -> tuple[str, str] | None:
     """Return (label, matched_text) for the first denylist hit, else None.
     A command that begins with a read-only echo/grep/cat is treated as inert
@@ -248,6 +473,12 @@ def main() -> None:
     command = tool_input.get("command", "") if isinstance(tool_input, dict) else ""
     if not isinstance(command, str) or not command.strip():
         return  # nothing to match → passthrough
+
+    flow = check_flow_floor(hook_input)   # FR-24 — deny, before the ask-tier denylist
+    if flow is not None:
+        log(f"deny reason=flow-floor cmd={command[:80]!r}")
+        print(json.dumps(flow))
+        return
 
     hit = match_denylist(command)
     if not hit:

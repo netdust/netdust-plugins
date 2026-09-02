@@ -431,7 +431,29 @@ def _print_dispatch_only_fallback(
     instead of all three sharing the misleading "no run-log.jsonl" text."""
     print(render_per_dispatch_table(dispatches, controller_rows))
     print()
+    print(render_per_model_table(dispatches))
+    print()
     print(f"per-stage attribution skipped ({reason})")
+
+
+def render_per_model_table(dispatches: list[Dispatch]) -> str:
+    """Per-model totals over the dispatches in scope (harness-inversion FR-12) — the
+    one number that makes the model ladder (`skills/_shared/model-ladder.md`) a
+    measured decision instead of an echoed field. A dispatch whose transcript
+    carries no `message.model` lands under `unknown`, never crashes."""
+    per: dict[str, tuple[int, dict[str, int]]] = {}
+    for d in dispatches:
+        key = d.model or "unknown"
+        n, totals = per.get(key, (0, zero_usage()))
+        add_usage(totals, d.totals)
+        per[key] = (n + 1, totals)
+    lines = ["── per-model ──"]
+    for key in sorted(per):
+        n, totals = per[key]
+        lines.append(f"{key} | dispatches={n} | {format_tokens(totals)}")
+    if len(lines) == 1:
+        lines.append("(no dispatches)")
+    return "\n".join(lines)
 
 
 def run(feature_dir: Path, transcript_dir: Path) -> int:
@@ -497,6 +519,8 @@ def run(feature_dir: Path, transcript_dir: Path) -> int:
     print(render_per_stage_table(segments, dispatches, controller_rows))
     print()
     print(render_per_dispatch_table(dispatches, controller_rows))
+    print()
+    print(render_per_model_table(dispatches))
     return 0
 
 

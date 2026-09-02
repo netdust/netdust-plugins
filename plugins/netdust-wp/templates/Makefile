@@ -137,11 +137,11 @@ setup: ## Complete local setup
 
 # === DAILY WORKFLOW ===
 
-dev: ## Start development (ensures safe branch)
+dev: ## Start development (warns when you are on a rung branch)
 	@echo "$(BLUE)Starting development...$(RESET)"
 	@$(MAKE) --no-print-directory _check-ddev
 	@ddev start
-	@$(MAKE) --no-print-directory _ensure-safe-branch
+	@$(MAKE) --no-print-directory _warn-rung-branch
 	@echo "$(GREEN)✅ Ready on branch: $(shell git branch --show-current)$(RESET)"
 	@echo "$(GREEN)🌐 Local: https://$(PROJECT_NAME).ddev.site$(RESET)"
 
@@ -188,6 +188,7 @@ feature: ## Start a feature (make feature name=my-feature) — branches from the
 	@if [ -z "$(name)" ]; then echo "$(RED)Usage: make feature name=my-feature$(RESET)"; exit 1; fi
 	@if ! echo "$(name)" | grep -qE '^[a-zA-Z][a-zA-Z0-9._-]*$$'; then \
 		echo "$(RED)✗ Invalid name: use letters, digits, dot, dash, underscore$(RESET)"; exit 1; fi
+	@$(MAKE) --no-print-directory _ensure-flow
 	@$(MAKE) --no-print-directory _ensure-clean-git
 	@git fetch --quiet origin $(BR_INTEG)
 	@git checkout -b "feature/$(name)" origin/$(BR_INTEG)
@@ -197,6 +198,7 @@ hotfix: ## Start a hotfix (make hotfix name=vat-rounding) — branches from the 
 	@if [ -z "$(name)" ]; then echo "$(RED)Usage: make hotfix name=my-fix$(RESET)"; exit 1; fi
 	@if ! echo "$(name)" | grep -qE '^[a-zA-Z][a-zA-Z0-9._-]*$$'; then \
 		echo "$(RED)✗ Invalid name: use letters, digits, dot, dash, underscore$(RESET)"; exit 1; fi
+	@$(MAKE) --no-print-directory _ensure-flow
 	@$(MAKE) --no-print-directory _ensure-clean-git
 	@git fetch --quiet origin $(BR_PROD)
 	@git checkout -b "hotfix/$(name)" origin/$(BR_PROD)
@@ -204,6 +206,7 @@ hotfix: ## Start a hotfix (make hotfix name=vat-rounding) — branches from the 
 	@echo "$(YELLOW)   Fix, commit, then: make finish$(RESET)"
 
 finish: ## Merge the current branch one step up the promotion path
+	@$(MAKE) --no-print-directory _ensure-flow
 	@$(MAKE) --no-print-directory _ensure-clean-git
 	@BRANCH=$$(git branch --show-current); \
 	case "$$BRANCH" in \
@@ -231,6 +234,7 @@ finish: ## Merge the current branch one step up the promotion path
 promote: ## Send ONE feature to staging, leaving the rest of develop behind
        ## (make promote name=my-feature)
 	@if [ -z "$(name)" ]; then echo "$(RED)Usage: make promote name=my-feature$(RESET)"; exit 1; fi
+	@$(MAKE) --no-print-directory _ensure-flow
 	@git fetch --quiet origin 2>/dev/null || true
 	@BR="feature/$(name)"; \
 	if ! git rev-parse --verify --quiet "$$BR" >/dev/null && \
@@ -243,6 +247,7 @@ promote: ## Send ONE feature to staging, leaving the rest of develop behind
 	@$(MAKE) --no-print-directory _ensure-clean-git
 	@BR="feature/$(name)"; \
 	git rev-parse --verify --quiet "$$BR" >/dev/null || git branch "$$BR" "origin/$$BR"; \
+	$(MAKE) --no-print-directory _need-tty verb=promote; \
 	echo "$(YELLOW)$$BR → $(BR_REVIEW) ($(BR_INTEG) is not merged)$(RESET)"; \
 	git --no-pager log --oneline $(BR_REVIEW).."$$BR" | head -20; \
 	read -p "Continue? Type 'yes': " reply; \
@@ -255,6 +260,8 @@ promote: ## Send ONE feature to staging, leaving the rest of develop behind
 release: ## Promote the review branch to the production branch (then: make ship)
 	@if [ "$(HAS_PROD)" != "yes" ]; then \
 		echo "$(RED)✗ No production environment in site.yml yet$(RESET)"; exit 1; fi
+	@$(MAKE) --no-print-directory _ensure-flow
+	@$(MAKE) --no-print-directory _need-tty verb=release
 	@$(MAKE) --no-print-directory _ensure-clean-git
 	@git fetch --quiet origin
 	@git checkout $(BR_REVIEW) && git pull --quiet --ff-only
@@ -335,6 +342,8 @@ status: ## Show complete project status
 	@echo "$(BLUE)║         PROJECT STATUS                 ║$(RESET)"
 	@echo "$(BLUE)╚════════════════════════════════════════╝$(RESET)"
 	@echo ""
+	@$(MAKE) --no-print-directory _flow-state
+	@echo ""
 	@echo "$(YELLOW)LOCAL:$(RESET)"
 	@echo "  Branch: $(shell git branch --show-current 2>/dev/null || echo 'none')"
 	@echo "  Changes: $(shell git status --porcelain 2>/dev/null | wc -l | tr -d ' ') files"
@@ -359,8 +368,29 @@ ssh: ## SSH to staging
 ssh-prod: ## SSH to production
 	@ssh $(PRODUCTION_HOST) -t "cd $(PRODUCTION_PATH); bash"
 
-test: ## Run the deploy tooling tests (never contacts a server)
+test: ## Run the deploy tooling + branch-flow tests (never contacts a server)
 	@scripts/tests/deploy-test.sh
+	@scripts/tests/flow-test.sh
+
+# Where am I in the flow, and what is the next verb — printed FIRST by doctor and status.
+_flow-state:
+	@echo "$(BLUE)Flow$(RESET)"
+	@if URL=$$(git remote get-url origin 2>/dev/null); then printf "  origin:  %s\n" "$$URL"; \
+	else printf "  origin:  $(RED)MISSING$(RESET) — git remote add origin <url>\n"; fi
+	@BRANCH=$$(git branch --show-current 2>/dev/null || echo none); \
+	ROLE=$$($(MAKE) --no-print-directory _branch-role); \
+	printf "  branch:  %s  (%s)\n" "$$BRANCH" "$$ROLE"; \
+	case "$$ROLE" in \
+		feature) printf "  next:    commit, then make finish  → $(BR_INTEG)\n";; \
+		hotfix)  printf "  next:    commit, then make finish  → $(BR_PROD), then back down\n";; \
+		rung:*)  printf "  next:    make feature name=<x>  (a rung is deploy-only)\n";; \
+		none)    printf "  next:    git checkout $(BR_INTEG), then make feature name=<x>\n";; \
+		*)       printf "  next:    make feature name=<x>  (this branch is outside the flow)\n";; \
+	esac
+	@for b in $(BR_INTEG) $(BR_REVIEW) $(BR_PROD); do \
+		if git rev-parse --verify --quiet "origin/$$b" >/dev/null 2>&1; then printf "  rung:    %-14s on origin\n" "$$b"; \
+		else printf "  rung:    %-14s $(YELLOW)not on origin$(RESET)\n" "$$b"; fi; \
+	done
 
 gate: ## Run this project's own test suite (commands.gate from site.yml)
 	@G=$$($(SITE) commands.gate 2>/dev/null); \
@@ -368,6 +398,8 @@ gate: ## Run this project's own test suite (commands.gate from site.yml)
 	echo "$(BLUE)$$G$(RESET)"; eval "$$G"
 
 doctor: ## Check required tools and SSH connectivity
+	@$(MAKE) --no-print-directory _flow-state
+	@echo ""
 	@echo "$(BLUE)Tools$(RESET)"
 	@for c in ddev git rsync ssh python3; do \
 		command -v $$c >/dev/null 2>&1 \
@@ -489,6 +521,7 @@ rollback: ## Redeploy the previously deployed commit (make rollback env=producti
 	PREV=$$(ssh -qn "$$HOST" "tail -2 $$DIR/$$ENV.log 2>/dev/null | head -1" | awk '{print $$2}'); \
 	if [ -z "$$PREV" ]; then \
 		echo "$(RED)✗ No previous deploy recorded for $$ENV$(RESET)"; exit 1; fi; \
+	$(MAKE) --no-print-directory _need-tty verb="rollback env=$$ENV"; \
 	echo "$(YELLOW)Rolling $$ENV back to $$PREV$(RESET)"; \
 	git --no-pager log --oneline -1 "$$PREV" || { \
 		echo "$(RED)✗ Commit $$PREV is not in this repository$(RESET)"; exit 1; }; \
@@ -711,6 +744,7 @@ _deploy-opcache:
 _deploy-confirm:
 	@ENV="$(env)"; \
 	if [ "$$($(SITE) environments.$$ENV.confirm)" != "true" ]; then exit 0; fi; \
+	$(MAKE) --no-print-directory _need-tty verb="deploy env=$$ENV"; \
 	echo "$(RED)╔════════════════════════════════════════╗$(RESET)"; \
 	echo "$(RED)║   DEPLOY TO $$ENV$(RESET)"; \
 	echo "$(RED)║   $$($(SITE) environments.$$ENV.role)$(RESET)"; \
@@ -776,7 +810,12 @@ _deploy-gate:
 		git status --short; \
 		exit 1; \
 	fi; \
-	git fetch --quiet origin "$$WANT" 2>/dev/null || true; \
+	if ! git remote get-url origin >/dev/null 2>&1; then \
+		echo "$(RED)✗ no 'origin' remote — nothing can be deployed that is not pushed$(RESET)"; \
+		echo "$(YELLOW)  git remote add origin <url> && git push -u origin $$WANT$(RESET)"; \
+		exit 1; \
+	fi; \
+	git fetch --quiet origin "$$WANT" 2>/dev/null || { echo "$(RED)✗ origin is unreachable — the gate cannot verify that HEAD is pushed$(RESET)"; exit 1; }; \
 	if ! git merge-base --is-ancestor HEAD "origin/$$WANT" 2>/dev/null; then \
 		echo "$(RED)✗ HEAD is not on origin/$$WANT — push before deploying$(RESET)"; \
 		exit 1; \
@@ -796,14 +835,71 @@ _check-ddev:
 		exit 1; \
 	fi
 
+# The flow floor (netdust-agent harness-inversion FR-22): a rung branch is deploy-only.
+# This target REFUSES and names the verb — it never switches you and never creates a
+# branch. The old behaviour (silently `git checkout -b develop` off master) healed a
+# wrong topology invisibly, which is how commits landed on the wrong rung.
 _ensure-safe-branch:
 	@BRANCH=$$(git branch --show-current 2>/dev/null || echo "none"); \
-	if [ "$$BRANCH" = "main" ] || [ "$$BRANCH" = "master" ]; then \
-		echo "$(YELLOW)master is deploy-only — switching to develop...$(RESET)"; \
-		git checkout $(BR_INTEG) 2>/dev/null || git checkout -b $(BR_INTEG); \
-	elif [ "$$BRANCH" = "none" ]; then \
-		git checkout $(BR_INTEG) 2>/dev/null || git checkout -b $(BR_INTEG); \
+	ROLE=$$($(MAKE) --no-print-directory _branch-role); \
+	case "$$ROLE" in \
+		rung:*) \
+			echo "$(RED)✗ '$$BRANCH' is the $${ROLE#rung:} branch — a rung is deploy-only, never worked on$(RESET)"; \
+			echo "$(YELLOW)  make feature name=<x>   (or: make hotfix name=<x> for a production fix)$(RESET)"; \
+			exit 1;; \
+		none) \
+			echo "$(RED)✗ no branch checked out$(RESET)"; \
+			echo "$(YELLOW)  git checkout $(BR_INTEG)   then: make feature name=<x>$(RESET)"; \
+			exit 1;; \
+	esac
+
+_warn-rung-branch:
+	@ROLE=$$($(MAKE) --no-print-directory _branch-role); \
+	case "$$ROLE" in rung:*) \
+		echo "$(YELLOW)⚠  on the $${ROLE#rung:} branch — fine for looking, not for editing: make feature name=<x> before you change anything$(RESET)";; \
+	esac
+
+# feature | hotfix | rung:<env> | other | none — the one classifier every flow line reads.
+_branch-role:
+	@BRANCH=$$(git branch --show-current 2>/dev/null); \
+	if [ -z "$$BRANCH" ]; then echo none; exit 0; fi; \
+	case "$$BRANCH" in feature/*) echo feature; exit 0;; hotfix/*) echo hotfix; exit 0;; esac; \
+	for e in $$($(SITE) environments 2>/dev/null); do \
+		if [ "$$($(SITE) environments.$$e.branch 2>/dev/null)" = "$$BRANCH" ]; then echo "rung:$$e"; exit 0; fi; \
+	done; \
+	echo other
+
+# A confirming verb reads its `yes` from a HUMAN. Piped or redirected stdin is not a
+# terminal, so it is refused — `echo yes | make ship` and `make ship < answers` both
+# stop here (security review 2026-09-02, C1).
+_need-tty:
+	@if [ ! -t 0 ]; then \
+		echo "$(RED)✗ make $(verb) needs a terminal — its confirmation is typed by a human, never piped or redirected$(RESET)"; \
+		exit 1; \
 	fi
+
+# The flow needs a remote and its rungs on it (FR-22). Refuse by name — a half-run verb
+# dying on a git error is exactly what taught agents to fall back to raw git.
+_ensure-flow:
+	@if ! git remote get-url origin >/dev/null 2>&1; then \
+		echo "$(RED)✗ no 'origin' remote — the branch flow needs one$(RESET)"; \
+		echo "$(YELLOW)  git remote add origin <url>$(RESET)"; \
+		echo "$(YELLOW)  git push -u origin $(BR_INTEG)      (and $(BR_REVIEW) / $(BR_PROD) once they exist)$(RESET)"; \
+		exit 1; \
+	fi; \
+	git fetch --quiet --prune origin 2>/dev/null || { echo "$(RED)✗ origin is unreachable — check the URL or your network before running the flow$(RESET)"; exit 1; }; \
+	for b in $(BR_INTEG) $(BR_REVIEW) $(BR_PROD); do \
+		git rev-parse --verify --quiet "origin/$$b" >/dev/null || { \
+			echo "$(RED)✗ origin has no '$$b' branch — the flow promotes through it$(RESET)"; \
+			echo "$(YELLOW)  git checkout -b $$b <base> && git push -u origin $$b$(RESET)"; exit 1; }; \
+		if git rev-parse --verify --quiet "$$b" >/dev/null; then \
+			N=$$(git rev-list --count "origin/$$b..$$b" 2>/dev/null || echo 0); \
+			if [ "$$N" != "0" ]; then \
+				echo "$(RED)✗ local '$$b' carries $$N commit(s) that are not on origin — a rung is written only by the flow, and finish would push them$(RESET)"; \
+				echo "$(YELLOW)  from another branch: git branch -f $$b origin/$$b   (rescue the commits onto a feature branch first if they matter)$(RESET)"; exit 1; \
+			fi; \
+		fi; \
+	done
 
 _ensure-clean-git:
 	@if [ -n "$$(git status --porcelain)" ]; then \

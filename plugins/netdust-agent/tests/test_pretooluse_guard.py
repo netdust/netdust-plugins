@@ -30,6 +30,7 @@ false-positive cases that would otherwise tempt someone to loosen the regex.
 """
 
 import json
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -140,6 +141,41 @@ def _upstream_case(desc: str, relpath: str, expected: str, *,
 # --- scenarios ------------------------------------------------------------
 
 
+def _flow_repo(tmp: Path, branch: str, *, site_yml: bool = True, reader: bool = True) -> None:
+    """A throwaway flow project: site.yml (three rungs), optionally a scripts/site
+    reader, a git repo checked out on `branch`."""
+    if site_yml:
+        (tmp / "site.yml").write_text(
+            "site: {name: t}\nenvironments:\n"
+            "  development: {branch: development}\n  staging: {branch: staging}\n"
+            "  production: {branch: main, confirm: true}\n")
+    if reader:
+        (tmp / "scripts").mkdir(exist_ok=True)
+        (tmp / "scripts" / "site").write_text(
+            "#!/usr/bin/env python3\nimport sys\n"
+            "k=sys.argv[1]\nb={'environments.development.branch':'development',"
+            "'environments.staging.branch':'staging','environments.production.branch':'main'}\n"
+            "print('development\\nstaging\\nproduction') if k=='environments' else print(b[k])\n")
+    env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+           "GIT_COMMITTER_EMAIL": "t@t", "HOME": str(tmp), "PATH": os.environ.get("PATH", "")}
+    subprocess.run(["git", "init", "-q", "-b", branch], cwd=tmp, env=env, check=True)
+    (tmp / "README").write_text("x")
+    subprocess.run(["git", "add", "."], cwd=tmp, env=env, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=tmp, env=env, check=True)
+
+
+def _flow_case(desc: str, branch: str, cmd: str, expected: str, **repo_kw) -> tuple[bool, str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        _flow_repo(Path(tmp), branch, **repo_kw)
+        payload = json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                              "tool_input": {"command": cmd}, "cwd": tmp})
+        result = subprocess.run(["python3", str(HOOK)], input=payload,
+                                capture_output=True, text=True, timeout=20)
+    got = _decision(result.stdout) if result.returncode == 0 else f"exit{result.returncode}"
+    ok = got == expected and (expected != "deny" or "make " in result.stdout)
+    return ok, f"flow {desc}: on {branch!r}, {cmd!r} -> {expected} (got {got})"
+
+
 def run() -> list[tuple[bool, str]]:
     r: list[tuple[bool, str]] = []
 
@@ -239,6 +275,63 @@ def run() -> list[tuple[bool, str]]:
                             "docs/notes.md", "passthrough"))
     r.append(_upstream_case("review doc inside specs/ dir → floor does not apply",
                             "specs/f/review-A.md", "passthrough"))
+
+    # -- the flow floor (harness-inversion FR-24, T13): deny x 10, allow x 4, fail-open x 2
+    r += [
+        _flow_case("(a) commit on the integration rung", "development", "git commit -m 'x'", "deny"),
+        _flow_case("(b) hand merge into the review rung", "staging", "git merge feature/x", "deny"),
+        _flow_case("(b2) switch-then-merge from a feature branch", "feature/x",
+                   "git checkout development && git merge feature/x", "deny"),
+        _flow_case("(c) push of a rung by name", "feature/x", "git push origin development", "deny"),
+        _flow_case("(c2) bare push while on a rung", "main", "git push", "deny"),
+        _flow_case("(d) checkout -b off a rung", "development", "git checkout -b feature/y", "deny"),
+        _flow_case("(d2) switch -c off a rung", "staging", "git switch -c feature/y", "deny"),
+        _flow_case("(e) piped yes into make ship", "main", "echo yes | make ship", "deny"),
+        _flow_case("(e2) here-string into make release", "staging", "make release <<< yes", "deny"),
+        _flow_case("(e3) branch -D of a rung", "feature/x", "git branch -D staging", "deny"),
+        _flow_case("(f) commit on a feature branch", "feature/x", "git commit -m 'x'", "passthrough"),
+        _flow_case("(f2) push of a feature branch", "feature/x", "git push -u origin feature/x", "passthrough"),
+        _flow_case("(f3) make finish itself is never inspected", "feature/x", "make finish", "passthrough"),
+        _flow_case("(f4) a read on a rung", "main", "git log --oneline -5", "passthrough"),
+        _flow_case("(g) no site.yml -> today's behaviour", "development", "git commit -m 'x'",
+                   "passthrough", site_yml=False, reader=False),
+        _flow_case("(h) scripts/site missing -> rungs read from site.yml", "staging",
+                   "git commit -m 'x'", "deny", reader=False),
+        # security review 2026-09-02 — I1: prefixes and git global options
+        _flow_case("(a2) git -C . commit on a rung", "development", "git -C . commit -m x", "deny"),
+        _flow_case("(a3) git -c k=v commit", "development", "git -c user.name=x commit -m x", "deny"),
+        _flow_case("(a4) command git commit", "staging", "command git commit -m x", "deny"),
+        _flow_case("(a5) (git commit) in a subshell", "main", "(git commit -m x)", "deny"),
+        _flow_case("(a6) env-prefixed commit", "main", "GIT_AUTHOR_NAME=x git commit -m x", "deny"),
+        _flow_case("(a7) escaped \\git commit", "development", "\\git commit -m x", "deny"),
+        # I2: more rung writes
+        _flow_case("(a8) git am on a rung", "development", "git am fix.patch", "deny"),
+        _flow_case("(a9) git revert on a rung", "main", "git revert HEAD", "deny"),
+        _flow_case("(a10) git reset --hard on a rung", "staging", "git reset --hard HEAD~1", "deny"),
+        _flow_case("(a11) git reset <path> (unstage) is allowed", "staging", "git reset README", "passthrough"),
+        _flow_case("(a12) git branch -f moves a rung", "feature/x", "git branch -f development HEAD", "deny"),
+        _flow_case("(a13) fetch refspec into a rung", "feature/x", "git fetch origin feature/y:development", "deny"),
+        _flow_case("(a14) stash pop on a rung", "development", "git stash pop", "deny"),
+        # C1: stdin forgery beyond echo|yes
+        _flow_case("(e4) make ship < file", "main", "make ship < answers.txt", "deny"),
+        _flow_case("(e5) cat file | make ship", "main", "cat a | make ship", "deny"),
+        _flow_case("(e6) sh -c 'yes | make ship'", "main", "sh -c 'yes | make ship'", "deny"),
+        _flow_case("(e7) expect wrapping make ship", "main", "expect -c 'spawn make ship; send yes'", "deny"),
+        _flow_case("(e8) make -C . release <<< yes", "staging", "make -C . release <<< yes", "deny"),
+        # I4: false positives that would teach routing around
+        _flow_case("(f5) push of feature/main is not a rung push", "feature/main", "git push -u origin feature/main", "passthrough"),
+        _flow_case("(f6) push HEAD:feature/main", "feature/main", "git push origin HEAD:feature/main", "passthrough"),
+        _flow_case("(f7) sync a rung then commit on a feature", "feature/x",
+                   "git checkout development && git pull && git checkout feature/x && git commit -m x", "passthrough"),
+        _flow_case("(f8) yes | make deploy-test is not a confirming verb", "main", "yes | make deploy-test env=staging", "passthrough"),
+        _flow_case("(f9) make deploy env=staging 2>&1 | tee log (pipe OUT of make)", "staging", "make deploy env=staging 2>&1 | tee deploy.log", "passthrough"),
+    ]
+    # (i) unreadable cwd -> fail open
+    payload = json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                          "tool_input": {"command": "git commit -m x"}, "cwd": "/nonexistent/x/y"})
+    rr = subprocess.run(["python3", str(HOOK)], input=payload, capture_output=True, text=True, timeout=20)
+    r.append((rr.returncode == 0 and _decision(rr.stdout) == "passthrough",
+                    "flow (i): an unreadable cwd fails OPEN"))
 
     return r
 

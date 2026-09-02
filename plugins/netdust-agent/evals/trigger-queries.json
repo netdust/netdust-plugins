@@ -544,5 +544,19 @@
     "query": "The staging deploy succeeded but the site is throwing 500s — pull the recent server logs and the site logs so I can see what's failing.",
     "should_trigger": false,
     "type": "command"
+  },
+  {
+    "name": "testing-workflow",
+    "desc": "The per-task test decision — what tier of test a task owes before it closes, and through which runner. Fires on 'does this need a test', 'is this Tier A or B', 'do I need a test for this nonce/capability/sanitize call', 'this feature is drowning in tests'. Layers the netdust tier rule onto superpowers:test-driven-development, which owns the RED→GREEN mechanics. On WordPress the runner is the netdust harness (Brain Monkey / wp-phpunit — the netdust-wp-manager template); superpowers has no knowledge of that environment, so this skill is what routes tests through it.",
+    "type": "skill",
+    "query": "This cluster is just the CPT config on ntdst-core — four field maps and a tab layout. Do the tasks need their own tests, or is the cluster's one smoke test enough?",
+    "should_trigger": true
+  },
+  {
+    "name": "building",
+    "desc": "The BUILD overlay — superpowers executes; this adds the netdust gates. Refuses Class A/B work without the seam artifact (approved tasks.md + gate-check GREEN). Home of the plan-less classes (C bug-fix bundle, D security diff, E small tweak). Triggers on \"execute the plan\", \"work the plan\", \"start building\", \"fix the code-review findings\". NOT for writing plans — that is `planning`.",
+    "type": "skill",
+    "query": "Run the plan in specs/case-model — the clusters are Lane: behaviour, gate-check is green and I approved tasks.md.",
+    "should_trigger": true
   }
 ]

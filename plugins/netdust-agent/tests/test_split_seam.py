@@ -60,8 +60,8 @@ def run():
           "flat" in building.lower()
           and "bypass" in building.lower()
           and "The handoff is `tasks.md`" in building)
-    check("building: repositions the test-author to feature tests after each cluster",
-          "Feature tests after each cluster" in building)
+    check("building: repositions the test-author to feature tests after each contract-lane cluster",
+          "Feature tests after each contract-lane cluster" in building)
     check("building: owns the armed loop protocol",
           "loop-gate.py" in building and "loop-check.py" in building)
     check("building: no plan-authoring content (threat-model section shape lives in planning only)",

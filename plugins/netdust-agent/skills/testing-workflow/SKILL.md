@@ -6,7 +6,12 @@ description: "The per-task test decision — what tier of test a task owes befor
 # Testing workflow — the tier decision
 
 `superpowers:test-driven-development` owns HOW to write a test. This decides WHETHER and
-AT WHAT TIER, in three questions asked in order:
+AT WHAT TIER, in four questions asked in order:
+
+**0. Which lane is the cluster in?** Read `Lane:` on the cluster (`check_cluster_lanes`).
+`behaviour` — a rule the framework already has, configured here: the cluster owes ONE
+outside-observable RED (its `RED until:`), the task owes nothing of its own, and
+questions 1–3 do not apply. `contract` — a rule this project chose: continue.
 
 **1. What does a failure cost?** Read the plan's `Stakes:` line (effective per-cluster
 value when a table exists). Never re-decide it.

@@ -294,6 +294,18 @@ if [[ -f "$STATE" ]] || [[ -f "$LESSONS" ]]; then
   OUTPUT+="The goal: a session in 3 months should pick up where this one left off, with no re-explaining.\n\n"
 fi
 
+# ── herdr (harness-inversion FR-19) ─────────────────────────────────────────
+# Cheapest possible detection, once per session: inside herdr, name the pane and
+# point at the one file that maps harness moments onto herdr primitives. Outside
+# herdr (HERDR_ENV unset) this block emits nothing — output is byte-identical.
+if [[ "${HERDR_ENV:-}" == "1" ]]; then
+  OUTPUT+="## herdr\n"
+  if [[ -n "${HERDR_PANE_ID:-}${HERDR_TAB_ID:-}${HERDR_WORKSPACE_ID:-}" ]]; then
+    OUTPUT+="- this session: pane \`${HERDR_PANE_ID:-?}\` · tab \`${HERDR_TAB_ID:-?}\` · workspace \`${HERDR_WORKSPACE_ID:-?}\`\n"
+  fi
+  OUTPUT+="- harness moments → herdr primitives: \`${CLAUDE_PLUGIN_ROOT}/skills/_shared/herdr-moments.md\` (syntax: \`herdr --skill\`; channels/topology: \`netdust-core:herdr-orchestration\`)\n\n"
+fi
+
 # ── Log every fire ──────────────────────────────────────────────────────────
 {
   printf '[%s] session-start cwd=%s found=[%s] missing=[%s]\n' \
