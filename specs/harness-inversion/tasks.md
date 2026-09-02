@@ -1,7 +1,7 @@
 # Tasks — Harness inversion
 
 **Spec:** `specs/harness-inversion/spec.md` · **Plan:** `specs/harness-inversion/plan.md`
-**Loop budget: ~16 iterations** (11 tasks + 4 review clusters + one fix round on Cluster A).
+**Loop budget: ~21 iterations** (14 tasks + 5 review clusters + one fix round each on Clusters A and E).
 
 **Standing line for every checker task (T01–T03):**
 > New checks follow the house shape — a `check_*(text, f: Findings)` function reading the
@@ -17,7 +17,7 @@
 
 ---
 
-## Phase 1 — all four clusters
+## Phase 1 — all five clusters
 
 ### Cluster A — the checker lane grammar (3 tasks · effective stakes: standard · provisional tier: STANDARD)
 
@@ -115,6 +115,32 @@ RED until: `plugins/netdust-agent/tests/test_spec_gate_check.py::test_lane_behav
   Unit test: no unit test: Tier B, documentation, eval cases and version metadata.
   (FR-20, SC-2, SC-3)
 
-**Integration gate (Cluster D):** `python3 plugins/netdust-agent/bin/gate-check.py specs/harness-inversion` → exit 0 with one behaviour-lane cluster reported (SC-3); `bash plugins/netdust-agent/tests/run.sh` → 0 failed modules beyond the recorded live-corpus skip (SC-2); `git diff --stat` shows no edit under `plugins/netdust-core/`.
+**Integration gate (Cluster D):** `python3 plugins/netdust-agent/bin/gate-check.py specs/harness-inversion` → exit 0 with one behaviour-lane cluster reported (SC-3); `bash plugins/netdust-agent/tests/run.sh` → 0 failed modules beyond the recorded live-corpus skip (SC-2); `git diff --stat` shows no edit under `plugins/netdust-core/` other than T14's dev-stack paragraph.
 
 ── REVIEW GATE ── (tier: LIGHT)
+
+---
+
+### Cluster E — the flow floor (3 tasks · effective stakes: high · provisional tier: FULL)
+
+- [ ] T12 [Tier A] Makefile refusals and the flow test: every flow verb exits non-zero naming the fix when `origin` is absent; `_ensure-safe-branch` refuses on a rung branch (never switches, never creates); `doctor` and `status` print the flow state first; `scripts/tests/flow-test.sh` builds a temp repo + bare origin + minimal `site.yml` and asserts the flow and its refusals; `make test` runs it.  (files: plugins/netdust-wp/templates/Makefile, plugins/netdust-wp/templates/scripts/tests/flow-test.sh)
+  Test-author: solo — A-lite: the contract is a table of shell exit codes over a temp repo, enumerable from the spec; no attacker-supplied input; high stakes are carried by the FULL review and by T13's split, not by a second author on a Makefile.
+  Proven by: new test — `flow-test.sh` (SC-7), RED against the current template first.
+  Unit test: RED-first, in the temp repo. (a) `feature`+`finish` → commit on integration only; (b) `hotfix`+`finish` → on production, review and integration; (c) `finish` on a rung → refused; (d) deploy gate refuses dirty / wrong branch / unpushed; (e) origin removed → each of feature/finish/promote/release/deploy refuses naming the fix; (f) `_ensure-safe-branch` on `main` → refused with `make feature` named, branch unchanged; (g) `doctor` prints the flow block first.
+  (FR-22, FR-23, AC-7, SC-7)
+
+- [ ] T13 [Tier A] The guard's rung floor: in a `site.yml` project, deny the raw git writes FR-24 lists and any piped input into `make ship|release|promote|deploy`, naming the make verb; rung names via `scripts/site`, fallback list when absent; no `site.yml` → today's behaviour byte-for-byte; every tooling failure fails open.  (files: plugins/netdust-agent/hooks/pretooluse-guard.py, plugins/netdust-agent/tests/test_pretooluse_guard.py)
+  Test-author: split
+  Proven by: new test — the rung-floor cases in `test_pretooluse_guard.py`.
+  Unit test: RED-first, denial paths mandatory. (a) `git commit -m x` on `development` → deny naming `make save`/`make feature`; (b) `git merge feature/x` on `staging` → deny naming `make finish`/`make promote`; (c) `git push origin development` → deny; (d) `git checkout -b feature/y` while on `development` → deny naming `make feature`; (e) `echo yes | make ship` and `make release <<< yes` → deny; (f) `git commit` on `feature/x` → allow; (g) same commands with no `site.yml` → allow (today); (h) `scripts/site` missing → fallback rung list applies; (i) unreadable cwd → fail open.
+  (FR-24, AC-8, SC-7)
+
+- [ ] T14 [Tier B] Enter and leave through the flow: `building` Stage 2 entry asserts `feature/*` or `hotfix/*` on a `site.yml` project (runs `make feature`/`make hotfix` or hands back), Stage 3 closes with `make finish` and never offers `finishing-a-development-branch`'s merge/PR options there, `make health` precedes `make release`; `/loop` refuses to arm on a rung branch; `netdust-core:dev-stack` gains one paragraph naming the floor as the machine half of its intent table.  (files: plugins/netdust-agent/skills/building/SKILL.md, plugins/netdust-agent/commands/loop.md, plugins/netdust-core/skills/dev-stack/SKILL.md)
+  Test-author: solo — Tier B.
+  Proven by: machine gate — T12's flow test and T13's guard cases are the enforcement; this text cites `flow-test.sh` and the guard floor by name (standing line).
+  Unit test: no unit test: Tier B, prose over mechanics landed in T12/T13.
+  (FR-25)
+
+**Integration gate (Cluster E):** in a scratch WordPress project scaffolded from the template with a bare origin: `make test` green including `flow-test.sh`; with the netdust-agent hook active, `git commit` on `development` is denied and `make feature name=x && git commit` is allowed; `bash plugins/netdust-agent/tests/run.sh` green (live-corpus skip excepted); `make ship` is NOT run.
+
+── REVIEW GATE ── (tier: FULL — `security-sentinel` on the guard diff; the floor is the harness's own enforcement boundary.)

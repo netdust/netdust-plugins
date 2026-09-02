@@ -42,7 +42,7 @@
   `$HERDR_PANE_ID` / `$HERDR_TAB_ID` / `$HERDR_WORKSPACE_ID` are the detection surface
   the netdust-core skill already documents.
 
-**Loop budget: ~16 iterations** (11 tasks + 4 review clusters + one fix round on Cluster A).
+**Loop budget: ~21 iterations** (14 tasks + 5 review clusters + one fix round each on Clusters A and E).
 
 ## Stakes
 
@@ -59,6 +59,7 @@ boundary in reach (the sensitive-path floor in `subagent-stop.py`) is not edited
 | B — machine layer | **standard** | run-cost is read-only telemetry; session-start appends two lines under an env flag; agent frontmatter is declarative |
 | C — the spine texts | **standard** | prose routing; every mechanical gate beneath it still holds |
 | D — the record | **low** | calibration, version, self-hosting re-shape |
+| E — the flow floor | **high** | the guard and the Makefile are what stands between an agent and production; a silent hole ships the wrong branch, irreversibly on a client site |
 
 ## First working version
 
@@ -141,13 +142,26 @@ SC-6 grep at the Cluster C/D gates).
   unfinished change sitting there". The herdr line is an example for a framework fix on a
   master-default repo, not a rule; FR-21 makes dev-stack the authority and reads the base
   from `site.yml`.
+- **G10 — why agents route around the Makefile (read from the template, not asserted):**
+  `feature` does `git fetch origin` + `checkout -b … origin/<integ>` and `finish` ends in
+  `git push`; on a project with no remote every verb fails mid-way with a git error, not
+  a named refusal, and the agent falls back to raw git. `_ensure-safe-branch` silently
+  switches off `main` and even CREATES the integration branch (`git checkout -b`), so a
+  wrong topology heals itself invisibly. `_deploy-gate` correctly refuses dirty / wrong
+  branch / unpushed HEAD — but that is the LAST gate, hours after the wrong-branch commit.
+  `deploy-test.sh` (162 lines) asserts site.yml invariants and one wrong-branch refusal;
+  it never runs `feature` / `finish` / `hotfix`, so the flow itself has no test. The
+  PreToolUse guard `ask`s only on force-push and push-to-main/master; a commit on
+  `staging`, a hand merge into `development`, or `echo yes | make ship` is unguarded.
+  The per-project `wp-workflow` skill was folded into dev-stack on 2026-08-26 (c119893)
+  so the intent→verb table has exactly one home; the floor here is its machine half.
 - **G8 — run-cost fields:** `bin/run-cost.py` reads `message.usage` from assistant lines;
   the sibling key `message.model` is present on the same records in this box's own
   transcripts (checked on the current session's jsonl).
 
 ## Phases & review clusters [GATE]
 
-Single phase, four clusters, ordered so the checker (the demo) lands first, the machine
+Single phase, five clusters, ordered so the checker (the demo) lands first, the machine
 layer second, the prose that cites both third, the record last:
 
 - **Cluster A — the checker lane grammar** (T01–T03, standard, provisional tier
@@ -163,6 +177,10 @@ layer second, the prose that cites both third, the record last:
 - **Cluster D — the record** (T11, low, LIGHT): calibration entry, eval cases, version
   bump, and the self-hosting re-shape of this feature's own `tasks.md` to the lane
   grammar.
+- **Cluster E — the flow floor** (T12–T14, high, FULL): the Makefile refusals + the flow
+  test; the guard's rung floor (`split` per D1 — the guard is an enforcement boundary);
+  the building / loop / dev-stack text that enters and leaves through the flow. Ordered
+  last because it is independent of the lane and the operator can take it alone.
 
 Task list, contracts and gates: `specs/harness-inversion/tasks.md`.
 

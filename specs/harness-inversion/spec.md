@@ -200,6 +200,47 @@ nothing changes.
   important" (Stefan, 2026-09-02); the conflict it resolves is ground-truthed in the plan
   (G9).
 
+### The flow floor — the Makefile is the only door to a rung branch
+- **FR-22:** The shared Makefile (`netdust-wp/templates/Makefile`) refuses, with the fix
+  named, instead of assuming or self-healing: `feature` / `hotfix` / `finish` / `promote` /
+  `release` / `deploy` exit non-zero when `origin` is absent ("no origin — add the remote,
+  then re-run"); `_ensure-safe-branch` never creates a rung branch and never silently
+  switches — on a rung branch it refuses and names `make feature name=<x>`; `make doctor`
+  and `make status` print the flow state first (origin present, current branch role
+  feature / hotfix / rung, the next verb). Source: "agents are confused and not always
+  following it. sometimes because remote doesn't exist or they just skip it" (Stefan,
+  2026-09-02).
+- **FR-23:** The branch flow is TESTED, never contacting a server: a
+  `scripts/tests/flow-test.sh` sibling of `deploy-test.sh`, run by `make test`, builds a
+  temp repo with a bare `origin` and a minimal `site.yml`, and asserts: `feature` then
+  `finish` lands the commit on the integration branch only; `hotfix` then `finish` lands
+  it on production AND back down into review and integration; `finish` refuses on a rung
+  branch; the deploy gate refuses a dirty tree, a wrong branch and an unpushed HEAD; every
+  verb refuses without `origin` and names the fix. Source: "this can only be the case when
+  the makefile works" (Stefan, 2026-09-02).
+- **FR-24:** On a project carrying `site.yml`, `hooks/pretooluse-guard.py` DENIES (not
+  asks) a raw git write that bypasses the flow: `git commit` while on a rung branch,
+  `git merge` / `git rebase` / `git reset --hard` on a rung branch, `git push` of a rung
+  branch, `git checkout -b` / `git switch -c` while on a rung branch, `git branch -D` of a
+  rung, and any piping of input into `make ship|release|promote|deploy` (`echo yes |`,
+  `yes |`, `<<<`). The denial names the make verb that does it right. Rung names are read
+  from `site.yml` through `scripts/site`, falling back to `main|master|staging|development`
+  when the script is absent; every tooling failure fails OPEN like the rest of the hook.
+  `make` invocations are never inspected — the verbs are the door. Source: "the flow in it
+  is used and respected and thus files are in correct branch" (Stefan, 2026-09-02); the
+  deny-not-ask posture follows the upstream-invocation floor's reasoning (agent-side
+  correction, one tool call, no human arbitration).
+- **FR-25:** On a `site.yml` project the harness enters and leaves through the flow:
+  `building` Stage 2 refuses to dispatch unless the current branch is `feature/*` or
+  `hotfix/*` (it runs `make feature` / `make hotfix` first, or hands back); `/loop` refuses
+  to arm on a rung branch; Stage 3 closes with `make finish`, and
+  `superpowers:finishing-a-development-branch`'s merge/PR options are never offered on such
+  a project; `make health` runs before `make release`; `make ship` and `/deploy` to
+  production only on the operator's explicit ask in that turn (dev-stack's existing rule,
+  cited, not restated). `netdust-core:dev-stack` gains one paragraph naming this floor as
+  the machine half of its own "what gets said, what to run" table. Source: "going through
+  the flow until shipping to production" (Stefan, 2026-09-02).
+
 ### Record
 - **FR-20:** The plugin version bumps 0.20.0 → 0.21.0; the manifest description names the
   lane; `_shared/calibrations.md` gains `yootheme-6-of-6-tier-a` (the corpus evidence above);
@@ -219,6 +260,10 @@ nothing changes.
   four allowed values (tested).
 - **AC-5:** `session-start.sh` with `HERDR_ENV=1` and the three ids set emits the two lines;
   without it, its output is byte-identical to today (tested).
+- **AC-7:** In a temp repo with a bare origin, `flow-test.sh` passes; with `origin`
+  removed, every flow verb exits non-zero naming the fix (tested, never a server).
+- **AC-8:** The guard denies `git commit` on `development` and `echo yes | make ship` in a
+  `site.yml` project, and allows both when no `site.yml` exists (tested).
 - **AC-6:** No skill text restates herdr syntax or the ladder table — each cites its single
   home (grep at the Cluster D gate).
 
@@ -235,6 +280,8 @@ nothing changes.
   (grep count of the table's first row outside `_shared/model-ladder.md` is 0).
 - **SC-5:** `run-cost.py --help` and a fixture run both exit 0 and the fixture table has a
   `model` column on 100% of its rows.
+- **SC-7:** `flow-test.sh` asserts ≥ 8 flow cases and 5 refusal cases and exits 0 on the
+  template; the guard test module adds ≥ 8 rung-floor cases (deny × 6, allow × 2).
 - **SC-6:** 0 occurrences of a herdr subcommand string (`herdr worktree`, `herdr tab`,
   `herdr agent`) outside `_shared/herdr-moments.md` within `plugins/netdust-agent/**`.
 
@@ -298,7 +345,9 @@ names and in the self-hosting gate-check run.
 
 - Changing Tier A/B definitions, the erosion guard, D1's split rule, or the sensitive-path
   floor — the contract lane is today's grammar untouched.
-- Any netdust-wp / netdust-statamic skill change.
+- Any netdust-wp / netdust-statamic SKILL change; the netdust-wp Makefile template and
+  its `scripts/tests/` ARE in scope (FR-22, FR-23), as is one paragraph in
+  `netdust-core:dev-stack` (FR-25).
 - Dollar pricing in `run-cost.py`; model choice for the MAIN session (the operator's call).
 - A herdr plugin (`herdr-plugin.toml`) reacting to agent state as events — the watcher
   script stays the doorbell.
