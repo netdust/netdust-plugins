@@ -13,6 +13,15 @@ set -u  # don't set -e — we never want a sourced file to abort the session
 : "${CLAUDE_PLUGIN_ROOT:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 CWD=$(pwd)
+# The project root, not the launch dir: walk up to CLAUDE.md / site.yml / .git,
+# skipping markers under a vendor segment, stopping at $HOME (mirrors session-stop.py).
+ROOT="$CWD"
+while [ "$ROOT" != "$HOME" ] && [ "$ROOT" != "/" ]; do
+  case "$ROOT" in */themes/*|*/plugins/*|*/mu-plugins/*|*/vendor/*|*/packages/*|*/node_modules/*) ROOT=$(dirname "$ROOT"); continue;; esac
+  if [ -e "$ROOT/CLAUDE.md" ] || [ -e "$ROOT/site.yml" ] || [ -e "$ROOT/.git" ]; then break; fi
+  ROOT=$(dirname "$ROOT")
+done
+[ "$ROOT" = "$HOME" ] || [ "$ROOT" = "/" ] && ROOT="$CWD"
 LOG="$HOME/.claude/logs/memory-hook.log"
 TS=$(date '+%Y-%m-%d %H:%M:%S')
 mkdir -p "$(dirname "$LOG")"
@@ -188,7 +197,7 @@ if [[ -f "$HARNESS_GLOBAL" ]]; then
 fi
 
 # ── site.yml (per-project operational config) ───────────────────────────────
-SITE_YML="$CWD/site.yml"
+SITE_YML="$ROOT/site.yml"
 note site_yml "$SITE_YML"
 if [[ -f "$SITE_YML" ]]; then
   OUTPUT+="## site.yml summary (project operational config)\n"
@@ -199,7 +208,7 @@ if [[ -f "$SITE_YML" ]]; then
 fi
 
 # ── Project state ───────────────────────────────────────────────────────────
-STATE="$CWD/memory/STATE.md"
+STATE="$ROOT/memory/STATE.md"
 note state "$STATE"
 if [[ -f "$STATE" ]]; then
   OUTPUT+="## Project State\n"
@@ -212,7 +221,7 @@ if [[ -f "$STATE" ]]; then
 fi
 
 # ── Project lessons ─────────────────────────────────────────────────────────
-LESSONS="$CWD/memory/lessons.md"
+LESSONS="$ROOT/memory/lessons.md"
 note lessons "$LESSONS"
 if [[ -f "$LESSONS" ]]; then
   OUTPUT+="## Project Lessons\n"
@@ -221,7 +230,7 @@ if [[ -f "$LESSONS" ]]; then
 fi
 
 # ── Open tasks carried forward ──────────────────────────────────────────────
-TODO="$CWD/tasks/todo.md"
+TODO="$ROOT/tasks/todo.md"
 note todo "$TODO"
 if [[ -f "$TODO" ]]; then
   OUTPUT+="## Open Tasks (carried forward)\n"

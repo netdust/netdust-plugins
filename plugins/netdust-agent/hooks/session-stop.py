@@ -203,6 +203,33 @@ def scan_tags(text: str) -> dict:
 
 # ── Watermark sidecar (idempotency) ──────────────────────────────────────────
 
+VENDOR_SEGMENTS = {"themes", "plugins", "mu-plugins", "vendor", "packages", "node_modules"}
+ROOT_MARKERS = ("CLAUDE.md", "site.yml", ".git")
+
+
+def project_root(cwd: str) -> Path | None:
+    """The project the shell is IN, not the directory it happens to be in.
+
+    Sessions `cd` into theme, plugin and vendor trees; writing memory/ at cwd left
+    seventeen stray sidecars under themes/ and vendor/ across ~/Sites (2026-09-02).
+    Walk up to the nearest dir holding a root marker, never past $HOME, and skip a
+    marker that sits below a vendor segment (a .git inside vendor/x is not a root).
+    """
+    home = Path.home().resolve()
+    start = Path(cwd).resolve()
+    for cand in (start, *start.parents):
+        if cand == home or home not in cand.parents and cand != home and not str(cand).startswith(str(home)):
+            return None
+        rel = cand.relative_to(home).parts
+        if any(seg in VENDOR_SEGMENTS for seg in rel) and any(
+            (cand / m).exists() for m in ROOT_MARKERS
+        ):
+            continue   # a marker under vendor/themes/plugins is not this project's root
+        if any((cand / m).exists() for m in ROOT_MARKERS):
+            return cand
+    return None
+
+
 def sidecar_path(cwd: str) -> Path:
     return Path(cwd) / "memory" / SIDECAR_NAME
 
@@ -527,7 +554,12 @@ def main() -> None:
         sys.exit(0)
 
     transcript_path = hook_input.get("transcript_path", "")
-    cwd = hook_input.get("cwd", os.getcwd())
+    launched_in = hook_input.get("cwd", os.getcwd())
+    root = project_root(launched_in)
+    if root is None:
+        log(f"skip no-project-root cwd={launched_in}")
+        sys.exit(0)
+    cwd = str(root)   # every write path below is relative to the project root
     date = datetime.now().strftime("%Y-%m-%d")
     project = Path(cwd).name
 
