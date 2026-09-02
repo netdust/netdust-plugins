@@ -1,0 +1,110 @@
+{
+ "_source": "josworld page 64 (test-secties), generalised 2026-09-02",
+ "type": "section",
+ "name": "H3 · Header — pagina",
+ "props": {
+  "image_position": "center-center",
+  "padding_bottom": "large",
+  "padding_top": "large",
+  "style": "default",
+  "title_breakpoint": "xl",
+  "title_position": "top-left",
+  "title_rotation": "left",
+  "vertical_align": "middle",
+  "width": "default"
+ },
+ "children": [
+  {
+   "type": "row",
+   "props": {
+    "column_gap": "large",
+    "layout": "3-5,2-5",
+    "margin_top": "remove",
+    "row_gap": "medium"
+   },
+   "children": [
+    {
+     "type": "column",
+     "props": {
+      "image_position": "center-center",
+      "position_sticky_breakpoint": "m",
+      "vertical_align": "bottom",
+      "width_medium": "3-5"
+     },
+     "children": [
+      {
+       "type": "text",
+       "props": {
+        "column_breakpoint": "m",
+        "content": "<p>Eyebrow</p>",
+        "margin_bottom": "small",
+        "margin_top": "remove"
+       }
+      },
+      {
+       "type": "headline",
+       "props": {
+        "content": "Page title over<br>two lines",
+        "image_align": "left",
+        "image_margin": "xsmall",
+        "margin_bottom": "remove",
+        "margin_top": "remove",
+        "title_element": "h1",
+        "title_style": "h1"
+       }
+      }
+     ]
+    },
+    {
+     "type": "column",
+     "props": {
+      "image_position": "center-center",
+      "position_sticky_breakpoint": "m",
+      "vertical_align": "bottom",
+      "width_medium": "2-5"
+     },
+     "children": [
+      {
+       "type": "text",
+       "props": {
+        "column_breakpoint": "m",
+        "content": "<p>Intro paragraph, bottom-aligned to the title.</p>",
+        "margin_bottom": "remove",
+        "margin_top": "remove",
+        "text_style": "large"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "row",
+   "props": {
+    "margin_top": "large"
+   },
+   "children": [
+    {
+     "type": "column",
+     "props": {
+      "image_position": "center-center",
+      "position_sticky_breakpoint": "m"
+     },
+     "children": [
+      {
+       "type": "image",
+       "props": {
+        "image": "content/uploads/placeholder.jpg",
+        "image_height": 442,
+        "image_svg_color": "emphasis",
+        "image_width": 1280,
+        "margin_bottom": "remove",
+        "margin_top": "remove"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

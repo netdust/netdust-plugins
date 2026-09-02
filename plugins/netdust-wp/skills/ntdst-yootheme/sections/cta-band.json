@@ -1,0 +1,84 @@
+{
+ "_source": "josworld page 64 (test-secties), generalised 2026-09-02",
+ "type": "section",
+ "name": "A2 · CTA — tekst",
+ "props": {
+  "image_position": "center-center",
+  "padding_bottom": "xlarge",
+  "padding_top": "xlarge",
+  "style": "default",
+  "title_breakpoint": "xl",
+  "title_position": "top-left",
+  "title_rotation": "left",
+  "vertical_align": "middle",
+  "width": "default"
+ },
+ "children": [
+  {
+   "type": "row",
+   "props": {
+    "margin_top": "remove"
+   },
+   "children": [
+    {
+     "type": "column",
+     "props": {
+      "image_position": "center-center",
+      "position_sticky_breakpoint": "m",
+      "text_align": "center"
+     },
+     "children": [
+      {
+       "type": "text",
+       "props": {
+        "column_breakpoint": "m",
+        "content": "<p>Eyebrow</p>",
+        "margin_bottom": "small",
+        "margin_top": "remove",
+        "text_align": "center",
+        "text_style": "small"
+       }
+      },
+      {
+       "type": "headline",
+       "props": {
+        "content": "One sentence that asks<br>for the click",
+        "image_align": "left",
+        "image_margin": "xsmall",
+        "margin_bottom": "default",
+        "margin_top": "remove",
+        "text_align": "center",
+        "title_element": "h2",
+        "title_style": "h3"
+       }
+      },
+      {
+       "type": "button",
+       "props": {
+        "button_size": "small",
+        "grid_column_gap": "small",
+        "grid_row_gap": "small",
+        "margin_bottom": "remove",
+        "margin_top": "remove",
+        "text_align": "center"
+       },
+       "children": [
+        {
+         "type": "button_item",
+         "props": {
+          "button_style": "secondary",
+          "content": "Call to action",
+          "dialog_layout": "modal",
+          "dialog_offcanvas_flip": true,
+          "icon_align": "left",
+          "link": "/contact/"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

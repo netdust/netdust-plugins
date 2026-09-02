@@ -1,0 +1,137 @@
+{
+ "_source": "josworld page 64 (test-secties), generalised 2026-09-02",
+ "type": "section",
+ "name": "C8 · FAQ",
+ "props": {
+  "image_position": "center-center",
+  "padding_bottom": "large",
+  "padding_top": "large",
+  "style": "default",
+  "title_breakpoint": "xl",
+  "title_position": "top-left",
+  "title_rotation": "left",
+  "vertical_align": "middle",
+  "width": "default"
+ },
+ "children": [
+  {
+   "type": "row",
+   "props": {
+    "column_gap": "large",
+    "layout": "2-5,3-5",
+    "margin_top": "remove",
+    "row_gap": "medium"
+   },
+   "children": [
+    {
+     "type": "column",
+     "props": {
+      "image_position": "center-center",
+      "position_sticky_breakpoint": "m",
+      "width_medium": "2-5"
+     },
+     "children": [
+      {
+       "type": "text",
+       "props": {
+        "column_breakpoint": "m",
+        "content": "<p>Eyebrow</p>",
+        "margin_bottom": "small",
+        "margin_top": "remove"
+       }
+      },
+      {
+       "type": "headline",
+       "props": {
+        "content": "Maybe your answer<br>is already here",
+        "image_align": "left",
+        "image_margin": "xsmall",
+        "margin_bottom": "medium",
+        "margin_top": "remove",
+        "title_element": "h2",
+        "title_style": "h3"
+       }
+      },
+      {
+       "type": "button",
+       "props": {
+        "button_size": "small",
+        "grid_column_gap": "small",
+        "grid_row_gap": "small",
+        "margin_bottom": "remove",
+        "margin_top": "remove"
+       },
+       "children": [
+        {
+         "type": "button_item",
+         "props": {
+          "button_style": "default",
+          "content": "Ask us",
+          "dialog_layout": "modal",
+          "dialog_offcanvas_flip": true,
+          "icon_align": "left",
+          "link": "/contact/"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "column",
+     "props": {
+      "image_position": "center-center",
+      "position_sticky_breakpoint": "m",
+      "width_medium": "3-5"
+     },
+     "children": [
+      {
+       "type": "accordion",
+       "props": {
+        "collapsible": true,
+        "content_column_breakpoint": "m",
+        "image_align": "top",
+        "image_grid_breakpoint": "m",
+        "image_grid_width": "1-2",
+        "image_svg_color": "emphasis",
+        "link_style": "default",
+        "link_text": "Read more",
+        "margin_bottom": "remove",
+        "margin_top": "remove",
+        "multiple": false,
+        "show_image": false,
+        "show_link": false
+       },
+       "children": [
+        {
+         "type": "accordion_item",
+         "props": {
+          "title": "Question 1",
+          "content": "<p>Answer.</p>",
+          "item_element": "div"
+         }
+        },
+        {
+         "type": "accordion_item",
+         "props": {
+          "title": "Question 2",
+          "content": "<p>Answer.</p>",
+          "item_element": "div"
+         }
+        },
+        {
+         "type": "accordion_item",
+         "props": {
+          "title": "Question 3",
+          "content": "<p>Answer.</p>",
+          "item_element": "div"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

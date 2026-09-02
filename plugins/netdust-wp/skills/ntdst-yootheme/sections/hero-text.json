@@ -1,0 +1,75 @@
+{
+ "_source": "josworld page 64 (test-secties), generalised 2026-09-02",
+ "type": "section",
+ "name": "H1 · Hero — tekst",
+ "props": {
+  "height": "viewport",
+  "height_viewport": "28",
+  "image_position": "center-center",
+  "padding_bottom": "default",
+  "padding_top": "default",
+  "style": "default",
+  "title_breakpoint": "xl",
+  "title_position": "top-left",
+  "title_rotation": "left",
+  "vertical_align": "middle",
+  "width": "default"
+ },
+ "children": [
+  {
+   "type": "row",
+   "props": {
+    "column_gap": "large",
+    "layout": "1-2,1-2",
+    "margin_top": "remove",
+    "row_gap": "medium"
+   },
+   "children": [
+    {
+     "type": "column",
+     "props": {
+      "image_position": "center-center",
+      "position_sticky_breakpoint": "m",
+      "vertical_align": "middle",
+      "width_medium": "1-2"
+     },
+     "children": [
+      {
+       "type": "headline",
+       "props": {
+        "content": "Headline over two lines",
+        "image_align": "left",
+        "image_margin": "xsmall",
+        "margin_bottom": "remove",
+        "margin_top": "remove",
+        "title_element": "h1",
+        "title_style": "h2"
+       }
+      }
+     ]
+    },
+    {
+     "type": "column",
+     "props": {
+      "image_position": "center-center",
+      "position_sticky_breakpoint": "m",
+      "vertical_align": "bottom",
+      "width_medium": "1-2"
+     },
+     "children": [
+      {
+       "type": "text",
+       "props": {
+        "column_breakpoint": "m",
+        "content": "<p>One lead sentence that carries the promise.</p>",
+        "margin_bottom": "remove",
+        "margin_top": "remove",
+        "text_style": "lead"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

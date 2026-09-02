@@ -34,8 +34,7 @@ if [ -f "$SKILL/scripts/yoo_layout.py" ]; then
   python3 - "$SKILL/scripts" <<'PY' > fixtures/.built.json
 import sys, json; sys.path.insert(0, sys.argv[1])
 import yoo_layout as y
-page = y.wrap([y.library("../../skills/ntdst-yootheme/sections/hero-text.json")["hero-text"]], "5.0.43") if False else None
-sec = y.section("H1 · Hero — tekst", [y.row([y.column([y.headline("Hallo", element="h1", style="h1"), y.text("<p>Intro</p>"), y.button("Meer", "/meer/")], width_medium="1-2")], layout="1-2,1-2", alignment="center")])
+sec = y.section("H1 · Hero — tekst", [y.row([y.column([y.headline("Hallo", element="h1", style="h1"), y.text("<p>Intro</p>"), y.button("Meer", "/meer/")], width_medium="1-2"), y.column([y.image("content/uploads/x.jpg", 628, 500)], width_medium="1-2")], layout="1-2,1-2", column_gap="large")])
 print(json.dumps(y.wrap([sec], "5.0.43")))
 PY
   out=$($LINT fixtures/.built.json 2>&1); rc=$?
