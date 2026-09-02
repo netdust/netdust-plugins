@@ -17,12 +17,17 @@ Each line names what pins it — a core unit test, or an invariant in `ARCHITECT
 
 ## Silent no-ops
 
+- **A lifecycle listener registered with the OLD arity never sees the 5.2.0 before-state.** `ntdst/model/updated` now carries a fourth argument and `deleting` / `deleted` a third; WordPress passes only `accepted_args` arguments, so `add_action('ntdst/model/updated', $cb, 10, 3)` keeps running and silently receives no snapshot. Say `4` (or `3`) when the listener wants it.
+- **Before 5.2.0 a direct meta write fired NO model hook.** `updateMeta()`, `updateMetaBatch()` and `deleteMeta()` bypassed `updating`/`updated` entirely; an audit listener on `updated` missed every status flip and lock written that way. On 5.2.0 they fire `ntdst/model/meta_updated` (ONE event per batch, success path only) and `ntdst/model/meta_deleted` (only when a row was actually deleted) — listen there, not on `updated`.
+
 - **`'default' => …` on a field is read by nothing.** A `select` shows its first option because that is what `<select>` does. Apply defaults yourself — pinned by MetaboxGeneratorRenderTest.php.
 - **`'label' => …` on a top-level scalar field is ignored.** The admin label is always `ucwords(str_replace('_', ' ', $key))`. Rename the key. `label` IS honoured on a repeater sub-field — pinned by MetaboxGeneratorRenderTest.php.
 - **A repeater declared with `fields` renders no row inputs.** The sub-field key is **`sub_fields`**. With the wrong key every sub-value falls back to a plain text clean — pinned by DataRegistersRestMetaTest.php.
 - **A sub-field's own `sanitizer` is refused at `register()`.** Nothing ever ran it: the row walk cleans each cell by its DECLARED TYPE and never looks for a callable. A security declaration that quietly does nothing is worse than none — pinned by DataReadsTheVocabularyTest.php.
 
 ## Reversed or non-obvious defaults
+
+- **Two 5.1.1 reads changed what comes BACK, never what is stored.** `array`/`json` string leaves keep `\n` (they were flattened through `sanitize_text_field()` on every read); `repeater()` now decodes a stored JSON STRING (it used to answer `[]` for anything not already a PHP array, so converting a `json` field to `repeater` emptied it). Nothing already stored is rewritten — a consumer that worked around either by re-saving may now double-handle.
 
 - **`int` is SIGNED now.** The unsigned cast left that path, so `-500` stores as `-500` where it used to store `500`. A numeric string past the platform maximum saturates at `PHP_INT_MAX`, a float past it is PHP's undefined cast, and a non-scalar stores `0` — pinned by DataReadsTheVocabularyTest.php.
 - **`bool` stores `false` ONLY for the exact string `"false"`.** It is `wp_validate_boolean()`, WordPress's word: `'no'` and `'off'` store as **true**. Find those before you upgrade — `SELECT post_id, meta_key FROM wp_postmeta WHERE meta_value IN ('no','off')` — pinned by MetaboxGeneratorSaveTest.php.

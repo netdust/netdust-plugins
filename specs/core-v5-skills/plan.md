@@ -179,4 +179,4 @@ Loop budget: ~9 iterations — 7 tasks plus two expected review-fix rounds. Atte
 - T01 before everything: T02–T05 cite its headings; an edit to a heading after T02 is a find-and-replace across four files.
 - T05's `baseline_ref` is `391eb0f` — the commit *before* this branch — so the baseline arm reads the old skill text regardless of how many commits the branch has.
 - T06 (version bump) before T07 (re-anchor) so the re-anchor commit is the last thing on the branch and Stefan's push carries a single version.
-- T07 has two trigger points (core-shape T13 commit; the `v5.0.0` tag). The task is written once and run twice; the second run is expected to change nothing and says so in its commit.
+- T07 has two trigger points (core-shape T13 commit; the `5.0.0` tag (no `v` prefix — run 2 executed against `5.2.0` on 2026-09-02, since core had moved on)). The task is written once and run twice; the second run is expected to change nothing and says so in its commit.

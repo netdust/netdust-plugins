@@ -1,4 +1,4 @@
-# netdust-wp — correctness eval, ntdst-core 5.0.0 re-anchor
+# netdust-wp — correctness eval, ntdst-core 5.2.0 re-anchor
 
 Run **2026-08-24** with `evals/run-correctness-eval.sh` over `evals/behavioral-lessons.json`
 (T05 of `core-v5-skills`). Three runs; runs 1 and 2 were defect-finding, **run 3 is the
