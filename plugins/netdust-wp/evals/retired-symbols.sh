@@ -41,6 +41,7 @@ ALLOW=(
   './skills/ntdst-framework/references/traps.md|ntdst_service_|trap line: the retired ntdst_service_{slug}_enabled filter FAILED OPEN — naming it is the warning'
   './skills/ntdst-framework/references/traps.md|ntdst_model_|trap line: a listener on the renamed hook is silently inert — naming the old spelling is the warning'
   './skills/ntdst-yootheme/*|wysiwyg|YOOtheme/ACF vocabulary, not the NTDST field vocabulary; `wysiwyg` is a live ACF type name'
+  './skills/ntdst-framework/references/baseline.md|ntdst/api_data|baseline 2.1.0 MOVED its manual purge door off this action onto a route; naming the door it left is the warning, and ntdst-baseline own README still documents the old one'
 )
 
 allowed() {  # $1 = path, $2 = symbol

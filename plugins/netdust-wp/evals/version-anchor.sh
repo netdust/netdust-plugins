@@ -10,8 +10,10 @@
 #   NTDST_CORE_DIR=/path bash evals/version-anchor.sh
 # Exit 0 = anchors current. Exit 1 = drift. Exit 2 = cannot verify (package absent).
 #
-# The package version is read from the plugin header, NOT from git tags — the 5.x
-# line shipped untagged while the header carried the truth.
+# The package version is read from the plugin header FIRST, the newest git tag
+# second. Neither source is reliable alone: ntdst-core's 5.x line shipped untagged
+# with the truth in the header, and ntdst-baseline is the inverse — tagged v2.3.0
+# with no Version: line in the header at all.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2   # plugins/netdust-wp
 
@@ -26,6 +28,18 @@ PACKAGES=(
 header_version() {
   grep -m1 -oE '^[[:space:]]*\*?[[:space:]]*Version:[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+' "$1" 2>/dev/null \
     | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'
+}
+
+tag_version() {
+  git -C "$1" tag --sort=-v:refname 2>/dev/null \
+    | grep -m1 -oE '[0-9]+\.[0-9]+\.[0-9]+'
+}
+
+shipped_version() {
+  local dir="$1" name="$2" v
+  v="$(header_version "$dir/$name.php")"
+  [ -n "$v" ] || v="$(tag_version "$dir")"
+  printf '%s' "$v"
 }
 
 claimed_version() {
@@ -46,9 +60,9 @@ for entry in "${PACKAGES[@]}"; do
     continue
   fi
 
-  shipped="$(header_version "$dir/$name.php")"
+  shipped="$(shipped_version "$dir" "$name")"
   if [ -z "$shipped" ]; then
-    echo "$name: cannot read a version from $dir/$name.php — not checked" >&2
+    echo "$name: no Version: header in $dir/$name.php and no version tag — not checked" >&2
     unverifiable=$((unverifiable + 1))
     continue
   fi

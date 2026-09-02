@@ -16,7 +16,7 @@ description: >
 ntdst-core 5.2.0 — anchored on tag `5.2.0` (d68ed3a; README + CHANGELOG @ 662befb), specs core-shape rev 3 / field-types rev 3 / core-trim rev 2. 5.1.0 added the chain's grouping methods, 5.1.1 fixed two FieldTypes reads, 5.2.0 added the meta hooks and the before-state arguments — all below, each additive.
 
 - **ntdst-core** (5.2.0) — boot, container, data layer, one HTTP surface, pages, templates.
-- **ntdst-baseline** (2.0.0) — the WordPress-gaps layer. See `references/baseline.md`.
+- **ntdst-baseline** (2.3.0) — the WordPress-gaps layer, seven modules; the `yootheme` builder-source bridge is opt-in, and the manual purge door is a route now. See `references/baseline.md`.
 
 **Read the source before you write.** This file carries the decisions and the convergence points, not an API inventory: core refuses what it does not know, and names the replacement when it refuses. `NTDST_FieldTypes::get()` throws and names the canonical type; a write verb with no capability does not register; a listed class PHP cannot resolve is refused at `register()`. What a signature cannot tell you is in `references/traps.md`. Read that before writing. 5.0.0 shrank core to what only a framework can own; a primitive WordPress already ships is not one, and the admission test is `docs/philosophy.md` §6.
 
