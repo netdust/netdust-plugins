@@ -226,6 +226,34 @@ make ship                      # production is always `make ship`
 git checkout staging && git merge --no-ff hotfix/critical-bug && git push  # backport
 ```
 
+## Is the work anywhere but here?
+
+`scripts/work-audit.sh` — reports work that exists only on this machine, and refs that
+hide the ones that still mean something.
+
+```bash
+bash scripts/work-audit.sh            # the repo you are standing in
+bash scripts/work-audit.sh PATH...    # those repos
+bash scripts/work-audit.sh --fleet    # every repo under ~/Sites and ~/Projects
+```
+
+Four shapes, in falling order of how quietly they lose work:
+
+| Shape | Why it bites |
+|---|---|
+| staged, never committed | `git add` writes the blob and nothing else. `gc` reaps it; the working file is the only durable copy, and the file LOOKS handled. |
+| untracked | never entered git at all — the shape that cost four authored specs |
+| unpushed commits / a branch with no upstream | one disk away from gone |
+| a remote branch already merged | not a risk, but it buries the branches that are |
+
+**Reports only.** Every finding prints the command to fix it; the audit never pushes,
+commits or deletes. Exit 1 means something is at risk, 0 means nothing is.
+
+Run it before you close a spec, and after any session that ended in a hurry. It is
+stack-agnostic and needs no `site.yml` or Makefile — deliberately, because the repos
+that strand work are usually the ones with neither. A `make` verb would not have
+caught a single one of the three strandings that prompted it (2026-09-02).
+
 ## Anti-patterns
 
 | Smell | Fix |
@@ -235,6 +263,7 @@ git checkout staging && git merge --no-ff hotfix/critical-bug && git push  # bac
 | Running `composer install` / `npm install` outside the container | Use `ddev composer …` / `ddev exec npm install` so the version matches the runtime. |
 | Manual file upload deployment | Use `/deploy` (reads site.yml's deploy.method, dispatches). |
 | Branch named `develop` | Netdust convention is `staging`, not `develop`. |
+| A session ends with commits unpushed | `work-audit.sh`. Three separate strandings on 2026-09-02 — 17 commits, four specs, a lessons.md — none visible until something tripped over them. |
 | Multiple `.env*` variants in repo (`.env.dev`, `.env.prod`) | One `.env.example` + per-environment runtime injection. |
 | `ddev wp` on a non-WP project | WP-CLI is WP-only. Use `ddev composer …` or `ddev exec …` for other stacks. |
 
