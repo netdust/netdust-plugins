@@ -176,7 +176,7 @@ Services are listed with full namespace strings; the loader respects `priority` 
 2. **Query field name + label/group** — what shows in the builder's Dynamic Content dropdown.
 3. **Resolver query** — `get_posts()` args (single vs list, filters, ordering).
 4. **listOf vs single** — single type to expose repeater sub-fields; `['listOf' => 'Type']` for a collection (Grid/List of many items).
-5. **Enable/disable** — the `ntdst_service_{slug}_enabled` filter or the `ntdst_service_{slug}` option, if the source must be switchable per site.
+5. **Enable/disable** — `metadata()['enabled'] => false`, or a `services.conditional` entry whose condition returns false. Those are the two switches and there is no third; the v4 filter and option are retired, and the filter FAILED OPEN — a source somebody switched off through it BOOTS after the upgrade.
 6. **Priority** — 21+ for a normal source; nudge higher only if ordering against another custom source matters.
 
 **Never changes:**

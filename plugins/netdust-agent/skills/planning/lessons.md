@@ -28,3 +28,21 @@ Neither is visible from reading the *calling* code. Both are visible from readin
 **Rule:** 1c's "read X's source and confirm X accepts Y" extends to the framework's **extension points and declarative keys**, not only to the classes and methods the plan calls. When a plan leans on a declaration (`required`, `validate`, a scope, a capability map) or a hook seam (`*_saved`, `*_after`), read what actually reads that key or fires that hook, and **enumerate every write path that must reach it**. A hook that covers one of three write paths is a premise, and it was wrong here.
 
 **Cheap test for the second half:** for any derived or maintained value, name every path that writes the thing it is derived from. If the maintenance hook does not cover all of them, the value is not maintained — it is maintained *sometimes*, which for a query predicate means rows silently vanishing from both sides of the filter.
+
+---
+
+## An integration-gate curl that reads only the status code passes a mid-render fatal
+
+**Problem (ntdst-core 5.0.0, 2026-08-23):** core-shape Cluster 4a's gate line was
+`curl -s -o /dev/null -w '%{http_code}' https://daan.ddev.site/` and it printed **200
+on a broken homepage** — the consumer's theme helper called a method the branch had
+deleted, the fatal hit mid-render, and WordPress had already flushed the 200 header.
+The gate reported PASS over a page whose body was a stack trace. The task review
+caught it only because a reviewer ran the gate's own command and then read the body.
+
+**Rule:** an `Observable:` or `Integration gate:` line that drives a page must assert
+the BODY, not the status alone — at minimum
+`[ "$(curl -sS <url> | grep -c 'Stack trace\|Fatal error')" = 0 ]` beside the status
+check. A status-only curl proves the server started answering, not that the page
+rendered. The same applies to any gate whose success channel can be committed before
+the failure happens (headers before render, exit codes of pipelines, queue acks).

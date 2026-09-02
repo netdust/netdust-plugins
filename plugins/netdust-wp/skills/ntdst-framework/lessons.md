@@ -332,3 +332,43 @@ layer in core (deleted in v4, ruled out by core-shape D1).
 3. Open the one-task spec in `ntdst-core` (`specs/rest-query/`), citing the site as
    the consumer. The site's change is one key on the field description.
 
+
+## v5 re-anchor (2026-08-23)
+
+`SKILL.md` and `references/traps.md` described a package that no longer exists. Three
+breaking specs — `core-shape`, `field-types` and `core-trim` — merged into ntdst-core
+5.0.0, and the skill still taught v3/v4: the command dispatcher, `api_data`, the
+`{success,data}` envelope, auto-discovery, the `_enabled` switch, `Theme::style()` and
+21 field-type names. A consumer agent reading it would have written code that fatals at
+`init`. The rewrite re-anchors every claim on the source (README `### 5.0.0`,
+`ARCHITECTURE-INVARIANTS.md` INV-1…INV-10, the three specs, and the code where a spec is
+silent), reorganises the file around the three doors a consumer actually picks between,
+and re-pins every trap to the core unit test or invariant that would catch its
+regression. Four doors became three; the fourth was never a door, it was a second HTTP
+surface. Where README's own rows are not written yet (Response, Theme, the exposure
+helpers), the specs are cited as the authority and the header says `pre-tag`.
+
+- **The command dispatcher** — `ntdst_actions()`, `ntdst/api_data/{action}`, the minted
+  nonce route and the JS client are gone. There is ONE HTTP surface, `ntdst_rest()`, and
+  a command is a `->post()` route reached with `wp.apiFetch` (INV-2, INV-4).
+- **`'permission' => 'public'`** — the STRING is refused and the route does not register.
+  `->public()` on the verb is the one door to anonymous, because a value reaches config,
+  a constant and a merge, and a chained call does not (INV-3).
+- **Internal by default** — a route that says nothing is `is_user_logged_in`, and a write
+  verb carrying only a posture does not register at all. v4 required a callable permission.
+- **The surface registry** — `surface()`, `publicSurface()`, `opaqueSurface()`,
+  `forgetSurface()`, `public_fields`, `publicRow`. WordPress keeps the register; ask
+  `rest_get_server()->get_routes($ns)` (INV-5).
+- **Auto-discovery** — `auto_discover`, `discovery_paths` and the source-parsing loader
+  are gone. You load, core resolves; a writable directory on that list was code execution
+  (INV-10).
+- **The `_enabled` filter and its option** — retired, and they FAILED OPEN. A service kept
+  off through them BOOTS after the upgrade. Two switches now: `metadata()['enabled']` or a
+  conditional entry. The config filter is `ntdst/service/{slug}/config`.
+- **The v2 model hooks** — `ntdst_model_*` renamed to `ntdst/model/{creating,…}` with no
+  shim; a listener on an old name is silently inert. Same for the old config-filter spellings.
+- **13 field-type names** — a retired name is now a fatal at `register()` naming its
+  canonical. The vocabulary is 17, closed, in one table (INV-8). `int` is signed.
+- **`render()`, the envelope, `Theme::style()`/`script()`, `Scheduler`, `Mailer`** — the
+  renderer and the envelope left with the dispatcher; assets, scheduling and mail are
+  WordPress primitives or another package's job (`docs/philosophy.md` §6).

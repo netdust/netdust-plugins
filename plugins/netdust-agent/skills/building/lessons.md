@@ -32,6 +32,21 @@ This is the same family as the already-known "HALTs on fix-shaped clusters" mis-
 
 ---
 
+## superpowers' task-brief script cannot parse netdust plan grammar — extract by hand
+
+**Problem (ntdst-core 5.0.0, 2026-08-23):** `scripts/task-brief PLAN_FILE N` expects
+`### Task N` headings; netdust `tasks.md` uses `- [ ] Tnn — …` task lines under
+`### Cluster` headings. The script answered "task 9 not found" on a valid plan, and the
+controller had to extract the task block by hand (slice from the `- [ ] Tnn` line to
+the next task line / `Integration gate:` / `── REVIEW GATE ──` / heading).
+
+**Rule:** on a netdust-grammar plan, build the brief by slicing `tasks.md` between the
+task's own line and the next structural marker, write it to the plan's workspace as
+`task-N-brief.md`, and append a controller ground-truth section (live line numbers,
+signatures) before dispatching. Do not "fix" the plan's grammar to satisfy the script —
+`gate-check.py` owns the grammar. The same applies to `review-package`'s BASE: record
+BASE before dispatching; `HEAD~1` silently truncates multi-commit tasks.
+
 ## "The compiled artifact has the right values" is not "the page looks right"
 
 **Problem (edushare, 2026-08-27):** A Cluster A close declared the plan's

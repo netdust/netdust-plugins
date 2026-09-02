@@ -8,7 +8,7 @@ WordPress layer of the Netdust harness for Claude Code. Layers on top of [`netdu
 |---|---|
 | **WP discipline skills** | `wp-security`, `wp-database`, `bedrock-composer` (each with RED tests) |
 | **WP reference skills** | `wp-frontend`, `wp-testing`, `wp-infra` |
-| **ntdst-core framework skills** | `ntdst-framework`, `ntdst-patterns`, `ntdst-yootheme` |
+| **ntdst-core framework skills** (ntdst-core 5.2.0) | `ntdst-framework`, `ntdst-patterns`, `ntdst-yootheme` |
 | **WP commands** | `/wp-new-project`, `/scaffold-plugin`, `/sync-db`, `/setup-tests` |
 | **Templates** | portable `Makefile` + `scripts/` (gate, ledger, rollback; rsync or git-push transport) |
 | **Identity** | `CLAUDE.md` (WP-specific defaults), `RULES.md` (WP-specific rules — universal rules come from netdust-core) |

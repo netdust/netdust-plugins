@@ -1,12 +1,10 @@
-# Golden Path — Form / data-flow feature (AJAX with all four security pillars)
+# Golden Path — Form / data-flow feature (a write route on `ntdst_rest()`)
 
-> **Verified against source: 2026-06-09** — Stride `Handlers/ProfileHandler.php` + `ntdst-core/api/Actions.php`. Re-verify with the drift-reviewer grep set (check #11) when the source moves or drifts; `/skill-audit` flags this after 90 days.
+> **Rewritten for ntdst-core 5.0.0** — anchored on `api/Rest.php` (`NTDST_Rest`), `api/Data.php`. Re-verify with the drift-reviewer grep set when the source moves; `/skill-audit` flags this after 90 days.
 
-**Read this before planning any form, AJAX, or write-flow.** It shows where each of the four security pillars fires in the NTDST AJAX path. Build to it; name any deviation in the plan.
+**Read this before planning any form, write flow, or REST write endpoint.** 5.0.0 removed the old AJAX command dispatcher outright, with no shim — see `ntdst-framework/SKILL.md`'s `## Retired` section for what it was. **There is now ONE HTTP surface: `ntdst_rest()`.** A form posts straight to a REST route; `wp.apiFetch` is the one frontend driver.
 
-**Extracted from** Stride's `ProfileHandler` (`Stride\Handlers\ProfileHandler`) + the framework edge `ntdst-core/api/Actions.php`. Verified drift-clean. Genericised `Stride` → `{Project}`.
-
-The single most important thing this golden path teaches: **the nonce and login pillars fire at the framework edge, not in your handler.** A handler that re-checks the nonce is redundant; a handler that *omits* capability/sanitize/escape is a vulnerability. Know which pillar is yours.
+The write/posture refusal is `ntdst-framework/SKILL.md` `## Rest is the one surface`; this doc shows the two shapes it produces — the capability write and the anonymous write.
 
 ---
 
@@ -14,220 +12,250 @@ The single most important thing this golden path teaches: **the nonce and login 
 
 | File | Layer | Responsibility (one line) |
 |---|---|---|
-| `Handlers/{Feature}Handler.php` | Thin handler | Registers `ntdst/api_data/{action}` filter; validates input, delegates, returns array\|WP_Error |
-| `Modules/{Module}/{Feature}Service.php` | Service | Owns the business logic the handler delegates to |
-| `themes/{theme}/src/main.js` (`ntdstAPI`) | Frontend driver | `ntdstAPI.call('{action}', params)` — fetches nonce, posts to the REST edge |
-| `ntdst-core/api/Actions.php` | **Framework edge (do not copy — reference)** | Verifies nonce + login + origin + rate-limit, then dispatches the `ntdst/api_data/{action}` filter |
+| `Modules/{Module}/{Feature}Handler.php` | Thin handler | Shapes the `WP_REST_Request`, delegates to the repository, returns `WP_REST_Response`\|`WP_Error` |
+| `Modules/{Module}/{Type}Repository.php` | Repository | The only place that calls `ntdst_data()->get('{type}')->create()` |
+| the owning service's `init()` | Route registration | `ntdst_rest($ns)->post(...)` — `NTDST_Rest`, the ONE HTTP surface |
+| `assets/js/{feature}.js` | Frontend driver | `wp.apiFetch({ path, method: 'POST', data })` |
 
-Governing reference: **`netdust-wp:wp-security`** (the four pillars + exact sanitize/escape/authorize functions), **`ntdst-framework/SKILL.md`** (the `ntdst/api_data` contract). This doc does not restate the pillar tables — it shows where each pillar lands.
+Governing reference: **`ntdst-framework/SKILL.md`** (`## Rest is the one surface`, `## Retired`), **`ntdst-framework/references/traps.md`** (`## Rest`), **`netdust-wp:wp-security`** (Validate/Sanitize/Escape/Authorize). This doc does not restate those rules — it shows where each one lands on a write route.
 
----
-
-## Where the four pillars fire
-
-```
- Browser                          Framework edge                      Your handler
- ───────                          (Actions.php)                      ({Feature}Handler)
- ntdstAPI.call(action, params)
-   │  GET /ntdst/v1/get_nonce  ─────▶ issues per-action nonce
-   │  POST /ntdst/v1/action    ─────▶ ① wp_verify_nonce(nonce, action)   [PILLAR 1: NONCE]
-   │     {action, nonce, …}          ② is_user_logged_in() unless        [auth gate]
-   │                                     action ∈ public_actions
-   │                                  ③ verifyOrigin() (CSRF)
-   │                                  ④ rate-limit per action
-   │                                  ⑤ apply_filters("ntdst/api_data/$action", [], $params)
-   │                                                              │
-   │                                                              ▼
-   │                                          ③ current_user_can(...) / ownership  [PILLAR 2: CAPABILITY]
-   │                                          ④ sanitize_*() every $param          [PILLAR 3: SANITIZE]
-   │                                          ⑤ delegate to service, return array|WP_Error
-   ◀─────────────────────────── JSON ◀──────────────────────────────┘
-        x-text binding (no raw HTML)                                  [PILLAR 4: ESCAPE — at the render]
-```
-
-**Pillars 1 (nonce) + the login gate are the framework's** — `Actions.php` verifies them *before* your filter runs, so your handler never sees an unauthenticated/forged request. **Pillars 2, 3, 4 are yours.**
+The code below is one worked example (`Acme\Modules\Contact`, an anonymous contact form) so every block is real, lintable PHP — rename the namespace, class and route to your own project's.
 
 ---
 
-## The handler — `{Feature}Handler.php`
+## The sequence — capability write and anonymous write, side by side
 
-Thin handler pattern: no constructor DI of services (resolve via `ntdst_get()` when needed), registers its own `ntdst/api_data/*` filters in `init()`, returns `array|WP_Error` (never echoes, never `wp_send_json_*` — the framework edge serialises the return).
+```
+Browser                                        ntdst-core (NTDST_Rest)                Your code
+────────                                       ────────────────────────                ─────────
+wp.apiFetch({ path, method: 'POST', data })
+   │  sets X-WP-Nonce itself (the wp_rest nonce — CSRF only, INV-4;
+   │  refreshed automatically on expiry — nothing for you to fetch)
+   ▼
+POST /{project}/v1/{route}
+   │
+   ▼
+permission — resolved from what the route DECLARED, never from a value
+that "reads like" open:
+   • a capability string   → current_user_can($cap)     [internal write]
+   • your own callable     → run exactly as you wrote it [the ONE door to an anonymous write]
+   │  (+ rate_limit / rate_window, charged from inside this same check — INV-7)
+   ▼
+                                                                          {Feature}Handler::handle($request)
+                                                                             │
+                                                                             ▼
+                                                                          {Type}Repository::create($data)
+                                                                             │
+                                                                             ▼
+                                                                          ntdst_data()->get('{type}')->create($data)
+   ◀───────────────────────────  WP_REST_Response | WP_Error  ──────────────┘
+```
+
+---
+
+## The handler — thin, no envelope
+
+A handler takes a `WP_REST_Request`, does its own Validate/Sanitize (`netdust-wp:wp-security`), delegates to the repository, and returns **`WP_REST_Response` or `WP_Error`** — never an array, never `wp_send_json_*`. `NTDST_Rest` and WordPress build the response body; a client that expects `response.data.thing` reads `response.thing`. Pass failure status through `WP_Error`'s own `['status' => …]` args (`new WP_Error('code', 'message', ['status' => 422])`) — never `return false` and never swallow a repository's `WP_Error`.
 
 ```php
 <?php
 declare(strict_types=1);
 
-namespace {Project}\Handlers;
+namespace Acme\Modules\Contact;
 
 use WP_Error;
+use WP_REST_Request;
+use WP_REST_Response;
 
 /**
- * Thin handler — validates input, delegates, returns. No business logic, no output.
+ * Thin handler: shapes the request, delegates, returns. No output, no
+ * business logic beyond turning request params into the repository's
+ * vocabulary.
  */
-final class {Feature}Handler
+final class ContactHandler
 {
-    public function __construct()
+    public function __construct(private readonly MessageRepository $messages) {}
+
+    /** Internal write — reached only by a user holding 'edit_posts'. */
+    public function store(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        $this->init();
-    }
+        $message = $this->messages->create([
+            'title'   => sanitize_text_field((string) $request->get_param('subject')),
+            'content' => wp_kses_post((string) $request->get_param('body')),
+            'email'   => sanitize_email((string) $request->get_param('email')),
+        ]);
 
-    private function init(): void
-    {
-        // FRAMEWORK AJAX PATH (drift cat 3) — never add_action('wp_ajax_...').
-        // The framework verifies nonce+login BEFORE this filter is applied.
-        add_filter('ntdst/api_data/{project}_update_profile', [$this, 'handleUpdateProfile'], 10, 2);
-    }
-
-    /**
-     * @param mixed $data    Existing filter data (unused — we own the response).
-     * @param array<string,mixed> $params  Request params (already past nonce+login at the edge).
-     * @return array<string,mixed>|WP_Error
-     */
-    public function handleUpdateProfile(mixed $data, array $params): array|WP_Error
-    {
-        // PILLAR 2 — CAPABILITY / OWNERSHIP. Here the resource is the user's own
-        // profile, so "logged in" + "acting on self" IS the authorization.
-        // For a CPT write you'd use current_user_can('edit_post', $id) instead.
-        $userId = get_current_user_id();
-        if (!$userId) {
-            return new WP_Error('not_logged_in', __('Je moet ingelogd zijn.', '{project}'));
+        if (is_wp_error($message)) {
+            return $message; // never swallowed — the repository's WP_Error propagates as-is
         }
 
-        // PILLAR 3 — SANITIZE ON INPUT. Every param is sanitised by type before use.
-        $formType = sanitize_text_field($params['form_type'] ?? 'personal');
-
-        return match ($formType) {
-            'billing'       => $this->updateBilling($userId, $params),
-            'notifications' => $this->updateNotifications($userId, $params),
-            default         => $this->updatePersonal($userId, $params),
-        };
-    }
-
-    /**
-     * Partial update: only posted keys are written; missing keys untouched.
-     */
-    private function updatePersonal(int $userId, array $params): array|WP_Error
-    {
-        $userUpdate = ['ID' => $userId];
-        if (isset($params['first_name'])) {
-            $userUpdate['first_name'] = sanitize_text_field($params['first_name']);   // PILLAR 3
-        }
-        if (isset($params['last_name'])) {
-            $userUpdate['last_name'] = sanitize_text_field($params['last_name']);      // PILLAR 3
-        }
-
-        if (count($userUpdate) > 1) {
-            $result = wp_update_user($userUpdate);
-            if (is_wp_error($result)) {     // never swallow WP_Error (drift cat 5) — propagate it
-                return $result;
-            }
-        }
-
-        // Map of input key → [meta key, sanitiser]. The sanitiser is chosen per field type.
-        $metaFields = ['phone' => 'phone', 'organisation' => 'organisation'];
-        foreach ($metaFields as $inputKey => $metaKey) {
-            if (isset($params[$inputKey])) {
-                update_user_meta($userId, $metaKey, sanitize_text_field($params[$inputKey]));  // PILLAR 3
-            }
-        }
-
-        ntdst_log('profile')->info('Personal profile updated', ['user_id' => $userId]);
-
-        return ['success' => true, 'message' => __('Gegevens bijgewerkt.', '{project}')];
-    }
-
-    private function updateBilling(int $userId, array $params): array|WP_Error
-    {
-        // PILLAR 3 — sanitiser per field. Note sanitize_email for the email field.
-        $billingMap = [
-            'company'       => ['billing_company',   'sanitize_text_field'],
-            'vat_number'    => ['billing_vat',       'sanitize_text_field'],
-            'address'       => ['billing_address_1', 'sanitize_text_field'],
-            'invoice_email' => ['invoice_email',     'sanitize_email'],
-        ];
-        foreach ($billingMap as $inputKey => [$metaKey, $sanitiser]) {
-            if (isset($params[$inputKey])) {
-                update_user_meta($userId, $metaKey, $sanitiser($params[$inputKey]));
-            }
-        }
-        return ['success' => true, 'message' => __('Facturatiegegevens bijgewerkt.', '{project}')];
+        return new WP_REST_Response(['id' => $message->ID], 201);
     }
 }
 ```
 
-> **`update_user_meta` here is NOT a repository bypass.** Users are not a CPT and have no `*Repository` — WP's user-meta API is the correct primitive. The cat-1/cat-8 repository rule applies to CPT data. For a CPT write, the handler would delegate to a service that goes through `{Type}Repository`. See the content-type golden path.
-
-### PILLAR 4 — ESCAPE ON OUTPUT, and why it's `n/a` here
-
-This handler returns a **JSON array**, not HTML. The frontend binds it with Alpine `x-text` (which sets `textContent`, never `innerHTML`), so there is no HTML sink to escape. **State this explicitly in the plan — `escape: n/a (JSON response, x-text binding)` — never silently omit the pillar.** If your handler returned a string that lands in HTML, you would `esc_html()` it at the render boundary (see the admin-settings golden path, which *does* echo and *does* escape).
-
----
-
-## The framework edge — `Actions.php` (reference only, do not copy)
-
-You don't write this — `ntdst-core` owns it. Know what it guarantees so you don't duplicate or assume:
+**`submit()`, the anonymous variant, is `store()` with ONE line changed** — the status. Everything else (the same sanitisers, the same `is_wp_error` propagation, the same 201) is identical, so only the delta is worth showing:
 
 ```php
-// ntdst-core/api/Actions.php — the contract your handler sits behind
-'permission_callback' => [$this, 'check_action_permission'],   // every action route
-// …
-if (!wp_verify_nonce($nonce, $action)) {        // PILLAR 1 — fires here, not in your handler
-    return new WP_Error('invalid_nonce', …);
-}
-// public_actions is an opt-in allow-list; everything else requires login:
-$public = apply_filters('ntdst/api/public_actions', $this->public_actions);
-if (!in_array($action, $public, true) && !is_user_logged_in()) {
-    return new WP_Error('not_logged_in', …);
-}
-// origin/referer CSRF check + per-action rate limit, then:
-return apply_filters("ntdst/api_data/{$action}", [], $params);   // → your handler
+$message = $this->messages->create([
+    // …the three fields store() sends, unchanged…
+    'post_status' => 'pending',   // THE DELTA
+]);
 ```
 
-**Consequence for the plan:** a handler on a non-public action is reached only by a logged-in user with a valid nonce. So the plan's security line for such a flow reads: *nonce + login = framework edge; capability + sanitize = handler; escape = n/a or at render.* If the action must be public (`nopriv`), it has to be added to the `ntdst/api/public_actions` allow-list explicitly — name that in the plan, because it removes the login gate.
+`create()` defaults `post_status` to `'publish'` (`api/Data.php:639`), so without that line an unauthenticated stranger's submission is live on the site the moment it is accepted. A row written by a caller nobody authenticated waits for a human.
+
+Every key the handler sends must be DECLARED on the model. An unregistered key is dropped from `create()` with an `Unregistered key(s) passed to create` line in `logs/data-*.log` and nothing else (`api/Data.php:502-520`) — so `email` is declared here, not assumed:
+
+```php
+<?php
+ntdst_data()->register('message', [
+    'label'       => 'Berichten',
+    'meta_prefix' => '_acme_',
+    'fields'      => ['email' => ['type' => 'email', 'label' => 'E-mail']],
+]);
+```
+
+```php
+<?php
+declare(strict_types=1);
+
+namespace Acme\Modules\Contact;
+
+use WP_Error;
+use WP_Post;
+
+/**
+ * The only place `ntdst_data()->get('message')` is called for this type —
+ * a handler, a template or a service reaching for it directly is drift.
+ * CRUD forwarding INSIDE a repository is the mediator boundary, not a
+ * pass-through: it fixes the model name and the status default.
+ */
+final class MessageRepository
+{
+    public function create(array $data): WP_Post|WP_Error
+    {
+        return ntdst_data()->get('message')->create($data);
+    }
+}
+```
 
 ---
 
-## The frontend driver — `ntdstAPI`
+## Route registration — the owning service's `init()`
 
-Never raw `fetch()` to a WP endpoint (drift / `anti-patterns.md` → *Manual fetch()*). `ntdstAPI` fetches a fresh per-action nonce, posts with `credentials: 'same-origin'`, and retries on nonce expiry.
+```php
+<?php
+declare(strict_types=1);
+
+use Acme\Modules\Contact\ContactHandler;
+
+$handler = ntdst_get(ContactHandler::class);
+
+ntdst_rest('{project}/v1')
+    // INTERNAL WRITE — a real WP capability names who may act. This is
+    // the default shape: nothing special to declare beyond the capability.
+    ->post('/messages', [$handler, 'store'], [
+        'permission' => 'edit_posts',
+    ])
+    // ANONYMOUS WRITE — see "The anonymous-form variant" below.
+    ->post('/contact', [$handler, 'submit'], [
+        'permission'  => static function (WP_REST_Request $request): bool {
+            // Honeypot: a real visitor never FILLS this hidden field, but the
+            // form always SENDS it. `?? ''` is load-bearing — get_param()
+            // returns null for a field that is absent, and a bare `=== ''`
+            // would then deny every submission that omits it.
+            return ($request->get_param('website') ?? '') === '';
+        },
+        'rate_limit'  => 5,
+        'rate_window' => 60,
+    ]);
+```
+
+`'permission' => 'edit_posts'` resolves to `current_user_can('edit_posts')` — a STRING is always asked as a capability, never as a function name (no `is_callable()` check runs first: WordPress itself ships capability slugs that are also function names, and asking `is_callable()` first would execute one as a gate). There is no "logged in, no specific capability" shorthand for a write — see the variant below for that exact case.
+
+---
+
+## The anonymous-form variant
+
+An anonymous write has exactly one door: **hand `permission` your own callable.** A callable is used exactly as given — never wrapped, never asked `is_callable()` twice — so it is free to run its own gate (a honeypot field, a Turnstile/hCaptcha token, a signed one-time link) and return `bool`. `rate_limit`/`rate_window` are charged from inside that same permission check (`api/Rest.php`, `guard()` — auth before the bucket, so a caller who could never pass the gate never makes the route write a rate-limit row).
+
+**A honeypot is spam deterrence, not authorization.** It is a bot filter sitting in the permission slot; anyone who reads your form's HTML can satisfy it. Everything downstream — the `'pending'` status, the sanitisers, the rate limit — must hold on the assumption that an attacker passed the gate on purpose.
+
+This is also the shape for "any logged-in user, no specific capability" — WordPress has no capability that means only "is logged in". The callable is simply `static fn(WP_REST_Request $r): bool => is_user_logged_in();` instead of a honeypot check.
+
+---
+
+## The frontend driver — `wp.apiFetch`
+
+Never raw `fetch()` against a REST route (it re-derives the nonce header and the credentials mode by hand, and both already ship with `wp.apiFetch`). Enqueue with `wp-api-fetch` as a script dependency; `wp.apiFetch` reads WordPress's own localized nonce and refreshes it on a 403 — there is nothing to fetch first.
+
+The honeypot is a contract between three places — the markup that renders the field, the payload that always sends it, and the permission callable that reads it. Miss any one and every real submission is refused.
+
+```html
+<!-- the markup: present, hidden from humans, never `type="hidden"`
+     (a bot skips those) and never `display:none` alone if your CSS is
+     inlined by a plugin — pair it with an off-screen label. -->
+<input type="text" name="website" value="" tabindex="-1" autocomplete="off"
+       class="acme-hp" aria-hidden="true">
+```
 
 ```js
-// in an Alpine component
-async save() {
-    const res = await ntdstAPI.call('{project}_update_profile', {
-        form_type: 'personal',
-        first_name: this.firstName,
-        last_name: this.lastName,
+// assets/js/contact-form.js
+async function submitContactForm(fields) {
+    return await wp.apiFetch({
+        path: '/{project}/v1/contact',
+        method: 'POST',
+        // `website: ''` is ALWAYS sent. The permission callable reads it, and
+        // an absent param arrives as null, which is not ''.
+        data: { ...fields, website: '' },
     });
-    this.message = res.message;   // bound via x-text — no innerHTML, so no XSS sink
 }
 ```
+
+```php
+wp_enqueue_script(
+    '{project}-contact-form',
+    plugins_url('assets/js/contact-form.js', __FILE__),
+    ['wp-api-fetch'],                 // dependency — no manual nonce plumbing
+    (string) filemtime($jsFile),
+    true,
+);
+```
+
+---
+
+## Where Validate/Sanitize/Escape/Authorize land
+
+`netdust-wp:wp-security`'s four pillars, mapped onto this slice:
+
+- **Authorize** — the route's `permission` (capability or your own callable), checked by `NTDST_Rest` before the handler ever runs. CSRF is separate and automatic: `wp.apiFetch` sends the nonce, WordPress verifies it (INV-4) — a nonce proves the request came from this browser session, it is never an access-control decision.
+- **Validate + Sanitize** — the handler's job, per parameter (`sanitize_text_field`, `sanitize_email`, `wp_kses_post`, …), before the value reaches the repository. The repository's own model schema sanitizes again on write (defence in depth), but the handler must not hand it raw request params and assume that catches everything — see `wp-security`'s function table for the sanitizer per type.
+- **Escape** — `n/a` here: the response is `WP_REST_Response` JSON, never HTML, so there is no render-time sink. State that explicitly in the plan (`escape: n/a — JSON response`) rather than silently omitting the pillar. A route that also renders HTML (a settings page save) escapes at the render boundary — see `golden-paths/admin-settings-page.md`.
 
 ---
 
 ## How to adapt — what changes per project, what never does
 
 **Changes per project:**
-1. **Action name** — `{project}_update_profile` (the filter tag + the `ntdstAPI.call` string must match).
-2. **Capability check** — own-resource (`get_current_user_id`) vs `current_user_can('edit_post', $id)` vs a custom cap. Pick per resource.
-3. **Sanitisers** — one per field, chosen by type (`sanitize_text_field` / `sanitize_email` / `absint` / `wp_kses_post` / `esc_url_raw`).
-4. **Delegation target** — which service/repository the handler calls (or, for user-meta, the WP user API directly).
-5. **Public vs authenticated** — if the action needs `nopriv`, add it to `ntdst/api/public_actions` and re-derive the auth pillar.
-6. **Escape decision** — `n/a` (JSON + x-text) vs `esc_html` at a render boundary. Always stated, never omitted.
+1. **Namespace + route** — `{project}/v1`, `/messages`, `/contact`.
+2. **Permission** — a capability for an internal write; your own callable for an anonymous one.
+3. **Sanitisers** — one per field, matching its type (see the handler above).
+4. **Rate limit** — only on a route that needs one; it is a route option, nothing is metered by default.
+5. **Delegation target** — which repository/model the handler writes through.
 
 **Never changes:**
-- Use the `ntdst/api_data/{action}` filter — never `add_action('wp_ajax_*')`.
-- Nonce + login are the framework edge's job; don't re-implement, don't assume absent.
-- Handler returns `array|WP_Error`; never echoes, never `wp_send_json_*`.
-- Never swallow a `WP_Error` — propagate it (cat 5).
-- Frontend uses `ntdstAPI.call()`, never raw `fetch()`.
-- All four pillars are accounted for in the plan; a missing one is the bug pre-shipped.
+- Register through `ntdst_rest()` — never a raw `register_rest_route()` and never the retired AJAX dispatcher.
+- Handler returns `WP_REST_Response`\|`WP_Error`; never an array envelope, never `wp_send_json_*`.
+- Never swallow a `WP_Error` — propagate it.
+- `ntdst_data()->get('{type}')` appears only inside the repository.
+- Frontend uses `wp.apiFetch`, never raw `fetch()`.
 
 ---
 
 ## Cross-references
 
-- Governing references: `netdust-wp:wp-security` (four pillars + functions), `ntdst-framework/SKILL.md` (the `ntdst/api_data` contract), `references/response.md`.
-- Anti-patterns this slice satisfies: `anti-patterns.md` → *Unsanitized Input*, *Missing Capability Checks*, *Unescaped Output*, *Manual fetch() in JavaScript*, *Returning false/null on Error*.
-- Drift categories satisfied (per `ntdst-drift-reviewer`): **3** (no raw `wp_ajax_*`), **5** (no swallowed `WP_Error`). The four security pillars map to `wp-plan-requirements` Block 1.
-- For a REST (not AJAX) flow with `permission_callback`, the shape is the same minus the nonce edge. **Register through `ntdst_rest()` (`NTDST_Rest`), not a raw `register_rest_route()`** — it makes `permission` a required option and absorbs WP's double permission-callback invocation (see `ntdst-framework/SKILL.md`). For a **cross-origin** endpoint, declare the `cors` route option (ntdst-core 4.1.0) — never a hand-rolled `Access-Control-*` filter. (Stride's `Modules/PartnerAPI/PartnerAPIController.php` calls `register_rest_route` directly, but it *predates* the registrar and is accepted baseline — read it for the role/company-scoping idea, not as the registration pattern to copy for new work.)
+- Governing references: `ntdst-framework/SKILL.md` (`## Rest is the one surface`), `ntdst-framework/references/traps.md` (`## Rest`), `netdust-wp:wp-security`.
+- For cross-origin, declare `cors()` once at the namespace (`ntdst_rest($ns)->cors([...])`) — never a hand-rolled `Access-Control-*` filter; it is REST-scoped and additive onto WordPress's own `allowed_http_origins` (INV-5).
+- For a CPT write that also needs an admin screen around it, see `golden-paths/content-type-feature.md`.
+- A settings-page save is itself a write route with the same shape — see `golden-paths/admin-settings-page.md`.

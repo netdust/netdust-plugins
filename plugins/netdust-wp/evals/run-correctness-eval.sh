@@ -17,7 +17,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."   # plugins/netdust-wp
 python3 - "${1:-evals/behavioral-lessons.json}" "${2:-evals/outputs/correctness-results.json}" <<'PY'
-import json, subprocess, sys, os, re, pathlib
+import json, subprocess, sys, os, re, time, pathlib
 from concurrent.futures import ThreadPoolExecutor
 
 cases = json.load(open(sys.argv[1], encoding="utf-8"))["cases"]
@@ -31,11 +31,32 @@ for stray in ("CLAUDE.md","AGENTS.md"):
     if os.path.exists(fp): os.remove(fp)
 PREFIX = "plugins/netdust-wp/"
 
-def ask(prompt, timeout=600, turns="14"):
+# A transport failure is NOT an answer. `claude -p` prints API trouble to STDOUT as
+# prose and exits 0, so "API Error: 529 Overloaded ..." arrives looking exactly like a
+# short reply. Run 1 of the v5 re-anchor (2026-08-24) scored five such banners as
+# content: four cases read as "the skill failed to teach ntdst_rest()" when the arm had
+# simply never run. Detect them, retry with backoff, and only then give up as ERRORED.
+TRANSPORT = ("api error", "overloaded", "rate limit", "503 ", "529", "internal server error")
+
+def _transport_failure(out):
+    head = out[:200].lower()
+    return any(t in head for t in TRANSPORT)
+
+def ask(prompt, timeout=600, turns="14", tries=3):
     """--max-turns 6, not 1. At 1 these large-context prompts return the literal
     string "Error: Reached max turns (N)" and the probe then scores an EMPTY
     ANSWER as a skill failure. That produced a bogus 0/8 and a PASS->FAIL flip
     between two identical runs before it was caught."""
+    last = ""
+    for attempt in range(tries):
+        last = _ask_once(prompt, timeout, turns)
+        if not last.startswith("ERROR:"):
+            return last
+        if attempt < tries - 1:
+            time.sleep(20 * (attempt + 1))   # 20s, 40s — 529s clear on their own
+    return last
+
+def _ask_once(prompt, timeout=600, turns="14"):
     try:
         r = subprocess.run(["claude","-p",prompt,"--max-turns",turns,
                             # CLEAN ROOM. Run 4 caught the BASELINE arm answering
@@ -53,6 +74,8 @@ def ask(prompt, timeout=600, turns="14"):
         out = (r.stdout or "").strip()
         if not out or "Reached max turns" in out or out.startswith("Error:"):
             return f"ERROR:no-answer rc={r.returncode} out={out[:120]!r}"
+        if _transport_failure(out):
+            return f"ERROR:transport rc={r.returncode} out={out[:160]!r}"
         return out
     except Exception as e:
         return f"ERROR:{e}"
