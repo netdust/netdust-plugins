@@ -25,14 +25,18 @@ by shipping, and every one reads as "this feature is broken" until you know it.
 | Asking WHERE something lives (pages, menus, header, footer, templates, a demo package) | `references/yootheme-site-model.md` |
 | Setting up SITE CHROME (header/mobile/top/bottom/sidebar layouts, post & blog defaults, Settings) | `references/yootheme-customizer.md` |
 | Composing or editing a PAGE (layout JSON, elements, props, responsive grid) | `references/yootheme-builder-json.md` |
-| Driving pages from DATA (ACF → sources → bindings → template routing) | `references/yootheme-content-binding.md` |
+| Driving pages from DATA (model → module source → bindings → template routing) | `references/yootheme-content-binding.md` |
 | Deciding how the site LOOKS (child theme, LESS, tokens, fonts) | `references/yootheme-less.md` + `templates/theme.child.less.md` |
 | Getting a model's fields into the picker, or a curated query | `references/yootheme.md` |
 
 ## Orientation — the five facts that reframe everything
 
 Learned from six official YOOtheme demo packages (theme 5.0.32) and verified
-against the parent theme's source. Detail in `yootheme-site-model.md`.
+against the parent theme's source at **5.0.43** (2026-09-02). 5.0.38 → 5.0.43 changed
+15 PHP files and nothing in the layout grammar except `button_item`'s modal condition
+now reading `lightbox` and `grid_item`'s `{@content_expand}`. **5.0.41 is the floor**:
+it closed CVE-2026-75115 (arbitrary file read) and CVE-2026-76613 (SQL injection), both
+reachable by a contributor account. Detail in `yootheme-site-model.md`.
 
 1. **A YOOtheme site lives in the database, not in theme files.** Page layouts
    are JSON in `wp_posts.post_content` (inside a trailing `<!-- {...} -->`
@@ -76,7 +80,8 @@ and isn't scriptable in `yootheme-site-model.md` → "Writing settings"):
    `set_theme_mod` skips both.
 2. **There is no server-side LESS compiler** — less.js compiles in the browser
    and uploads the CSS. `style` / `less` / `custom_less` can be *set* but not
-   *compiled* from CLI. Script the value, then a browser Customizer save.
+   *compiled* from CLI. Script the value, then `scripts/yoo-recompile.mjs` (it
+   clicks the Styler's "Recompile style" and proves the md5 changed).
 3. `config` is a JSON string inside a PHP-serialized theme_mod; a bad write
    loses the site's whole configuration silently.
 
@@ -96,7 +101,7 @@ install:
 | `scripts/yoo-content.php` | pages (`page get/set/list`) and templates (`template list/get/set/reorder/delete/export`) |
 
 Both run the same builder/event pipeline the UI runs, back up before every write,
-and are verified byte-identical against a live YOOtheme 5.0.38 install. Prefer
+and are verified byte-identical against a live YOOtheme install (5.0.38, re-run on 5.0.43). Prefer
 them over hand-rolled `wp option update` / `wp post update`.
 
 ## Data reaches the builder — no PHP
@@ -116,7 +121,7 @@ returns the module's type): `references/yootheme.md`. The bridge itself is docum
 | `references/yootheme-site-model.md` | **Where a site lives** — the four DB stores, the positions model, five ways into a header, the three header architectures, demo-package anatomy + how to mine one |
 | `references/yootheme-customizer.md` | **Every setting** — complete panel-by-panel vocabulary extracted from the theme's own config: Site, Header (12 layouts), Mobile, Top/Bottom, Sidebar, Post/Blog fallbacks, Settings |
 | `references/yootheme-builder-json.md` | **Page composition** — layout JSON grammar, 47-element catalogue, prop systems (spacing, responsive widths, parallax, visibility), card-family props |
-| `references/yootheme-content-binding.md` | **Data → pages, no PHP** — ACF field-type mapping, source naming rules, `#parent` repeats, `_condition`, filters, template routing |
+| `references/yootheme-content-binding.md` | **Data → pages, no PHP** — field-type mapping, source naming rules, `#parent` repeats, the two repeat shapes, `_condition`, filters, template routing |
 | `references/yootheme.md` | **Data → builder** — the ntdst-baseline `yootheme` module, the type table, derived query names, the curated-query escape hatch |
 | `references/yootheme-less.md` | **Styling** — child themes, the styler, LESS discovery + browser compile, design tokens → UIkit mapping, font loading, the classic→child conversion |
 | `templates/theme.child.less.md` | Copy-in skeleton for `less/theme.<slug>.less` (2-section shape + verification commands) |

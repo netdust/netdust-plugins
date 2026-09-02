@@ -4,8 +4,10 @@ Everything a YOOtheme Pro site *is* — pages, menus, header, footer, templates,
 style choice — lives in **four options in the database**, not in theme files.
 This file maps them. Verified against six official YOOtheme demo packages
 (Glowbar, Kojiro, Quantum Flares, FC Greenfield, Oakville, Woolberry — theme
-5.0.32, Woolberry 5.0.37), against the parent theme's own source, and against a
-live child-theme install (5.0.38 + Polylang) for the write path.
+5.0.32, Woolberry 5.0.37), against the parent theme's own source (5.0.43), and
+against live child-theme installs (josworld 5.0.38 + Polylang, edushare 5.0.43) for
+the write path. The 5.0.38 → 5.0.43 diff touched 15 PHP files and no store, no
+position and no element vocabulary beyond `button_item`'s `lightbox` condition.
 
 Read this before: cloning/inspecting a demo, scripting site setup, debugging
 "where is that footer coming from", or migrating a YOOtheme site.
@@ -401,12 +403,12 @@ UI would never have produced. Emit the event instead — that's what
 
 **Therefore `style`, `less` and `custom_less` cannot be compiled from PHP.**
 You can write the value; the stylesheet stays stale until a browser recompiles
-it — but that does NOT require a human. The Styler ships a **"Recompile style"**
-button that runs load → compile → save → refresh, and it can be driven headlessly
-(Playwright) against
-`/wp/wp-admin/admin-ajax.php?action=yootheme&yootheme=customizer` — note the
-Customizer is NOT at `customize.php`. See `lessons.md` §6. Plan any style change as script-then-browser-save, or do
-it entirely in the LESS file (`yootheme-less.md`).
+it — and `scripts/yoo-recompile.mjs` does that: it drives the Styler's
+**"Recompile style"** button (load → compile → save → refresh) headlessly against
+`/wp/wp-admin/admin-ajax.php?action=yootheme&yootheme=customizer` — the Customizer
+is NOT at `customize.php` — and prints the stylesheet md5 before and after. Plan any
+style change as script-then-recompile, or do it entirely in the LESS file
+(`yootheme-less.md`).
 
 ### 3. `config` is JSON inside a serialized theme_mod
 
@@ -465,7 +467,7 @@ wp eval-file yoo-config.php backup / restore <file>
 It always backs up, emits `config.save|filter`, verifies the JSON round-trip
 before writing, and warns when you touch a style key.
 
-**Verified on a live DDEV site** (YOOtheme 5.0.38, child theme + Polylang):
+**Verified on a live DDEV site** (YOOtheme 5.0.38 and again on 5.0.43, child theme + Polylang):
 
 * `Event::emit('config.save|filter', …)` **does fire under WP-CLI** — the
   YOOtheme app is booted and `config.save` has its listeners registered.
@@ -496,7 +498,7 @@ wp eval-file yoo-content.php template export      > all-templates.json
 ```
 
 Both writers run the builder pipeline the UI runs, so output matches a real
-save. **Verified end to end on a live install** (YOOtheme 5.0.38):
+save. **Verified end to end on a live install** (YOOtheme 5.0.38, re-run on 5.0.43):
 
 * `page get` → `page set` with no edits is **byte-identical** to the stored
   `post_content` (after the assoc-decode fix above).

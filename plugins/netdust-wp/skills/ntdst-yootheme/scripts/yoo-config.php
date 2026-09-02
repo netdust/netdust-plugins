@@ -32,8 +32,9 @@
  * ⚠ CANNOT recompile CSS. YOOtheme has no server-side LESS compiler — less.js
  *   compiles in the browser and uploads the result via StyleController::save.
  *   Changing `style`, `less` or `custom_less` here writes the value but leaves
- *   `css/theme.<id>.css` stale. A human must open the Customizer and hit Save.
- *   This script warns when you touch those keys.
+ *   `css/theme.<id>.css` stale until a browser recompiles it. That is scriptable:
+ *   `node scripts/yoo-recompile.mjs --expect-change` drives the Styler's
+ *   "Recompile style" button. This script warns when you touch those keys.
  */
 
 if (!defined('WP_CLI') || !WP_CLI) {
@@ -88,7 +89,7 @@ function yoo_write(array $cfg, array $touched = []): void {
     foreach ($touched as $path) {
         if (in_array(strtok($path, '.'), STYLE_KEYS, true)) {
             WP_CLI::warning("`$path` is style-related. CSS is compiled IN THE BROWSER — "
-                . 'open the Customizer and Save, or css/theme.*.css stays stale.');
+                . 'run `node scripts/yoo-recompile.mjs --expect-change`, or css/theme.*.css stays stale.');
         }
     }
 

@@ -20,6 +20,9 @@ PATTERNS=(
   'A human must open the Customizer'
   'Template layouts are BARE ARRAYS'
   'theme 5\.0\.38\)'
+  '5\.0\.38 \+ Polylang\)'
+  'container carries the list query'
+  'carries the list query and repeats'
   '`permalink`'
   '`featured_image`'
 )

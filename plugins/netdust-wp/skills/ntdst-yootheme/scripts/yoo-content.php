@@ -147,8 +147,8 @@ function yc_page_set(string $ref, string $file, array $flags): void {
 
     if (yc_prop($layout, 'type') !== 'layout') {
         WP_CLI::error("root node must be {\"type\":\"layout\",...} — got '"
-            . (yc_prop($layout, 'type') ?? 'nothing') . "'. Template layouts are BARE ARRAYS; "
-            . 'wrap one before using it as a page.');
+            . (yc_prop($layout, 'type') ?? 'nothing') . "'. A page's root and a template's "
+            . '`layout` share this shape — see the header; wrap a bare node array in it.');
     }
 
     if (!current_user_can('unfiltered_html') && !in_array('--allow-kses-strip', $flags, true)) {

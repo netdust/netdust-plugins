@@ -14,6 +14,7 @@ JSON array of SQL statements, with `@@TABLE_PREFIX@@` / `@@SITES_URL@@` /
     python3 demo-mine.py sample_yootheme.json config      > customizer.json
     python3 demo-mine.py sample_yootheme.json settings    # site/header/mobile/top/bottom/post/blog
     python3 demo-mine.py sample_yootheme.json templates
+    python3 demo-mine.py sample_yootheme.json pages       # id, type, slug, builder|-
     python3 demo-mine.py sample_yootheme.json menus
     python3 demo-mine.py sample_yootheme.json layout home > home.json
     python3 demo-mine.py sample_yootheme.json footer      > footer.json
