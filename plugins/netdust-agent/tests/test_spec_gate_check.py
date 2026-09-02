@@ -1594,6 +1594,118 @@ Integration gate: gate exit 0
 ── REVIEW GATE ── STANDARD
 """
 
+# ── lanes (harness-inversion FR-1..FR-5) ──────────────────────────────────────
+#
+# A `### Cluster` declares `Lane: behaviour` or `Lane: contract` (heading label or a line
+# between the heading and the first task). Behaviour-lane members carry ONLY a files
+# segment; the cluster's full behaviour block is the proof and the file ends at one
+# `── BRANCH REVIEW ──` marker. Contract lane is today's grammar untouched.
+
+_LANE_BLOCK = """Behaviour: the case model is registered and its admin screen answers.
+Observable: `wp post-type list --field=name` contains `case`; `/wp-admin/edit.php?post_type=case` → 200.
+RED until: `tests/CaseModelTest.php::test_case_registered`
+
+"""
+
+_LANE_BEHAVIOUR_MEMBERS = """- [ ] T01 declare the case model  (files: src/models/case.php, tests/CaseModelTest.php)
+- [ ] T02 the field map  (files: src/models/case-fields.php)
+- [ ] T03 the admin tab layout  (files: src/admin/case-tabs.php)
+- [ ] T04 the archive template  (files: templates/archive-case.php)
+
+**Integration gate (L1):** `composer gate` exits 0 and the observable above holds.
+"""
+
+_BRANCH_REVIEW = """
+── BRANCH REVIEW ──  *(tier LIGHT)*
+"""
+
+TASKS_LANE_BEHAVIOUR_BARE = ("# Tasks: Case model\n\n### Cluster L1 — the case model  (4 tasks)\n\n"
+                             "Lane: behaviour\n" + _LANE_BLOCK + _LANE_BEHAVIOUR_MEMBERS
+                             + _BRANCH_REVIEW)
+
+# the lane on the heading label instead of its own line — both placements count
+TASKS_LANE_IN_LABEL = ("# Tasks: Case model\n\n### Cluster L1 — the case model  (4 tasks · lane: behaviour)\n\n"
+                       + _LANE_BLOCK + _LANE_BEHAVIOUR_MEMBERS + _BRANCH_REVIEW)
+
+_CONTRACT_CLUSTER = """
+### Cluster L2 — the access rule  (1 task · provisional tier: FULL)
+
+Lane: contract — encodes the grant-access window this project chose
+
+- [ ] T05 [Tier A] private events honour grantaccess  (files: src/access/grant.php, tests/GrantTest.php)
+      Test-author: solo — standard stakes, an ownership predicate with a fixture
+      Proven by: new test — the denial path in GrantTest
+      Unit test: a viewer without a grant gets 403; with one, 200
+
+**Integration gate (L2):** the denial path holds through the real request.
+
+── REVIEW GATE ──  *(tier FULL)*
+"""
+
+TASKS_LANE_MIXED = ("# Tasks: Case model\n\n### Cluster L1 — the case model  (4 tasks)\n\n"
+                    "Lane: behaviour\n" + _LANE_BLOCK + _LANE_BEHAVIOUR_MEMBERS
+                    + _CONTRACT_CLUSTER + _BRANCH_REVIEW)
+
+# (b): a sibling cluster with NO lane once one is declared
+TASKS_LANE_SIBLING_BARE = TASKS_LANE_MIXED.replace(
+    "Lane: contract — encodes the grant-access window this project chose\n\n", "")
+
+# (c): a behaviour-lane member whose files hit the boundary detector
+TASKS_LANE_BOUNDARY = TASKS_LANE_BEHAVIOUR_BARE.replace(
+    "(files: src/admin/case-tabs.php)", "(files: src/admin/case-tabs.php, auth/Guard.php)")
+
+# (e)/(f): contract lane with no boundary hit, with and without a reason
+TASKS_LANE_CONTRACT_NO_REASON = TASKS_LANE_MIXED.replace(
+    "Lane: contract — encodes the grant-access window this project chose",
+    "Lane: contract").replace("src/access/grant.php", "src/rules/window.php")
+TASKS_LANE_CONTRACT_REASON = TASKS_LANE_MIXED.replace("src/access/grant.php", "src/rules/window.php")
+
+# invalid value
+TASKS_LANE_INVALID = TASKS_LANE_BEHAVIOUR_BARE.replace("Lane: behaviour", "Lane: fast")
+
+# T02 (b): a behaviour-lane member carrying per-task paperwork anyway
+TASKS_LANE_DRIFT = TASKS_LANE_BEHAVIOUR_BARE.replace(
+    "- [ ] T02 the field map  (files: src/models/case-fields.php)\n",
+    "- [ ] T02 [Tier B] the field map  (files: src/models/case-fields.php)\n"
+    "      Test-author: solo — Tier B\n")
+
+# T02 (c): behaviour lane with a partial block
+TASKS_LANE_PARTIAL_BLOCK = TASKS_LANE_BEHAVIOUR_BARE.replace(
+    "RED until: `tests/CaseModelTest.php::test_case_registered`\n", "")
+
+# T02 (d): behaviour lane with no integration gate
+TASKS_LANE_NO_INTEGRATION = TASKS_LANE_BEHAVIOUR_BARE.replace(
+    "**Integration gate (L1):** `composer gate` exits 0 and the observable above holds.\n", "")
+
+# T02 (e): the contract cluster in a mixed file still gets every per-task check
+TASKS_LANE_CONTRACT_MISSING_TIER = TASKS_LANE_MIXED.replace(
+    "- [ ] T05 [Tier A] private events", "- [ ] T05 private events")
+
+# T03 (b)/(c)/(d): branch-review marker absent, tier-less, or a review gate on a behaviour cluster
+TASKS_LANE_NO_BRANCH_REVIEW = TASKS_LANE_BEHAVIOUR_BARE.replace(_BRANCH_REVIEW, "\n")
+TASKS_LANE_BRANCH_REVIEW_NO_TIER = TASKS_LANE_BEHAVIOUR_BARE.replace(
+    "── BRANCH REVIEW ──  *(tier LIGHT)*", "── BRANCH REVIEW ──")
+TASKS_LANE_BEHAVIOUR_WITH_REVIEW_GATE = TASKS_LANE_BEHAVIOUR_BARE.replace(
+    _BRANCH_REVIEW, "\n── REVIEW GATE ──  *(tier LIGHT)*\n" + _BRANCH_REVIEW)
+
+PLAN_CLUSTER_STAKES_HIGH = PLAN_GATES_FULL + """
+### Per-cluster stakes
+
+| Cluster | Stakes | Why |
+|---|---|---|
+| L1 — the case model | high | the model stores payment references |
+"""
+PLAN_STAKES_HIGH_LINE = PLAN_GATES_FULL.replace("Stakes: standard", "Stakes: high")
+
+
+def test_lane_behaviour_bare_members_pass() -> tuple[bool, str]:
+    """The cluster RED named in specs/harness-inversion: a behaviour-lane cluster whose
+    members carry only `(files:)` passes the gate, exit 0, with the lane reported."""
+    rc, out = _run({"tasks.md": TASKS_LANE_BEHAVIOUR_BARE})
+    return (rc == 0 and "✓ [cluster-lane]" in out and "behaviour" in out,
+            "lane (a): behaviour-lane cluster with 4 bare members exits 0 with the ✓ line")
+
+
 def _run(files: dict) -> tuple[int, str]:
     with tempfile.TemporaryDirectory() as d:
         for name, content in files.items():
@@ -2664,6 +2776,87 @@ def run():
     rc, out = _run({"tasks.md": TASKS_SUFFIXED_ID_OVERSIZED})
     results.append((rc == 1 and "review-cluster" in out,
                     "b-suffixed tasks count toward the <=4 cluster-size rule"))
+
+    # ── 27. lanes — FR-1/FR-3/FR-4 (T01) ─────────────────────────────────────
+    results.append(test_lane_behaviour_bare_members_pass())
+
+    rc, out = _run({"tasks.md": TASKS_LANE_IN_LABEL})
+    results.append((rc == 0 and "✓ [cluster-lane]" in out,
+                    "lane: `lane: behaviour` on the heading label counts too"))
+
+    rc, out = _run({"tasks.md": TASKS_LANE_MIXED})
+    results.append((rc == 0 and "1 behaviour" in out and "1 contract" in out,
+                    "lane: a mixed file (behaviour + reasoned contract) exits 0 naming both counts"))
+
+    rc, out = _run({"tasks.md": TASKS_LANE_SIBLING_BARE})
+    results.append((rc == 1 and "cluster-lane" in out and "L2" in out,
+                    "lane (b): one cluster lane-declared, sibling bare → FAIL naming the sibling"))
+
+    rc, out = _run({"tasks.md": TASKS_LANE_BOUNDARY})
+    results.append((rc == 1 and "cluster-lane" in out and "T03" in out and "auth" in out,
+                    "lane (c): behaviour-lane member touching auth/ → FAIL naming task and term"))
+
+    rc, out = _run({"plan.md": PLAN_CLUSTER_STAKES_HIGH, "tasks.md": TASKS_LANE_BEHAVIOUR_BARE})
+    results.append((rc == 1 and "cluster-lane" in out and "high" in out,
+                    "lane (d): behaviour lane under a per-cluster `high` row → FAIL"))
+    rc, out = _run({"plan.md": PLAN_STAKES_HIGH_LINE, "tasks.md": TASKS_LANE_BEHAVIOUR_BARE})
+    results.append((rc == 1 and "cluster-lane" in out and "high" in out,
+                    "lane (d'): behaviour lane under a spec-level `Stakes: high` → FAIL"))
+
+    rc, out = _run({"tasks.md": TASKS_LANE_CONTRACT_NO_REASON})
+    results.append((rc == 0 and "! [cluster-lane]" in out and "L2" in out,
+                    "lane (e): contract lane, no boundary hit, no reason → WARN naming the cluster"))
+    rc, out = _run({"tasks.md": TASKS_LANE_CONTRACT_REASON})
+    results.append((rc == 0 and "! [cluster-lane]" not in out,
+                    "lane (f): the same with a dash-reason → silent"))
+
+    rc, out = _run({"tasks.md": TASKS_LANE_INVALID})
+    results.append((rc == 1 and "cluster-lane" in out and "fast" in out,
+                    "lane: an unknown lane value FAILs naming it"))
+
+    rc, out = _run({"spec.md": SPEC_TRIGGERED, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "cluster-lane" not in out,
+                    "lane (g): no `Lane:` anywhere → zero cluster-lane findings (AC-2 lock)"))
+
+    # ── 28. lane-aware per-task checks — FR-2 (T02) ──────────────────────────
+    rc, out = _run({"tasks.md": TASKS_LANE_BEHAVIOUR_BARE})
+    results.append((rc == 0 and "✓ [task-tier]" in out and "✓ [test-author-mode]" in out
+                     and "✓ [proven-by]" in out and "✓ [unit-test-contract]" in out
+                     and "exempt" in out,
+                    "lane (T02 a): the four per-task checks pass over bare members and say how many are exempt"))
+
+    rc, out = _run({"tasks.md": TASKS_LANE_DRIFT})
+    results.append((rc == 0 and "! [lane-drift]" in out and "T02" in out,
+                    "lane (T02 b): a behaviour-lane member carrying Tier/Test-author lines → lane-drift WARN"))
+
+    rc, out = _run({"tasks.md": TASKS_LANE_PARTIAL_BLOCK})
+    results.append((rc == 1 and "cluster-lane" in out and "RED until" in out,
+                    "lane (T02 c): behaviour lane with a partial block → FAIL naming the missing line"))
+
+    rc, out = _run({"tasks.md": TASKS_LANE_NO_INTEGRATION})
+    results.append((rc == 1 and "integration-gate" in out,
+                    "lane (T02 d): behaviour lane with no Integration gate: → FAIL"))
+
+    rc, out = _run({"tasks.md": TASKS_LANE_CONTRACT_MISSING_TIER})
+    results.append((rc == 1 and "task-tier" in out and "T05" in out,
+                    "lane (T02 e): the contract cluster beside it still gets every per-task check"))
+
+    # ── 29. lane-aware review markers — FR-5 (T03) ───────────────────────────
+    rc, out = _run({"tasks.md": TASKS_LANE_BEHAVIOUR_BARE})
+    results.append((rc == 0 and "✓ [review-gate-marker]" in out and "BRANCH REVIEW" in out,
+                    "lane (T03 a): behaviour clusters without review markers + one tiered branch marker → pass"))
+    rc, out = _run({"tasks.md": TASKS_LANE_NO_BRANCH_REVIEW})
+    results.append((rc == 1 and "review-gate-marker" in out and "BRANCH REVIEW" in out,
+                    "lane (T03 b): no `── BRANCH REVIEW ──` marker → FAIL"))
+    rc, out = _run({"tasks.md": TASKS_LANE_BRANCH_REVIEW_NO_TIER})
+    results.append((rc == 1 and "review-tier" in out and "BRANCH REVIEW" in out,
+                    "lane (T03 c): a branch marker without a tier → FAIL"))
+    rc, out = _run({"tasks.md": TASKS_LANE_BEHAVIOUR_WITH_REVIEW_GATE})
+    results.append((rc == 0 and "! [review-gate-marker]" in out and "L1" in out,
+                    "lane (T03 d): a behaviour-lane cluster carrying a review marker → WARN"))
+    rc, out = _run({"tasks.md": TASKS_NO_REVIEW_GATE})
+    results.append((rc == 1 and "review-gate-marker" in out and "BRANCH REVIEW" not in out,
+                    "lane (T03 e): a lane-less file keeps today's marker findings, no branch-marker demand"))
 
     return results
 
