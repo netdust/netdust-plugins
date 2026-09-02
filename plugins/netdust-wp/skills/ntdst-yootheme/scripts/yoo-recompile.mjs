@@ -29,7 +29,7 @@ await page.fill('#user_login', user); await page.fill('#user_pass', pass);
 await Promise.all([page.waitForNavigation(), page.click('#wp-submit')]);
 const admin = login.replace(/wp-login\.php$/, 'wp-admin/admin-ajax.php?action=yootheme&yootheme=customizer');
 await page.goto(site + admin, { waitUntil: 'networkidle' });
-await page.getByText(/^(Style|Stijl|Stil|Style)$/).first().click();
+await page.getByText(/^(Style|Stijl|Stil)$/).first().click();
 const btn = page.getByText(/Recompile style|opnieuw compileren|neu kompilieren|Recompiler/i).first();
 await btn.waitFor({ timeout: 15000 });
 await btn.scrollIntoViewIfNeeded();

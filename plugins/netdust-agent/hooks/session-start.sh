@@ -13,12 +13,12 @@ set -u  # don't set -e — we never want a sourced file to abort the session
 : "${CLAUDE_PLUGIN_ROOT:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 CWD=$(pwd)
-# The project root, not the launch dir: walk up to CLAUDE.md / site.yml / .git,
+# The project root, not the launch dir: walk up to CLAUDE.md / site.yml / .git / memory/,
 # skipping markers under a vendor segment, stopping at $HOME (mirrors session-stop.py).
 ROOT="$CWD"
 while [ "$ROOT" != "$HOME" ] && [ "$ROOT" != "/" ]; do
   case "$ROOT" in */themes/*|*/plugins/*|*/mu-plugins/*|*/vendor/*|*/packages/*|*/node_modules/*) ROOT=$(dirname "$ROOT"); continue;; esac
-  if [ -e "$ROOT/CLAUDE.md" ] || [ -e "$ROOT/site.yml" ] || [ -e "$ROOT/.git" ]; then break; fi
+  if [ -e "$ROOT/CLAUDE.md" ] || [ -e "$ROOT/site.yml" ] || [ -e "$ROOT/.git" ] || [ -d "$ROOT/memory" ]; then break; fi
   ROOT=$(dirname "$ROOT")
 done
 [ "$ROOT" = "$HOME" ] || [ "$ROOT" = "/" ] && ROOT="$CWD"

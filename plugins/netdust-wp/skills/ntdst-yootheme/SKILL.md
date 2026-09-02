@@ -49,7 +49,7 @@ the scripts, which run the same builder / event pipeline the UI runs and back up
 |---|---|
 | `scripts/yoo-config.php` | the `config` theme_mod — get / set / unset / backup / restore (emits `config.save\|filter`) |
 | `scripts/yoo-content.php` | pages, templates, builder widgets — get / set / **patch** (live copy) / reorder / export; fills a missing root `version`; lints before every write |
-| `scripts/yoo-lint.php` | a layout against the installed parent's element definitions — 16 finding codes, the fix named; `all` walks every tree in the DB |
+| `scripts/yoo-lint.php` | a layout against the installed parent's element definitions — 17 finding codes, the fix named; `all` walks every tree in the DB |
 | `scripts/yoo-measure.mjs` | the rendered page as rects + computed styles, `--compare` against Figma geometry |
 | `scripts/yoo-recompile.mjs` | the Styler's "Recompile style", headless, md5 proven before/after |
 | `scripts/yoo_layout.py` · `sections/` | build layouts in Python with the builder's default props; six verified shapes to copy |

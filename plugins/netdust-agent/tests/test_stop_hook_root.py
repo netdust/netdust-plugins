@@ -64,8 +64,24 @@ def test_bare_dir_is_still_a_project() -> tuple[bool, str]:
     return ok, "a marker-less cwd outside any vendor segment keeps today's behaviour (memory/ at cwd)"
 
 
+def test_memory_only_root_read_and_write_agree() -> tuple[bool, str]:
+    """A dir marked only by an existing memory/ is the root for BOTH hooks."""
+    import subprocess
+    home = _home()
+    root = home / "Sites" / "old"; (root / "memory").mkdir(parents=True); (root / "sub" / "dir").mkdir(parents=True)
+    (root / "memory" / "STATE.md").write_text("# old — Project State\nMARKER-STATE\n")
+    _run(root / "sub" / "dir", _transcript(home), {"HOME": str(home)})
+    wrote_at_root = (root / "memory" / ".stop-hook-state.json").exists() and not (root / "sub" / "dir" / "memory").exists()
+    start = Path(__file__).resolve().parent.parent / "hooks" / "session-start.sh"
+    out = subprocess.run(["bash", str(start)], cwd=root / "sub" / "dir", capture_output=True, text=True, timeout=20,
+                         env={**__import__("os").environ, "HOME": str(home), "CLAUDE_PLUGIN_ROOT": str(start.parent.parent)}).stdout
+    read_from_root = "MARKER-STATE" in out
+    shutil.rmtree(home, ignore_errors=True)
+    return wrote_at_root and read_from_root, "memory/-only root: session-stop writes there and session-start reads from there"
+
+
 def run() -> list[tuple[bool, str]]:
-    return [test_deep_cwd_lands_at_root(), test_git_under_vendor_is_not_a_root(), test_no_root_writes_nothing(), test_bare_dir_is_still_a_project()]
+    return [test_deep_cwd_lands_at_root(), test_git_under_vendor_is_not_a_root(), test_no_root_writes_nothing(), test_bare_dir_is_still_a_project(), test_memory_only_root_read_and_write_agree()]
 
 
 if __name__ == "__main__":

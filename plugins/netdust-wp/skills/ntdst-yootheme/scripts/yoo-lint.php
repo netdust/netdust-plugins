@@ -17,7 +17,7 @@
  *   parent-at-root, binding-args                                   (error)
  *   lone-column, block-align-no-maxwidth, bgcolor-needs-empty-style,
  *   bare-featured-image, row-in-column, list-on-container, unnamed-section,
- *   condition-on-list                                              (warn)
+ *   condition-on-list, unknown-key                                 (warn)
  *
  * Why a script: YOOtheme stores whatever prop it is handed and renders the element
  * default, so an invented name, a missing sibling prop or a mis-scoped binding is
@@ -146,9 +146,6 @@ final class Vocab
     private function collectChildProps($panels, string $element): void
     {
         if (!is_array($panels)) return;
-        array_walk_recursive($panels, function ($v, $k) use ($element) {
-            // child-prop entries carry `field => ['name' => …]`; walk_recursive hands us the leaf
-        });
         $it = new \RecursiveIteratorIterator(new \RecursiveArrayIterator($panels), \RecursiveIteratorIterator::SELF_FIRST);
         foreach ($it as $k => $v) {
             if (is_array($v) && ($v['type'] ?? '') === 'child-prop' && isset($v['field']['name'])) {
