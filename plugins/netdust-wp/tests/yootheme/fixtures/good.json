@@ -1,0 +1,28 @@
+{"type":"layout","version":"5.0.43","children":[
+ {"type":"section","name":"V1 · Hero + titel","props":{"image_position":"center-center","padding_bottom":"small","style":"","title_breakpoint":"xl","title_position":"top-left","title_rotation":"left","vertical_align":"middle","width":"default"},"children":[
+   {"type":"row","props":{"layout":"1-2,1-2","alignment":"center","column_gap":"large"},"children":[
+     {"type":"column","props":{"image_position":"center-center","position_sticky_breakpoint":"m","width_medium":"1-2","vertical_align":"middle"},"children":[
+       {"type":"headline","props":{"content":"Hallo","image_align":"left","image_margin":"xsmall","margin_bottom":"default","margin_top":"remove","title_element":"h1","title_style":"h2"}},
+       {"type":"text","props":{"column_breakpoint":"m","content":"<p>Intro</p>","margin_bottom":"remove","margin_top":"remove","text_style":"lead"}},
+       {"type":"button","props":{"button_size":"small","margin_top":"small"},"children":[
+         {"type":"button_item","props":{"button_style":"primary","content":"Meer","link":"/meer/","icon_align":"left"}}
+       ]}
+     ]},
+     {"type":"column","props":{"image_position":"center-center","position_sticky_breakpoint":"m","width_medium":"1-2"},"children":[
+       {"type":"image","props":{"image":"content/uploads/2026/08/x.jpg","image_border":"rounded","image_width":628,"image_height":500,"margin_top":"remove","margin_bottom":"remove","class":"jw-photo","attributes":"data-effect=clip-up"}}
+     ]}
+   ]}
+ ]},
+ {"type":"section","name":"W1 · Verhalen","props":{"style":"muted","width":"default","image_position":"center-center","title_breakpoint":"xl","title_position":"top-left","title_rotation":"left","vertical_align":"middle"},"children":[
+   {"type":"row","props":{"layout":"1-1","alignment":"center"},"children":[
+     {"type":"column","props":{"image_position":"center-center","position_sticky_breakpoint":"m","width_default":"1-1"},"children":[
+       {"type":"grid","props":{"grid_default":"1","grid_medium":"2","panel_style":"card-default","show_link":true,"panel_link":true,"link_text":""},"children":[
+         {"type":"grid_item","source":{"query":{"name":"verhalen.customVerhalen","arguments":{"limit":6,"order":"date","order_direction":"DESC"}},"props":{"title":{"name":"title"},"link":{"name":"link"},"image":{"name":"featuredImage.url"},"image_alt":{"name":"featuredImage.alt"}}}}
+       ]},
+       {"type":"fragment","props":{},"source":{"query":{"name":"verhalen.singleVerhaal"},"props":{"_condition":{"name":"title","filters":{"condition":"!!"}}}},"children":[
+         {"type":"headline","props":{"title_element":"div","title_style":"h4"},"source":{"query":{"name":"#parent"},"props":{"content":{"name":"title"}}}}
+       ]}
+     ]}
+   ]}
+ ]}
+]}

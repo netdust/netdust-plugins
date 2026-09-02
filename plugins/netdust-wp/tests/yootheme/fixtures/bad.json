@@ -1,0 +1,29 @@
+{"type":"layout","children":[
+ {"type":"section","props":{"padding":"large","background_color":"#fff","style":"default"},"children":[
+   {"type":"row","props":{"layout":"1-2,1-2","margin_top":"remove"},"children":[
+     {"type":"column","props":{"width_medium":"1-2","position":"center"},"children":[
+       {"type":"headline","props":{"content":"Hi","title_style":"h2"}},
+       {"type":"image","props":{"image":"x.jpg","block_align":"right","border":"rounded"}},
+       {"type":"row","props":{},"children":[{"type":"column","props":{},"children":[]}]},
+       {"type":"tile","props":{}}
+     ]}
+   ]},
+   {"type":"row","props":{"layout":"1-1"},"children":[
+     {"type":"column","props":{"width_medium":"1-1"},"children":[
+       {"type":"grid","props":{"grid_medium":"8"},"source":{"query":{"name":"verhalen.customVerhalen","args":{"limit":4}}},"children":[
+         {"type":"grid_item","source":{"query":{"name":"#parent"},"props":{"title":{"name":"title"},"image":{"name":"featuredImage"}}}}
+       ]},
+       {"type":"fragment","props":{},"children":[
+         {"type":"button_item","props":{"content":"Go","link":"/go/"}}
+       ]}
+     ]}
+   ]}
+ ]},
+ {"type":"section","name":"V2 · Root parent","props":{},"children":[
+   {"type":"row","props":{},"children":[
+     {"type":"column","props":{"width_medium":"1-2"},"children":[
+       {"type":"headline","props":{"title_element":"h1"},"source":{"query":{"name":"#parent"},"props":{"content":{"name":"title"}}}}
+     ]}
+   ]}
+ ]}
+]}
