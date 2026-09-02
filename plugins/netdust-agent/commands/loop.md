@@ -18,6 +18,9 @@ Preconditions — refuse to arm (say why) if any fails:
 2. **Class A/B only.** C/D/E are single cycles; nothing to loop.
 3. **Stage 1.5 green:** run `python3 <plugin>/bin/gate-check.py <feature-dir>`
    — exit 0 required. A loop on a gate-failing plan grinds a defective plan.
+3b. **On a `site.yml` project, the branch is `feature/*` or `hotfix/*`.** A loop on a
+   rung branch would commit every task straight onto a deploy branch; refuse and name
+   `make feature name=<x>` (the guard would deny the commits anyway — FR-24).
 4. **No marker already armed.** If `tasks/.harness-loop.json` already exists
    and was not written by this loop, something else is driving RIGHT NOW —
    never overwrite it. One marker path, one driver.

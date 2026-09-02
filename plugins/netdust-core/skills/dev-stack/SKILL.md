@@ -116,6 +116,18 @@ Read the environment names and branches from `site.yml` — never hardcode them:
 **Always run `make deploy-test env=<name>` first** and read the output,
 especially deletions.
 
+### The machine half of this table
+
+The verbs are the only door to a rung branch, and two machines hold that door: the
+Makefile refuses by name (no `origin`, a rung missing on origin, a commit attempted on
+a rung — never a silent branch switch), and `scripts/tests/flow-test.sh` (run by
+`make test`) proves feature, hotfix, finish and every refusal in a throwaway repo with
+a bare origin. On a machine running netdust-agent, its PreToolUse guard additionally
+DENIES a raw `git commit` / `merge` / `rebase` / `push` / `checkout -b` on a rung
+branch and any piped input into `make ship|release|promote|deploy`, naming the verb.
+A verb that fails is a finding to file, not permission to use raw git. `make status`
+and `make doctor` print the flow state first — origin, branch role, next verb.
+
 ### The rule that matters most
 
 **A bug fix branches from the production branch**, never from the integration or

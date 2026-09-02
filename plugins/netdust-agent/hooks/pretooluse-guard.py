@@ -48,6 +48,7 @@ Logs to ~/.claude/logs/memory-hook.log (shared with the other hooks).
 """
 
 import json
+import subprocess
 import re
 import sys
 from pathlib import Path
@@ -209,6 +210,165 @@ def check_upstream_floor(hook_input: dict) -> dict | None:
     }
 
 
+# ── The flow floor (harness-inversion FR-24, 2026-09-02) ─────────────────────
+#
+# On a project carrying `site.yml`, the Makefile's verbs are the only door to a rung
+# branch (the branches site.yml binds to environments). Agents routed around the flow
+# when a verb died on a git error, or simply skipped it; the last gate — the deploy
+# gate — refused hours after a commit landed on the wrong rung. This floor denies the
+# raw git writes that bypass the flow AT THE COMMAND, naming the make verb that does it
+# right. `deny`, not `ask`, on the upstream-floor reasoning: the correction is
+# agent-side and costs one tool call. `make …` commands are never inspected — the verbs
+# are the door — except when input is PIPED into a confirming verb, which is the one
+# way to run `make ship` without a human typing yes.
+#
+# Rung names: `scripts/site environments.<e>.branch` when that reader is present (the
+# project's own truth), else a dependency-free read of `branch:` lines under
+# `environments:` in site.yml, else the fleet defaults. No site.yml anywhere up to the
+# git toplevel → not a flow project → this floor does not exist. Every tooling failure
+# (git missing, unreadable cwd, a subprocess timeout) fails OPEN like the rest of the hook.
+
+FLOW_DEFAULT_RUNGS = ("main", "master", "staging", "development")
+FLOW_CONFIRMING_VERBS = r"(?:ship|release|promote|deploy)"
+FLOW_PIPED_MAKE = re.compile(
+    rf"(?:\b(?:echo|printf|yes)\b[^|\n]*\|\s*make\s+(?:[^\s|]+\s+)*{FLOW_CONFIRMING_VERBS}\b"
+    rf"|\bmake\s+(?:[^\s|<]+\s+)*{FLOW_CONFIRMING_VERBS}\b[^\n]*<<<?)", re.IGNORECASE)
+FLOW_WRITE_ON_BRANCH = re.compile(
+    rf"(?m){_SEP}git\s+(commit|merge|rebase|cherry-pick|reset\s+--hard|checkout\s+-b|switch\s+-c)\b",
+    re.IGNORECASE)
+FLOW_PUSH = re.compile(rf"(?m){_SEP}git\s+push\b([^\n;&|]*)", re.IGNORECASE)
+FLOW_BRANCH_DELETE = re.compile(rf"(?m){_SEP}git\s+branch\s+(?:-[dD]|--delete)\s+(\S+)", re.IGNORECASE)
+FLOW_SWITCH_TO = re.compile(rf"(?m){_SEP}git\s+(?:checkout|switch)\s+(?!-)(\S+)", re.IGNORECASE)
+
+FLOW_VERB_FOR = {
+    "commit": "make feature name=<x> first (a rung is deploy-only), then commit there",
+    "merge": "make finish (feature → integration, hotfix → production and back down) or make promote name=<x>",
+    "rebase": "make finish — the rungs are merged --no-ff, never rebased",
+    "cherry-pick": "make hotfix name=<x>, then make finish",
+    "reset --hard": "make rollback env=<name> — a rung's history is the deploy ledger",
+    "checkout -b": "make feature name=<x> / make hotfix name=<x> — they pick the right base from site.yml",
+    "switch -c": "make feature name=<x> / make hotfix name=<x> — they pick the right base from site.yml",
+    "push": "make finish (it pushes the rung it merged into) or make deploy env=<name>",
+    "branch -D": "make finish / make promote name=<x> — a rung is never deleted; the flow promotes through it",
+}
+
+
+def _flow_project_root(cwd: str) -> Path | None:
+    """The nearest ancestor of cwd (inclusive) carrying site.yml, stopping at the git
+    toplevel or the filesystem root. None → not a flow project."""
+    try:
+        d = Path(cwd).resolve()
+    except Exception:
+        return None
+    for p in (d, *d.parents):
+        if (p / "site.yml").is_file():
+            return p
+        if (p / ".git").exists():
+            return None
+    return None
+
+
+def _flow_rungs(root: Path) -> set[str]:
+    """Branch names bound to environments. scripts/site first, then a regex over
+    site.yml's `environments:` block, then the fleet defaults."""
+    reader = root / "scripts" / "site"
+    if reader.is_file():
+        try:
+            envs = subprocess.run([sys.executable, str(reader), "environments"], cwd=root,
+                                  capture_output=True, text=True, timeout=3)
+            if envs.returncode == 0:
+                out = set()
+                for e in envs.stdout.split():
+                    r = subprocess.run([sys.executable, str(reader), f"environments.{e}.branch"],
+                                       cwd=root, capture_output=True, text=True, timeout=3)
+                    if r.returncode == 0 and r.stdout.strip():
+                        out.add(r.stdout.strip())
+                if out:
+                    return out
+        except Exception as e:  # noqa: BLE001 — fail open to the next rung source
+            log(f"flow-floor scripts/site failed err={e}")
+    try:
+        text = (root / "site.yml").read_text()
+        m = re.search(r"(?ms)^environments:\s*\n(.*?)(?=^\S|\Z)", text)
+        if m:
+            found = set(re.findall(r"^\s+branch:\s*([^\s#]+)", m.group(1), re.M))
+            if found:
+                return found
+    except Exception as e:  # noqa: BLE001
+        log(f"flow-floor site.yml read failed err={e}")
+    return set(FLOW_DEFAULT_RUNGS)
+
+
+def _flow_current_branch(root: Path) -> str | None:
+    try:
+        r = subprocess.run(["git", "branch", "--show-current"], cwd=root,
+                           capture_output=True, text=True, timeout=3)
+        return r.stdout.strip() if r.returncode == 0 else None
+    except Exception as e:  # noqa: BLE001
+        log(f"flow-floor git failed err={e}")
+        return None
+
+
+def _flow_deny(what: str, verb: str, detail: str) -> dict:
+    return {"hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "deny",
+        "permissionDecisionReason": (
+            f"netdust-agent flow floor: {what} bypasses the branch flow this project's "
+            f"Makefile owns ({detail}). Use the verb instead: {verb}. The Makefile is the "
+            f"only door to a rung branch; nothing reaches production that did not walk "
+            f"feature → integration → review → production through it."),
+    }}
+
+
+def check_flow_floor(hook_input: dict) -> dict | None:
+    """Return a deny decision for a raw git write that bypasses the flow, else None."""
+    try:
+        tool_input = hook_input.get("tool_input") or {}
+        command = tool_input.get("command", "") if isinstance(tool_input, dict) else ""
+        if not isinstance(command, str) or not command.strip():
+            return None
+        root = _flow_project_root(hook_input.get("cwd") or "")
+        if root is None:
+            return None
+
+        m = FLOW_PIPED_MAKE.search(command)
+        if m:
+            return _flow_deny(f"piping input into `{m.group(0).strip()}`",
+                              "run the verb and type the confirmation yourself — a confirming "
+                              "verb is a human moment by design",
+                              "a typed confirmation is the operator's, never piped")
+
+        rungs = _flow_rungs(root)
+        current = _flow_current_branch(root)
+        switched = [b for b in FLOW_SWITCH_TO.findall(command) if b in rungs]
+        on_rung = (current in rungs) or bool(switched)
+        where = f"on `{switched[-1] if switched else current}`"
+
+        m = FLOW_WRITE_ON_BRANCH.search(command)
+        if m and on_rung:
+            key = re.sub(r"\s+", " ", m.group(1).lower())
+            return _flow_deny(f"`git {key}` {where}", FLOW_VERB_FOR.get(key, "the make verb"),
+                              "a rung branch is deploy-only")
+
+        m = FLOW_PUSH.search(command)
+        if m:
+            args = m.group(1)
+            names_rung = any(re.search(rf"(?:^|[\s:/]){re.escape(b)}(?=\s|$)", args) for b in rungs)
+            if names_rung or (on_rung and not re.search(r"\bfeature/|\bhotfix/", args)):
+                return _flow_deny(f"`git push` of a rung branch {where}", FLOW_VERB_FOR["push"],
+                                  "the flow pushes a rung only after it merged into it")
+
+        m = FLOW_BRANCH_DELETE.search(command)
+        if m and m.group(1) in rungs:
+            return _flow_deny(f"`git branch -D {m.group(1)}`", FLOW_VERB_FOR["branch -D"],
+                              "a rung branch")
+        return None
+    except Exception as e:  # noqa: BLE001 — fail OPEN, always
+        log(f"flow-floor error err={e}")
+        return None
+
+
 def match_denylist(command: str) -> tuple[str, str] | None:
     """Return (label, matched_text) for the first denylist hit, else None.
     A command that begins with a read-only echo/grep/cat is treated as inert
@@ -248,6 +408,12 @@ def main() -> None:
     command = tool_input.get("command", "") if isinstance(tool_input, dict) else ""
     if not isinstance(command, str) or not command.strip():
         return  # nothing to match → passthrough
+
+    flow = check_flow_floor(hook_input)   # FR-24 — deny, before the ask-tier denylist
+    if flow is not None:
+        log(f"deny reason=flow-floor cmd={command[:80]!r}")
+        print(json.dumps(flow))
+        return
 
     hit = match_denylist(command)
     if not hit:

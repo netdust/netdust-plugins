@@ -30,6 +30,16 @@ superpowers finish skill's merge/PR options are not offered there. Models per di
 come from `skills/_shared/model-ladder.md`; herdr moments (isolation, the status tab, the
 branch-review pane) from `skills/_shared/herdr-moments.md` — both cited, never restated.
 
+**Enter and leave through the flow (FR-25).** On a `site.yml` project, Stage 2 does not
+dispatch until the current branch is `feature/*` or `hotfix/*` — run `make feature
+name=<x>` (`make hotfix` for Class D) first, or hand back; a rung branch is deploy-only
+and `hooks/pretooluse-guard.py` denies a raw `git commit` / merge / push there, naming
+the verb. Stage 3 closes with `make finish`; `make health` runs before any `make
+release`; `make ship` and a production `/deploy` happen only on the operator's explicit
+ask in that turn (dev-stack's rule). The flow itself is tested — `make test` runs
+`scripts/tests/flow-test.sh` — so "the Makefile is broken" is a finding to file, never a
+reason to route around it.
+
 **The handoff is `tasks.md`, and it is never run flat.** Any flat executor over the task
 list bypasses the per-task gates and the review-cluster stops — execute task by task
 through the overlay below, whatever tool proposes to do the walking.
