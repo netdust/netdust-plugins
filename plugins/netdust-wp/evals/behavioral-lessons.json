@@ -1,487 +1,696 @@
 {
- "_readme": "Behavioral eval cases pinning lessons.md entries (netdust-wp skills). Methodology per netdust-agent/evals/EVAL-PLAN.md: baseline (skill off) vs with-skill on the prompt; assertion = the signature behavior appears with-skill. Each case names the lesson it regression-pins. Cases carrying a `baseline_ref` pin a CORRECTNESS re-anchor rather than a lessons.md entry: the baseline is the named commit's skill text, which taught the failure verbatim, so fail-before is a property of the tree and is checkable with the `discriminator` grep rather than argued. NB: run every `discriminator` grep with --exclude-dir=evals — this file quotes the very strings it counts, so including it inflates the `now` column and hides a regression. context_before paths resolve from the case's `baseline_ref` COMMIT and must be spelled as they were at that commit; context_after resolves from the working tree. The two diverged permanently on 2026-08-21 when ntdst-architecture + ntdst-data merged into ntdst-framework. 2026-08-24 (T05, core-v5-skills): re-anchored on ntdst-core 5.0.0. Seven cases rewritten and seven added, all pinned to baseline_ref 391eb0f — pre-v5 skill text. Kept verbatim: data-default-key, rest-query-parked (both lessons-pins with no context, so the runner skips them) and the two router-decides cases, whose result must not move. Every rewritten case inverts a symbol the 391eb0f text taught as live, verified 0-in-old / >=1-in-new before the case was written; a probe with no such asymmetry cannot discriminate and is not worth running.",
- "cases": [
-  {
-   "id": "api-rate-budget",
-   "skill": "ntdst-framework",
-   "lesson": "The command dispatcher is gone: a metered anonymous call is an ntdst_rest() route with rate_limit/rate_window, not an api_data action behind a minted nonce (v5 re-anchor)",
-   "baseline_ref": "391eb0f — pre-v5 skill text",
-   "prompt": "On an ntdst-core 5.x site I'm adding a booking endpoint that anonymous visitors call from the site's own JS: at most 3 bookings per visitor per minute. Show me the registration, how the browser calls it, and how the handler refuses an over-limit or invalid request.",
-   "baseline_expected_failure": "Registers an api_data action and meters it with add_filter('ntdst/api/rate_limit/{action}', …), then has the browser call it through window.ntdstAPI after POSTing /ntdst/v1/get_nonce for a token. The whole dispatcher — ntdst_actions(), the api_data hooks, the JS client and the nonce mint — was removed in 5.0.0 with no shim, so every line of that answer is a fatal or a 404.",
-   "with_skill_assertion": "Registers with ntdst_rest($ns)->post(...) carrying rate_limit and rate_window as the ROUTE's OWN OPTIONS — not a filter, and nothing is metered unless the route asks. Hands the anonymous write its own permission CALLABLE (a bare ->public() on a write verb is refused), and says the limit is charged from inside the permission callback. Calls it from the browser with wp.apiFetch, which sends the wp_rest nonce in X-WP-Nonce and refreshes a stale one — core mints no nonce of its own. Refuses from the handler with WP_Error carrying a status, never a success-shaped array. It may and should NAME ntdst_actions(), window.ntdstAPI and /ntdst/v1/get_nonce to say they are retired — the test is that it does not BUILD on them. Bonus, not required: 429 for the rate denial kept distinct from a 401 auth denial.",
-   "discriminator": "grep -cF 'ntdstAPI' on the framework skill — present at 391eb0f as live guidance, present now only inside the ## Retired block, which the eval context still shows but as a retirement list.",
-   "context_before": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "context_after": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "must_contain": [
-    "ntdst_rest(",
-    "rate_limit",
-    "apiFetch"
-   ],
-   "must_not_contain": [
-    "get_nonce",
-    "ntdstAPI",
-    "ntdst_actions("
-   ],
-   "probe_note": "429/retry_after are deliberately NOT in must_contain: neither string appears in the v5 SKILL or traps, so requiring them would score the after-arm on knowledge the context does not carry. The status asymmetry is the judge's half."
-  },
-  {
-   "id": "data-default-key",
-   "skill": "ntdst-framework",
-   "lesson": "'default' field keys are INERT, and select does not enforce its options (2026-08-10)",
-   "prompt": "Declare the fields for a new ntdst-core CPT 'ticket': a 'tier' select over exactly gold|silver|bronze that must never store any other value, and an 'active' boolean that should default to true when the editor doesn't touch it.",
-   "baseline_expected_failure": "Writes 'active' => ['type' => 'boolean', 'default' => true] and a bare select with 'options', trusting both keys to behave.",
-   "with_skill_assertion": "Omits any 'default' key (the vocabulary extracts only required/min/max/validate — a default is inert; omission semantics stated in the description, writers explicit) AND adds a validate closure enforcing the gold|silver|bronze closed set on create and update (select's options are UI-only, not validation)."
-  },
-  {
-   "id": "pages-custom-route",
-   "skill": "ntdst-framework",
-   "lesson": "path() compiles the rewrite rule and the query vars ITSELF — the hand-written add_rewrite_rule + query_vars pair was the v4 shape (v5 re-anchor)",
-   "baseline_ref": "391eb0f — pre-v5 skill text",
-   "prompt": "ntdst-core 5.x site. I need a shareable card at /share/exhibitions/<slug>. Right now it 404s. Write the registration — I want it to actually work on this site.",
-   "baseline_expected_failure": "Writes the v4 pair: add_rewrite_rule('^share/exhibitions/([^/]+)/?$', …, 'top') plus an add_filter('query_vars', …), and explains that NTDST_Pages matches on REQUEST_URI so the rewrite exists only to stop WordPress 404ing first. On 5.0.0 that is a duplicate rule fighting the one path() already registered.",
-   "with_skill_assertion": "Registers with ntdst_pages()->path('/share/exhibitions/:slug', $cb) and NOTHING else — states that path() compiles the :param placeholders into add_rewrite_rule() plus the registered query vars and dispatches on template_redirect, so the caller writes no rewrite rule and no query_vars filter. Uses the THIRD argument for a non-GET method rather than ->get()/->post(). Bonus: notes rules flush on two triggers (hash moved, or the rules missing from the live rewrite option), never per request.",
-   "discriminator": "add_rewrite_rule in the framework SKILL — 1 at 391eb0f (taught as required), 0 now except as the thing path() does for you.",
-   "context_before": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "context_after": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "must_contain": [
-    "ntdst_pages()->path("
-   ],
-   "must_not_contain": [
-    "add_rewrite_rule",
-    "add_filter('query_vars'",
-    "ntdst_router(",
-    "NTDST_Router"
-   ],
-   "probe_note": "must_not_contain targets add_filter('query_vars', not the bare token. Run 2 scored a textbook-correct answer FAIL because its template snippet carried the comment \"load_template() extracts $wp_query->query_vars\" — the warning the skill wants, read as the v4 filter it forbids. The v4 shape is the REGISTRATION; probe that."
-  },
-  {
-   "id": "rest-cors-option",
-   "skill": "ntdst-framework",
-   "lesson": "cors() is SITE-WIDE and feeds WordPress's own allowed_http_origins — it is not a per-route option and core keeps no second list (v5 re-anchor, INV-5)",
-   "baseline_ref": "391eb0f — pre-v5 skill text",
-   "prompt": "We're building a headless front end on https://app.example that needs to POST submissions to this WordPress site. Add the REST endpoint and lock CORS down to just that origin.",
-   "baseline_expected_failure": "Declares CORS as a PER-ROUTE option — 'cors' => ['https://app.example'] in the route's opts array — which is the 4.1.0 shape the pre-v5 skill taught. 5.0.0 moved it to a site-wide cors() declaration feeding allowed_http_origins; a route carrying an option core does not know is not registered at all, so the endpoint reviews as protected and 404s on the wire. May also reach for NTDST_Cors_Policy, which has never existed.",
-   "with_skill_assertion": "Declares origins ONCE, site-wide, with cors(['https://app.example']) apart from any route, and says the origins are ADDED to WordPress's own allowed_http_origins so every allowed question goes to is_allowed_http_origin() — core keeps no second list. States the declaration is scoped to REST requests only (admin-ajax, admin-post and the customizer read the same option and would otherwise be widened) and that '*' is refused. Registers the write with ntdst_rest($ns)->post() naming a capability or its own callable. Does not hand-roll Access-Control-* headers and does not name NTDST_Cors_Policy.",
-   "discriminator": "allowed_http_origins — 0 in the framework skill at 391eb0f, 1 now (plus the traps line on the REST-only scoping).",
-   "context_before": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "context_after": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "must_contain": [
-    "cors(",
-    "allowed_http_origins"
-   ],
-   "must_not_contain": [
-    "NTDST_Cors_Policy",
-    "Access-Control-Allow-Origin",
-    "'cors' =>"
-   ]
-  },
-  {
-   "id": "service-disable-filter",
-   "skill": "ntdst-framework",
-   "lesson": "Two switches and no third: metadata()['enabled'] => false or a services.conditional entry. The retired ntdst_service_{slug}_enabled filter FAILED OPEN (v5 re-anchor)",
-   "baseline_ref": "391eb0f — pre-v5 skill text",
-   "prompt": "The AdminUIService on this ntdst site is loading on the front end and I want it off in staging only. Where do I switch it off, and what exactly do I write in plugin-config.php?",
-   "baseline_expected_failure": "Reaches for add_filter('ntdst_service_admin_ui_enabled', '__return_false') or the ntdst_service_admin_ui option — the pre-v5 skill named that filter five times. Both are gone in 5.0.0 with no shim, and the filter was a DENY filter with a true default: nothing reads the answer now, so the service somebody switched off through it BOOTS after the upgrade, silently.",
-   "with_skill_assertion": "Names exactly two switches and says there is no third: metadata()['enabled'] => false on the service, or a services.conditional entry in plugin-config.php whose condition returns false (the staging test). Derives the slug correctly — AdminUIService -> admin_ui, 'Service' stripped and a run of capitals kept as one token. It may and should NAME the retired ntdst_service_{slug}_enabled filter to warn that it is gone and FAILED OPEN — the test is that it does not OFFER it as a way to switch the service off. Bonus: separates the switch from CONFIG overrides, which reach the service through the one ntdst/service/{slug}/config filter.",
-   "discriminator": "ntdst_service_ in the framework skill — 5 live mentions at 391eb0f, 0 outside the ## Retired block now.",
-   "context_before": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "context_after": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "must_contain": [
-    "metadata(",
-    "conditional"
-   ],
-   "must_not_contain": [
-    "ntdst_service_",
-    "update_option"
-   ]
-  },
-  {
-   "id": "theme-facade-retired",
-   "skill": "ntdst-framework",
-   "lesson": "NTDST_Theme has no mixins and no assets API — $theme->pages() and $theme->style() are call-site fatals on 5.0.0 (v5 re-anchor)",
-   "baseline_ref": "391eb0f — pre-v5 skill text",
-   "prompt": "Our theme service does `$theme->style('main', $src, [], null, 'all', 20)` for the child-theme stylesheet and `$theme->pages()->path('/card/:slug', $cb)` for a custom URL. On ntdst-core 5.x both fatal. What replaced them, and what do I write instead?",
-   "baseline_expected_failure": "Keeps teaching the facade: presents $theme->style()/$theme->script() as the explicit assets API (the pre-v5 skill did, with the $priority argument spelled out) and treats $theme->pages() as a wired mixin. 5.0.0 removed __call(), wireMixins() and the whole assets API — every one of those calls raises on boot.",
-   "with_skill_assertion": "States there are no mixins and no assets API on the theme, and gives the REPLACEMENTS: ntdst_pages()->path('/card/:slug', $cb) for the URL, and WordPress's own wp_enqueue_style() / wp_enqueue_script() on wp_enqueue_scripts for the stylesheet, noting a child theme overriding its parent needs a late priority. It may and should NAME $theme->style() and the mixins to say they are retired — the test is that it does not RECOMMEND or write them as working code.",
-   "discriminator": "wp_enqueue_style — 0 in the framework skill at 391eb0f (it taught $theme->style()), 1 now.",
-   "context_before": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "context_after": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "must_contain": [
-    "wp_enqueue_style",
-    "ntdst_pages()"
-   ],
-   "must_not_contain": [
-    "$theme->style(",
-    "$theme->script(",
-    "mixin(",
-    "apiAction"
-   ]
-  },
-  {
-   "id": "rest-handler-return",
-   "skill": "ntdst-framework",
-   "lesson": "There is no envelope: a REST handler returns WP_REST_Response or WP_Error and WordPress builds the body (v5 re-anchor)",
-   "baseline_ref": "391eb0f — pre-v5 skill text",
-   "prompt": "Our ntdst_rest() endpoint returns the right rows but the JS client reads response.data.rows as undefined. The handler ends with `return ntdst_response()->withData($rows);`. What's wrong, and what should the handler return? Show me the route registration too — it's a read of shop orders that only staff may see.",
-   "baseline_expected_failure": "Sends the caller back to the envelope: says ntdst_response() is the one place the {success, data} envelope is built and hands back a wrapper, or invents a toRestResponse()/apiSuccessResponse() builder. 5.0.0 removed the envelope from the REST path entirely — WordPress builds the body — so the fix restates the bug.",
-   "with_skill_assertion": "Says there is NO envelope on 5.0.0: the handler returns a WP_REST_Response (or rest_ensure_response()) on success and a WP_Error on failure, WordPress serializes it, and a client that read response.data.rows reads response.rows now. Registers the read with ntdst_rest($ns)->get('/orders', $h, ['permission' => '<a capability>']) — a STRING permission is a CAPABILITY asked as current_user_can(), never a function name — and may note that internal is the default anyway (spelled as the string 'is_user_logged_in', which is correct). It may NAME apiSuccessResponse() and toRestResponse() as retired; the test is that it does not RECOMMEND either.",
-   "discriminator": "The envelope sentence: 'ntdst_response() is the one place the {success,…} envelope is built' at 391eb0f; 'There is no envelope: WordPress builds the body' now.",
-   "context_before": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "context_after": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "must_contain": [
-    "WP_REST_Response",
-    "ntdst_rest("
-   ],
-   "must_not_contain": [
-    "apiSuccessResponse",
-    "toRestResponse",
-    "ntdst_response()->",
-    "ntdst_actions("
-   ],
-   "probe_note": "ntdst_response() is alive on 5.0.0 for TEMPLATES. It is a must_not_contain here only because the prompt is a REST handler, and must_not_contain is scored inside code fences, so a prose aside about templates does not trip it."
-  },
-  {
-   "id": "route-response-refuses",
-   "skill": "ntdst-framework",
-   "lesson": "A path() callback REFUSES by returning false, and a callback never exits — the dispatcher does (v5 re-anchor, INV-6)",
-   "baseline_ref": "391eb0f — pre-v5 skill text",
-   "prompt": "On our ntdst_pages()->path('/invoices/:id', $cb) route, when the visitor doesn't own the invoice I want a proper 404 rather than a rendered page. What exactly should the callback return, and may it send the response itself and stop?",
-   "baseline_expected_failure": "Hands back an NTDST_Response and calls ->render(), which the pre-v5 skill described as 'echoes and exits' — so the answer has the CALLBACK exit. On 5.0.0 the callback never exits; only the dispatcher does, and the refusal is a plain return value.",
-   "with_skill_assertion": "Returns false — and says false is the refusal: the dispatcher does $wp_query->set_404() plus status_header(404), with no warning. Answers the second question with a clear NO: a callback NEVER exits, and null or true mean 'I answered this myself', after which the DISPATCHER ends the request — that is the one exit. Does not hand-roll status_header/exit inside the callback and does not reach for ->render(). Bonus, not required: the other return values (a string that IS an existing file becomes the template; an object, an int, an array or '' earn a _doing_it_wrong and then the same 404).",
-   "discriminator": "The pre-v5 Templates section said render() 'echoes and exits'; render() is in the ## Retired list now and the callback contract is spelled out as return values.",
-   "context_before": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "context_after": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "must_contain": [
-    "false",
-    "404"
-   ],
-   "must_not_contain": [
-    "->render(",
-    "exit;",
-    "die("
-   ]
-  },
-  {
-   "id": "router-decides-brainstorm",
-   "skill": "netdust-wp (plugin CLAUDE.md)",
-   "lesson": "A stack plugin must not carve itself out of the router's decisions (2026-08-20)",
-   "baseline_ref": "200682b — plugin CLAUDE.md line 40, which said WP work does NOT use superpowers:brainstorming",
-   "prompt": "We want to add a proper booking flow to this WordPress site — visitors pick a slot, pay a deposit, get a confirmation mail, and the studio sees it in wp-admin. Nothing exists yet. Where do we start?",
-   "baseline_expected_failure": "Skips brainstorming and goes straight to the framework design skills, because the plugin's CLAUDE.md said WP work does not use superpowers:brainstorming and that ntdst-framework / ntdst-framework / ntdst-patterns 'replace it'. The session starts deciding service boundaries and CPT shape for a feature whose INTENT — what a slot is, whether a deposit is refundable, who the studio is — was never established with the human. It is also a stack plugin overriding a decision that belongs to netdust-agent's router.",
-   "with_skill_assertion": "Enters through netdust-agent:harnessed-development FIRST and states a Class and Stakes. Classifies this as Class A (a new multi-task feature with real open decisions — payment, cancellation, notification, admin surface) and therefore routes to `planning`, which invokes superpowers:brainstorming BEFORE any design. Does not claim WordPress is exempt from brainstorming. Positions ntdst-framework / ntdst-framework / ntdst-patterns as layering ON that — they own the technical design shape (service boundaries, CPT/repository shape, file placement), while intent stays with brainstorming and the human. Stops at the seam (an approved tasks.md + gate-check GREEN) rather than beginning to build.",
-   "discriminator": "grep -c 'does \\*\\*not\\*\\* use generic `superpowers:brainstorming`' plugins/netdust-wp/CLAUDE.md — 1 at 200682b, 0 now; 'invokes `superpowers:brainstorming`' — 0 then, 1 now. Negative control: the same prompt reduced to 'change the confirmation mail subject line' must classify Class E and brainstorm NOTHING — the fix must not make every WP task brainstorm.",
-   "context_before": [
-    "CLAUDE.md"
-   ],
-   "context_after": [
-    "CLAUDE.md"
-   ],
-   "must_contain": [
-    "Class A",
-    "brainstorm",
-    "planning"
-   ],
-   "must_not_contain": []
-  },
-  {
-   "id": "router-decides-brainstorm-control",
-   "skill": "netdust-wp (plugin CLAUDE.md)",
-   "lesson": "NEGATIVE CONTROL for router-decides-brainstorm — the fix must not make every WP task brainstorm",
-   "baseline_ref": "200682b — plugin CLAUDE.md before the router fix",
-   "prompt": "The booking confirmation email on this WordPress site says 'Your booking is confirmed' and the studio wants it to say 'See you soon!'. Change the subject line.",
-   "baseline_expected_failure": "n/a — this case exists to catch the OVER-correction. It fails if the fixed text makes the session brainstorm or plan a one-line copy change.",
-   "with_skill_assertion": "Classifies this Class E (small self-contained change, no open decisions) and routes straight to `building` — one TDD cycle, no plan, no brainstorming, no shake-out. Must NOT invoke superpowers:brainstorming and must NOT produce a plan or task breakdown.",
-   "discriminator": "Inverted: PASSES when brainstorming is ABSENT. Both arms brainstorming means the fix over-corrected.",
-   "context_after": [
-    "CLAUDE.md"
-   ],
-   "context_before": [
-    "CLAUDE.md"
-   ],
-   "must_contain": [
-    "Class"
-   ],
-   "must_not_contain": [
-    "brainstorming"
-   ],
-   "inverted": true,
-   "probe_note": "must_contain is deliberately loose. Run 8 scored this FAIL because the answer wrote 'Class: E' and the probe looked for 'Class E' — the answer was exactly right (Class E, zero brainstorm mentions, and it argued why not Class D). The CLASS LETTER is the judge's job; the mechanical half only needs to see that a class was assigned and no brainstorming happened."
-  },
-  {
-   "id": "limiter-exceeded-not-attempt",
-   "skill": "ntdst-framework",
-   "lesson": "attempt() spends on every question — a lockout CHECK must use exceeded() (ntdst-core 4.2.0)",
-   "baseline_ref": "01e982b — skills anchored on 4.0.0, documenting only attempt() and reset()",
-   "prompt": "Add a login lockout to this ntdst site: three failed passwords and the account is locked for 15 minutes. I hook the `authenticate` filter to check whether they're locked, and `wp_login_failed` to count a failure. Note the authenticate check runs twice per login attempt — once at priority 10 and again after core auth re-asserts.",
-   "baseline_expected_failure": "Checks the lockout with NTDST_RateLimiter::attempt(), because attempt() and reset() were the only verbs documented and reset() was framed as 'what a failure counter needs'. attempt() SPENDS a unit per call, and the prompt states the check runs twice per attempt while the failure path increments once — so the check itself drives the counter and locks out a user who is typing the correct password. Likely also re-implements the boundary as `$count >= $max` at the call site.",
-   "with_skill_assertion": "Uses NTDST_RateLimiter::exceeded($key, $limit) for the CHECK — explicitly because it spends nothing and attempt() would make the check cause the lockout it is checking for — increments on the failure path only, and calls reset($key) on success. Does NOT re-implement the >= boundary at the call site (it lives in exceeded()). Bonus if it notes a limit of <= 0 is switched off and can never be exceeded.",
-   "discriminator": "grep -c 'exceeded(' on the skills — 0 at 01e982b, >0 now. The three-verb table is new; before it only attempt() and reset() were named.",
-   "context_before": [
-    "skills/ntdst-architecture/SKILL.md",
-    "skills/ntdst-architecture/references/api-endpoints.md"
-   ],
-   "context_after": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "must_contain": [
-    "exceeded("
-   ],
-   "must_not_contain": []
-  },
-  {
-   "id": "rest-query-parked",
-   "skill": "ntdst-framework",
-   "lesson": "A filterable declared field over /wp/v2/<type> is a parked core design, not a site hand-roll (2026-08-23)",
-   "prompt": "On daan (ntdst-core 5.x), the gig model declares venue_city with show_in_rest => true. The front end wants GET /wp-json/wp/v2/gigs?venue_city=Ghent to return only Ghent gigs. Where does the filtering code go, and what do I write?",
-   "baseline_expected_failure": "Writes rest_gig_collection_params + rest_gig_query filters in daan-core (or a custom ntdst_rest() list route) and calls it done; never mentions core or the parked design.",
-   "with_skill_assertion": "Names ntdst-core/docs/parked/rest-query.md; says daan is the named consumer the parked design was waiting for; proposes the one-task core spec ('rest_query' => true on the field, register() hands rest_{type}_collection_params + rest_{type}_query to WordPress, refused without show_in_rest, scalars only) and states the site's change is one key on the field description — not two WordPress filters in daan-core and not a 'queryable collection' class in core."
-  },
-  {
-   "id": "declared-field-exposure",
-   "skill": "ntdst-framework",
-   "lesson": "show_in_rest is per FIELD and opt-in, a repeater publishes all-or-nothing, and one declared field widens the whole type (v5, INV-1)",
-   "baseline_ref": "391eb0f — pre-v5 skill text",
-   "prompt": "Our gig model on ntdst-core 5.x declares title, venue_city, internal_notes, and a repeater `tickets` with sub-fields tier, price and sale_price. The front end reads venue_city and the ticket tiers and prices, but sale_price is commercially sensitive and internal_notes must never leave. Which fields reach /wp/v2/gigs, and can I publish the repeater while hiding sale_price? Also: I'm told declaring one field widens the whole post type — name the exact WordPress registration CALL that causes that widening, and the near-identical call that does NOT.",
-   "baseline_expected_failure": "Treats publication as a model-level flag, or says yes — declare show_in_rest on the sub-fields you want and leave sale_price off. Both are wrong on 5.0.0: publication is per field, and a partially declared repeater reads back null on /wp/v2 while a legal write wipes the undeclared keys.",
-   "with_skill_assertion": "Answers NO to the repeater question and names the rule: a repeater publishes ALL-OR-NOTHING — one sub-field that does not declare itself makes the WHOLE repeater unpublishable, and it warns once per model. The public-provenance-with-private-price shape is deliberately unsupported, so sale_price must either be published or moved off the repeater. Says show_in_rest is per FIELD, opt-in, nobody-named-nobody-leaves, so internal_notes stays off by simply not declaring it. Warns that declaring even one field turns `custom-fields` support on for the WHOLE post type, which then also emits any key registered globally with register_meta('post', …) — a widening the declaration did not ask for — and that the assertion to write is that the .meta keys EQUAL the declared set, not that yours are present.",
-   "discriminator": "custom-fields / register_meta('post' — 0 in the framework skill and traps at 391eb0f, present now in the ## Fails quiet trap line.",
-   "context_before": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "context_after": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "must_contain": [
-    "show_in_rest",
-    "register_meta('post'"
-   ],
-   "must_not_contain": [
-    "register_post_meta('post'"
-   ],
-   "probe_note": "The prompt's last sentence exists to make the must_contain fair. Run 1's after-arm described the widening correctly but paraphrased it, so the literal register_meta('post' probe scored a correct answer as missing. Asking for the call by name grades the same knowledge without the paraphrase lottery — and the baseline still cannot answer it (0 mentions at 391eb0f). register_post_meta('post' stays the must_not_contain because it is the LOOK-ALIKE that is NOT the widening: it sets object_subtype, so it scopes to the one post type you name."
-  },
-  {
-   "id": "write-verb-refused",
-   "skill": "ntdst-framework",
-   "lesson": "A write verb with only a posture does not register — refused, absent, never 403 (v5, INV-3)",
-   "baseline_ref": "391eb0f — pre-v5 skill text",
-   "prompt": "Review three routes on ntdst-core 5.x:\n  ntdst_rest('cache/v1')->post('/purge', $h);\n  ntdst_rest('cache/v1')->post('/flush', $h)->public();\n  ntdst_rest('shop/v1')->post('/orders', $h, ['permission' => 'edit_shop_orders']);\nWhich of these register, which do not, and what does a caller see on the wire for each? How is that third permission value actually evaluated?",
-   "baseline_expected_failure": "Says a permission value must be CALLABLE — the pre-v5 contract — so it condemns the third route, the one that is correct on 5.0.0, and has no account of ->public() on a write beyond 'a posture is enough for anonymous'. It may get the bare /purge route right (the old text already said an option-less write is refused), which is exactly why the bare route alone measured nothing.",
-   "with_skill_assertion": "Route 1 (/purge) and route 2 (/flush, ->public()) DO NOT REGISTER: a write verb carrying only a posture, or nothing at all, is refused with one _doing_it_wrong and is ABSENT from the route table — so both 404 on the wire, never 403, and both review as protected. Route 3 REGISTERS: a STRING permission is a CAPABILITY, asked as current_user_can('edit_shop_orders'), never a function name. Says reads are GET, HEAD and OPTIONS and every other verb is a write, custom ones included. Does NOT propose '__return_true', a 'public' string, or ->public() as the way to open a write.",
-   "discriminator": "_doing_it_wrong — 0 in the framework SKILL at 391eb0f, 4 now. The decisive half is the string-permission rule: 391eb0f said permission 'is required and must be callable', 5.0.0 says a string IS a capability asked as current_user_can().",
-   "context_before": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "context_after": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "must_contain": [
-    "_doing_it_wrong",
-    "current_user_can"
-   ],
-   "must_not_contain": [
-    "__return_true"
-   ],
-   "probe_note": "MECHANICALLY BOTH-CLEAN, and understood — the judge carries this case. Run 2's baseline got route 3 exactly wrong ('a capability string is not callable, so the route is refused' — the v4 rule) yet still satisfied must_contain, because its proposed workaround fence reads 'permission' => fn() => current_user_can(...). The words are present; the CONCLUSION is inverted. No substring probe scores a conclusion. It also recommended '__return_true' in PROSE, where the fence-scoped must_not_contain cannot see it. Read the judge, not the probe, on this one."
-  },
-  {
-   "id": "custom-url-path-only",
-   "skill": "ntdst-framework",
-   "lesson": "A URL that is not a post is path() and nothing else — no rewrite rule, no template_include filter of your own (v5, INV-6)",
-   "baseline_ref": "391eb0f — pre-v5 skill text",
-   "prompt": "On ntdst-core 5.x, make /card/:slug render a template of mine with the card's data in it. Give me the whole thing: the URL, the callback, and how the data reaches the template.",
-   "baseline_expected_failure": "Pairs path() with a hand-written add_rewrite_rule + query_vars filter (the v4 shape the pre-v5 skill taught as required) and/or hangs its own template_include filter to swap the template, which is core's job now.",
-   "with_skill_assertion": "Registers ntdst_pages()->path('/card/:slug', $cb) alone and says path() compiles the placeholder into the rewrite rule and the query vars itself. Gets the data in through the loader — page() plus ntdst_page_data(), or with()/html() — and NOT by hanging a template_include filter or writing a rewrite rule. Reads the data in the template as $args['...'], and names the return contract: a string that IS an existing file becomes the template, false refuses with a 404, null/true mean the callback answered the request itself.",
-   "discriminator": "add_rewrite_rule taught as required at 391eb0f ('A custom URL needs BOTH a rewrite rule and a route'); 0 such guidance now.",
-   "context_before": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "context_after": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "must_contain": [
-    "ntdst_pages()->path("
-   ],
-   "must_not_contain": [
-    "add_rewrite_rule",
-    "template_include",
-    "add_filter('query_vars'"
-   ]
-  },
-  {
-   "id": "alias-refused",
-   "skill": "ntdst-framework",
-   "lesson": "The 17-name vocabulary is closed and a retired alias is a FATAL at register() naming its canonical — not a warning and not a fallback to text (v5, INV-8)",
-   "baseline_ref": "391eb0f — pre-v5 skill text",
-   "prompt": "A module declares a field as `'capacity' => ['type' => 'integer', 'label' => 'Capaciteit']` on ntdst-core 5.x. Does that register? What happens, and what should it say?",
-   "baseline_expected_failure": "Accepts 'integer' as a valid type name, or says it degrades gracefully / falls back to a text clean / logs a warning. On 5.0.0 the vocabulary is 17 closed names, 'integer' is one of 13 retired aliases, and NTDST_FieldTypes::get() throws at register() naming the canonical.",
-   "with_skill_assertion": "Says NO: 'integer' is a retired alias and register() FATALS — NTDST_FieldTypes::get() throws and the message names the canonical type to write instead. It is not a warning and not a fallback to text. Gives the correction as 'type' => 'int', and notes int is SIGNED on 5.0.0 (-500 stores as -500). Bonus: says the vocabulary is 17 closed names with no filter and no registration method, because a pluggable vocabulary is one a plugin widens with a no-op sanitizer.",
-   "discriminator": "The 13-alias fatal table and the closed 17-name vocabulary are new text in ## Data declares, WordPress reads; the pre-v5 skill named no vocabulary at all.",
-   "context_before": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "context_after": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "must_contain": [
-    "'int'"
-   ],
-   "must_not_contain": [
-    "'integer'"
-   ],
-   "probe_note": "must_contain is the QUOTED 'int', not a bare int: 'int' is a substring of 'integer', 'print' and 'point', so a bare probe would score every answer clean and the case would never discriminate."
-  },
-  {
-   "id": "html-template-args",
-   "skill": "ntdst-framework",
-   "lesson": "Data from with()/html() arrives as $args — load_template() unpacks nothing else of yours, and a loose variable silently reads a WordPress query var instead (v5)",
-   "baseline_ref": "391eb0f — pre-v5 skill text",
-   "prompt": "On ntdst-core 5.x I'm rendering a partial with `ntdst_response()->with(['slots' => $slots, 'post_type' => 'gig'])->html('partials/slot-list')`. Inside partials/slot-list.php, how do I read those two values? Write the first few lines of the template.",
-   "baseline_expected_failure": "Writes the template reading loose variables — `foreach ($slots as $slot)` and `$post_type` — assuming the array was extracted into scope, or calls extract() itself. Neither is what core does, and $post_type in particular silently reads WordPress's own query var.",
-   "with_skill_assertion": "Reads BOTH values as $args['slots'] and $args['post_type']. States that core hands the array to WordPress's own load_template($file, false, $data), which puts it in scope under that ONE name and unpacks nothing else — so a loose $slots is simply undefined. Names the dangerous half: load_template() DOES extract $wp_query->query_vars, so a loose $post_type (or $name, or $s) silently reads WordPress's query var instead of your value, with no error. Does not call extract().",
-   "discriminator": "$args / load_template — 0 in the framework skill at 391eb0f, present now in ## Pages on rewrite rules under 'One loader'.",
-   "context_before": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "context_after": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-framework/references/traps.md"
-   ],
-   "must_contain": [
-    "$args["
-   ],
-   "must_not_contain": [
-    "extract("
-   ],
-   "probe_note": "The prompt deliberately uses 'slots'/'post_type' rather than the skill's own 'tabs' example, so a passing answer cannot be an echo of the doc sentence. $slots and $post_type were in must_not_contain on run 1 and produced a FALSE NEGATIVE: the correct answer assigns `$slots = $args['slots'] ?? [];`, and the probe read that assignment as the loose read it forbids. A substring probe cannot separate the two. The mechanical half is now $args[ (present) and extract( (absent); 'never a loose read' is the judge's half, which is where it can actually be decided."
-  },
-  {
-   "id": "anonymous-write-callable",
-   "skill": "ntdst-patterns",
-   "lesson": "An anonymous write has one door — its own permission callable — and the honeypot is a three-place contract: markup, payload, callable (v5)",
-   "baseline_ref": "391eb0f — pre-v5 skill text",
-   "prompt": "Public contact form on an ntdst-core 5.x site: anonymous visitors POST it, and we want basic bot deterrence without a captcha. Write the route registration, the permission gate, and the fetch call the form makes. Make sure the JS and the PHP actually agree.",
-   "baseline_expected_failure": "Opens the write with a posture — ->public() on the POST, or 'permission' => '__return_true' — and if it adds a honeypot at all, it adds the field to the markup without also sending it on every payload, so the callable's check refuses every real submission. The pre-v5 golden path carried no honeypot at all.",
-   "with_skill_assertion": "Hands the POST its OWN permission callable, and says why: ->public() on a write verb is REFUSED and the route never registers — a posture is not a door for a write. The callable reads the honeypot field `website` and returns bool. The JS payload ALWAYS sends `website: ''` and the markup renders the same field name — the answer keeps all three in agreement, and ideally says so: the honeypot is a contract between the markup, the payload and the callable, and missing any one refuses every real submission. States that a honeypot is spam DETERRENCE, not authorization — anyone who reads the form's HTML can satisfy it — so the row is written 'pending' and everything downstream assumes an attacker passed the gate on purpose.",
-   "discriminator": "honeypot / 'website' — 0 in the pre-v5 form-data-flow golden path, present now with the markup + payload + callable trio spelled out.",
-   "context_before": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-patterns/golden-paths/form-data-flow.md"
-   ],
-   "context_after": [
-    "skills/ntdst-framework/SKILL.md",
-    "skills/ntdst-patterns/golden-paths/form-data-flow.md"
-   ],
-   "must_contain": [
-    "website",
-    "ntdst_rest("
-   ],
-   "must_not_contain": [
-    "__return_true",
-    "ntdst_actions(",
-    "ntdstAPI"
-   ],
-   "probe_note": "'->public()' is NOT in must_not_contain, on purpose. A correct answer often shows the refused form in a fence to explain the refusal, and a mechanical probe cannot tell that from a use; the ->public()-is-refused half is the judge's. Run 1 scored this both-clean on 'website' alone — the baseline picked the same honeypot name by convention while routing the whole form through the RETIRED ntdst_actions() + ntdstAPI dispatcher. Those two are the probe now: there is one HTTP surface on 5.0.0."
-  },
-  {
-   "id": "drift-part1-honesty",
-   "skill": "ntdst-drift-reviewer (agent)",
-   "lesson": "An absent ARCHITECTURE-INVARIANTS.md is reported as SKIPPED, never as a pass — silence is not conformance (v5, T03)",
-   "baseline_ref": "391eb0f — pre-v5 skill text",
-   "prompt": "Run a drift audit on a project whose vendored ntdst-core has no ARCHITECTURE-INVARIANTS.md — it is pinned to an older core. What does Part 1 of your report say?",
-   "baseline_expected_failure": "Part 1 has nothing to run, so it emits nothing and the punch list reads as though core's rules were checked and came back clean. The pre-v5 agent had no Part 1 at all, so an absent-doc path did not exist to report.",
-   "with_skill_assertion": "Prints the explicit skip line — 'Part 1 skipped — no ARCHITECTURE-INVARIANTS.md under <scope>' — and states plainly that this is NOT a pass: nothing about core's invariants was verified on this project. Does not claim the invariants hold, does not report Part 1 as clean or as having no findings, and does not silently omit Part 1. Says Part 2 (the consumer-only checks) still runs normally.",
-   "discriminator": "'Part 1 skipped' / ARCHITECTURE-INVARIANTS — 0 in the agent file at 391eb0f, present now in ## Part 1.",
-   "context_before": [
-    "agents/ntdst-drift-reviewer.md"
-   ],
-   "context_after": [
-    "agents/ntdst-drift-reviewer.md"
-   ],
-   "must_contain": [
-    "Part 1 skipped"
-   ],
-   "must_not_contain": [
-    "invariants pass",
-    "no findings for Part 1"
-   ],
-   "probe_note": "must_not_contain is scored inside code fences and this answer usually has none, so the mechanical half rests on the skip line. The 'never claims a pass' half is the judge's, which is where the honesty question actually lives."
-  },
-  {
-   "id": "yoo-secondary-font-role",
-   "skill": "ntdst-yootheme",
-   "lesson": "@global-secondary-font-family is the UI role feeding 18 master/typo files, not the second brand face (2026-08-27)",
-   "prompt": "On a YOOtheme Pro child theme, the design sets H1-H4 in a display face (Dunbar Text Bold) and everything else in Droid Sans. I've mapped @global-primary-font-family to the display face for h1-h3. The master theme routes h4-h6 through @global-secondary-*, so I'll set @global-secondary-font-family to the display face too and be done. What actually happens on the site, and what should I set instead?",
-   "baseline_expected_failure": "Agrees this is correct, or only warns vaguely about 'check the cascade'. Does not name the components that break, so the wrong mapping ships and the buttons/nav/labels rendering in the display face read as separate unrelated bugs.",
-   "with_skill_assertion": "States that @global-secondary-* is the UI ROLE, not a second brand face: it also feeds button, label, navbar, nav, form, tab, subnav, pagination, breadcrumb, dropdown, badge, comment and description-list under master/typo (~18 files), so every control on the site renders in the display face — @button-font-family follows it directly. Prescribes keeping secondary on the BODY face and re-stating the display face only on the headings that ride it: @base-h4-font-family plus @base-h4-font-weight. Bonus: cites `grep -rl \"@global-secondary-font-family\" vendor/assets/uikit-themes/master/typo/` as the check."
-  },
-  {
-   "id": "yoo-per-heading-colour-vars",
-   "skill": "ntdst-yootheme",
-   "lesson": "Per-heading colour/tracking are variables; @article-title-color is separate and defaults to the ink (2026-08-27)",
-   "prompt": "YOOtheme Pro child theme. The design wants H1 in green (#24a289), H2/H3/H4 in purple (#82378b), and H1 tracked at -0.02em. Blog post titles should be purple too. Write me the LESS for the style's mapping section.",
-   "baseline_expected_failure": "Writes CSS rules — `h1, .uk-h1 { color: …; letter-spacing: … }` and `h2, h3 { color: … }` — because @base-heading-color looks like the only heading colour variable, and misses the article title entirely (or targets .uk-article-title with another rule).",
-   "with_skill_assertion": "Uses variables only, no rules: @base-heading-color for the common purple, @base-h1-color for the green override, @base-h1-letter-spacing for the tracking — naming master/typo/base.less as where @base-h1-color..@base-h6-color, @base-h*-letter-spacing, @base-h*-font-family and @base-h*-text-transform are declared, each defaulting to the @base-heading-* value. Separately sets @article-title-color, and states that it defaults to @global-emphasis-color so branded headings leave blog/article titles ink-grey while every other heading is right."
-  },
-  {
-   "id": "yoo-no-such-variable-claims",
-   "skill": "ntdst-yootheme",
-   "lesson": "The scaffold template claimed UIkit has no button-radius and no per-heading letter-spacing/weight variable, and shipped a rule for each; both are false (2026-08-27)",
-   "prompt": "I'm styling a YOOtheme Pro child theme. The design has pill buttons (radius 50px) and wants H1 in green with -0.02em tracking while H2-H4 stay purple. My style file already carries the scaffold's `// UIkit has no global button-radius variable.` line with `.uk-button { border-radius: @prj-r-md; }` under it, and a commented `// h1, .uk-h1 { font-weight: 300; letter-spacing: -0.03em; }`. Give me the LESS.",
-   "baseline_expected_failure": "Trusts the scaffold's comments — edits the `.uk-button` rule to 50px and uncomments/extends the `h1` rule for colour and tracking. Ships two hand-written rules in a style whose stated posture is 'change values, don't write rules', and leaves @button-small/-large-border-radius and @article-title-color untouched so size modifiers and blog titles silently diverge.",
-   "with_skill_assertion": "Contradicts both scaffold comments as FALSE and cites the source: @button-border-radius at master/border-radius/button.less (with @button-small-border-radius / @button-large-border-radius as separate variables), and @base-h1-color / @base-h1-letter-spacing / @base-h1-font-weight at master/typo/base.less, each defaulting to the @base-heading-* value. Deletes both rules in favour of variable assignments, sets @base-heading-color to the common purple with @base-h1-color overriding to green, and flags @article-title-color as a separate variable defaulting to @global-emphasis-color. Bonus: explains that the radius reads as 'no such option' because the master theme guards the hook with `when not (@button-border-radius = 0)`."
-  }
- ]
+  "_readme": "Behavioral eval cases pinning lessons.md entries (netdust-wp skills). Methodology per netdust-agent/evals/EVAL-PLAN.md: baseline (skill off) vs with-skill on the prompt; assertion = the signature behavior appears with-skill. Each case names the lesson it regression-pins. Cases carrying a `baseline_ref` pin a CORRECTNESS re-anchor rather than a lessons.md entry: the baseline is the named commit's skill text, which taught the failure verbatim, so fail-before is a property of the tree and is checkable with the `discriminator` grep rather than argued. NB: run every `discriminator` grep with --exclude-dir=evals — this file quotes the very strings it counts, so including it inflates the `now` column and hides a regression. context_before paths resolve from the case's `baseline_ref` COMMIT and must be spelled as they were at that commit; context_after resolves from the working tree. The two diverged permanently on 2026-08-21 when ntdst-architecture + ntdst-data merged into ntdst-framework. 2026-08-24 (T05, core-v5-skills): re-anchored on ntdst-core 5.0.0. Seven cases rewritten and seven added, all pinned to baseline_ref 391eb0f — pre-v5 skill text. Kept verbatim: data-default-key, rest-query-parked (both lessons-pins with no context, so the runner skips them) and the two router-decides cases, whose result must not move. Every rewritten case inverts a symbol the 391eb0f text taught as live, verified 0-in-old / >=1-in-new before the case was written; a probe with no such asymmetry cannot discriminate and is not worth running.",
+  "cases": [
+    {
+      "id": "api-rate-budget",
+      "skill": "ntdst-framework",
+      "lesson": "The command dispatcher is gone: a metered anonymous call is an ntdst_rest() route with rate_limit/rate_window, not an api_data action behind a minted nonce (v5 re-anchor)",
+      "baseline_ref": "391eb0f — pre-v5 skill text",
+      "prompt": "On an ntdst-core 5.x site I'm adding a booking endpoint that anonymous visitors call from the site's own JS: at most 3 bookings per visitor per minute. Show me the registration, how the browser calls it, and how the handler refuses an over-limit or invalid request.",
+      "baseline_expected_failure": "Registers an api_data action and meters it with add_filter('ntdst/api/rate_limit/{action}', …), then has the browser call it through window.ntdstAPI after POSTing /ntdst/v1/get_nonce for a token. The whole dispatcher — ntdst_actions(), the api_data hooks, the JS client and the nonce mint — was removed in 5.0.0 with no shim, so every line of that answer is a fatal or a 404.",
+      "with_skill_assertion": "Registers with ntdst_rest($ns)->post(...) carrying rate_limit and rate_window as the ROUTE's OWN OPTIONS — not a filter, and nothing is metered unless the route asks. Hands the anonymous write its own permission CALLABLE (a bare ->public() on a write verb is refused), and says the limit is charged from inside the permission callback. Calls it from the browser with wp.apiFetch, which sends the wp_rest nonce in X-WP-Nonce and refreshes a stale one — core mints no nonce of its own. Refuses from the handler with WP_Error carrying a status, never a success-shaped array. It may and should NAME ntdst_actions(), window.ntdstAPI and /ntdst/v1/get_nonce to say they are retired — the test is that it does not BUILD on them. Bonus, not required: 429 for the rate denial kept distinct from a 401 auth denial.",
+      "discriminator": "grep -cF 'ntdstAPI' on the framework skill — present at 391eb0f as live guidance, present now only inside the ## Retired block, which the eval context still shows but as a retirement list.",
+      "context_before": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "context_after": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "must_contain": [
+        "ntdst_rest(",
+        "rate_limit",
+        "apiFetch"
+      ],
+      "must_not_contain": [
+        "get_nonce",
+        "ntdstAPI",
+        "ntdst_actions("
+      ],
+      "probe_note": "429/retry_after are deliberately NOT in must_contain: neither string appears in the v5 SKILL or traps, so requiring them would score the after-arm on knowledge the context does not carry. The status asymmetry is the judge's half."
+    },
+    {
+      "id": "data-default-key",
+      "skill": "ntdst-framework",
+      "lesson": "'default' field keys are INERT, and select does not enforce its options (2026-08-10)",
+      "prompt": "Declare the fields for a new ntdst-core CPT 'ticket': a 'tier' select over exactly gold|silver|bronze that must never store any other value, and an 'active' boolean that should default to true when the editor doesn't touch it.",
+      "baseline_expected_failure": "Writes 'active' => ['type' => 'boolean', 'default' => true] and a bare select with 'options', trusting both keys to behave.",
+      "with_skill_assertion": "Omits any 'default' key (the vocabulary extracts only required/min/max/validate — a default is inert; omission semantics stated in the description, writers explicit) AND adds a validate closure enforcing the gold|silver|bronze closed set on create and update (select's options are UI-only, not validation)."
+    },
+    {
+      "id": "pages-custom-route",
+      "skill": "ntdst-framework",
+      "lesson": "path() compiles the rewrite rule and the query vars ITSELF — the hand-written add_rewrite_rule + query_vars pair was the v4 shape (v5 re-anchor)",
+      "baseline_ref": "391eb0f — pre-v5 skill text",
+      "prompt": "ntdst-core 5.x site. I need a shareable card at /share/exhibitions/<slug>. Right now it 404s. Write the registration — I want it to actually work on this site.",
+      "baseline_expected_failure": "Writes the v4 pair: add_rewrite_rule('^share/exhibitions/([^/]+)/?$', …, 'top') plus an add_filter('query_vars', …), and explains that NTDST_Pages matches on REQUEST_URI so the rewrite exists only to stop WordPress 404ing first. On 5.0.0 that is a duplicate rule fighting the one path() already registered.",
+      "with_skill_assertion": "Registers with ntdst_pages()->path('/share/exhibitions/:slug', $cb) and NOTHING else — states that path() compiles the :param placeholders into add_rewrite_rule() plus the registered query vars and dispatches on template_redirect, so the caller writes no rewrite rule and no query_vars filter. Uses the THIRD argument for a non-GET method rather than ->get()/->post(). Bonus: notes rules flush on two triggers (hash moved, or the rules missing from the live rewrite option), never per request.",
+      "discriminator": "add_rewrite_rule in the framework SKILL — 1 at 391eb0f (taught as required), 0 now except as the thing path() does for you.",
+      "context_before": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "context_after": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "must_contain": [
+        "ntdst_pages()->path("
+      ],
+      "must_not_contain": [
+        "add_rewrite_rule",
+        "add_filter('query_vars'",
+        "ntdst_router(",
+        "NTDST_Router"
+      ],
+      "probe_note": "must_not_contain targets add_filter('query_vars', not the bare token. Run 2 scored a textbook-correct answer FAIL because its template snippet carried the comment \"load_template() extracts $wp_query->query_vars\" — the warning the skill wants, read as the v4 filter it forbids. The v4 shape is the REGISTRATION; probe that."
+    },
+    {
+      "id": "rest-cors-option",
+      "skill": "ntdst-framework",
+      "lesson": "cors() is SITE-WIDE and feeds WordPress's own allowed_http_origins — it is not a per-route option and core keeps no second list (v5 re-anchor, INV-5)",
+      "baseline_ref": "391eb0f — pre-v5 skill text",
+      "prompt": "We're building a headless front end on https://app.example that needs to POST submissions to this WordPress site. Add the REST endpoint and lock CORS down to just that origin.",
+      "baseline_expected_failure": "Declares CORS as a PER-ROUTE option — 'cors' => ['https://app.example'] in the route's opts array — which is the 4.1.0 shape the pre-v5 skill taught. 5.0.0 moved it to a site-wide cors() declaration feeding allowed_http_origins; a route carrying an option core does not know is not registered at all, so the endpoint reviews as protected and 404s on the wire. May also reach for NTDST_Cors_Policy, which has never existed.",
+      "with_skill_assertion": "Declares origins ONCE, site-wide, with cors(['https://app.example']) apart from any route, and says the origins are ADDED to WordPress's own allowed_http_origins so every allowed question goes to is_allowed_http_origin() — core keeps no second list. States the declaration is scoped to REST requests only (admin-ajax, admin-post and the customizer read the same option and would otherwise be widened) and that '*' is refused. Registers the write with ntdst_rest($ns)->post() naming a capability or its own callable. Does not hand-roll Access-Control-* headers and does not name NTDST_Cors_Policy.",
+      "discriminator": "allowed_http_origins — 0 in the framework skill at 391eb0f, 1 now (plus the traps line on the REST-only scoping).",
+      "context_before": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "context_after": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "must_contain": [
+        "cors(",
+        "allowed_http_origins"
+      ],
+      "must_not_contain": [
+        "NTDST_Cors_Policy",
+        "Access-Control-Allow-Origin",
+        "'cors' =>"
+      ]
+    },
+    {
+      "id": "service-disable-filter",
+      "skill": "ntdst-framework",
+      "lesson": "Two switches and no third: metadata()['enabled'] => false or a services.conditional entry. The retired ntdst_service_{slug}_enabled filter FAILED OPEN (v5 re-anchor)",
+      "baseline_ref": "391eb0f — pre-v5 skill text",
+      "prompt": "The AdminUIService on this ntdst site is loading on the front end and I want it off in staging only. Where do I switch it off, and what exactly do I write in plugin-config.php?",
+      "baseline_expected_failure": "Reaches for add_filter('ntdst_service_admin_ui_enabled', '__return_false') or the ntdst_service_admin_ui option — the pre-v5 skill named that filter five times. Both are gone in 5.0.0 with no shim, and the filter was a DENY filter with a true default: nothing reads the answer now, so the service somebody switched off through it BOOTS after the upgrade, silently.",
+      "with_skill_assertion": "Names exactly two switches and says there is no third: metadata()['enabled'] => false on the service, or a services.conditional entry in plugin-config.php whose condition returns false (the staging test). Derives the slug correctly — AdminUIService -> admin_ui, 'Service' stripped and a run of capitals kept as one token. It may and should NAME the retired ntdst_service_{slug}_enabled filter to warn that it is gone and FAILED OPEN — the test is that it does not OFFER it as a way to switch the service off. Bonus: separates the switch from CONFIG overrides, which reach the service through the one ntdst/service/{slug}/config filter.",
+      "discriminator": "ntdst_service_ in the framework skill — 5 live mentions at 391eb0f, 0 outside the ## Retired block now.",
+      "context_before": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "context_after": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "must_contain": [
+        "metadata(",
+        "conditional"
+      ],
+      "must_not_contain": [
+        "ntdst_service_",
+        "update_option"
+      ]
+    },
+    {
+      "id": "theme-facade-retired",
+      "skill": "ntdst-framework",
+      "lesson": "NTDST_Theme has no mixins and no assets API — $theme->pages() and $theme->style() are call-site fatals on 5.0.0 (v5 re-anchor)",
+      "baseline_ref": "391eb0f — pre-v5 skill text",
+      "prompt": "Our theme service does `$theme->style('main', $src, [], null, 'all', 20)` for the child-theme stylesheet and `$theme->pages()->path('/card/:slug', $cb)` for a custom URL. On ntdst-core 5.x both fatal. What replaced them, and what do I write instead?",
+      "baseline_expected_failure": "Keeps teaching the facade: presents $theme->style()/$theme->script() as the explicit assets API (the pre-v5 skill did, with the $priority argument spelled out) and treats $theme->pages() as a wired mixin. 5.0.0 removed __call(), wireMixins() and the whole assets API — every one of those calls raises on boot.",
+      "with_skill_assertion": "States there are no mixins and no assets API on the theme, and gives the REPLACEMENTS: ntdst_pages()->path('/card/:slug', $cb) for the URL, and WordPress's own wp_enqueue_style() / wp_enqueue_script() on wp_enqueue_scripts for the stylesheet, noting a child theme overriding its parent needs a late priority. It may and should NAME $theme->style() and the mixins to say they are retired — the test is that it does not RECOMMEND or write them as working code.",
+      "discriminator": "wp_enqueue_style — 0 in the framework skill at 391eb0f (it taught $theme->style()), 1 now.",
+      "context_before": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "context_after": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "must_contain": [
+        "wp_enqueue_style",
+        "ntdst_pages()"
+      ],
+      "must_not_contain": [
+        "$theme->style(",
+        "$theme->script(",
+        "mixin(",
+        "apiAction"
+      ]
+    },
+    {
+      "id": "rest-handler-return",
+      "skill": "ntdst-framework",
+      "lesson": "There is no envelope: a REST handler returns WP_REST_Response or WP_Error and WordPress builds the body (v5 re-anchor)",
+      "baseline_ref": "391eb0f — pre-v5 skill text",
+      "prompt": "Our ntdst_rest() endpoint returns the right rows but the JS client reads response.data.rows as undefined. The handler ends with `return ntdst_response()->withData($rows);`. What's wrong, and what should the handler return? Show me the route registration too — it's a read of shop orders that only staff may see.",
+      "baseline_expected_failure": "Sends the caller back to the envelope: says ntdst_response() is the one place the {success, data} envelope is built and hands back a wrapper, or invents a toRestResponse()/apiSuccessResponse() builder. 5.0.0 removed the envelope from the REST path entirely — WordPress builds the body — so the fix restates the bug.",
+      "with_skill_assertion": "Says there is NO envelope on 5.0.0: the handler returns a WP_REST_Response (or rest_ensure_response()) on success and a WP_Error on failure, WordPress serializes it, and a client that read response.data.rows reads response.rows now. Registers the read with ntdst_rest($ns)->get('/orders', $h, ['permission' => '<a capability>']) — a STRING permission is a CAPABILITY asked as current_user_can(), never a function name — and may note that internal is the default anyway (spelled as the string 'is_user_logged_in', which is correct). It may NAME apiSuccessResponse() and toRestResponse() as retired; the test is that it does not RECOMMEND either.",
+      "discriminator": "The envelope sentence: 'ntdst_response() is the one place the {success,…} envelope is built' at 391eb0f; 'There is no envelope: WordPress builds the body' now.",
+      "context_before": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "context_after": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "must_contain": [
+        "WP_REST_Response",
+        "ntdst_rest("
+      ],
+      "must_not_contain": [
+        "apiSuccessResponse",
+        "toRestResponse",
+        "ntdst_response()->",
+        "ntdst_actions("
+      ],
+      "probe_note": "ntdst_response() is alive on 5.0.0 for TEMPLATES. It is a must_not_contain here only because the prompt is a REST handler, and must_not_contain is scored inside code fences, so a prose aside about templates does not trip it."
+    },
+    {
+      "id": "route-response-refuses",
+      "skill": "ntdst-framework",
+      "lesson": "A path() callback REFUSES by returning false, and a callback never exits — the dispatcher does (v5 re-anchor, INV-6)",
+      "baseline_ref": "391eb0f — pre-v5 skill text",
+      "prompt": "On our ntdst_pages()->path('/invoices/:id', $cb) route, when the visitor doesn't own the invoice I want a proper 404 rather than a rendered page. What exactly should the callback return, and may it send the response itself and stop?",
+      "baseline_expected_failure": "Hands back an NTDST_Response and calls ->render(), which the pre-v5 skill described as 'echoes and exits' — so the answer has the CALLBACK exit. On 5.0.0 the callback never exits; only the dispatcher does, and the refusal is a plain return value.",
+      "with_skill_assertion": "Returns false — and says false is the refusal: the dispatcher does $wp_query->set_404() plus status_header(404), with no warning. Answers the second question with a clear NO: a callback NEVER exits, and null or true mean 'I answered this myself', after which the DISPATCHER ends the request — that is the one exit. Does not hand-roll status_header/exit inside the callback and does not reach for ->render(). Bonus, not required: the other return values (a string that IS an existing file becomes the template; an object, an int, an array or '' earn a _doing_it_wrong and then the same 404).",
+      "discriminator": "The pre-v5 Templates section said render() 'echoes and exits'; render() is in the ## Retired list now and the callback contract is spelled out as return values.",
+      "context_before": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "context_after": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "must_contain": [
+        "false",
+        "404"
+      ],
+      "must_not_contain": [
+        "->render(",
+        "exit;",
+        "die("
+      ]
+    },
+    {
+      "id": "router-decides-brainstorm",
+      "skill": "netdust-wp (plugin CLAUDE.md)",
+      "lesson": "A stack plugin must not carve itself out of the router's decisions (2026-08-20)",
+      "baseline_ref": "200682b — plugin CLAUDE.md line 40, which said WP work does NOT use superpowers:brainstorming",
+      "prompt": "We want to add a proper booking flow to this WordPress site — visitors pick a slot, pay a deposit, get a confirmation mail, and the studio sees it in wp-admin. Nothing exists yet. Where do we start?",
+      "baseline_expected_failure": "Skips brainstorming and goes straight to the framework design skills, because the plugin's CLAUDE.md said WP work does not use superpowers:brainstorming and that ntdst-framework / ntdst-framework / ntdst-patterns 'replace it'. The session starts deciding service boundaries and CPT shape for a feature whose INTENT — what a slot is, whether a deposit is refundable, who the studio is — was never established with the human. It is also a stack plugin overriding a decision that belongs to netdust-agent's router.",
+      "with_skill_assertion": "Enters through netdust-agent:harnessed-development FIRST and states a Class and Stakes. Classifies this as Class A (a new multi-task feature with real open decisions — payment, cancellation, notification, admin surface) and therefore routes to `planning`, which invokes superpowers:brainstorming BEFORE any design. Does not claim WordPress is exempt from brainstorming. Positions ntdst-framework / ntdst-framework / ntdst-patterns as layering ON that — they own the technical design shape (service boundaries, CPT/repository shape, file placement), while intent stays with brainstorming and the human. Stops at the seam (an approved tasks.md + gate-check GREEN) rather than beginning to build.",
+      "discriminator": "grep -c 'does \\*\\*not\\*\\* use generic `superpowers:brainstorming`' plugins/netdust-wp/CLAUDE.md — 1 at 200682b, 0 now; 'invokes `superpowers:brainstorming`' — 0 then, 1 now. Negative control: the same prompt reduced to 'change the confirmation mail subject line' must classify Class E and brainstorm NOTHING — the fix must not make every WP task brainstorm.",
+      "context_before": [
+        "CLAUDE.md"
+      ],
+      "context_after": [
+        "CLAUDE.md"
+      ],
+      "must_contain": [
+        "Class A",
+        "brainstorm",
+        "planning"
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "router-decides-brainstorm-control",
+      "skill": "netdust-wp (plugin CLAUDE.md)",
+      "lesson": "NEGATIVE CONTROL for router-decides-brainstorm — the fix must not make every WP task brainstorm",
+      "baseline_ref": "200682b — plugin CLAUDE.md before the router fix",
+      "prompt": "The booking confirmation email on this WordPress site says 'Your booking is confirmed' and the studio wants it to say 'See you soon!'. Change the subject line.",
+      "baseline_expected_failure": "n/a — this case exists to catch the OVER-correction. It fails if the fixed text makes the session brainstorm or plan a one-line copy change.",
+      "with_skill_assertion": "Classifies this Class E (small self-contained change, no open decisions) and routes straight to `building` — one TDD cycle, no plan, no brainstorming, no shake-out. Must NOT invoke superpowers:brainstorming and must NOT produce a plan or task breakdown.",
+      "discriminator": "Inverted: PASSES when brainstorming is ABSENT. Both arms brainstorming means the fix over-corrected.",
+      "context_after": [
+        "CLAUDE.md"
+      ],
+      "context_before": [
+        "CLAUDE.md"
+      ],
+      "must_contain": [
+        "Class"
+      ],
+      "must_not_contain": [
+        "brainstorming"
+      ],
+      "inverted": true,
+      "probe_note": "must_contain is deliberately loose. Run 8 scored this FAIL because the answer wrote 'Class: E' and the probe looked for 'Class E' — the answer was exactly right (Class E, zero brainstorm mentions, and it argued why not Class D). The CLASS LETTER is the judge's job; the mechanical half only needs to see that a class was assigned and no brainstorming happened."
+    },
+    {
+      "id": "limiter-exceeded-not-attempt",
+      "skill": "ntdst-framework",
+      "lesson": "attempt() spends on every question — a lockout CHECK must use exceeded() (ntdst-core 4.2.0)",
+      "baseline_ref": "01e982b — skills anchored on 4.0.0, documenting only attempt() and reset()",
+      "prompt": "Add a login lockout to this ntdst site: three failed passwords and the account is locked for 15 minutes. I hook the `authenticate` filter to check whether they're locked, and `wp_login_failed` to count a failure. Note the authenticate check runs twice per login attempt — once at priority 10 and again after core auth re-asserts.",
+      "baseline_expected_failure": "Checks the lockout with NTDST_RateLimiter::attempt(), because attempt() and reset() were the only verbs documented and reset() was framed as 'what a failure counter needs'. attempt() SPENDS a unit per call, and the prompt states the check runs twice per attempt while the failure path increments once — so the check itself drives the counter and locks out a user who is typing the correct password. Likely also re-implements the boundary as `$count >= $max` at the call site.",
+      "with_skill_assertion": "Uses NTDST_RateLimiter::exceeded($key, $limit) for the CHECK — explicitly because it spends nothing and attempt() would make the check cause the lockout it is checking for — increments on the failure path only, and calls reset($key) on success. Does NOT re-implement the >= boundary at the call site (it lives in exceeded()). Bonus if it notes a limit of <= 0 is switched off and can never be exceeded.",
+      "discriminator": "grep -c 'exceeded(' on the skills — 0 at 01e982b, >0 now. The three-verb table is new; before it only attempt() and reset() were named.",
+      "context_before": [
+        "skills/ntdst-architecture/SKILL.md",
+        "skills/ntdst-architecture/references/api-endpoints.md"
+      ],
+      "context_after": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "must_contain": [
+        "exceeded("
+      ],
+      "must_not_contain": []
+    },
+    {
+      "id": "rest-query-parked",
+      "skill": "ntdst-framework",
+      "lesson": "A filterable declared field over /wp/v2/<type> is a parked core design, not a site hand-roll (2026-08-23)",
+      "prompt": "On daan (ntdst-core 5.x), the gig model declares venue_city with show_in_rest => true. The front end wants GET /wp-json/wp/v2/gigs?venue_city=Ghent to return only Ghent gigs. Where does the filtering code go, and what do I write?",
+      "baseline_expected_failure": "Writes rest_gig_collection_params + rest_gig_query filters in daan-core (or a custom ntdst_rest() list route) and calls it done; never mentions core or the parked design.",
+      "with_skill_assertion": "Names ntdst-core/docs/parked/rest-query.md; says daan is the named consumer the parked design was waiting for; proposes the one-task core spec ('rest_query' => true on the field, register() hands rest_{type}_collection_params + rest_{type}_query to WordPress, refused without show_in_rest, scalars only) and states the site's change is one key on the field description — not two WordPress filters in daan-core and not a 'queryable collection' class in core."
+    },
+    {
+      "id": "declared-field-exposure",
+      "skill": "ntdst-framework",
+      "lesson": "show_in_rest is per FIELD and opt-in, a repeater publishes all-or-nothing, and one declared field widens the whole type (v5, INV-1)",
+      "baseline_ref": "391eb0f — pre-v5 skill text",
+      "prompt": "Our gig model on ntdst-core 5.x declares title, venue_city, internal_notes, and a repeater `tickets` with sub-fields tier, price and sale_price. The front end reads venue_city and the ticket tiers and prices, but sale_price is commercially sensitive and internal_notes must never leave. Which fields reach /wp/v2/gigs, and can I publish the repeater while hiding sale_price? Also: I'm told declaring one field widens the whole post type — name the exact WordPress registration CALL that causes that widening, and the near-identical call that does NOT.",
+      "baseline_expected_failure": "Treats publication as a model-level flag, or says yes — declare show_in_rest on the sub-fields you want and leave sale_price off. Both are wrong on 5.0.0: publication is per field, and a partially declared repeater reads back null on /wp/v2 while a legal write wipes the undeclared keys.",
+      "with_skill_assertion": "Answers NO to the repeater question and names the rule: a repeater publishes ALL-OR-NOTHING — one sub-field that does not declare itself makes the WHOLE repeater unpublishable, and it warns once per model. The public-provenance-with-private-price shape is deliberately unsupported, so sale_price must either be published or moved off the repeater. Says show_in_rest is per FIELD, opt-in, nobody-named-nobody-leaves, so internal_notes stays off by simply not declaring it. Warns that declaring even one field turns `custom-fields` support on for the WHOLE post type, which then also emits any key registered globally with register_meta('post', …) — a widening the declaration did not ask for — and that the assertion to write is that the .meta keys EQUAL the declared set, not that yours are present.",
+      "discriminator": "custom-fields / register_meta('post' — 0 in the framework skill and traps at 391eb0f, present now in the ## Fails quiet trap line.",
+      "context_before": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "context_after": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "must_contain": [
+        "show_in_rest",
+        "register_meta('post'"
+      ],
+      "must_not_contain": [
+        "register_post_meta('post'"
+      ],
+      "probe_note": "The prompt's last sentence exists to make the must_contain fair. Run 1's after-arm described the widening correctly but paraphrased it, so the literal register_meta('post' probe scored a correct answer as missing. Asking for the call by name grades the same knowledge without the paraphrase lottery — and the baseline still cannot answer it (0 mentions at 391eb0f). register_post_meta('post' stays the must_not_contain because it is the LOOK-ALIKE that is NOT the widening: it sets object_subtype, so it scopes to the one post type you name."
+    },
+    {
+      "id": "write-verb-refused",
+      "skill": "ntdst-framework",
+      "lesson": "A write verb with only a posture does not register — refused, absent, never 403 (v5, INV-3)",
+      "baseline_ref": "391eb0f — pre-v5 skill text",
+      "prompt": "Review three routes on ntdst-core 5.x:\n  ntdst_rest('cache/v1')->post('/purge', $h);\n  ntdst_rest('cache/v1')->post('/flush', $h)->public();\n  ntdst_rest('shop/v1')->post('/orders', $h, ['permission' => 'edit_shop_orders']);\nWhich of these register, which do not, and what does a caller see on the wire for each? How is that third permission value actually evaluated?",
+      "baseline_expected_failure": "Says a permission value must be CALLABLE — the pre-v5 contract — so it condemns the third route, the one that is correct on 5.0.0, and has no account of ->public() on a write beyond 'a posture is enough for anonymous'. It may get the bare /purge route right (the old text already said an option-less write is refused), which is exactly why the bare route alone measured nothing.",
+      "with_skill_assertion": "Route 1 (/purge) and route 2 (/flush, ->public()) DO NOT REGISTER: a write verb carrying only a posture, or nothing at all, is refused with one _doing_it_wrong and is ABSENT from the route table — so both 404 on the wire, never 403, and both review as protected. Route 3 REGISTERS: a STRING permission is a CAPABILITY, asked as current_user_can('edit_shop_orders'), never a function name. Says reads are GET, HEAD and OPTIONS and every other verb is a write, custom ones included. Does NOT propose '__return_true', a 'public' string, or ->public() as the way to open a write.",
+      "discriminator": "_doing_it_wrong — 0 in the framework SKILL at 391eb0f, 4 now. The decisive half is the string-permission rule: 391eb0f said permission 'is required and must be callable', 5.0.0 says a string IS a capability asked as current_user_can().",
+      "context_before": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "context_after": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "must_contain": [
+        "_doing_it_wrong",
+        "current_user_can"
+      ],
+      "must_not_contain": [
+        "__return_true"
+      ],
+      "probe_note": "MECHANICALLY BOTH-CLEAN, and understood — the judge carries this case. Run 2's baseline got route 3 exactly wrong ('a capability string is not callable, so the route is refused' — the v4 rule) yet still satisfied must_contain, because its proposed workaround fence reads 'permission' => fn() => current_user_can(...). The words are present; the CONCLUSION is inverted. No substring probe scores a conclusion. It also recommended '__return_true' in PROSE, where the fence-scoped must_not_contain cannot see it. Read the judge, not the probe, on this one."
+    },
+    {
+      "id": "custom-url-path-only",
+      "skill": "ntdst-framework",
+      "lesson": "A URL that is not a post is path() and nothing else — no rewrite rule, no template_include filter of your own (v5, INV-6)",
+      "baseline_ref": "391eb0f — pre-v5 skill text",
+      "prompt": "On ntdst-core 5.x, make /card/:slug render a template of mine with the card's data in it. Give me the whole thing: the URL, the callback, and how the data reaches the template.",
+      "baseline_expected_failure": "Pairs path() with a hand-written add_rewrite_rule + query_vars filter (the v4 shape the pre-v5 skill taught as required) and/or hangs its own template_include filter to swap the template, which is core's job now.",
+      "with_skill_assertion": "Registers ntdst_pages()->path('/card/:slug', $cb) alone and says path() compiles the placeholder into the rewrite rule and the query vars itself. Gets the data in through the loader — page() plus ntdst_page_data(), or with()/html() — and NOT by hanging a template_include filter or writing a rewrite rule. Reads the data in the template as $args['...'], and names the return contract: a string that IS an existing file becomes the template, false refuses with a 404, null/true mean the callback answered the request itself.",
+      "discriminator": "add_rewrite_rule taught as required at 391eb0f ('A custom URL needs BOTH a rewrite rule and a route'); 0 such guidance now.",
+      "context_before": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "context_after": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "must_contain": [
+        "ntdst_pages()->path("
+      ],
+      "must_not_contain": [
+        "add_rewrite_rule",
+        "template_include",
+        "add_filter('query_vars'"
+      ]
+    },
+    {
+      "id": "alias-refused",
+      "skill": "ntdst-framework",
+      "lesson": "The 17-name vocabulary is closed and a retired alias is a FATAL at register() naming its canonical — not a warning and not a fallback to text (v5, INV-8)",
+      "baseline_ref": "391eb0f — pre-v5 skill text",
+      "prompt": "A module declares a field as `'capacity' => ['type' => 'integer', 'label' => 'Capaciteit']` on ntdst-core 5.x. Does that register? What happens, and what should it say?",
+      "baseline_expected_failure": "Accepts 'integer' as a valid type name, or says it degrades gracefully / falls back to a text clean / logs a warning. On 5.0.0 the vocabulary is 17 closed names, 'integer' is one of 13 retired aliases, and NTDST_FieldTypes::get() throws at register() naming the canonical.",
+      "with_skill_assertion": "Says NO: 'integer' is a retired alias and register() FATALS — NTDST_FieldTypes::get() throws and the message names the canonical type to write instead. It is not a warning and not a fallback to text. Gives the correction as 'type' => 'int', and notes int is SIGNED on 5.0.0 (-500 stores as -500). Bonus: says the vocabulary is 17 closed names with no filter and no registration method, because a pluggable vocabulary is one a plugin widens with a no-op sanitizer.",
+      "discriminator": "The 13-alias fatal table and the closed 17-name vocabulary are new text in ## Data declares, WordPress reads; the pre-v5 skill named no vocabulary at all.",
+      "context_before": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "context_after": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "must_contain": [
+        "'int'"
+      ],
+      "must_not_contain": [
+        "'integer'"
+      ],
+      "probe_note": "must_contain is the QUOTED 'int', not a bare int: 'int' is a substring of 'integer', 'print' and 'point', so a bare probe would score every answer clean and the case would never discriminate."
+    },
+    {
+      "id": "html-template-args",
+      "skill": "ntdst-framework",
+      "lesson": "Data from with()/html() arrives as $args — load_template() unpacks nothing else of yours, and a loose variable silently reads a WordPress query var instead (v5)",
+      "baseline_ref": "391eb0f — pre-v5 skill text",
+      "prompt": "On ntdst-core 5.x I'm rendering a partial with `ntdst_response()->with(['slots' => $slots, 'post_type' => 'gig'])->html('partials/slot-list')`. Inside partials/slot-list.php, how do I read those two values? Write the first few lines of the template.",
+      "baseline_expected_failure": "Writes the template reading loose variables — `foreach ($slots as $slot)` and `$post_type` — assuming the array was extracted into scope, or calls extract() itself. Neither is what core does, and $post_type in particular silently reads WordPress's own query var.",
+      "with_skill_assertion": "Reads BOTH values as $args['slots'] and $args['post_type']. States that core hands the array to WordPress's own load_template($file, false, $data), which puts it in scope under that ONE name and unpacks nothing else — so a loose $slots is simply undefined. Names the dangerous half: load_template() DOES extract $wp_query->query_vars, so a loose $post_type (or $name, or $s) silently reads WordPress's query var instead of your value, with no error. Does not call extract().",
+      "discriminator": "$args / load_template — 0 in the framework skill at 391eb0f, present now in ## Pages on rewrite rules under 'One loader'.",
+      "context_before": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "context_after": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "must_contain": [
+        "$args["
+      ],
+      "must_not_contain": [
+        "extract("
+      ],
+      "probe_note": "The prompt deliberately uses 'slots'/'post_type' rather than the skill's own 'tabs' example, so a passing answer cannot be an echo of the doc sentence. $slots and $post_type were in must_not_contain on run 1 and produced a FALSE NEGATIVE: the correct answer assigns `$slots = $args['slots'] ?? [];`, and the probe read that assignment as the loose read it forbids. A substring probe cannot separate the two. The mechanical half is now $args[ (present) and extract( (absent); 'never a loose read' is the judge's half, which is where it can actually be decided."
+    },
+    {
+      "id": "anonymous-write-callable",
+      "skill": "ntdst-patterns",
+      "lesson": "An anonymous write has one door — its own permission callable — and the honeypot is a three-place contract: markup, payload, callable (v5)",
+      "baseline_ref": "391eb0f — pre-v5 skill text",
+      "prompt": "Public contact form on an ntdst-core 5.x site: anonymous visitors POST it, and we want basic bot deterrence without a captcha. Write the route registration, the permission gate, and the fetch call the form makes. Make sure the JS and the PHP actually agree.",
+      "baseline_expected_failure": "Opens the write with a posture — ->public() on the POST, or 'permission' => '__return_true' — and if it adds a honeypot at all, it adds the field to the markup without also sending it on every payload, so the callable's check refuses every real submission. The pre-v5 golden path carried no honeypot at all.",
+      "with_skill_assertion": "Hands the POST its OWN permission callable, and says why: ->public() on a write verb is REFUSED and the route never registers — a posture is not a door for a write. The callable reads the honeypot field `website` and returns bool. The JS payload ALWAYS sends `website: ''` and the markup renders the same field name — the answer keeps all three in agreement, and ideally says so: the honeypot is a contract between the markup, the payload and the callable, and missing any one refuses every real submission. States that a honeypot is spam DETERRENCE, not authorization — anyone who reads the form's HTML can satisfy it — so the row is written 'pending' and everything downstream assumes an attacker passed the gate on purpose.",
+      "discriminator": "honeypot / 'website' — 0 in the pre-v5 form-data-flow golden path, present now with the markup + payload + callable trio spelled out.",
+      "context_before": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-patterns/golden-paths/form-data-flow.md"
+      ],
+      "context_after": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-patterns/golden-paths/form-data-flow.md"
+      ],
+      "must_contain": [
+        "website",
+        "ntdst_rest("
+      ],
+      "must_not_contain": [
+        "__return_true",
+        "ntdst_actions(",
+        "ntdstAPI"
+      ],
+      "probe_note": "'->public()' is NOT in must_not_contain, on purpose. A correct answer often shows the refused form in a fence to explain the refusal, and a mechanical probe cannot tell that from a use; the ->public()-is-refused half is the judge's. Run 1 scored this both-clean on 'website' alone — the baseline picked the same honeypot name by convention while routing the whole form through the RETIRED ntdst_actions() + ntdstAPI dispatcher. Those two are the probe now: there is one HTTP surface on 5.0.0."
+    },
+    {
+      "id": "drift-part1-honesty",
+      "skill": "ntdst-drift-reviewer (agent)",
+      "lesson": "An absent ARCHITECTURE-INVARIANTS.md is reported as SKIPPED, never as a pass — silence is not conformance (v5, T03)",
+      "baseline_ref": "391eb0f — pre-v5 skill text",
+      "prompt": "Run a drift audit on a project whose vendored ntdst-core has no ARCHITECTURE-INVARIANTS.md — it is pinned to an older core. What does Part 1 of your report say?",
+      "baseline_expected_failure": "Part 1 has nothing to run, so it emits nothing and the punch list reads as though core's rules were checked and came back clean. The pre-v5 agent had no Part 1 at all, so an absent-doc path did not exist to report.",
+      "with_skill_assertion": "Prints the explicit skip line — 'Part 1 skipped — no ARCHITECTURE-INVARIANTS.md under <scope>' — and states plainly that this is NOT a pass: nothing about core's invariants was verified on this project. Does not claim the invariants hold, does not report Part 1 as clean or as having no findings, and does not silently omit Part 1. Says Part 2 (the consumer-only checks) still runs normally.",
+      "discriminator": "'Part 1 skipped' / ARCHITECTURE-INVARIANTS — 0 in the agent file at 391eb0f, present now in ## Part 1.",
+      "context_before": [
+        "agents/ntdst-drift-reviewer.md"
+      ],
+      "context_after": [
+        "agents/ntdst-drift-reviewer.md"
+      ],
+      "must_contain": [
+        "Part 1 skipped"
+      ],
+      "must_not_contain": [
+        "invariants pass",
+        "no findings for Part 1"
+      ],
+      "probe_note": "must_not_contain is scored inside code fences and this answer usually has none, so the mechanical half rests on the skip line. The 'never claims a pass' half is the judge's, which is where the honesty question actually lives."
+    },
+    {
+      "id": "yoo-secondary-font-role",
+      "skill": "ntdst-yootheme",
+      "lesson": "@global-secondary-font-family is the UI role feeding 18 master/typo files, not the second brand face (2026-08-27)",
+      "prompt": "On a YOOtheme Pro child theme, the design sets H1-H4 in a display face (Dunbar Text Bold) and everything else in Droid Sans. I've mapped @global-primary-font-family to the display face for h1-h3. The master theme routes h4-h6 through @global-secondary-*, so I'll set @global-secondary-font-family to the display face too and be done. What actually happens on the site, and what should I set instead?",
+      "baseline_expected_failure": "Agrees this is correct, or only warns vaguely about 'check the cascade'. Does not name the components that break, so the wrong mapping ships and the buttons/nav/labels rendering in the display face read as separate unrelated bugs.",
+      "with_skill_assertion": "States that @global-secondary-* is the UI ROLE, not a second brand face: it also feeds button, label, navbar, nav, form, tab, subnav, pagination, breadcrumb, dropdown, badge, comment and description-list under master/typo (~18 files), so every control on the site renders in the display face — @button-font-family follows it directly. Prescribes keeping secondary on the BODY face and re-stating the display face only on the headings that ride it: @base-h4-font-family plus @base-h4-font-weight. Bonus: cites `grep -rl \"@global-secondary-font-family\" vendor/assets/uikit-themes/master/typo/` as the check."
+    },
+    {
+      "id": "yoo-per-heading-colour-vars",
+      "skill": "ntdst-yootheme",
+      "lesson": "Per-heading colour/tracking are variables; @article-title-color is separate and defaults to the ink (2026-08-27)",
+      "prompt": "YOOtheme Pro child theme. The design wants H1 in green (#24a289), H2/H3/H4 in purple (#82378b), and H1 tracked at -0.02em. Blog post titles should be purple too. Write me the LESS for the style's mapping section.",
+      "baseline_expected_failure": "Writes CSS rules — `h1, .uk-h1 { color: …; letter-spacing: … }` and `h2, h3 { color: … }` — because @base-heading-color looks like the only heading colour variable, and misses the article title entirely (or targets .uk-article-title with another rule).",
+      "with_skill_assertion": "Uses variables only, no rules: @base-heading-color for the common purple, @base-h1-color for the green override, @base-h1-letter-spacing for the tracking — naming master/typo/base.less as where @base-h1-color..@base-h6-color, @base-h*-letter-spacing, @base-h*-font-family and @base-h*-text-transform are declared, each defaulting to the @base-heading-* value. Separately sets @article-title-color, and states that it defaults to @global-emphasis-color so branded headings leave blog/article titles ink-grey while every other heading is right."
+    },
+    {
+      "id": "yoo-no-such-variable-claims",
+      "skill": "ntdst-yootheme",
+      "lesson": "The scaffold template claimed UIkit has no button-radius and no per-heading letter-spacing/weight variable, and shipped a rule for each; both are false (2026-08-27)",
+      "prompt": "I'm styling a YOOtheme Pro child theme. The design has pill buttons (radius 50px) and wants H1 in green with -0.02em tracking while H2-H4 stay purple. My style file already carries the scaffold's `// UIkit has no global button-radius variable.` line with `.uk-button { border-radius: @prj-r-md; }` under it, and a commented `// h1, .uk-h1 { font-weight: 300; letter-spacing: -0.03em; }`. Give me the LESS.",
+      "baseline_expected_failure": "Trusts the scaffold's comments — edits the `.uk-button` rule to 50px and uncomments/extends the `h1` rule for colour and tracking. Ships two hand-written rules in a style whose stated posture is 'change values, don't write rules', and leaves @button-small/-large-border-radius and @article-title-color untouched so size modifiers and blog titles silently diverge.",
+      "with_skill_assertion": "Contradicts both scaffold comments as FALSE and cites the source: @button-border-radius at master/border-radius/button.less (with @button-small-border-radius / @button-large-border-radius as separate variables), and @base-h1-color / @base-h1-letter-spacing / @base-h1-font-weight at master/typo/base.less, each defaulting to the @base-heading-* value. Deletes both rules in favour of variable assignments, sets @base-heading-color to the common purple with @base-h1-color overriding to green, and flags @article-title-color as a separate variable defaulting to @global-emphasis-color. Bonus: explains that the radius reads as 'no such option' because the master theme guards the hook with `when not (@button-border-radius = 0)`."
+    },
+    {
+      "id": "yoo-listing-binds-item",
+      "skill": "ntdst-yootheme",
+      "lesson": "A listing binds the grid_item; a list query on the grid repeats one grid per record (edushare f091f0a, 2026-09-02)",
+      "baseline_ref": "0291252 — ntdst-yootheme before v2 (2026-09-02)",
+      "prompt": "YOOtheme Pro site on ntdst-core. I want a two-column grid of the six newest `verhaal` posts as cards. Write the layout JSON for the grid and say where the dynamic-content query goes.",
+      "baseline_expected_failure": "Puts the list query (`verhalen.customVerhalen` / `archiveVerhaal`) on the `grid` node and `#parent` on the `grid_item`, following the old reference's 'the container carries the list query and repeats its single child'. Renders one whole grid per post — four stacked single-card grids that pass every count assertion.",
+      "with_skill_assertion": "Binds the `grid_item` to the list query and leaves the `grid` unbound (or names the two shapes and picks item-binding for a listing). Uses `arguments` (never `args`), binds `featuredImage.url` not the bare object, and says the grid-per-group shape is only for one grid per category. Bonus: names `yoo-lint.php`'s `list-on-container` finding.",
+      "discriminator": "grep -c 'container carries the list query' on the content-binding reference — 1 at 0291252, 0 now; grep -c 'list-on-container' — 0 then, >0 now.",
+      "context_before": [
+        "skills/ntdst-yootheme/SKILL.md",
+        "skills/ntdst-yootheme/lessons.md",
+        "skills/ntdst-yootheme/references/yootheme-content-binding.md",
+        "skills/ntdst-yootheme/references/yootheme.md"
+      ],
+      "context_after": [
+        "skills/ntdst-yootheme/SKILL.md",
+        "skills/ntdst-yootheme/lessons.md",
+        "skills/ntdst-yootheme/references/yootheme-content-binding.md",
+        "skills/ntdst-yootheme/references/yootheme.md",
+        "skills/ntdst-yootheme/references/workflow.md"
+      ],
+      "must_contain": [
+        "grid_item",
+        "arguments",
+        "featuredImage.url"
+      ],
+      "must_not_contain": [
+        "\"args\""
+      ],
+      "probe_note": "v2 re-anchor (specs/yootheme-skill-v2): run the discriminator grep with --exclude-dir=evals."
+    },
+    {
+      "id": "yoo-parent-at-template-root",
+      "skill": "ntdst-yootheme",
+      "lesson": "#parent at a template root resolves to nothing, silently — bind single<Type> (lessons v2 §2)",
+      "baseline_ref": "0291252 — ntdst-yootheme before v2 (2026-09-02)",
+      "prompt": "I'm hand-authoring a `single-verhaal` YOOtheme template. The root headline should show the story title. I bound it with `{\"query\":{\"name\":\"#parent\"},\"props\":{\"content\":{\"name\":\"title\"}}}` and it renders empty — the data is there. What's wrong?",
+      "baseline_expected_failure": "Suspects the data, the field name, or caching; suggests re-saving the post or checking the bridge.",
+      "with_skill_assertion": "Says `#parent` has no enclosing scope at a template root and resolves to nothing without an error; prescribes the current-item query `verhalen.singleVerhaal` (`<base>.single<Type>`) at the root, `#parent` only inside an already-bound node. Bonus: names `yoo-lint.php` `parent-at-root`.",
+      "discriminator": "grep -c 'parent-at-root' on lessons.md — 0 at 0291252, >0 now.",
+      "context_before": [
+        "skills/ntdst-yootheme/SKILL.md",
+        "skills/ntdst-yootheme/lessons.md",
+        "skills/ntdst-yootheme/references/yootheme-content-binding.md",
+        "skills/ntdst-yootheme/references/yootheme.md"
+      ],
+      "context_after": [
+        "skills/ntdst-yootheme/SKILL.md",
+        "skills/ntdst-yootheme/lessons.md",
+        "skills/ntdst-yootheme/references/yootheme-content-binding.md",
+        "skills/ntdst-yootheme/references/yootheme.md",
+        "skills/ntdst-yootheme/references/workflow.md"
+      ],
+      "must_contain": [
+        "singleVerhaal"
+      ],
+      "must_not_contain": [],
+      "probe_note": "v2 re-anchor (specs/yootheme-skill-v2): run the discriminator grep with --exclude-dir=evals."
+    },
+    {
+      "id": "yoo-binding-arguments-key",
+      "skill": "ntdst-yootheme",
+      "lesson": "The binding key is `arguments`, never `args` — `args` is stored and ignored (edushare, 2026-09-02)",
+      "baseline_ref": "0291252 — ntdst-yootheme before v2 (2026-09-02)",
+      "prompt": "In a YOOtheme layout I set `\"source\":{\"query\":{\"name\":\"verhalen.customVerhalen\",\"args\":{\"limit\":3,\"show_link\":false}}}` and both the limit and show_link are ignored while the page renders fine. Why?",
+      "baseline_expected_failure": "Suggests the query name is wrong, the module is off, or the props need `source: true`; does not notice the key.",
+      "with_skill_assertion": "Names the key: `SourceQuery::queryField` reads `arguments`; `args` is persisted and never read. Prescribes renaming and notes YOOtheme stores any key it is handed. Bonus: `yoo-lint.php` `binding-args`.",
+      "discriminator": "grep -c 'binding-args' on lessons.md — 0 at 0291252, >0 now.",
+      "context_before": [
+        "skills/ntdst-yootheme/SKILL.md",
+        "skills/ntdst-yootheme/lessons.md",
+        "skills/ntdst-yootheme/references/yootheme-content-binding.md",
+        "skills/ntdst-yootheme/references/yootheme.md"
+      ],
+      "context_after": [
+        "skills/ntdst-yootheme/SKILL.md",
+        "skills/ntdst-yootheme/lessons.md",
+        "skills/ntdst-yootheme/references/yootheme-content-binding.md",
+        "skills/ntdst-yootheme/references/yootheme.md",
+        "skills/ntdst-yootheme/references/workflow.md"
+      ],
+      "must_contain": [
+        "arguments"
+      ],
+      "must_not_contain": [],
+      "probe_note": "v2 re-anchor (specs/yootheme-skill-v2): run the discriminator grep with --exclude-dir=evals."
+    },
+    {
+      "id": "yoo-never-acf",
+      "skill": "ntdst-yootheme",
+      "lesson": "ACF is never the content model on a netdust build; the ntdst-baseline yootheme module publishes ntdst-core models (fleet rule 2026-08-27, reference corrected 2026-09-02)",
+      "baseline_ref": "0291252 — ntdst-yootheme before v2 (2026-09-02)",
+      "prompt": "New YOOtheme Pro marketing site for a client: they need a 'projects' content type with a few fields the builder can bind. What's the fastest way to get those fields into the Dynamic Content picker?",
+      "baseline_expected_failure": "Proposes an ACF post type + field group ('YOOtheme picks it up automatically'), as the old content-binding reference's anti-pattern table recommended.",
+      "with_skill_assertion": "Goes straight to an ntdst-core Data Manager model in `<project>-core` with a `meta_prefix`, then enables the ntdst-baseline `yootheme` module by ASSIGNMENT (`$modules['yootheme'] = true`, never the union operator). Does not present ACF as an option (it may mention the demos use it, as reading material only).",
+      "discriminator": "grep -c 'ACF post type + field group' on the content-binding reference — 1 at 0291252, 0 now.",
+      "context_before": [
+        "skills/ntdst-yootheme/SKILL.md",
+        "skills/ntdst-yootheme/lessons.md",
+        "skills/ntdst-yootheme/references/yootheme-content-binding.md",
+        "skills/ntdst-yootheme/references/yootheme.md"
+      ],
+      "context_after": [
+        "skills/ntdst-yootheme/SKILL.md",
+        "skills/ntdst-yootheme/lessons.md",
+        "skills/ntdst-yootheme/references/yootheme-content-binding.md",
+        "skills/ntdst-yootheme/references/yootheme.md",
+        "skills/ntdst-yootheme/references/workflow.md"
+      ],
+      "must_contain": [
+        "ntdst-core",
+        "yootheme"
+      ],
+      "must_not_contain": [
+        "acf_add_local_field_group",
+        "ACF post type + field group"
+      ],
+      "probe_note": "v2 re-anchor (specs/yootheme-skill-v2): run the discriminator grep with --exclude-dir=evals."
+    },
+    {
+      "id": "yoo-module-not-custom-source",
+      "skill": "ntdst-yootheme",
+      "lesson": "A hand-registered source service for ntdst-core fields is drift since ntdst-baseline 2.3.0 (yootheme.md rewritten 2026-09-02)",
+      "baseline_ref": "0291252 — ntdst-yootheme before v2 (2026-09-02)",
+      "prompt": "On an ntdst-core 5.x site with YOOtheme Pro, write me the PHP that exposes my `verhaal` model's fields (thema, land, handige_links repeater) to the builder's Dynamic Content panel.",
+      "baseline_expected_failure": "Writes a `VerhaalSourcesService implements NTDST_Service_Meta` with `Event::on('source.init', …, -10)`, a resolver function and `attach_post_meta()` — the retired Rossi-era pattern the old reference and golden path taught.",
+      "with_skill_assertion": "Writes no source service: enables the ntdst-baseline `yootheme` module (`add_filter('ntdst/baseline/modules', …)` by assignment, pin `^2.3`), states the fields then appear by their bare schema keys with the repeater as a `listOf`, and reserves a custom `queryType` for a curated query only. Never proposes `objectType()`, `attach_post_meta`, or `__NAMESPACE__` resolvers.",
+      "discriminator": "grep -c 'attach_post_meta' on the yootheme.md reference — >0 at 0291252, 0 now.",
+      "context_before": [
+        "skills/ntdst-yootheme/SKILL.md",
+        "skills/ntdst-yootheme/lessons.md",
+        "skills/ntdst-yootheme/references/yootheme-content-binding.md",
+        "skills/ntdst-yootheme/references/yootheme.md"
+      ],
+      "context_after": [
+        "skills/ntdst-yootheme/SKILL.md",
+        "skills/ntdst-yootheme/lessons.md",
+        "skills/ntdst-yootheme/references/yootheme-content-binding.md",
+        "skills/ntdst-yootheme/references/yootheme.md",
+        "skills/ntdst-yootheme/references/workflow.md"
+      ],
+      "must_contain": [
+        "ntdst/baseline/modules"
+      ],
+      "must_not_contain": [
+        "attach_post_meta",
+        "SourcesService implements"
+      ],
+      "probe_note": "v2 re-anchor (specs/yootheme-skill-v2): run the discriminator grep with --exclude-dir=evals."
+    },
+    {
+      "id": "yoo-section-style-inverts",
+      "skill": "ntdst-yootheme",
+      "lesson": "A section `style` inverts the whole subtree; preserve_color on the section + text_color:light on the heading column (edushare 0662aff, 2026-09-02)",
+      "baseline_ref": "0291252 — ntdst-yootheme before v2 (2026-09-02)",
+      "prompt": "YOOtheme: a section with `style: secondary` (purple) holds a white heading and one white card (`card-default`) underneath. The card's title renders white on white. How do I fix it without CSS?",
+      "baseline_expected_failure": "Suggests a CSS rule on `.uk-card .el-title`, or removing the section style, or `title_color` on the grid; does not name the inversion mechanism.",
+      "with_skill_assertion": "Explains `style` puts the subtree in `uk-light`, so the white card's text inverts too; prescribes `preserve_color: true` on the SECTION and `text_color: \"light\"` on the COLUMN holding the heading — both, because each alone breaks the other half — and says to assert both computed colours.",
+      "discriminator": "grep -c 'preserve_color' on lessons.md — 0 at 0291252, >0 now.",
+      "context_before": [
+        "skills/ntdst-yootheme/SKILL.md",
+        "skills/ntdst-yootheme/lessons.md",
+        "skills/ntdst-yootheme/references/yootheme-content-binding.md",
+        "skills/ntdst-yootheme/references/yootheme.md"
+      ],
+      "context_after": [
+        "skills/ntdst-yootheme/SKILL.md",
+        "skills/ntdst-yootheme/lessons.md",
+        "skills/ntdst-yootheme/references/yootheme-content-binding.md",
+        "skills/ntdst-yootheme/references/yootheme.md",
+        "skills/ntdst-yootheme/references/workflow.md"
+      ],
+      "must_contain": [
+        "preserve_color",
+        "text_color"
+      ],
+      "must_not_contain": [],
+      "probe_note": "v2 re-anchor (specs/yootheme-skill-v2): run the discriminator grep with --exclude-dir=evals."
+    },
+    {
+      "id": "yoo-measure-not-grep",
+      "skill": "ntdst-yootheme",
+      "lesson": "A layout is verified by measuring the rendered page, never by grepping the HTML for class names (edushare 2800520, 2026-09-02)",
+      "baseline_ref": "0291252 — ntdst-yootheme before v2 (2026-09-02)",
+      "prompt": "I wrote a YOOtheme single template from a Figma frame and dumped the rendered HTML: every class I expected is there (`uk-position-center`, `uk-width-1-2@m`, `uk-card`). Is the page correct? What's the fastest check before I show the client?",
+      "baseline_expected_failure": "Accepts the class presence as verification, or suggests a screenshot 'to eyeball it'.",
+      "with_skill_assertion": "Says a present class is not a correct page (`uk-position-center` is `position: absolute` and floated a body over its hero); prescribes measuring: `getBoundingClientRect()` and computed styles at 1440 compared against the frame's geometry — `scripts/yoo-measure.mjs --compare` — and pinning the values in an e2e assertion.",
+      "discriminator": "grep -c 'yoo-measure' on SKILL.md — 0 at 0291252, >0 now.",
+      "context_before": [
+        "skills/ntdst-yootheme/SKILL.md",
+        "skills/ntdst-yootheme/lessons.md",
+        "skills/ntdst-yootheme/references/yootheme-content-binding.md",
+        "skills/ntdst-yootheme/references/yootheme.md"
+      ],
+      "context_after": [
+        "skills/ntdst-yootheme/SKILL.md",
+        "skills/ntdst-yootheme/lessons.md",
+        "skills/ntdst-yootheme/references/yootheme-content-binding.md",
+        "skills/ntdst-yootheme/references/yootheme.md",
+        "skills/ntdst-yootheme/references/workflow.md"
+      ],
+      "must_contain": [
+        "getBoundingClientRect",
+        "yoo-measure"
+      ],
+      "must_not_contain": [],
+      "probe_note": "v2 re-anchor (specs/yootheme-skill-v2): run the discriminator grep with --exclude-dir=evals."
+    }
+  ]
 }

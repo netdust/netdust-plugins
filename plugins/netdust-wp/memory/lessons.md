@@ -43,3 +43,10 @@ for stages that the skill no longer has.
 **Check when editing any stack plugin's CLAUDE.md:** does a sentence decide something
 the router decides (whether to plan, whether to brainstorm, which class this is)? If so
 it belongs in `netdust-agent`, or nowhere.
+
+- **2026-09-02 — ntdst-yootheme v2** (`specs/yootheme-skill-v2/`): the skill taught a
+  retired source pattern in four places and recommended ACF in the binding reference;
+  twenty verified traps sat only in josworld/edushare memory; the build loop was never
+  written down. Now: the baseline module, `yoo-lint.php` (run before every write),
+  `yoo-measure.mjs`, `workflow.md`, lessons by task. Gates: `evals/yootheme-anchor.sh`,
+  `yootheme-budget.sh`, `yootheme-cases.sh`, `tests/yootheme/run.sh`.
