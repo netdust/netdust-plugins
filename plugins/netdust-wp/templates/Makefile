@@ -247,6 +247,7 @@ promote: ## Send ONE feature to staging, leaving the rest of develop behind
 	@$(MAKE) --no-print-directory _ensure-clean-git
 	@BR="feature/$(name)"; \
 	git rev-parse --verify --quiet "$$BR" >/dev/null || git branch "$$BR" "origin/$$BR"; \
+	$(MAKE) --no-print-directory _need-tty verb=promote; \
 	echo "$(YELLOW)$$BR → $(BR_REVIEW) ($(BR_INTEG) is not merged)$(RESET)"; \
 	git --no-pager log --oneline $(BR_REVIEW).."$$BR" | head -20; \
 	read -p "Continue? Type 'yes': " reply; \
@@ -260,6 +261,7 @@ release: ## Promote the review branch to the production branch (then: make ship)
 	@if [ "$(HAS_PROD)" != "yes" ]; then \
 		echo "$(RED)✗ No production environment in site.yml yet$(RESET)"; exit 1; fi
 	@$(MAKE) --no-print-directory _ensure-flow
+	@$(MAKE) --no-print-directory _need-tty verb=release
 	@$(MAKE) --no-print-directory _ensure-clean-git
 	@git fetch --quiet origin
 	@git checkout $(BR_REVIEW) && git pull --quiet --ff-only
@@ -519,6 +521,7 @@ rollback: ## Redeploy the previously deployed commit (make rollback env=producti
 	PREV=$$(ssh -qn "$$HOST" "tail -2 $$DIR/$$ENV.log 2>/dev/null | head -1" | awk '{print $$2}'); \
 	if [ -z "$$PREV" ]; then \
 		echo "$(RED)✗ No previous deploy recorded for $$ENV$(RESET)"; exit 1; fi; \
+	$(MAKE) --no-print-directory _need-tty verb="rollback env=$$ENV"; \
 	echo "$(YELLOW)Rolling $$ENV back to $$PREV$(RESET)"; \
 	git --no-pager log --oneline -1 "$$PREV" || { \
 		echo "$(RED)✗ Commit $$PREV is not in this repository$(RESET)"; exit 1; }; \
@@ -741,6 +744,7 @@ _deploy-opcache:
 _deploy-confirm:
 	@ENV="$(env)"; \
 	if [ "$$($(SITE) environments.$$ENV.confirm)" != "true" ]; then exit 0; fi; \
+	$(MAKE) --no-print-directory _need-tty verb="deploy env=$$ENV"; \
 	echo "$(RED)╔════════════════════════════════════════╗$(RESET)"; \
 	echo "$(RED)║   DEPLOY TO $$ENV$(RESET)"; \
 	echo "$(RED)║   $$($(SITE) environments.$$ENV.role)$(RESET)"; \
@@ -811,7 +815,7 @@ _deploy-gate:
 		echo "$(YELLOW)  git remote add origin <url> && git push -u origin $$WANT$(RESET)"; \
 		exit 1; \
 	fi; \
-	git fetch --quiet origin "$$WANT" 2>/dev/null || true; \
+	git fetch --quiet origin "$$WANT" 2>/dev/null || { echo "$(RED)✗ origin is unreachable — the gate cannot verify that HEAD is pushed$(RESET)"; exit 1; }; \
 	if ! git merge-base --is-ancestor HEAD "origin/$$WANT" 2>/dev/null; then \
 		echo "$(RED)✗ HEAD is not on origin/$$WANT — push before deploying$(RESET)"; \
 		exit 1; \
@@ -865,6 +869,15 @@ _branch-role:
 	done; \
 	echo other
 
+# A confirming verb reads its `yes` from a HUMAN. Piped or redirected stdin is not a
+# terminal, so it is refused — `echo yes | make ship` and `make ship < answers` both
+# stop here (security review 2026-09-02, C1).
+_need-tty:
+	@if [ ! -t 0 ]; then \
+		echo "$(RED)✗ make $(verb) needs a terminal — its confirmation is typed by a human, never piped or redirected$(RESET)"; \
+		exit 1; \
+	fi
+
 # The flow needs a remote and its rungs on it (FR-22). Refuse by name — a half-run verb
 # dying on a git error is exactly what taught agents to fall back to raw git.
 _ensure-flow:
@@ -874,11 +887,18 @@ _ensure-flow:
 		echo "$(YELLOW)  git push -u origin $(BR_INTEG)      (and $(BR_REVIEW) / $(BR_PROD) once they exist)$(RESET)"; \
 		exit 1; \
 	fi; \
-	git fetch --quiet origin 2>/dev/null || { echo "$(RED)✗ origin is unreachable — check the URL or your network before running the flow$(RESET)"; exit 1; }; \
+	git fetch --quiet --prune origin 2>/dev/null || { echo "$(RED)✗ origin is unreachable — check the URL or your network before running the flow$(RESET)"; exit 1; }; \
 	for b in $(BR_INTEG) $(BR_REVIEW) $(BR_PROD); do \
 		git rev-parse --verify --quiet "origin/$$b" >/dev/null || { \
 			echo "$(RED)✗ origin has no '$$b' branch — the flow promotes through it$(RESET)"; \
 			echo "$(YELLOW)  git checkout -b $$b <base> && git push -u origin $$b$(RESET)"; exit 1; }; \
+		if git rev-parse --verify --quiet "$$b" >/dev/null; then \
+			N=$$(git rev-list --count "origin/$$b..$$b" 2>/dev/null || echo 0); \
+			if [ "$$N" != "0" ]; then \
+				echo "$(RED)✗ local '$$b' carries $$N commit(s) that are not on origin — a rung is written only by the flow, and finish would push them$(RESET)"; \
+				echo "$(YELLOW)  from another branch: git branch -f $$b origin/$$b   (rescue the commits onto a feature branch first if they matter)$(RESET)"; exit 1; \
+			fi; \
+		fi; \
 	done
 
 _ensure-clean-git:

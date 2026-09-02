@@ -1549,6 +1549,7 @@ def parse_behaviour_clusters(tasks_text: str) -> list[dict]:
                    "lane": lane[0] if lane else None,
                    "lane_reason": lane[1] if lane else "",
                    "lane_raw": lane[2] if lane else None,
+                   "lane_conflict": None,   # (heading value, body value) when both are stated
                    "members": []}
             i += 1
             continue
@@ -1575,8 +1576,13 @@ def parse_behaviour_clusters(tasks_text: str) -> list[dict]:
             continue
         if cur is not None and not cur["members"]:
             lm = LANE_LINE.match(ln)
-            if lm and cur["lane_raw"] is None:
-                cur["lane"], cur["lane_reason"], cur["lane_raw"] = _parse_lane_value(lm.group(1))
+            if lm:
+                if cur["lane_raw"] is None:
+                    cur["lane"], cur["lane_reason"], cur["lane_raw"] = _parse_lane_value(lm.group(1))
+                else:
+                    body = _parse_lane_value(lm.group(1))[0]
+                    if body != cur["lane"]:
+                        cur["lane_conflict"] = (cur["lane"], body)
                 i += 1
                 continue
             for key, rx in BEHAVIOUR_BLOCK_LINES.items():
@@ -1824,6 +1830,12 @@ def check_cluster_lanes(tasks_text: str, plan_text: str | None, f: Findings,
               + ", ".join(invalid[:5]))
     if bare or invalid:
         return
+    conflicts = [f"{c['name']} (heading `{c['lane_conflict'][0]}`, body `{c['lane_conflict'][1]}`)"
+                 for c in declared if c["lane_conflict"]]
+    if conflicts:
+        f.add("warn", "cluster-lane",
+              "heading label and `Lane:` line disagree — the heading wins; delete one: "
+              + ", ".join(conflicts[:4]))
 
     # block validity uses the SAME two rungs as check_behaviour_clusters (a member's
     # files, or a test-shaped file on disk under the repo root) — the two checks must

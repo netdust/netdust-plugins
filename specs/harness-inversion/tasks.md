@@ -146,3 +146,15 @@ Lane: contract
 ── REVIEW GATE ── (tier: FULL — `security-sentinel` on the guard diff; the floor is the harness's own enforcement boundary.)
 
 ── BRANCH REVIEW ── (tier: LIGHT — the behaviour-lane cluster's only panel; contract clusters carried their own gates)
+
+## Branch review — 2026-09-02 (one generalist at LIGHT, one security pass on Cluster E)
+
+Findings closed in the same round, each on its named check:
+
+- **Critical (generalist):** the sensitive-path floor in `subagent-stop.py` fired only on `Test-author: solo`, which a behaviour-lane member never carries — three texts and plan G5 overclaimed it. Fixed: the mode resolver reads the cluster lane; `test_sensitive_path_gate.py` +4 (the first RED before the fix). G5 corrected in the plan.
+- **Critical (security C1):** any stdin redirect into `make ship|release|promote|deploy` was a typed yes. Fixed in the Makefile (`_need-tty`: a confirming verb refuses a non-terminal stdin; `flow-test.sh` +3) and the guard (any pipe into make, any `<`, pty/shell wrappers; `test_pretooluse_guard.py` +5).
+- **Important I1/I2 (security):** `git -C`, `-c`, `command`, `env`, subshell, `\git`, quoted verbs; `am`, `revert`, `reset` that moves the pointer, `branch -f`/`update-ref` naming a rung, fetch refspec into a rung, `stash pop`. Fixed; `test_pretooluse_guard.py` +13.
+- **Important I3 (security):** `finish` laundered a locally diverged rung. Fixed: `_ensure-flow` refuses a rung with local-only commits and fetches with `--prune`; `flow-test.sh` +2.
+- **Important I4 (security):** false positives — `feature/main` pushes (a pre-existing denylist bug, fixed at its home), a sync-then-commit on a feature, `deploy-test`. Fixed; +4 allow cases.
+- **Suggestion (generalist):** heading-label vs `Lane:` line disagreement now WARNs (heading wins); `test_spec_gate_check.py` +1. Latency: rungs are read from `site.yml` by regex first (no subprocess); `scripts/site` only as fallback.
+- **Not taken:** the deny text can name the wrong branch when a command commits on a feature and then switches to a rung (cosmetic); a local-path `origin` satisfies `_ensure-flow` by design (the flow test relies on it).

@@ -123,10 +123,14 @@ SC-6 grep at the Cluster C/D gates).
   what a boundary is.
 - **G4 — review markers:** `check_review_gates` / `check_review_tiers` (`:715–756`) read
   `parse_clusters()`; FR-5 filters that list by lane and adds one file-level marker check.
-- **G5 — the hook needs nothing:** `subagent-stop.py` docstring lines 10–60 + the FR-8
-  transition tests confirm mid-cluster tolerance of exactly the ledger-named RED and the
-  sensitive-path floor on solo closes. A behaviour-lane dispatch declares itself
-  `role=implementer`; the floor applies as-is.
+- **G5 — the hook needs ONE change (corrected at the branch review, 2026-09-02):**
+  `subagent-stop.py` tolerates the ledger-named RED mid-cluster as claimed, but its
+  sensitive-path floor fired only when `resolve_task_mode` read `solo` from the task's
+  `Test-author:` line — which a behaviour-lane member never carries (FR-2). The original
+  G5 ("the floor applies as-is") was wrong and three texts repeated it. Fixed: the
+  resolver reads the cluster lane (heading label or `Lane:` line) and treats a
+  behaviour-lane member with no `Test-author:` as a solo-class close; four cases in
+  `test_sensitive_path_gate.py` pin it, the first of which was RED before the fix.
 - **G6 — model contract:** see Technical context; dispatch parameter wins, hook visibility
   undocumented. Consequence taken: no PreToolUse ladder check in this spec.
 - **G7 — herdr decisions already written:** `netdust-core/skills/herdr-orchestration/SKILL.md`

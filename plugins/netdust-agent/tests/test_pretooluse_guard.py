@@ -297,6 +297,34 @@ def run() -> list[tuple[bool, str]]:
                    "passthrough", site_yml=False, reader=False),
         _flow_case("(h) scripts/site missing -> rungs read from site.yml", "staging",
                    "git commit -m 'x'", "deny", reader=False),
+        # security review 2026-09-02 — I1: prefixes and git global options
+        _flow_case("(a2) git -C . commit on a rung", "development", "git -C . commit -m x", "deny"),
+        _flow_case("(a3) git -c k=v commit", "development", "git -c user.name=x commit -m x", "deny"),
+        _flow_case("(a4) command git commit", "staging", "command git commit -m x", "deny"),
+        _flow_case("(a5) (git commit) in a subshell", "main", "(git commit -m x)", "deny"),
+        _flow_case("(a6) env-prefixed commit", "main", "GIT_AUTHOR_NAME=x git commit -m x", "deny"),
+        _flow_case("(a7) escaped \\git commit", "development", "\\git commit -m x", "deny"),
+        # I2: more rung writes
+        _flow_case("(a8) git am on a rung", "development", "git am fix.patch", "deny"),
+        _flow_case("(a9) git revert on a rung", "main", "git revert HEAD", "deny"),
+        _flow_case("(a10) git reset --hard on a rung", "staging", "git reset --hard HEAD~1", "deny"),
+        _flow_case("(a11) git reset <path> (unstage) is allowed", "staging", "git reset README", "passthrough"),
+        _flow_case("(a12) git branch -f moves a rung", "feature/x", "git branch -f development HEAD", "deny"),
+        _flow_case("(a13) fetch refspec into a rung", "feature/x", "git fetch origin feature/y:development", "deny"),
+        _flow_case("(a14) stash pop on a rung", "development", "git stash pop", "deny"),
+        # C1: stdin forgery beyond echo|yes
+        _flow_case("(e4) make ship < file", "main", "make ship < answers.txt", "deny"),
+        _flow_case("(e5) cat file | make ship", "main", "cat a | make ship", "deny"),
+        _flow_case("(e6) sh -c 'yes | make ship'", "main", "sh -c 'yes | make ship'", "deny"),
+        _flow_case("(e7) expect wrapping make ship", "main", "expect -c 'spawn make ship; send yes'", "deny"),
+        _flow_case("(e8) make -C . release <<< yes", "staging", "make -C . release <<< yes", "deny"),
+        # I4: false positives that would teach routing around
+        _flow_case("(f5) push of feature/main is not a rung push", "feature/main", "git push -u origin feature/main", "passthrough"),
+        _flow_case("(f6) push HEAD:feature/main", "feature/main", "git push origin HEAD:feature/main", "passthrough"),
+        _flow_case("(f7) sync a rung then commit on a feature", "feature/x",
+                   "git checkout development && git pull && git checkout feature/x && git commit -m x", "passthrough"),
+        _flow_case("(f8) yes | make deploy-test is not a confirming verb", "main", "yes | make deploy-test env=staging", "passthrough"),
+        _flow_case("(f9) make deploy env=staging 2>&1 | tee log (pipe OUT of make)", "staging", "make deploy env=staging 2>&1 | tee deploy.log", "passthrough"),
     ]
     # (i) unreadable cwd -> fail open
     payload = json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Bash",

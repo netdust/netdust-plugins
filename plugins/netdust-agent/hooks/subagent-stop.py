@@ -524,6 +524,16 @@ def matches_sensitive(file_path: str, globs: list[str]) -> bool:
 _TASKS_TASK_LINE_RE = re.compile(r"^- \[( |x|X)\] T\d+\b")
 _TASKS_TEST_AUTHOR_RE = re.compile(
     r"^\s+Test-author:\s*(split|solo)\b\s*(?:[—-]\s*(.*))?$")
+# harness-inversion FR-2/FR-7: a `Lane: behaviour` cluster's members carry NO
+# Test-author line by design. The floor must still see them — a behaviour-mode
+# close is a solo-class close (one agent, self-verified), so the sensitive-path
+# floor applies to it exactly as to `solo`. Read from the cluster heading label
+# (`· lane: behaviour`) or a `Lane:` line before the cluster's first task —
+# the same two placements gate-check.py reads.
+_TASKS_CLUSTER_RE = re.compile(r"^###\s+Cluster\b(.*)$", re.IGNORECASE)
+_TASKS_LANE_LINE_RE = re.compile(
+    r"^\s*(?:[-*]\s+)?(?:\*\*)?Lane(?:\*\*)?:\s*(behaviou?r|contract)\b", re.IGNORECASE)
+_TASKS_LANE_LABEL_RE = re.compile(r"\blane:\s*(behaviou?r|contract)\b", re.IGNORECASE)
 # D1's stakes clause: a solo whose reason cites the cluster's demoted dial
 # (`solo — standard stakes, …`) is the plan-sanctioned mode on a boundary task,
 # not a self-downgrade. The citation lives in tasks.md — a machine artifact the
@@ -591,21 +601,40 @@ def resolve_task_mode(cwd: str, edited_paths: list[str]) -> str | None:
         unchecked: list[dict] = []
         cur: dict | None = None
         in_fence = False
+        lane = None          # the enclosing cluster's lane, once known
+        seen_task = False    # a Lane: line counts only before the cluster's first task
         for ln in tasks_path.read_text().splitlines():
             if ln.lstrip().startswith("```"):
                 in_fence = not in_fence
                 continue
             if in_fence:
                 continue
+            cm = _TASKS_CLUSTER_RE.match(ln)
+            if cm:
+                lm = _TASKS_LANE_LABEL_RE.search(cm.group(1))
+                lane = lm.group(1).lower() if lm else None
+                seen_task = False
+                cur = None
+                continue
+            if ln.startswith("#"):
+                lane, seen_task, cur = None, False, None   # a phase boundary ends the cluster
+                continue
+            if not seen_task and lane is None:
+                lm = _TASKS_LANE_LINE_RE.match(ln)
+                if lm:
+                    lane = lm.group(1).lower()
+                    continue
             tm = _TASKS_TASK_LINE_RE.match(ln)
             if tm:
+                seen_task = True
                 cur = None
                 if tm.group(1) == " ":
                     fm = _TASKS_FILES_RE.search(ln)
                     files = {_basename(tok) for tok in
                              (fm.group(1).split(",") if fm else [])
                              if tok.strip()}
-                    cur = {"files": files, "mode": None}
+                    cur = {"files": files,
+                           "mode": "behaviour" if lane and lane.startswith("behavio") else None}
                     unchecked.append(cur)
                 continue
             if cur is not None and cur["mode"] is None:
@@ -976,7 +1005,7 @@ def main() -> None:
         candidates = [p for p in activity["code_paths"]
                       if p and not _is_test_path(p)
                       and matches_sensitive(p, globs)]
-        if candidates and resolve_task_mode(cwd, activity["edited_paths"]) == "solo":
+        if candidates and resolve_task_mode(cwd, activity["edited_paths"]) in ("solo", "behaviour"):
             sensitive_hits = candidates
             missing.append("sensitive")
             details["sensitive_paths"] = sensitive_hits

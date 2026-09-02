@@ -2884,6 +2884,13 @@ def run():
     results.append((rc == 0 and "✓ [review-gate-marker]" in out,
                     "lane: a prose mention of the branch marker inside a task is not counted as one"))
 
+    # (iii) heading label and Lane: line disagree → WARN, the heading wins (review S-1)
+    tasks_conflict = TASKS_LANE_IN_LABEL.replace(
+        "(4 tasks · lane: behaviour)\n\n", "(4 tasks · lane: contract)\n\nLane: behaviour\n")
+    rc, out = _run({"tasks.md": tasks_conflict})
+    results.append(("! [cluster-lane]" in out and "disagree" in out and "heading wins" in out,
+                    "lane: heading `lane: contract` beside a `Lane: behaviour` line → WARN naming both, heading wins"))
+
     return results
 
 

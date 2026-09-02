@@ -117,8 +117,9 @@ nothing changes.
 - **FR-7:** The `implementer` agent gains a `behaviour` dispatch mode beside `split`/`solo`:
   no self-authored RED, keeps the suite green, closes with the STATUS block and the
   evidence line; it escalates `NEEDS_CONTEXT` when the task edits a path the sensitive-glob
-  floor names (`hooks/subagent-stop.py` already blocks such a close — the agent says why
-  before the hook does). Source: invented — approved 2026-09-02.
+  floor names (`hooks/subagent-stop.py` blocks such a close — after T11's branch review
+  taught its mode resolver the lane, see plan G5 — the agent says why before the hook
+  does). Source: invented — approved 2026-09-02.
 - **FR-8:** Stage 3 runs the shake-out only when the plan's `## Acceptance flows` is not
   N/A, and the branch review at `LIGHT` (one `reviewer`) for a branch whose clusters are
   all behaviour-lane under `standard` or `low` stakes; contract-lane clusters keep their

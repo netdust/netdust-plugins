@@ -90,6 +90,20 @@ git push -q origin development
 assert_ok "deploy gate passes clean + right branch + pushed" M _deploy-gate env=development
 
 echo
+echo "flow — a confirming verb needs a terminal (C1)"
+assert_refuses "echo yes | make release is refused" "needs a terminal" bash -c 'echo yes | make --no-print-directory release'
+assert_refuses "make release < file is refused" "needs a terminal" bash -c 'echo yes > /tmp/flow-yes.$$; make --no-print-directory release < /tmp/flow-yes.$$; rc=$?; rm -f /tmp/flow-yes.$$; exit $rc'
+assert_eq "…and main did not move" "$(git rev-parse origin/main)" "$(git rev-parse main)"
+
+echo
+echo "flow — a rung with local-only commits refuses the flow (I3)"
+git checkout -q development && echo stray > stray.txt && git add stray.txt && git commit -q -m "stray on a rung"
+assert_refuses "make feature refuses while development carries an unpushed commit" "not on origin" M feature name=three
+git checkout -q main && git branch -f development origin/development && git checkout -q development
+assert_ok "…after resetting the rung to origin the flow runs again" M feature name=three
+git checkout -q development && git branch -D feature/three >/dev/null 2>&1
+
+echo
 echo "flow — doctor/status say where you are"
 assert_eq "flow state names the role" "1" "$(M _flow-state | grep -c 'rung:development')"
 assert_eq "flow state names the next verb" "1" "$(M _flow-state | grep -c 'make feature name=')"
