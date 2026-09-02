@@ -141,6 +141,54 @@ element stops one container-padding short of the viewport edge.
 
 ---
 
+### 1.12 An invented prop name is not an error — it is a missing class
+
+YOOtheme stores whatever you write. A prop the element does not declare is
+persisted into the layout JSON, emits nothing, and the element falls back to a
+default that looks like a styling bug. Three of these in ONE hand-authored
+section (edushare Verhaal detail, 2026-09-02):
+
+| written | what it actually is |
+|---|---|
+| column `position: "center"` | **absolute positioning** — emits `uk-position-center` (`position:absolute; top:50%; left:50%`). The body section floated on top of the hero. The prop that centres a column is the ROW's `alignment`. |
+| row `width` / `flex_align`, column `width_default` | not props at all. The row falls back to `uk-child-width-1-1`, so two auto-width items stretched to full width and a `uk-label` chip became a page-wide bar. |
+| image `border: "rounded"` | the image element's own prop is **`image_border`**; the shared `border` belongs to columns. |
+
+The whole vocabulary is small and readable from a working project's template
+store (`yoo-templates-backup-*.json` in the repo root). Across every josworld
+template, rows carry only `alignment` / `layout` / `column_gap` / `row_gap` /
+`margin_top`, and columns only `width_medium` / `vertical_align` / `text_align`
+/ `padding` / `class` / `background_color` / `border`.
+
+**`layout` is the BUILDER's column spec, not the renderer's.** A row's
+`layout: "3-5,2-5"` is what the UI writes; the render reads each COLUMN's own
+`width_*`, which is why every josworld column also carries `width_medium`. Set
+one and not the other and the row silently collapses to `1-1`.
+
+When unsure, do not reason from the element definition — copy a working section
+out of another project's template store and swap content and bindings, keeping
+every prop.
+
+### 1.13 Binding paths: the query name is derived, and objects need a sub-field
+
+`Helper::getBase()` decides the query prefix: `rest_base`, unless it is empty or
+equal to the post type name, in which case `name . 's'`. So `case`+rest_base
+`cases` → `cases.`, `team`+rest_base `team` → `team**s**.`, `tool` with no
+rest_base → `tools.`, and `verhaal`+rest_base `verhalen` → `verhalen.`. The
+single-post field is `Str::camelCase(['single', $type->name])`, giving
+`verhalen.singleVerhaal`.
+
+`featuredImage` is an **`Attachment` OBJECT**, not a URL. Binding an image needs
+the sub-field path — `featuredImage.url`, with `featuredImage.alt` for alt text.
+Binding the bare object renders nothing at all.
+
+A custom `queryType` is only needed if you want your own query. Registering an
+`objectType` under the name YOOtheme already uses for that post type MERGES into
+it (`SchemaBuilder::objectType()` reuses `$this->types[$name]` and appends to
+`$this->configs[$name][]`), so custom fields ride on the built-in
+`single<Type>` query with no PHP.
+
+
 ## 2. Scroll animation is native — do not write JS
 
 ```json
@@ -532,6 +580,17 @@ prove the delta is only what you intended.
   ```
 * Assert on **rendered pixels or computed styles**, not on the fact that a prop
   was written — traps 1.1–1.5 all store fine and render wrong.
+* **A class being PRESENT is not the same as being CORRECT, and grep cannot tell
+  the difference.** 2026-09-02: I dumped the rendered DOM, saw
+  `uk-position-center` on the body column, ticked it off as "the class is there"
+  and shipped a page whose body floated over the hero — that class *is*
+  `position:absolute; top:50%; left:50%`. One `getBoundingClientRect()` would
+  have shown two sections occupying the same y-range. Grepping for class names
+  is not verification; it is the same mistake as asserting the prop was written,
+  one layer further out.
+* **Read ALL of this file, not the first screen.** The bullet above this one
+  already said exactly what I got wrong, and I had read to §1.10 and stopped.
+  §7 is the section that would have saved the session, and it is at the bottom.
 
 * **Derive a design screenshot's SCALE before measuring anything on it.** It
   varies per export, even within one project and one day (0.669 and 1:1 on the
