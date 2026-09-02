@@ -30,6 +30,12 @@ guidance, a gap the session paid for):
 - Structural fixes to a skill/agent body are proposed as diffs, not applied silently —
   `/skill-audit` is the review path.
 
+**The session-review pane's proposals are Pass B input.** When
+`memory/session-review/*-proposals.md` exists (written by the herdr session-review pane,
+`netdust-core:herdr-orchestration`), read it and fold each proposal into the manifest
+with its evidence — the pane observed what this session could not see about itself.
+Same rule: propose, the human approves, then write.
+
 ## Pass C — already automatic, don't duplicate it
 
 The session-stop hook captured `DECISION:` / `RISK:` / `LESSON:` / `TODO:` tags into the

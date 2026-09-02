@@ -21,9 +21,11 @@ python3 "$PLUGIN_DIR/bin/verify-budget.py" specs/<feature> --base "$(git merge-b
 Fold the `verify-ratio:` line into the final report — observability, not a gate
 (decision 2026-08-09).
 
-## Step 2 — Exercise the artifact
+## Step 2 — Exercise the artifact (only when `## Acceptance flows` is not N/A)
 
-Dispatch **`shakeout-qa`**: it drives the plan's `## Acceptance flows` matrix through the
+A plan whose acceptance-flows matrix is N/A has no user-facing surface to drive; skip
+this step and say so — a shake-out over nothing is a token sink, not a gate. Otherwise
+dispatch **`shakeout-qa`** (model per `skills/_shared/model-ladder.md`): it drives the plan's `## Acceptance flows` matrix through the
 faithful layer — UI flows through a real browser (Playwright spec if present, else
 `superpowers-chrome`), backend flows through the un-mocked wire — and returns a
 pass/fail/not-reachable manifest with reproducible failing payloads. No UI flow counts
@@ -31,8 +33,10 @@ as `pass` without a browser having driven it.
 
 ## Step 3 — The reviewer panel, on the full branch diff
 
-State the branch tier, then dispatch in parallel with fresh context (the author never
-reviews its own diff):
+The branch tier is the `── BRANCH REVIEW ──` marker's when `tasks.md` carries
+behaviour-lane clusters (an all-behaviour branch under non-high stakes is LIGHT), else
+the branch's tier as planned. State it, then dispatch in parallel with fresh context
+(the author never reviews its own diff; models per `skills/_shared/model-ladder.md`):
 
 - **FULL** (any security surface, invariant, or data-layer/migration touch): `reviewer` +
   `security-sentinel` + `code-simplicity-reviewer` + `invariant-auditor` when an

@@ -32,6 +32,9 @@ Then:
 7. Ensure `.gitignore` contains `tasks/.harness-loop.json` (runtime state,
    never committed — same treatment as the stop-hook sidecar).
 8. Emit `python3 <plugin>/bin/run-trace.py append <feature-dir> loop-armed budget=<N>`.
+8b. Under herdr (`HERDR_ENV=1`): arm the doorbell on this pane in the background so the
+   operator is rung on block and settle — `skills/_shared/herdr-moments.md`, "Unattended
+   run" row (the script and its syntax live in `netdust-core:herdr-orchestration`).
 9. Confirm to the user in two lines: armed, budget, and how the loop ends
    (FINISHED → disarms, Stage 3 runs attended · `[HUMAN]` task → yields with
    the question · budget/dry-loop → disarms · `/loop off` anytime).

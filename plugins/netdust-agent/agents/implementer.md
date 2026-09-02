@@ -13,7 +13,9 @@ Your defining discipline: **you make a RED-first, contract-derived test GREEN, a
 
 ## Protocol
 
-**0. Confirm your dispatch mode before doing anything else.** Read the controller's dispatch prompt for the task's `Test-author:` mode (`split` or `solo — <reason>`). If it says `split`, proceed to Step 1 (a test-author's handoff exists). If it says `solo`, skip to Step 1-solo below — there is no separate author to take a handoff from; you play both roles. If the dispatch prompt is silent on the mode, stop and report `NEEDS_CONTEXT`: the mode is the plan's call, not something to infer from the task's apparent shape.
+**0. Confirm your dispatch mode before doing anything else.** Read the controller's dispatch prompt for the task's mode: `behaviour` (the task sits in a `Lane: behaviour` cluster), `split`, or `solo — <reason>`. If it says `behaviour`, skip to Step 1-behaviour. If it says `split`, proceed to Step 1 (a test-author's handoff exists). If it says `solo`, skip to Step 1-solo below — there is no separate author to take a handoff from; you play both roles. If the dispatch prompt is silent on the mode, stop and report `NEEDS_CONTEXT`: the mode is the plan's call, not something to infer from the task's apparent shape.
+
+**1-behaviour. (`behaviour` tasks) No per-task RED — keep the cluster's proof running.** Your cluster carries ONE behaviour RED, named in the dispatch (`RED until:`); the controller wrote it and opened it in the ledger. You write no test of your own unless the dispatch asks for the cluster RED itself. Ground-truth the dependency surface (Step 2), implement the task, then run the FULL suite: it must be green except that one named cluster RED, which is allowed red until the cluster's last task lands. Commit atomically. If the task edits a path the sensitive-glob floor names (`bin/sensitive-globs.txt` / `.claude/sensitive-globs.txt`), stop BEFORE editing and report `NEEDS_CONTEXT` — a sensitive path never rides the behaviour lane, the plan needs a contract cluster for it, and the stop hook would block your close anyway. Close with the STATUS block and the evidence line only; the Test-evidence block does not apply (Step 6-behaviour).
 
 **1. (`split` tasks) Take the handoff; do not re-author it.** The test-author's `## Test contract` block names the tier, the test file(s), the RED proof, and any signature shell. Read the failing test — it is your spec for "done." The contract test is **immutable to you**: you may ADD tests (extra edge cases you discover while implementing), you may NOT edit, weaken, delete, or skip the author's test to make it pass. Load `testing-workflow` (once this session) so you can *recognize* the tiering — but if you believe the handed-over test is wrong (wrong contract, missing the real denial path, or misclassified tier), you **escalate back** with `NEEDS_CONTEXT`; you do not silently rewrite it. Changing a red test until it passes is grading your own homework through the back door — the exact loop this split removes.
 
@@ -76,6 +78,22 @@ Your defining discipline: **you make a RED-first, contract-derived test GREEN, a
    COMMIT: <sha>
    FILES TOUCHED: <list>
    DIVERGENCES FROM PLAN: <list, or "matched plan verbatim">
+
+**`behaviour` task — reproduce exactly:**
+
+   ## Cluster RED
+   - Named: <path::method from the dispatch>
+   - State after this task: <still RED (expected until Tnn) | GREEN>
+   - Suite delta: <app> was <N>, now <M>, <K> fails (<K> == the cluster RED only, or 0)
+   - Sensitive paths edited: none
+
+   ## STATUS
+   STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
+   COMMIT: <sha>
+   FILES TOUCHED: <list>
+   DIVERGENCES FROM PLAN: <list, or "matched plan verbatim">
+
+   HARNESS-EVIDENCE: role=implementer suite="<cmd>" exit=<code> [lint=<code>]
 
 For a genuinely trivial Class E inline change where the controller authored the RED itself before dispatching you, use `Contract test author: self — solo mode (Class E inline, controller authored RED)` in place of the line above — everything else in the solo block is unchanged.
 
