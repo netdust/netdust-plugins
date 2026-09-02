@@ -1,74 +1,55 @@
 # YOOtheme Dynamic Content — sources, bindings, and template routing
 
-How data reaches a layout **without writing PHP**. This is the half the official
-demos are built on: ACF defines the content model, YOOtheme auto-generates a
-queryable source from it, layouts bind to that source, and templates decide which
-layout renders for which URL.
+How data reaches a layout **without writing PHP**: an ntdst-core model declares the
+fields, the ntdst-baseline `yootheme` module publishes them as a source, layouts bind to
+that source, and templates decide which layout renders for which URL. The official
+demos do the first step with ACF instead — read them for the binding and routing
+idioms, never for the content model (see the aside in §1).
 
-Write PHP only when this runs out — see `yootheme.md` + SKILL.md for custom
-sources. Verified against six official demos and the parent theme's
-`packages/builder-*-source` code.
+Verified against six official demos, the parent theme's `packages/builder-*-source`
+code (5.0.43) and two live builds (josworld, edushare).
 
 ---
 
 ## The chain
 
 ```
-ACF post type / taxonomy / field group
-        ↓  auto-registered, no code
-Source schema:  matches.customMatches → Match { title, link, field.match_date, … }
+ntdst-core model  (<project>-core, ntdst_data()->register(), meta_prefix set)
+        ↓  ntdst-baseline yootheme module — opt-in, no per-project code
+Source schema:  verhalen.customVerhalen → Verhaal { title, link, thema, featuredImage, … }
         ↓  node.source
 Layout node:    grid_item bound to the query, props mapped to fields
         ↓  template.type + template.query
-URL:            /matches/  →  archive-match template
+URL:            /inspirerende-verhalen/  →  archive-verhaal template
 ```
 
 ---
 
-## 1. The content model is ACF
+## 1. The content model is an ntdst-core model
 
-Every CPT, taxonomy and field in the demos is registered through **ACF's own UI**
-and stored as posts — `acf-post-type`, `acf-taxonomy`, `acf-field-group`,
-`acf-field`. There is no custom plugin and no `register_post_type()` call.
-FC Greenfield: 3 post types, 5 taxonomies, 6 field groups, 49 fields. Oakville:
-8 post types.
+Content types, fields and taxonomies are Data Manager models in `<project>-core`. The
+ntdst-baseline `yootheme` module (≥ 2.3.0, opt-in by assignment) turns each declared
+field into a picker entry; `references/yootheme.md` carries the enable step and the
+full type table. What you bind, per declared type:
 
-YOOtheme picks them up automatically (`packages/builder-wordpress-acf/`):
-`AcfHelper::matchGroup()` maps a field group's **location rules** onto the source
-type — `post_type ==` → that CPT, `taxonomy ==` → that taxonomy, plus `user`,
-`attachment` and `options_page`.
+| ntdst-core type | Bind as |
+|---|---|
+| `text`, `textarea`, `html`, `email`, `url`, `select`, `date` | `<field>` |
+| `int` / `float` / `bool` | `<field>` |
+| `image`, `file`, `gallery` | `<field>.url`, `.alt`, `.caption`, `.thumbnail` — an `Attachment` object, never the bare field |
+| `relation` | a list of the related type, published only — bind on a repeating item |
+| `repeater` | container query `<single>.<field>` (+ a `slice` directive), item `#parent`, sub-fields by name |
+| `array`, `json` | not published |
 
-> **Consequence:** a field only appears in the builder if its group's location
-> rule matches. A group scoped to a specific post *template* or *page* will not
-> surface as a type-wide field. If a field is missing from the Dynamic Content
-> dropdown, check the location rule first.
+Field names bind by the bare schema key (`bio`, not `_jw_bio`). Only declared fields
+exist; a model without a `meta_prefix` is refused whole.
 
-### ACF field type → what you bind
-
-`packages/builder-wordpress-acf/src/Type/FieldsType.php`:
-
-| ACF type | Source shape | Bind as |
-|---|---|---|
-| `text`, `textarea`, `wysiwyg` | `String` (+ `limit`, `preserve` filters) | `field.subtitle` |
-| any field with `choices` (`select`, `radio`, `checkbox`, `button_group`) | `{ label, value }` | `field.match_type.value` / `field.match_round.label` |
-| `image` | Attachment | `field.intro_image.url`, `.alt`, `.caption` |
-| `file` | File field | `field.brochure.url` |
-| `link` | `{ title, url }` | `field.cta.url`, `field.cta.title` |
-| `date_picker`, `date_time_picker`, `time_picker` | `String` + `date` filter | `field.event_start_date` |
-| `post_object`, `relationship` | the **related type** (or `listOf` if multiple) | `field.event_place_place.field.place_authority_street` |
-| `repeater`, `group`, `flexible_content` (sub_fields) | nested object / `listOf` | `field.images` → bind items |
-| `google_map` | `{ coordinates, … }` | `field.place_authority_location.coordinates` |
-| multi-value text | `listOf ValueField` → `{ value }` | `field.tags.value` |
-
-Two rules worth memorising:
-
-* **Choice fields are objects, not strings.** `field.match_type` alone gives you
-  nothing; you want `.value` (the stored key) or `.label` (the display text).
-  This is the single most common "why is my field empty".
-* **Relations traverse.** A `post_object` field resolves to the related type, so
-  you can chain: `field.event_place_place.field.place_authority_street`. Oakville
-  does this to print a venue's address on an event. Set ACF's `bidirectional` on
-  the field if you need the reverse too (FC Greenfield's match↔team).
+> **Reading a demo package.** The official demos register every CPT and field through
+> ACF (`acf-post-type`, `acf-field-group` posts), and YOOtheme's `builder-wordpress-acf`
+> package maps the group's location rules onto the source. Choice fields arrive as
+> `{ label, value }` objects, relations traverse (`field.event_place.field.street`),
+> dates need the `date` filter. Use that knowledge to READ a demo's bindings; never
+> propose ACF on a netdust build — it is not an option to weigh.
 
 ---
 
@@ -152,37 +133,43 @@ Built-in fields on any post type (`PostType.php`): `title`, `content`, `teaser`,
   `directives`, e.g. `{"name":"slice","arguments":{"offset":0,"limit":1}}`).
 * `source.props` — *which field feeds which prop*. Keys are the element's own
   prop names; each maps to `{ name, filters }`.
+* The argument key is **`arguments`**, never `args` — `SourceQuery::queryField` reads
+  `$field->arguments`; an `args` key is stored and ignored (`yoo-lint.php`: `binding-args`).
 
 Anything the element declares with `'source' => true` in its `element.php` can be
 bound — including `image`, `video`, `link` and `style` on a section.
 
-### The repeat pattern (`#parent`)
+### The repeat pattern (`#parent`) — and which node carries the list
 
-This is how every dynamic listing in the demos works:
+`SourceTransform::repeatSource` clones WHICHEVER node carries a list query. That gives
+two shapes, and picking the wrong one counts correctly and arranges wrongly:
 
 ```
-grid            source.query = announcementCats.customAnnouncementCats   ← the LIST
-  └─ grid_item  source.query.name = "#parent"                            ← one ITEM
-                source.props = { title: …, link: … }
+LISTING (one grid, one card per post — the common case)
+grid                                            ← styling only, no source
+  └─ grid_item  source.query = verhalen.customVerhalen     ← the list; the item repeats
+                source.props = { title, link, image: featuredImage.url }
+
+A GRID PER GROUP (the demos' "newest announcement per category")
+grid            source.query = announcementCats.customAnnouncementCats   ← repeats the GRID
+  └─ grid_item  source.query.name = "#parent"                            ← one item of it
+                source.query.field = { name: "announcements", arguments: { limit: 1 } }
 ```
 
-The **container** carries the list query and repeats its single child. The
-**child** binds to `#parent`, meaning "the current item of the enclosing scope".
-Style the container, bind the item. Sub-queries nest: an item bound to `#parent`
-can pull a `field` off that item (as above — the newest announcement *within*
-each category).
+A list query on the `grid` produces one whole `<div class="uk-grid">` per post — four
+single-card grids stacked vertically, every `uk-child-width-1-2@m` present and every
+count assertion green (edushare, 2026-09-02). For a listing, **bind the item.**
 
-`#parent` also works on non-repeating elements — a `headline` inside a bound
-column just reads the current item.
+`#parent` means "the current item of the enclosing scope". It works on non-repeating
+elements too — a `headline` inside a bound column reads the current item — and sub-queries
+nest: an item bound to `#parent` can pull a `field` off that item.
 
 > **⚠ `#parent` at a template ROOT resolves to nothing, silently.** There is no
-> enclosing scope to inherit, so the element renders **empty** — no error, no
-> warning, no log line. At the root of a `single-<type>` template use the current-item
-> query (`posts.singlePost`, `products.singleProduct`, …); `#parent` is only for
-> descendants of an already-bound node. Verified on a live install: a root
-> `headline` bound to `#parent` produced no output at all, and swapping it to
-> `posts.singlePost` rendered immediately. **An empty element is the symptom of a
-> mis-scoped binding** — check the query name before suspecting the data.
+> enclosing scope, so the element renders **empty** — no error, no log line. At the root
+> of a `single-<type>` template use the current-item query (`verhalen.singleVerhaal`,
+> `posts.singlePost`); `#parent` is only for descendants of an already-bound node. An
+> empty element is the symptom of a mis-scoped binding — check the query name before
+> suspecting the data. `yoo-lint.php` reports it as `parent-at-root`.
 
 ### Conditional display — the `_condition` pseudo-prop
 
@@ -194,6 +181,20 @@ column just reads the current item.
 
 `_condition` is not a real prop — a falsy result **removes the whole element**.
 Wrap several elements in a `fragment` and condition the fragment to hide a block.
+
+**It cannot gate a repeater or a relation.** `applyCondition` runs `html_entity_decode()`
+on the value, so an ARRAY kills the node on every record, populated ones included. The
+empty-state gate for a list field is the SOURCE QUERY: `resolveSource` drops any node
+whose query resolves empty, so give the container the list query with a `slice` of
+limit 1 and it repeats once when there is data and never when there is none — and keep
+one `_condition` in `props`, because a source with a `query` and no `props` is inert:
+
+```json
+"source": {"query": {"name": "verhalen.singleVerhaal",
+                     "field": {"name": "handige_links",
+                               "directives": [{"name": "slice", "arguments": {"offset": 0, "limit": 1}}]}},
+           "props": {"_condition": {"name": "label", "filters": {"condition": "!!"}}}}
+```
 
 Operators (`SourceFilter::applyCondition`), used with `condition_value`:
 
@@ -245,9 +246,9 @@ List queries take a rich argument set (`CustomPostQueryType.php`):
   "date_relative": "next", "date_relative_unit": "day" }
 ```
 
-Note `order: "field:<acf_field>"` and `date_column: "field:<acf_field>"` — you can
-sort and date-filter on ACF fields, which is what makes an events listing work
-without code.
+Note `order: "field:<name>"` and `date_column: "field:<name>"` — sort and date-filter on a
+custom field with no code. On ntdst-core models the value is the STORED meta key
+(`_edushare_in_de_kijker`), because `Helper.php` passes it to `meta_key` verbatim.
 
 ---
 
@@ -352,13 +353,13 @@ adding a template, re-check that the catch-all is still last.
 
 | ❌ Don't | ✅ Do |
 |---|---|
-| Write PHP for a CPT the client will edit | ACF post type + field group; YOOtheme picks it up |
-| Bind `field.my_select` | `.value` (key) or `.label` (display) — choice fields are objects |
-| Bind the `grid` when you meant each card | List query on the container, `#parent` on the `_item` |
+| Write a source service for a model's fields | Enable the baseline `yootheme` module; the fields appear |
+| Bind `featuredImage` or an `image` field bare | `.url` — media fields are `Attachment` objects |
+| Put the list query on the `grid` for a listing | Bind the `grid_item`; the container repeats only when you want a grid per group |
 | Add a catch-all template and leave it first | Catch-all (`query: []`) goes last; order is the routing table |
 | `pre_get_posts` to change archive page size | `params.posts_per_page` on the template |
 | One template + a wall of `_condition` | Several templates ordered by specificity |
 | Hand-format dates in the field | `filters.date` on the binding |
 | Concatenate a separator into a field | `filters.before` / `after` — they no-op when empty |
-| Assume a field group appears everywhere | It surfaces only where its ACF **location rule** matches |
+| Gate a repeater/relation with `_condition` | The source query + a `slice` directive is the gate |
 | Delete a template you might want back | `status: "disabled"` |
