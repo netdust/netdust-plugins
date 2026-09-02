@@ -7,15 +7,32 @@
  *   wp eval-file yoo-content.php page get 44            > layout.json
  *   wp eval-file yoo-content.php page get about-us      > layout.json
  *   wp eval-file yoo-content.php page set 44 layout.json
+ *   wp eval-file yoo-content.php page patch 44 children/0/children/1/props/link '"/contact/"'
  *
  *   # templates (stored in the `yootheme` option — ORDER IS ROUTING PRIORITY)
  *   wp eval-file yoo-content.php template list
  *   wp eval-file yoo-content.php template get bFIb-syj  > tpl.json
  *   wp eval-file yoo-content.php template set bFIb-syj tpl.json
  *   wp eval-file yoo-content.php template set new tpl.json      # generates an id
+ *   wp eval-file yoo-content.php template patch bFIb-syj layout/children/2/props/style '"muted"'
  *   wp eval-file yoo-content.php template reorder id1,id2,id3
  *   wp eval-file yoo-content.php template delete <id>
  *   wp eval-file yoo-content.php template export        > all-templates.json
+ *
+ *   # builder widgets (layouts in header / dialog / bottom positions)
+ *   wp eval-file yoo-content.php widget list
+ *   wp eval-file yoo-content.php widget get 2           > widget.json
+ *   wp eval-file yoo-content.php widget set 2 widget.json
+ *   wp eval-file yoo-content.php widget new navbar "Navbar CTA" widget.json
+ *
+ * `patch` re-fetches the LIVE copy immediately before writing and fails when the
+ * path resolves to nothing — a get → edit → set cycle silently drops whatever a
+ * human saved in the builder meanwhile. Paths are slash-separated node keys.
+ *
+ * Every write runs yoo-lint.php first and refuses on an error (the word `no-lint`
+ * as an extra argument bypasses it, logged). A root `version` missing from a hand-authored layout is filled
+ * from the site's config and logged — without it every element migration runs on
+ * save and rewrites props.
  *
  * ⚠ RUN AS AN ADMIN: `wp --user=1 eval-file yoo-content.php page set …`
  *   Without a user, WordPress applies KSES to post_content and **mangles the
@@ -51,7 +68,14 @@ if (!defined('WP_CLI') || !WP_CLI) {
 use YOOtheme\Builder;
 use YOOtheme\Storage;
 
+define('YOO_LINT_LIBRARY', true);
+require_once __DIR__ . '/yoo-lint.php';
+
 $argv = $args ?? [];
+// WP-CLI eval-file rejects --flags it does not declare, so flags are bare words too.
+const YC_FLAGS = ['no-lint', 'allow-kses-strip'];
+$flags = array_map(fn($a) => '--' . ltrim($a, '-'), array_filter($argv, fn($a) => in_array(ltrim($a, '-'), YC_FLAGS, true)));
+$argv = array_values(array_filter($argv, fn($a) => !in_array(ltrim($a, '-'), YC_FLAGS, true)));
 $group = array_shift($argv) ?: '';
 $cmd = array_shift($argv) ?: '';
 
@@ -125,6 +149,74 @@ function yc_layout_of(?string $content) {
     return json_decode($m[1]);
 }
 
+/** The site's theme version, for a hand-authored layout that carries none. */
+function yc_site_version(): string
+{
+    $cfg = json_decode((string) get_theme_mod('config'));
+    if (!empty($cfg->version)) return (string) $cfg->version;
+    $themeCfg = @include get_template_directory() . '/config.php';
+    return (string) ($themeCfg['version'] ?? '');
+}
+
+function yc_ensure_version(object $layout): void
+{
+    if (yc_prop($layout, 'type') === 'layout' && empty($layout->version)) {
+        $v = yc_site_version();
+        if ($v === '') WP_CLI::error('layout has no root `version` and the site version is unknown — add it by hand (copy from `page get <id>`).');
+        $layout->version = $v;
+        WP_CLI::log("note: root version filled in ($v) — without it every element migration runs on save.");
+    }
+}
+
+/** Refuse a layout the linter finds an error in, unless --no-lint (logged). */
+function yc_lint(object $layout, string $label, array $flags): void
+{
+    if (in_array('--no-lint', $flags, true)) { WP_CLI::warning('lint skipped (--no-lint)'); return; }
+    $vocab = new \YooLint\Vocab(get_template_directory());
+    $linter = new \YooLint\Linter($vocab);
+    $linter->lint($layout, $label);
+    $errors = 0;
+    foreach ($linter->findings as $f) {
+        WP_CLI::log(sprintf('%-5s %-26s %s: %s → %s', $f['level'], $f['code'], $f['path'], $f['msg'], $f['fix']));
+        if ($f['level'] === 'error') $errors++;
+    }
+    if ($errors) WP_CLI::error("$errors lint error(s) — fix them or pass --no-lint.");
+}
+
+/** Resolve `a/0/b` into $root and set it; error when any segment is missing. */
+function yc_patch(object $root, string $path, $value): void
+{
+    $segs = array_values(array_filter(explode('/', trim($path, '/')), 'strlen'));
+    if (!$segs) WP_CLI::error('empty path');
+    $last = array_pop($segs);
+    $ref = $root;
+    foreach ($segs as $s) {
+        $next = is_array($ref) ? ($ref[$s] ?? null) : ($ref->$s ?? null);
+        if ($next === null) WP_CLI::error("path segment `$s` does not exist in the LIVE copy — nothing written (re-fetch and look).");
+        $ref = $next;
+    }
+    if (is_array($ref)) {
+        if (!array_key_exists($last, $ref)) WP_CLI::error("`$last` does not exist at the end of the path — nothing written.");
+        $ref[$last] = $value;
+    } elseif (is_object($ref)) {
+        $ref->$last = $value;
+    } else {
+        WP_CLI::error("cannot set `$last` on a scalar.");
+    }
+}
+
+/** A CPT archive at the page's own slug wins the rewrite — the page renders nowhere. */
+function yc_warn_archive_shadow(\WP_Post $post): void
+{
+    foreach (get_post_types(['public' => true], 'objects') as $pt) {
+        if (empty($pt->has_archive)) continue;
+        $slug = is_string($pt->has_archive) ? $pt->has_archive : ($pt->rewrite['slug'] ?? $pt->name);
+        if (trim((string) $slug, '/') === $post->post_name && $post->post_parent === 0) {
+            WP_CLI::warning("the `{$pt->name}` archive rewrites to /{$post->post_name}/ too — the archive wins; build this layout in an `archive-{$pt->name}` template instead.");
+        }
+    }
+}
+
 // ---------------------------------------------------------------- pages
 
 function yc_page_list(): void {
@@ -141,21 +233,39 @@ function yc_page_list(): void {
     }
 }
 
-function yc_page_set(string $ref, string $file, array $flags): void {
+function yc_page_set(string $ref, string $file, array $flags): void
+{
     $post = yc_find_post($ref);
     $layout = yc_read_json($file);
-
     if (yc_prop($layout, 'type') !== 'layout') {
         WP_CLI::error("root node must be {\"type\":\"layout\",...} — got '"
             . (yc_prop($layout, 'type') ?? 'nothing') . "'. A page's root and a template's "
             . '`layout` share this shape — see the header; wrap a bare node array in it.');
     }
+    yc_page_write($post, $layout, $flags);
+}
 
+function yc_page_patch(string $ref, string $path, string $json, array $flags): void
+{
+    $post = yc_find_post($ref);                       // the LIVE copy, read now
+    $layout = yc_layout_of($post->post_content);
+    if ($layout === null) WP_CLI::error("post {$post->ID} has no builder layout.");
+    $value = json_decode($json);
+    if ($value === null && strtolower(trim($json)) !== 'null') WP_CLI::error("value is not valid JSON: $json");
+    yc_patch($layout, $path, $value);
+    yc_page_write($post, $layout, $flags);
+}
+
+function yc_page_write(\WP_Post $post, object $layout, array $flags): void
+{
     if (!current_user_can('unfiltered_html') && !in_array('--allow-kses-strip', $flags, true)) {
         WP_CLI::error("current user cannot 'unfiltered_html' — KSES would mangle the builder "
             . 'JSON. Re-run with `wp --user=<admin-id> eval-file …` '
             . '(or pass --allow-kses-strip if you truly want the filtered result).');
     }
+    yc_ensure_version($layout);
+    yc_lint($layout, "page:{$post->post_name}#{$post->ID}", $flags);
+    yc_warn_archive_shadow($post);
 
     yc_backup("page-{$post->ID}", ['ID' => $post->ID, 'post_content' => $post->post_content]);
 
@@ -208,7 +318,8 @@ function yc_template_id(): string {
     return $s;
 }
 
-function yc_template_set(string $id, string $file): void {
+function yc_template_set(string $id, string $file, array $flags): void
+{
     $tpl = yc_read_json($file);
     $type = yc_prop($tpl, 'type');
     $layout = yc_prop($tpl, 'layout');
@@ -220,10 +331,31 @@ function yc_template_set(string $id, string $file): void {
     if (is_array($layout)) {
         WP_CLI::log('note: wrapping bare node array in {"type":"layout",…} — that is the stored shape.');
         $layout = (object) ['type' => 'layout', 'children' => $layout];
+        $tpl->layout = $layout;
     }
     if (yc_prop($layout, 'type') !== 'layout') {
         WP_CLI::error("'layout' root must be {\"type\":\"layout\",…} — got '" . yc_prop($layout, 'type') . "'.");
     }
+    yc_template_write($id, $tpl, $flags);
+}
+
+function yc_template_patch(string $id, string $path, string $json, array $flags): void
+{
+    $all = yc_templates();                            // the LIVE copy, read now
+    if (!isset($all[$id])) WP_CLI::error("no template '$id' — try `template list`.");
+    $tpl = json_decode(json_encode($all[$id]));       // stdClass end to end, `{}` preserved
+    $value = json_decode($json);
+    if ($value === null && strtolower(trim($json)) !== 'null') WP_CLI::error("value is not valid JSON: $json");
+    yc_patch($tpl, $path, $value);
+    yc_template_write($id, $tpl, $flags);
+}
+
+function yc_template_write(string $id, object $tpl, array $flags): void
+{
+    $type = yc_prop($tpl, 'type');
+    $layout = $tpl->layout;
+    yc_ensure_version($layout);
+    yc_lint($layout, "template:$id", $flags);
 
     $all = yc_templates();
     yc_backup('templates', $all);
@@ -259,6 +391,61 @@ function yc_template_reorder(string $csv): void {
         array_merge(array_intersect_key(array_flip($sorting), $templates), $templates))));
 }
 
+// -------------------------------------------------------------- widgets
+
+function yc_widgets(): array
+{
+    $w = get_option('widget_builderwidget', ['_multiwidget' => 1]);
+    return is_array($w) ? $w : ['_multiwidget' => 1];
+}
+
+function yc_widget_positions(): array
+{
+    $where = [];
+    foreach ((array) get_option('sidebars_widgets', []) as $position => $ids) {
+        foreach ((array) $ids as $wid) {
+            if (is_string($wid) && str_starts_with($wid, 'builderwidget-')) $where[substr($wid, 14)] = $position;
+        }
+    }
+    return $where;
+}
+
+function yc_widget_layout($content)
+{
+    return is_string($content) ? json_decode($content) : json_decode(json_encode($content));
+}
+
+function yc_widget_list(): void
+{
+    $where = yc_widget_positions();
+    foreach (yc_widgets() as $id => $w) {
+        if (!is_numeric($id) || !is_array($w)) continue;
+        $lay = yc_widget_layout($w['content'] ?? '');
+        WP_CLI::log(sprintf('%-16s builderwidget-%-3s %-30s %s nodes', $where[(string) $id] ?? 'unplaced', $id,
+            substr((string) ($w['title'] ?? ''), 0, 29), $lay ? substr_count(json_encode($lay), '"type":') : 0));
+    }
+}
+
+function yc_widget_write(int $id, object $layout, array $flags, ?string $title = null, ?string $position = null): void
+{
+    yc_ensure_version($layout);
+    yc_lint($layout, "widget:builderwidget-$id", $flags);
+    $widgets = yc_widgets();
+    yc_backup('widgets', $widgets);
+    $content = json_encode(yc_builder()->withParams(['context' => 'save'])
+        ->load(json_encode($layout, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)));
+    if (!$content || $content === 'null') WP_CLI::error('builder rejected the layout.');
+    $widgets[$id] = ['title' => $title ?? ($widgets[$id]['title'] ?? ''), 'content' => $content, 'element' => $widgets[$id]['element'] ?? ''];
+    $widgets['_multiwidget'] = 1;
+    update_option('widget_builderwidget', $widgets);
+    if ($position !== null) {
+        $sidebars = get_option('sidebars_widgets', []);
+        $sidebars[$position] = array_values(array_unique(array_merge($sidebars[$position] ?? [], ["builderwidget-$id"])));
+        update_option('sidebars_widgets', $sidebars);
+    }
+    WP_CLI::success("builderwidget-$id written" . ($position ? " → position '$position'" : ''));
+}
+
 // ------------------------------------------------------------- dispatch
 
 switch ("$group $cmd") {
@@ -272,8 +459,13 @@ switch ("$group $cmd") {
         break;
 
     case 'page set':
-        if (count($argv) < 2) WP_CLI::error('usage: page set <id|slug> <layout.json>');
-        yc_page_set($argv[0], $argv[1], array_slice($argv, 2));
+        if (count($argv) < 2) WP_CLI::error('usage: page set <id|slug> <layout.json> [no-lint]');
+        yc_page_set($argv[0], $argv[1], $flags);
+        break;
+
+    case 'page patch':
+        if (count($argv) < 3) WP_CLI::error('usage: page patch <id|slug> <children/0/props/key> <json-value>');
+        yc_page_patch($argv[0], $argv[1], $argv[2], $flags);
         break;
 
     case 'template list':    yc_template_list(); break;
@@ -287,8 +479,34 @@ switch ("$group $cmd") {
         break;
 
     case 'template set':
-        if (count($argv) < 2) WP_CLI::error('usage: template set <id|new> <tpl.json>');
-        yc_template_set($argv[0], $argv[1]);
+        if (count($argv) < 2) WP_CLI::error('usage: template set <id|new> <tpl.json> [no-lint]');
+        yc_template_set($argv[0], $argv[1], $flags);
+        break;
+
+    case 'template patch':
+        if (count($argv) < 3) WP_CLI::error('usage: template patch <id> <layout/children/0/props/key> <json-value>');
+        yc_template_patch($argv[0], $argv[1], $argv[2], $flags);
+        break;
+
+    case 'widget list':   yc_widget_list(); break;
+
+    case 'widget get':
+        $w = yc_widgets();
+        $id = $argv[0] ?? '';
+        if (!isset($w[$id])) WP_CLI::error("no builderwidget-$id — try `widget list`.");
+        yc_dump(yc_widget_layout($w[$id]['content'] ?? ''));
+        break;
+
+    case 'widget set':
+        if (count($argv) < 2) WP_CLI::error('usage: widget set <id> <layout.json>');
+        if (!isset(yc_widgets()[$argv[0]])) WP_CLI::error("no builderwidget-{$argv[0]}");
+        yc_widget_write((int) $argv[0], yc_read_json($argv[1]), $flags);
+        break;
+
+    case 'widget new':
+        if (count($argv) < 3) WP_CLI::error('usage: widget new <position> <title> <layout.json>');
+        $ids = array_filter(array_keys(yc_widgets()), 'is_numeric');
+        yc_widget_write($ids ? max($ids) + 1 : 2, yc_read_json($argv[2]), $flags, $argv[1], $argv[0]);
         break;
 
     case 'template delete':
@@ -306,6 +524,7 @@ switch ("$group $cmd") {
 
     default:
         WP_CLI::error("unknown: '$group $cmd'\n"
-            . "  page     list | get <id|slug> | set <id|slug> <file.json>\n"
-            . '  template list | get <id> | set <id|new> <file.json> | delete <id> | reorder <ids> | export');
+            . "  page     list | get <id|slug> | set <id|slug> <file.json> | patch <id|slug> <path> <json>\n"
+            . "  template list | get <id> | set <id|new> <file.json> | patch <id> <path> <json> | delete <id> | reorder <ids> | export\n"
+            . '  widget   list | get <id> | set <id> <file.json> | new <position> <title> <file.json>');
 }

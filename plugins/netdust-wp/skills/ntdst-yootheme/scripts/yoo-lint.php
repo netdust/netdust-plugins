@@ -6,9 +6,11 @@
  *   php yoo-lint.php --theme=<parent-theme-dir> [--schema=fields.json] <layout.json>…
  *   wp eval-file yoo-lint.php page <id|slug>
  *   wp eval-file yoo-lint.php template <id>
- *   wp eval-file yoo-lint.php --all          # every tree in the DB
+ *   wp eval-file yoo-lint.php all            # every tree in the DB
  *
- * Under WP-CLI the theme dir defaults to get_template_directory(). Every finding is
+ * Under WP-CLI the theme dir defaults to get_template_directory(), and options are
+ * plain words (`all`, `schema=fields.json`) because eval-file rejects `--flags` it
+ * does not declare. Every finding is
  * `LEVEL code path: message → fix`; exit 1 on any error. Codes:
  *
  *   unknown-type, unknown-prop, no-version, orphan-item, layout-count, grid-over-6,
@@ -350,12 +352,14 @@ function report(Linter $l, string $what): int
 }
 
 // ---------------------------------------------------------------- arguments
+if (defined('YOO_LINT_LIBRARY')) return;   // yoo-content.php includes the classes only
 $argvIn = defined('WP_CLI') && WP_CLI ? ($args ?? []) : array_slice($_SERVER['argv'], 1);
 $theme = null; $schemaFile = null; $files = []; $mode = null; $modeArg = null;
 foreach ($argvIn as $i => $a) {
-    if (str_starts_with($a, '--theme=')) { $theme = substr($a, 8); continue; }
-    if (str_starts_with($a, '--schema=')) { $schemaFile = substr($a, 9); continue; }
-    if ($a === '--all') { $mode = 'all'; continue; }
+    $a = ltrim($a, '-');   // WP-CLI eval-file rejects --flags; accept the bare word too
+    if (str_starts_with($a, 'theme=')) { $theme = substr($a, 6); continue; }
+    if (str_starts_with($a, 'schema=')) { $schemaFile = substr($a, 7); continue; }
+    if ($a === 'all') { $mode = 'all'; continue; }
     if (in_array($a, ['page', 'template'], true)) { $mode = $a; $modeArg = $argvIn[$i + 1] ?? null; continue; }
     if ($mode && $modeArg === $a) continue;
     $files[] = $a;
