@@ -181,6 +181,47 @@ def test_no_skill_audit_nudge_when_stamp_fresh() -> tuple[bool, str]:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def _run_hook_env(cwd: Path, env: dict) -> tuple[int, str, str]:
+    """Run the hook with an EXACT environment (HERDR_* stripped unless given) —
+    the FR-19 seam: the calling shell's own herdr vars must not leak into a test."""
+    base = {k: v for k, v in os.environ.items() if not k.startswith("HERDR_")}
+    proc = subprocess.run(["bash", str(HOOK)], cwd=str(cwd), capture_output=True,
+                          text=True, timeout=10, env={**base, **env})
+    return proc.returncode, proc.stdout, proc.stderr
+
+
+def test_herdr_lines() -> tuple[bool, str]:
+    """FR-19: under HERDR_ENV=1 the hook appends the herdr block (ids + the pointer);
+    with ids unset only the pointer; without HERDR_ENV the output is byte-identical."""
+    tmp = Path(tempfile.mkdtemp(prefix="netdust-test-"))
+    try:
+        (tmp / "memory").mkdir()
+        (tmp / "memory" / "STATE.md").write_text("Sentinel-STATE-HERDR")
+        rc0, out0, _ = _run_hook_env(tmp, {})
+        rc1, out1, _ = _run_hook_env(tmp, {"HERDR_ENV": "1", "HERDR_PANE_ID": "w3:p4",
+                                            "HERDR_TAB_ID": "w3:t2", "HERDR_WORKSPACE_ID": "w3"})
+        rc2, out2, _ = _run_hook_env(tmp, {"HERDR_ENV": "1"})
+        rc3, out3, _ = _run_hook_env(tmp, {"HERDR_ENV": "0", "HERDR_PANE_ID": "w3:p4"})
+        if (rc0, rc1, rc2, rc3) != (0, 0, 0, 0):
+            return False, f"herdr: hook exited {(rc0, rc1, rc2, rc3)}"
+        checks = [
+            ("## herdr" not in out0, "block emitted without HERDR_ENV"),
+            ("## herdr" in out1 and "w3:p4" in out1 and "w3:t2" in out1 and "herdr-moments.md" in out1,
+             "ids or pointer missing under HERDR_ENV=1"),
+            ("## herdr" in out2 and "herdr-moments.md" in out2 and "pane" not in out2.split("## herdr", 1)[1].split("\n\n", 1)[0],
+             "ids unset should emit the pointer only"),
+            ("## herdr" not in out3, "HERDR_ENV=0 must not emit the block"),
+            # byte-identical outside herdr, apart from the injected-size line that counts its own bytes
+            (out0 == out3, "HERDR_ENV=0 output differs from unset output"),
+        ]
+        failures = [msg for ok, msg in checks if not ok]
+        if failures:
+            return False, "herdr: " + "; ".join(failures)
+        return True, "herdr block: ids + pointer under HERDR_ENV=1, pointer-only without ids, nothing otherwise"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def run() -> list[tuple[bool, str]]:
     return [
         test_empty_cwd_emits_nothing_but_logs(),
@@ -188,4 +229,5 @@ def run() -> list[tuple[bool, str]]:
         test_log_records_missing_keys(),
         test_skill_audit_nudge_when_stamp_missing(),
         test_no_skill_audit_nudge_when_stamp_fresh(),
+        test_herdr_lines(),
     ]

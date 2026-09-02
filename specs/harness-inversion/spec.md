@@ -145,9 +145,11 @@ nothing changes.
   sonnet), with the one rule that overrides it: a dispatch that edits a sensitive-glob path
   never runs below inherit. `building` cites the file at every dispatch site and never
   restates the table. Source: same request; the table is invented — approved 2026-09-02.
-- **FR-12:** `bin/run-cost.py` adds a `model` column to its per-dispatch table, read from
-  the transcript's assistant-message `model` field, and a per-model total; absent field →
-  `unknown`, never a crash. Source: invented — approved 2026-09-02 (the ladder must be
+- **FR-12:** `bin/run-cost.py` prints a per-model totals block beside its per-dispatch
+  table (which already carries `model=` per row, read from the transcript's
+  assistant-message `model` field); absent field → `unknown`, never a crash. *(Ground-truth
+  correction at T04: the per-dispatch column already existed and run-cost has no `--json`
+  mode, so the block is the whole change.)* Source: invented — approved 2026-09-02 (the ladder must be
   measurable or it is another echoed field).
 
 ### herdr, at the harness moments (kills link 5)
