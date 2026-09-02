@@ -204,7 +204,7 @@ def scan_tags(text: str) -> dict:
 # ── Watermark sidecar (idempotency) ──────────────────────────────────────────
 
 VENDOR_SEGMENTS = {"themes", "plugins", "mu-plugins", "vendor", "packages", "node_modules"}
-ROOT_MARKERS = ("CLAUDE.md", "site.yml", ".git")
+ROOT_MARKERS = ("CLAUDE.md", "site.yml", ".git", "memory")
 
 
 def project_root(cwd: str) -> Path | None:
@@ -212,22 +212,27 @@ def project_root(cwd: str) -> Path | None:
 
     Sessions `cd` into theme, plugin and vendor trees; writing memory/ at cwd left
     seventeen stray sidecars under themes/ and vendor/ across ~/Sites (2026-09-02).
-    Walk up to the nearest dir holding a root marker, never past $HOME, and skip a
-    marker that sits below a vendor segment (a .git inside vendor/x is not a root).
+    Rules, in order: cwd with a marker and not below a vendor segment → cwd; else the
+    nearest ancestor (not past $HOME, or / outside it) with a marker and not below a
+    vendor segment; else cwd itself when it is not below a vendor segment (a fresh
+    project has no marker yet); else None — nothing is written under a vendor tree.
     """
-    home = Path.home().resolve()
     start = Path(cwd).resolve()
+    home = Path.home().resolve()
+    boundary = home if (start == home or home in start.parents) else Path("/")
+
+    def below_vendor(d: Path) -> bool:
+        return any(seg in VENDOR_SEGMENTS for seg in d.relative_to(boundary).parts)
+
+    def marked(d: Path) -> bool:
+        return any((d / m).exists() for m in ROOT_MARKERS)
+
     for cand in (start, *start.parents):
-        if cand == home or home not in cand.parents and cand != home and not str(cand).startswith(str(home)):
-            return None
-        rel = cand.relative_to(home).parts
-        if any(seg in VENDOR_SEGMENTS for seg in rel) and any(
-            (cand / m).exists() for m in ROOT_MARKERS
-        ):
-            continue   # a marker under vendor/themes/plugins is not this project's root
-        if any((cand / m).exists() for m in ROOT_MARKERS):
+        if cand == boundary:
+            break
+        if marked(cand) and not below_vendor(cand):
             return cand
-    return None
+    return None if below_vendor(start) or start == boundary else start
 
 
 def sidecar_path(cwd: str) -> Path:

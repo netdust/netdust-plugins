@@ -47,16 +47,25 @@ def test_git_under_vendor_is_not_a_root() -> tuple[bool, str]:
 
 def test_no_root_writes_nothing() -> tuple[bool, str]:
     home = _home()
-    cwd = home / "scratch" / "deep"; cwd.mkdir(parents=True)
+    cwd = home / "scratch" / "vendor" / "deep"; cwd.mkdir(parents=True)
     r = _run(cwd, _transcript(home), {"HOME": str(home)})
     written = list(home.rglob(".stop-hook-state.json"))
     ok = r.returncode == 0 and not written
     shutil.rmtree(home, ignore_errors=True)
-    return ok, f"no marker up to $HOME → exit 0, nothing written ({len(written)} sidecars found)"
+    return ok, f"below vendor/ with no marker up to $HOME → exit 0, nothing written ({len(written)} sidecars found)"
+
+
+def test_bare_dir_is_still_a_project() -> tuple[bool, str]:
+    home = _home()
+    cwd = home / "fresh"; cwd.mkdir()
+    _run(cwd, _transcript(home), {"HOME": str(home)})
+    ok = (cwd / "memory" / ".stop-hook-state.json").exists()
+    shutil.rmtree(home, ignore_errors=True)
+    return ok, "a marker-less cwd outside any vendor segment keeps today's behaviour (memory/ at cwd)"
 
 
 def run() -> list[tuple[bool, str]]:
-    return [test_deep_cwd_lands_at_root(), test_git_under_vendor_is_not_a_root(), test_no_root_writes_nothing()]
+    return [test_deep_cwd_lands_at_root(), test_git_under_vendor_is_not_a_root(), test_no_root_writes_nothing(), test_bare_dir_is_still_a_project()]
 
 
 if __name__ == "__main__":
