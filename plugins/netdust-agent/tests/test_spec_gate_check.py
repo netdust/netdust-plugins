@@ -2858,6 +2858,32 @@ def run():
     results.append((rc == 1 and "review-gate-marker" in out and "BRANCH REVIEW" not in out,
                     "lane (T03 e): a lane-less file keeps today's marker findings, no branch-marker demand"))
 
+    # ── 30. two checker bugs the self-hosting run found (harness-inversion T11) ──
+    # (i) a behaviour-lane RED-until that resolves ONLY on disk under the repo root is
+    # valid for the lane check exactly as it is for the behaviour-cluster check.
+    tasks_disk = TASKS_LANE_BEHAVIOUR_BARE.replace(
+        "RED until: `tests/CaseModelTest.php::test_case_registered`",
+        "RED until: `tests/OnDiskCaseTest.php::test_case_registered`")
+    with tempfile.TemporaryDirectory() as d:
+        (Path(d) / "tests").mkdir()
+        (Path(d) / "tests" / "OnDiskCaseTest.php").write_text("<?php // fixture")
+        f = _gate_check.Findings()
+        _gate_check.check_cluster_lanes(tasks_disk, None, f, repo_root=Path(d))
+        on_disk = [st for st, c, _ in f.items if c == "cluster-lane"]
+        f2 = _gate_check.Findings()
+        _gate_check.check_cluster_lanes(tasks_disk, None, f2, repo_root=None)
+        no_root = [st for st, c, _ in f2.items if c == "cluster-lane"]
+    results.append((on_disk == ["pass"] and no_root == ["fail"],
+                    "lane: a RED-until file on disk under the repo root validates the lane's block; "
+                    "without a root it is dangling — same rungs as behaviour-cluster"))
+    # (ii) a task that MENTIONS `── BRANCH REVIEW ──` in prose is not a second marker.
+    tasks_mention = TASKS_LANE_BEHAVIOUR_BARE.replace(
+        "- [ ] T04 the archive template  (files: templates/archive-case.php)",
+        "- [ ] T04 the archive template; the file ends at one `── BRANCH REVIEW ──` marker  (files: templates/archive-case.php)")
+    rc, out = _run({"tasks.md": tasks_mention})
+    results.append((rc == 0 and "✓ [review-gate-marker]" in out,
+                    "lane: a prose mention of the branch marker inside a task is not counted as one"))
+
     return results
 
 

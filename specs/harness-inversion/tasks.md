@@ -21,6 +21,8 @@
 
 ### Cluster A — the checker lane grammar (3 tasks · effective stakes: standard · provisional tier: STANDARD)
 
+Lane: contract — checker logic with RED-first contracts of its own
+
 Behaviour: `gate-check.py` accepts a behaviour-lane cluster whose member tasks carry only `(files:)`, and refuses the same cluster the moment one member touches a security-boundary path.
 Observable: two commands — the bare-members fixture exits 0; the fixture with `auth/Guard.php` in one member's files exits 1 with a `cluster-lane` finding naming the task and the term.
 RED until: `plugins/netdust-agent/tests/test_spec_gate_check.py::test_lane_behaviour_bare_members_pass`
@@ -51,6 +53,8 @@ RED until: `plugins/netdust-agent/tests/test_spec_gate_check.py::test_lane_behav
 
 ### Cluster B — machine layer (3 tasks · effective stakes: standard · provisional tier: STANDARD)
 
+Lane: contract — read-only tooling and an env-gated hook, each with a RED-first contract
+
 - [x] T04 [Tier A] `run-cost.py` per-model totals block beside the per-dispatch table (whose `model=` column already existed — ground-truth correction; there is no `--json` mode to extend); a dispatch without the field reads `unknown`; fixture transcripts in the existing test extended, never rewritten.  (files: plugins/netdust-agent/bin/run-cost.py, plugins/netdust-agent/tests/test_run_cost.py)
   Test-author: solo — standard stakes, read-only reporting over local files, not a security-boundary category.
   Proven by: new test — the model-column cases in `test_run_cost.py`.
@@ -75,41 +79,35 @@ RED until: `plugins/netdust-agent/tests/test_spec_gate_check.py::test_lane_behav
 
 ---
 
-### Cluster C — the spine texts (4 tasks · effective stakes: standard · provisional tier: LIGHT)
+### Cluster C — the spine texts (4 tasks · effective stakes: standard)
 
-- [x] T07 [Tier B] `building` SKILL.md: the behaviour-lane execution path (cluster RED first, one implementer per task with no per-task RED, no post-cluster test-author, no cluster panel, close on RED-green + integration gate + `Artifact-diff:`), the contract lane stated as today's path unchanged, the Stage 3 rule (shake-out only with real acceptance flows; LIGHT branch review for all-behaviour branches under non-high stakes), dispatch sites citing `model-ladder.md` by name, the herdr moments cited from `herdr-moments.md` (isolation rule for `[P]` and split pairs; the status tab; the branch-review pane), and every branch decision on a `site.yml` project routed to `netdust-core:dev-stack` (`make feature` / `make hotfix` / `make finish`; worktree base = the integration branch from `site.yml`, never a hard-coded `master`).  (files: plugins/netdust-agent/skills/building/SKILL.md)
-  Test-author: solo — Tier B.
-  Proven by: machine gate — Cluster A's lane checks and Cluster B's tests enforce the mechanics; this text cites them by name (standing line), verified by the Cluster C grep.
-  Unit test: no unit test: Tier B, skill prose over mechanics landed in T01–T06.
+Lane: behaviour
+Behaviour: every changed skill and command cites its single home and its mechanical check by name, and restates neither.
+Observable: `grep -rE 'herdr (worktree|tab|agent)\b' plugins/netdust-agent --include='*.md'` hits only `_shared/herdr-moments.md`; `grep -rl '| ground-truth read' plugins/netdust-agent/skills plugins/netdust-agent/agents plugins/netdust-agent/commands` hits only `_shared/model-ladder.md`.
+RED until: `plugins/netdust-agent/tests/test_agent_frontmatter.py::run`
+
+- [x] T07 `building` SKILL.md: the behaviour-lane execution path (cluster RED first, one implementer per task with no per-task RED, no post-cluster test-author, no cluster panel, close on RED-green + integration gate + `Artifact-diff:`), the contract lane stated as today's path unchanged, the Stage 3 rule (shake-out only with real acceptance flows; LIGHT branch review for all-behaviour branches under non-high stakes), dispatch sites citing `model-ladder.md` by name, the herdr moments cited from `herdr-moments.md` (isolation rule for `[P]` and split pairs; the status tab; the branch-review pane), and every branch decision on a `site.yml` project routed to `netdust-core:dev-stack` (`make feature` / `make hotfix` / `make finish`; worktree base = the integration branch from `site.yml`, never a hard-coded `master`).  (files: plugins/netdust-agent/skills/building/SKILL.md)
   (FR-6, FR-8, FR-11, FR-15, FR-16, FR-17, FR-21)
 
-- [x] T08 [Tier B] Agent bodies: `implementer` gains the `behaviour` dispatch mode (no self-authored RED, suite green except the ledger-named cluster RED, STATUS block + `HARNESS-EVIDENCE:` line, `NEEDS_CONTEXT` when the task edits a sensitive-glob path — said before the hook blocks it); `test-author` Mode 1 is scoped to contract-lane clusters and behaviour-lane cluster REDs on request; `reviewer` notes the branch-review-only posture for behaviour-lane branches and where its report lands under herdr.  (files: plugins/netdust-agent/agents/implementer.md, plugins/netdust-agent/agents/test-author.md, plugins/netdust-agent/agents/reviewer.md)
-  Test-author: solo — Tier B.
-  Proven by: framework — agent prose; the close is still machine-checked by the unchanged `subagent-stop.py` (suite ran, green, sensitive-path floor).
-  Unit test: no unit test: Tier B, persona prose; `test_agent_frontmatter.py` from T06 keeps the frontmatter valid through the edit.
+- [x] T08 Agent bodies: `implementer` gains the `behaviour` dispatch mode (no self-authored RED, suite green except the ledger-named cluster RED, STATUS block + `HARNESS-EVIDENCE:` line, `NEEDS_CONTEXT` when the task edits a sensitive-glob path — said before the hook blocks it); `test-author` Mode 1 is scoped to contract-lane clusters and behaviour-lane cluster REDs on request; `reviewer` notes the branch-review-only posture for behaviour-lane branches and where its report lands under herdr.  (files: plugins/netdust-agent/agents/implementer.md, plugins/netdust-agent/agents/test-author.md, plugins/netdust-agent/agents/reviewer.md)
   (FR-7)
 
-- [x] T09 [Tier B] `planning` seam (under herdr: the `spec` tab with `bat` over plan + tasks + the gate verdict, `--no-focus`, announced), `harnessed-development` (one sentence: lane is decided per cluster at plan time, machine-refused in the unsafe direction, the class dial unchanged), and `testing-workflow` (question 0 — a rule of this project, or config over a framework that already has the rule? — routing to lane before tier; the tier table applies inside the contract lane only).  (files: plugins/netdust-agent/skills/planning/SKILL.md, plugins/netdust-agent/skills/harnessed-development/SKILL.md, plugins/netdust-agent/skills/testing-workflow/SKILL.md)
-  Test-author: solo — Tier B.
-  Proven by: machine gate — `check_cluster_lanes` enforces the lane the prose describes; cited by name.
-  Unit test: no unit test: Tier B, skill prose.
+- [x] T09 `planning` seam (under herdr: the `spec` tab with `bat` over plan + tasks + the gate verdict, `--no-focus`, announced), `harnessed-development` (one sentence: lane is decided per cluster at plan time, machine-refused in the unsafe direction, the class dial unchanged), and `testing-workflow` (question 0 — a rule of this project, or config over a framework that already has the rule? — routing to lane before tier; the tier table applies inside the contract lane only).  (files: plugins/netdust-agent/skills/planning/SKILL.md, plugins/netdust-agent/skills/harnessed-development/SKILL.md, plugins/netdust-agent/skills/testing-workflow/SKILL.md)
   (FR-9, FR-14)
 
-- [x] T10 [Tier B] `skills/_shared/herdr-moments.md` (moment → primitive → when NOT to; cites `netdust-core:herdr-orchestration` sections for channels/topology/traps and `netdust-core:dev-stack` for the worktree base rule; no syntax), `/loop` arms `scripts/herdr-watcher.sh` on the working pane under herdr, `compounding` Pass B reads `memory/session-review/*-proposals.md`, `/shakeout` runs `shakeout-qa` only when `## Acceptance flows` is not N/A and takes the branch tier from the lane rule.  (files: plugins/netdust-agent/skills/_shared/herdr-moments.md, plugins/netdust-agent/commands/loop.md, plugins/netdust-agent/skills/compounding/SKILL.md, plugins/netdust-agent/commands/shakeout.md)
-  Test-author: solo — Tier B.
-  Proven by: framework — command/skill prose; herdr syntax authority stays `herdr --skill` by design, so there is nothing mechanical to pin beyond SC-6's grep.
-  Unit test: no unit test: Tier B, prose; SC-6 grep at the cluster gate.
+- [x] T10 `skills/_shared/herdr-moments.md` (moment → primitive → when NOT to; cites `netdust-core:herdr-orchestration` sections for channels/topology/traps and `netdust-core:dev-stack` for the worktree base rule; no syntax), `/loop` arms `scripts/herdr-watcher.sh` on the working pane under herdr, `compounding` Pass B reads `memory/session-review/*-proposals.md`, `/shakeout` runs `shakeout-qa` only when `## Acceptance flows` is not N/A and takes the branch tier from the lane rule.  (files: plugins/netdust-agent/skills/_shared/herdr-moments.md, plugins/netdust-agent/commands/loop.md, plugins/netdust-agent/skills/compounding/SKILL.md, plugins/netdust-agent/commands/shakeout.md)
   (FR-13, FR-16, FR-18, SC-6, AC-6)
 
 **Integration gate (Cluster C):** coherence greps across `plugins/netdust-agent/**`: 0 herdr subcommand strings outside `_shared/herdr-moments.md` (SC-6); 0 ladder table rows outside `_shared/model-ladder.md` (SC-4); every new claim in the four skill texts names its check (`check_cluster_lanes`, `run-cost`, `test_agent_frontmatter`, the ledger events); `gate-check.py specs/deliverable-first` and `specs/harness-efficiency` still exit as before (AC-2 on the live corpus).
 
-── REVIEW GATE ── (tier: LIGHT — prose only; escalates one-way if any text promises an enforcement the machine doesn't perform.)
 
 ---
 
 ### Cluster D — the record (1 task · effective stakes: low · provisional tier: LIGHT)
 
-- [ ] T11 [Tier B] Close the record: `_shared/calibrations.md` gains `yootheme-6-of-6-tier-a` (the corpus evidence: 6/6 Tier A, 6/6 `new test`, incl. a module-wire and a lookup table; 6 reviewer dispatches → 2 findings on the josworld run); `evals/trigger-queries.json` gains cases for `testing-workflow` ("this cluster is just CPT config on ntdst-core — do the tasks need tests?" → trigger) and `building` ("run the plan; the clusters are behaviour lane" → trigger); bump `plugin.json` 0.20.0 → 0.21.0 with the lane named in the description; re-shape THIS feature's `tasks.md` so Cluster C becomes `Lane: behaviour` (bare members, the existing block) and the file ends with `── BRANCH REVIEW ──` — the first self-hosting artifact — and re-run gate-check to exit 0.  (files: plugins/netdust-agent/skills/_shared/calibrations.md, plugins/netdust-agent/evals/trigger-queries.json, plugins/netdust-agent/.claude-plugin/plugin.json, specs/harness-inversion/tasks.md)
+Lane: contract — one task that closes on the self-hosting gate, no behaviour to observe from outside
+
+- [x] T11 [Tier B] Close the record: `_shared/calibrations.md` gains `yootheme-6-of-6-tier-a` (the corpus evidence: 6/6 Tier A, 6/6 `new test`, incl. a module-wire and a lookup table; 6 reviewer dispatches → 2 findings on the josworld run); `evals/trigger-queries.json` gains cases for `testing-workflow` ("this cluster is just CPT config on ntdst-core — do the tasks need tests?" → trigger) and `building` ("run the plan; the clusters are behaviour lane" → trigger); bump `plugin.json` 0.20.0 → 0.21.0 with the lane named in the description; re-shape THIS feature's `tasks.md` so Cluster C becomes `Lane: behaviour` (bare members, the existing block) and the file ends with `── BRANCH REVIEW ──` — the first self-hosting artifact — and re-run gate-check to exit 0.  (files: plugins/netdust-agent/skills/_shared/calibrations.md, plugins/netdust-agent/evals/trigger-queries.json, plugins/netdust-agent/.claude-plugin/plugin.json, specs/harness-inversion/tasks.md)
   Test-author: solo — Tier B.
   Proven by: machine gate — `gate-check.py specs/harness-inversion` exit 0 after the re-shape (SC-3) and the full runner green (SC-2).
   Unit test: no unit test: Tier B, documentation, eval cases and version metadata.
@@ -122,6 +120,8 @@ RED until: `plugins/netdust-agent/tests/test_spec_gate_check.py::test_lane_behav
 ---
 
 ### Cluster E — the flow floor (3 tasks · effective stakes: high · provisional tier: FULL)
+
+Lane: contract
 
 - [ ] T12 [Tier A] Makefile refusals and the flow test: every flow verb exits non-zero naming the fix when `origin` is absent; `_ensure-safe-branch` refuses on a rung branch (never switches, never creates); `doctor` and `status` print the flow state first; `scripts/tests/flow-test.sh` builds a temp repo + bare origin + minimal `site.yml` and asserts the flow and its refusals; `make test` runs it.  (files: plugins/netdust-wp/templates/Makefile, plugins/netdust-wp/templates/scripts/tests/flow-test.sh)
   Test-author: solo — A-lite: the contract is a table of shell exit codes over a temp repo, enumerable from the spec; no attacker-supplied input; high stakes are carried by the FULL review and by T13's split, not by a second author on a Makefile.
@@ -144,3 +144,5 @@ RED until: `plugins/netdust-agent/tests/test_spec_gate_check.py::test_lane_behav
 **Integration gate (Cluster E):** in a scratch WordPress project scaffolded from the template with a bare origin: `make test` green including `flow-test.sh`; with the netdust-agent hook active, `git commit` on `development` is denied and `make feature name=x && git commit` is allowed; `bash plugins/netdust-agent/tests/run.sh` green (live-corpus skip excepted); `make ship` is NOT run.
 
 ── REVIEW GATE ── (tier: FULL — `security-sentinel` on the guard diff; the floor is the harness's own enforcement boundary.)
+
+── BRANCH REVIEW ── (tier: LIGHT — the behaviour-lane cluster's only panel; contract clusters carried their own gates)

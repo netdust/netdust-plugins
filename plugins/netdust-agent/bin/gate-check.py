@@ -647,7 +647,9 @@ LANE_VALUES = ("behaviour", "contract")
 LANE_LINE = re.compile(
     r"^\s*(?:[-*]\s+)?(?:\*\*)?Lane(?:\*\*)?:\s*(\S.*?)\s*$", re.IGNORECASE)
 LANE_IN_LABEL = re.compile(r"\blane:\s*([^·()\n]*)", re.IGNORECASE)
-BRANCH_REVIEW_MARKER = re.compile(r"──\s*BRANCH REVIEW\s*──")
+# ANCHORED at line start: a task that MENTIONS the marker in its prose is not a marker
+# (self-hosting found three "markers" in a file carrying one).
+BRANCH_REVIEW_MARKER = re.compile(r"^\s*──\s*BRANCH REVIEW\s*──")
 
 
 def _parse_lane_value(raw: str) -> tuple[str | None, str, str]:
@@ -1779,7 +1781,8 @@ def effective_cluster_stakes(cluster_name: str, plan_text: str | None) -> str | 
 LANE_PAPERWORK = re.compile(r"^\s+(Test-author|Proven by|Unit test|Integration test):", re.IGNORECASE)
 
 
-def check_cluster_lanes(tasks_text: str, plan_text: str | None, f: Findings) -> None:
+def check_cluster_lanes(tasks_text: str, plan_text: str | None, f: Findings,
+                        repo_root: Path | None = None) -> None:
     """harness-inversion FR-1/FR-3/FR-4 — the lane is declared per cluster, machine-refused
     in the UNSAFE direction only, machine-warned in the wasteful one.
 
@@ -1822,7 +1825,9 @@ def check_cluster_lanes(tasks_text: str, plan_text: str | None, f: Findings) -> 
     if bare or invalid:
         return
 
-    repo_root = None  # block validity here rides the files rung; disk is the caller's
+    # block validity uses the SAME two rungs as check_behaviour_clusters (a member's
+    # files, or a test-shaped file on disk under the repo root) — the two checks must
+    # never disagree about one cluster (self-hosting found them disagreeing).
     boundary, high, partial, wasteful, drift = [], [], [], [], []
     n_beh = n_con = 0
     for c in clusters:
@@ -2244,7 +2249,7 @@ def run_checks(spec_dir: Path) -> Findings:
         check_deliverable_first(plan_text, spec_text, tasks_text, f)  # 1j — cross-artifact
     if tasks_text is not None:
         root = repo_root_for(spec_dir)  # RED-until paths resolve against the git toplevel
-        check_cluster_lanes(tasks_text, plan_text, f)  # harness-inversion FR-1/3/4
+        check_cluster_lanes(tasks_text, plan_text, f, repo_root=root)  # harness-inversion FR-1/3/4
         exempt = behaviour_lane_task_ids(tasks_text)   # FR-2 — bare members skip the four
         check_task_tiers(tasks_text, f, exempt=exempt)
         check_files_segment(tasks_text, f)
