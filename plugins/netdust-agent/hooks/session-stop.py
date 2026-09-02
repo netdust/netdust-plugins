@@ -456,8 +456,18 @@ def git_commit_memory(cwd: str) -> None:
 
         _ensure_sidecar_gitignored(cwd)
 
+        # Stage only the dirs that exist. git treats a pathspec matching nothing as
+        # fatal for the WHOLE command, so `git add memory/ tasks/` in a project with
+        # no tasks/ staged NOTHING and the hook committed nothing — silently, because
+        # the fatal went to a captured stderr and this runs after the `done` log line.
+        # ntdst-core and ntdst-baseline were the only projects without tasks/, and the
+        # only two whose memory/ never reached git (2026-09-02).
+        paths = [p for p in ("memory/", "tasks/") if (Path(cwd) / p).is_dir()]
+        if not paths:
+            return
+
         subprocess.run(
-            ["git", "add", "memory/", "tasks/"],
+            ["git", "add", *paths],
             cwd=cwd, capture_output=True,
         )
 
