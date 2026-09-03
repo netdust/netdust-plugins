@@ -1792,8 +1792,11 @@ def check_cluster_lanes(tasks_text: str, plan_text: str | None, f: Findings,
     """harness-inversion FR-1/FR-3/FR-4 — the lane is declared per cluster, machine-refused
     in the UNSAFE direction only, machine-warned in the wasteful one.
 
-      - no cluster declares a lane → silent: a pre-convention artifact reads as
-        all-contract, today's grammar byte-for-byte (AC-2);
+      - no cluster declares a lane → WARN: behaviour is the default lane, so a plan that
+        names none has skipped the decision; the artifact still reads as all-contract,
+        today's grammar byte-for-byte (AC-2), and a pre-convention artifact silences the
+        WARN with the legacy-artifact marker (2026-09-03: a lane-less plan written
+        against 0.21.1 passed silently because it copied a 0.20 exemplar);
       - some declare, some don't → FAIL naming the bare cluster(s); an unreadable value
         → FAIL naming it;
       - `behaviour` with a member whose files/prose hit `_boundary_hit()` → FAIL naming
@@ -1817,6 +1820,12 @@ def check_cluster_lanes(tasks_text: str, plan_text: str | None, f: Findings,
     clusters = parse_behaviour_clusters(tasks_text)
     declared = [c for c in clusters if c["lane_raw"] is not None]
     if not declared:
+        if clusters and not legacy_waiver(tasks_text) and not legacy_waiver(plan_text):
+            f.add("warn", "cluster-lane",
+                  f"{len(clusters)} cluster(s) and no `Lane:` line anywhere — behaviour is the "
+                  "default lane; name each cluster's lane (`Lane: behaviour`, or "
+                  "`Lane: contract — <reason>`). A pre-convention artifact says so with the "
+                  "`<!-- gate-check: legacy-artifact — <reason> -->` marker")
         return
     bare = [c["name"] for c in clusters if c["lane_raw"] is None]
     invalid = [f"{c['name']} (`{c['lane_raw']}`)" for c in declared if c["lane"] is None]

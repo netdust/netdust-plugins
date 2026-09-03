@@ -46,3 +46,28 @@ the BODY, not the status alone — at minimum
 check. A status-only curl proves the server started answering, not that the page
 rendered. The same applies to any gate whose success channel can be committed before
 the failure happens (headers before render, exit codes of pipelines, queue acks).
+
+---
+
+## An older tasks.md in the project is not the grammar
+
+**Problem (ntdst-baseline polylang, 2026-09-03):** the plan was written with
+`planning` 0.21.1 loaded — the text that says `Lane: behaviour` is the default — and
+still came out all-contract with no `Lane:` line on any cluster. The model copied the
+shape of `specs/edushare-verhaal-template/tasks.md`, a plan from before the lane
+existed. `gate-check` passed it silently (the AC-2 backward-compatibility silence),
+so nothing pushed back until Stefan asked whether the new skills were being used.
+A second pass re-laned two of five clusters as behaviour and dropped two review panels.
+
+**Rule:** the grammar is `bin/gate-check.py` plus this skill's text, never a
+neighbouring plan. A project's earlier `tasks.md` is a snapshot of the harness version
+that wrote it. Before copying any shape from it, check the plan's own date against the
+convention's (the lane: 2026-09-02). Since this lesson, a lane-less `tasks.md` WARNs
+unless it carries the legacy-artifact marker, so the silence no longer hides the miss —
+but a WARN is read only by someone who reads the findings, so read them.
+
+**Cheap test:** for each cluster ask the skill's question out loud in the plan — "does
+a task here encode a rule THIS project chose, or is it configuration over a framework
+that already has the rule?" — and write the answer after the dash of the `Lane:` line.
+A cluster whose reason you cannot finish in one sentence is behaviour.
+

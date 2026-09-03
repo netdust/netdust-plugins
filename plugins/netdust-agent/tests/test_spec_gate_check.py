@@ -2815,8 +2815,13 @@ def run():
                     "lane: an unknown lane value FAILs naming it"))
 
     rc, out = _run({"spec.md": SPEC_TRIGGERED, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "! [cluster-lane]" in out and "no `Lane:`" in out,
+                    "lane (g): no `Lane:` anywhere → one WARN, exit 0 — a new plan must name its lanes"))
+
+    waived = TASKS_GOOD + "\n<!-- gate-check: legacy-artifact — written under 0.20, before the lane existed -->\n"
+    rc, out = _run({"spec.md": SPEC_TRIGGERED, "plan.md": PLAN_GATES_FULL, "tasks.md": waived})
     results.append((rc == 0 and "cluster-lane" not in out,
-                    "lane (g): no `Lane:` anywhere → zero cluster-lane findings (AC-2 lock)"))
+                    "lane (g2): no `Lane:` + legacy waiver → zero cluster-lane findings (the AC-2 silence, for waived artifacts only)"))
 
     # ── 28. lane-aware per-task checks — FR-2 (T02) ──────────────────────────
     rc, out = _run({"tasks.md": TASKS_LANE_BEHAVIOUR_BARE})

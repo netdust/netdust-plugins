@@ -81,6 +81,11 @@ gates require, beyond upstream's own craft:
   user-facing surface: one row per intended flow, edges enumerated (empty, denied,
   re-entry, concurrent, boundary, mid-flow failure). Stage 3 drives this matrix.
 
+Do not copy the shape of an existing `tasks.md` in the project: an earlier plan is a
+snapshot of the harness version that wrote it, and plans before 0.21 carry no `Lane:`
+and read as all-contract. The grammar is `bin/gate-check.py` and this file
+(`lessons.md`: *An older tasks.md in the project is not the grammar*).
+
 Order clusters by the named ask, riskiest first — when a session dies mid-plan, what
 survives must be the thing that was asked for.
 
