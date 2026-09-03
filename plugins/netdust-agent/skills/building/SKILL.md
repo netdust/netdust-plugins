@@ -120,8 +120,11 @@ A behaviour-lane cluster carries no marker and buys no panel: its review is the 
   `reviewer` + `code-simplicity-reviewer`; FULL (any security surface, invariant, or
   data-layer/migration touch) — add `security-sentinel`, and `invariant-auditor` whenever
   the project carries an `ARCHITECTURE-INVARIANTS.md` (the no-drift check: bypasses AND
-  reinvented solutions). The author never reviews its own
-  diff; escalation to FULL is one-way. Record the verify-budget telemetry line
+  reinvented solutions). **On a WordPress project, or any package that consumes
+  ntdst-core, `netdust-wp:ntdst-drift-reviewer` sits on EVERY panel — LIGHT, STANDARD and
+  FULL, and the branch review — not only at shake-out** (Stefan's ruling 2026-09-03, after
+  six approved tasks built plain WordPress on top of the framework). The author never
+  reviews its own diff; escalation to FULL is one-way. Record the verify-budget telemetry line
   (`bin/verify-budget.py` — reports, never interrupts) in the cluster evidence.
 - **Findings close by ledger arithmetic**: Criticals (and Importants at effective-high
   stakes) become task lines closing on a named check; other Importants are triaged
