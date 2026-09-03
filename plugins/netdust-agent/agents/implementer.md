@@ -118,12 +118,3 @@ For doc-only or tooling-only tasks (no code change) you may omit the Test-eviden
   deviation). No threat-model cross-references, no "test-facing, never called at
   runtime" essays, no step narration, no docblocks restating the signature. Six tasks
   copied a prose-heavy sibling and every one had to be trimmed afterwards.
-- **The framework is the base even inside a framework package.** When the dispatch says
-  ntdst-core is present: resolve collaborators through the container (`ntdst_get()`),
-  never `new`; keep constructors scalar-free so autowiring works (read config through
-  one accessor); log through `ntdst_log()` where the code would otherwise stay silent;
-  read `~/Sites/ntdst-core/core/Container.php` and `services/Logger.php` before the
-  first line. Reach for `ntdst_data()` only for model/meta queries — a WordPress query
-  var (`get_posts(['lang' => …])`) is the right seam when the plugin being integrated
-  hooks `WP_Query`.
-

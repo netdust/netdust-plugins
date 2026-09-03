@@ -86,3 +86,23 @@ fine. Deferring it *and* declaring a working version in the same breath is not:
 the human sees the whole page, not the task boundary. If a cluster's deliverable
 is "a human can look at this", nothing visible in that frame is out of scope —
 either fix it or say plainly, at the gate, what will still look wrong and why.
+
+---
+
+## The stack skills ride in every dispatch, and the panel matches the base (2026-09-03)
+
+**Problem (ntdst-baseline polylang, Clusters A–B):** six tasks on a package that sits on
+ntdst-core were dispatched without `netdust-wp:ntdst-framework` or `wp-testing`, and
+reviewed by panels of reviewer + code-simplicity only. Every task built plain WordPress —
+`new` instead of the container, silence instead of `ntdst_log()`, prose comments copied
+from a bloated sibling — and every review approved it, because nobody on the panel owned
+the framework. Stefan caught it reading the diff.
+
+**Rule:** on a WordPress project (or any package that consumes ntdst-core) the controller
+loads `netdust-wp:ntdst-framework` before the first dispatch and names it, plus
+`wp-testing`, in every implementer prompt; the plan's `## Architecture invariants touched`
+cites ntdst-core's `ARCHITECTURE-INVARIANTS.md` even when the repo has none of its own;
+and the cluster panel on such a package includes `netdust-wp:ntdst-drift-reviewer` (or
+`invariant-auditor`) at STANDARD tier, not only at FULL. This is what
+`netdust-wp/CLAUDE.md` already says; the failure was the controller not doing it.
+
