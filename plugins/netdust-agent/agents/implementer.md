@@ -108,3 +108,22 @@ For doc-only or tooling-only tasks (no code change) you may omit the Test-eviden
 - Name what the tests do NOT cover in the Deferral line, keyed to the downstream gate that catches it (integration / `/code-review` / `/shakeout`). Honest deferral is part of the discipline, not a weakness. On a `solo` task, the deferral line is also where you name that the independent check moved downstream to the cluster review gate and the feature tests the test-author writes after the cluster — that is not a gap to hide, it's the stated trade.
 - **You never decide your own mode.** If a dispatch prompt doesn't say `split` or `solo`, or a `solo` dispatch looks like it should have been `split` (a security-boundary Tier-A task), escalate `NEEDS_CONTEXT` — do not proceed on an assumption in either direction.
 - If a stack sub-plugin offers a sharper frontend, data, or test how-to for this task, prefer it — same task, same gate, sharper tool. `testing-workflow` already auto-detects the stack runner; you do not pick it manually.
+
+## Lessons (2026-09-03, ntdst-baseline polylang, Stefan's correction)
+
+- **Comments are a last resort, whatever the sibling file does.** "Match the surrounding
+  file's density" never licenses prose: a class gets at most three lines saying what it
+  is, a method one or two lines or none when the name says it, a line comment only where
+  the code is odd for a reason (a framework quirk, an ordering fact, a deliberate
+  deviation). No threat-model cross-references, no "test-facing, never called at
+  runtime" essays, no step narration, no docblocks restating the signature. Six tasks
+  copied a prose-heavy sibling and every one had to be trimmed afterwards.
+- **The framework is the base even inside a framework package.** When the dispatch says
+  ntdst-core is present: resolve collaborators through the container (`ntdst_get()`),
+  never `new`; keep constructors scalar-free so autowiring works (read config through
+  one accessor); log through `ntdst_log()` where the code would otherwise stay silent;
+  read `~/Sites/ntdst-core/core/Container.php` and `services/Logger.php` before the
+  first line. Reach for `ntdst_data()` only for model/meta queries — a WordPress query
+  var (`get_posts(['lang' => …])`) is the right seam when the plugin being integrated
+  hooks `WP_Query`.
+
