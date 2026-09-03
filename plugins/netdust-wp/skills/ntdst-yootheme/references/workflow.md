@@ -14,6 +14,10 @@ script that does the work; the prose is what the script cannot know.
   `yoo-config.php`, `yoo-content.php`, `yoo-lint.php`, `yoo-lint-stubs.php`,
   `yoo-measure.mjs`, `yoo-recompile.mjs`, `yoo_layout.py`, `yoo-seed.php`.
   Always `wp --user=<admin-id>` for writes.
+- **Singles built per post** (a CPT whose page is the builder, the model only its card
+  fields): one starter layout per type in the library — `yoo-content.php library set
+  single-tool.json` (root `{"type":"layout","name":"Single · Tool",…}`, header bound to
+  `<plural>.single<Type>`); never bind `content` on such a page (`lessons.md` §6).
 
 ## 1. Tokens → LESS (the style)
 

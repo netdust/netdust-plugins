@@ -27,6 +27,7 @@ ddev ssh                           # shell into web container
 ddev composer <command>            # composer in container (PHP projects)
 ddev wp <command>                  # WP-CLI in container (WP projects only)
 ddev exec npm install              # run any command in the container
+ddev exec 'DRY=1 wp eval-file x.php'   # an env var set in front of `ddev wp …` never reaches the container
 ddev export-db --file=backup.sql.gz
 ddev import-db --src=backup.sql
 ddev mysql                         # interactive MySQL

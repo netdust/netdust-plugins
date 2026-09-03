@@ -203,3 +203,14 @@ between categories, and a report that says "clean" about a gap is worse than one
 says nothing — it certifies the space it never looked at. The same instinct is why Part 1
 must print `Part 1 skipped` or `not run — core-only` rather than a zero: the honest
 answer to "I did not look" is never "I found nothing."
+
+### 2026-09-03 — A field type that works in the admin can silently fail in another reader
+
+**Pattern that looked like drift:** none — a rule nuance. `'type' => 'relation'` scoped to `'post_type' => 'attachment'` audited clean against the vocabulary and the picker worked.
+
+**Why it matters:** a status or shape carve-out can exist in one convergence point (core's admin picker widens attachments to `inherit`) and not in its sibling (baseline's YOOtheme resolver keeps `publish` only), so the same declaration is valid on the write side and empty on the read side.
+
+**Example from a real audit:** josworld `ToolService.php` `file` field, 2026-09-03 — resolved empty on the tool starter's download button; fixed by declaring the native `file` type.
+
+**Updated exception rule:** when a project has just enabled the ntdst-baseline `yootheme` module, check every `relation` field's target post type against `FieldTypeBridge::$relatedPosts`' status gate — a target whose native status is never `publish` (attachments, custom non-publish workflows) is a Critical, not a note.
+

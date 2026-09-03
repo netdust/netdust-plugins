@@ -105,3 +105,16 @@ This is brittle (breaks silently if the property is renamed) and appears in **tw
 ## Resolved
 
 *Empty for now.*
+
+### 2026-09-03 — ntdst-baseline's relation resolver and ntdst-core's relation picker disagree about attachments
+
+**Where surfaced:** josworld drift audit on `josworld-core/services/content` after the site enabled the baseline `yootheme` module (spec cpt-builder-singles). Also the reason `ToolService` had declared its download as `relation → attachment` at all: the class docblock claimed the framework has no file type.
+
+**The gap:** `ntdst-core/admin/RelationField.php` (search path) widens `post_status` to `['publish', 'inherit']` when a relation is scoped to `attachment`, with a comment naming why. `ntdst-baseline/services/yootheme/FieldTypeBridge.php`'s `$relatedPosts` closure (resolve path) gates on `get_post_status($id) === 'publish'` with no attachment carve-out. An editor can pick a file that the builder then resolves to an empty list — no error, no log line.
+
+**Project-side workaround:** declare the field as the native `file` / `image` / `gallery` type (josworld 7eb21fb); a one-off script normalised the stored relation arrays to ints.
+
+**Suggested framework change:** either (a) `$relatedPosts` gains the same `inherit` carve-out for `post_type === 'attachment'`, or (b) `relation → attachment` is refused at `register()` with a `_doing_it_wrong` naming the media types — the closed-vocabulary posture prefers (b): two convergence points that must agree forever is the failure `FieldTypeBridge`'s own docblock warns about.
+
+**Severity:** Bug
+

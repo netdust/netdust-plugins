@@ -84,6 +84,12 @@ resolving **published posts only**; `image`/`file`/`gallery` as YOOtheme's own
 to `String` — a field missing from the picker is a question an editor asks, a field
 rendering "Array" on a live page is one a visitor sees.
 
+**A `relation` scoped to `attachment` resolves EMPTY through this module.** The
+relation resolver keeps only `publish` posts and an attachment is `inherit`, so the
+picker accepts a file (core's admin picker widens to `inherit`) and the page renders
+nothing, silently. Declare `file`, `image` or `gallery` — the native media types
+resolve through the `Attachment` closure with no status gate (josworld, 2026-09-03).
+
 Two boundaries: the model DECLARATION is the allow-list, so undeclared meta is
 unreachable; and a model whose `meta_prefix` is empty is refused whole, because its
 declared names would compose to bare keys another plugin may own.

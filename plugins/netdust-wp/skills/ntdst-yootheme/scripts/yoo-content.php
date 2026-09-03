@@ -19,6 +19,12 @@
  *   wp eval-file yoo-content.php template delete <id>
  *   wp eval-file yoo-content.php template export        > all-templates.json
  *
+ *   # library (My Layouts — starter layouts and saved sections, upsert by name)
+ *   wp eval-file yoo-content.php library list
+ *   wp eval-file yoo-content.php library get 3f2a9c1e   > starter.json
+ *   wp eval-file yoo-content.php library set starter.json     # root: a named layout or section
+ *   wp eval-file yoo-content.php library delete 3f2a9c1e
+ *
  *   # builder widgets (layouts in header / dialog / bottom positions)
  *   wp eval-file yoo-content.php widget list
  *   wp eval-file yoo-content.php widget get 2           > widget.json
@@ -446,6 +452,50 @@ function yc_widget_write(int $id, object $layout, array $flags, ?string $title =
     WP_CLI::success("builderwidget-$id written" . ($position ? " → position '$position'" : ''));
 }
 
+// ------------------------------------------------------------- library
+
+function yc_library(): array {
+    return yc_storage()->get('library', []) ?: [];
+}
+
+function yc_library_list(): void {
+    $lib = yc_library();
+    if (!$lib) { WP_CLI::log('(empty library)'); return; }
+    foreach ($lib as $id => $el) {
+        WP_CLI::log(sprintf('[%-10s] %-8s %s', $id, $el['type'] ?? '?', $el['name'] ?? ''));
+    }
+}
+
+/**
+ * Upsert one library entry from a file whose root is a named `layout` or `section`.
+ * The `name` is the key the builder lists and the key this upserts on; a layout
+ * root is linted like a page. The id is stable per name so re-runs update in place.
+ */
+function yc_library_set(string $file, array $flags): void
+{
+    $el = yc_read_json($file);
+    $name = yc_prop($el, 'name');
+    $type = yc_prop($el, 'type');
+    if (!$name) WP_CLI::error("library entry needs a 'name' — it is the upsert key and what the builder lists.");
+    if (!in_array($type, ['layout', 'section'], true)) WP_CLI::error("library entry root must be a 'layout' or a 'section' — got '$type'.");
+    if ($type === 'layout') {
+        yc_ensure_version($el);
+        yc_lint($el, "library:$name", $flags);
+    }
+    $lib = yc_library();
+    yc_backup('library', $lib);
+    $id = null;
+    foreach ($lib as $k => $entry) {
+        if (($entry['name'] ?? null) === $name) { $id = (string) $k; break; }
+    }
+    $id ??= substr(md5($name), 0, 8);
+    $loaded = yc_builder()->withParams(['context' => 'save'])
+        ->load(json_encode($el, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    if ($loaded === null) WP_CLI::error('builder->load() rejected the entry.');
+    yc_storage()->set("library.{$id}", $loaded);
+    WP_CLI::success("library '$name' " . (isset($lib[$id]) ? 'updated' : 'added') . " as $id ($type) — persisted at shutdown.");
+}
+
 // ------------------------------------------------------------- dispatch
 
 switch ("$group $cmd") {
@@ -509,6 +559,29 @@ switch ("$group $cmd") {
         yc_widget_write($ids ? max($ids) + 1 : 2, yc_read_json($argv[2]), $flags, $argv[1], $argv[0]);
         break;
 
+    case 'library list':   yc_library_list(); break;
+
+    case 'library get':
+        $lib = yc_library();
+        $id = $argv[0] ?? '';
+        if (!isset($lib[$id])) WP_CLI::error("no library entry '$id' — try `library list`.");
+        yc_dump($lib[$id]);
+        break;
+
+    case 'library set':
+        if (count($argv) < 1) WP_CLI::error('usage: library set <entry.json> [no-lint]');
+        yc_library_set($argv[0], $flags);
+        break;
+
+    case 'library delete':
+        $id = $argv[0] ?? '';
+        $lib = yc_library();
+        if (!isset($lib[$id])) WP_CLI::error("no library entry '$id'");
+        yc_backup('library', $lib);
+        yc_storage()->del("library.{$id}");
+        WP_CLI::success("library entry '$id' deleted — persisted at shutdown.");
+        break;
+
     case 'template delete':
         $id = $argv[0] ?? '';
         $all = yc_templates();
@@ -526,5 +599,6 @@ switch ("$group $cmd") {
         WP_CLI::error("unknown: '$group $cmd'\n"
             . "  page     list | get <id|slug> | set <id|slug> <file.json> | patch <id|slug> <path> <json>\n"
             . "  template list | get <id> | set <id|new> <file.json> | patch <id> <path> <json> | delete <id> | reorder <ids> | export\n"
-            . '  widget   list | get <id> | set <id> <file.json> | new <position> <title> <file.json>');
+            . "  widget   list | get <id> | set <id> <file.json> | new <position> <title> <file.json>\n"
+            . '  library  list | get <id> | set <entry.json> | delete <id>   (entry root: a named layout or section)');
 }

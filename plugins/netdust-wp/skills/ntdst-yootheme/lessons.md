@@ -158,3 +158,22 @@ Not mechanical:
   body line-pitch; it varies per export), un-blend a 1px rule per channel
   (`true = bg + Σ(row − bg)`), prefer the smaller of two candidate tokens.
 - Don't `tail` test output — it hides `1 failed` behind "N passed".
+
+## 6. Singles built in the builder (josworld, 2026-09-03)
+
+A post that carries a builder layout renders through `page.php`
+(`builder-wordpress/src/Listener/RenderBuilderPage.php`) and its `single-<type>`
+template never runs. A single is template-rendered OR builder-rendered, never both;
+keep the template as the trimmed fallback for a post without a layout.
+
+| symptom | cause | fix |
+|---|---|---|
+| a built single loses the template's sections | the template does not apply once the post has a layout | expected — the starter layout carries the header; the template is the fallback |
+| a text element bound to `content` duplicates the page or destroys the prose on save | on a builder page `content` IS the layout's own rendered introtext — a **self-echo** | never bind `content` on a builder page; use a plain text element |
+| a "pick a post" item shows the wrong post before anyone picked one | `custom<Type>` with `id: 0` is "no filter" → the first published post | placeholder `id: -1` renders empty; the editor selects via "Select Manually" |
+| a `relation` field to `attachment` resolves empty through the module | attachments are `inherit`, the resolver gates on `publish` | declare `file` / `image` / `gallery` — the native media types |
+
+Starter layouts per type live in the builder library as `type: layout` entries with a
+`name` (`Single · Tool`): `yoo-content.php library set starter.json` upserts by name.
+The library lists both layouts and sections; a layout entry is offered with
+"Replace / Insert at the top / Insert at the bottom".
