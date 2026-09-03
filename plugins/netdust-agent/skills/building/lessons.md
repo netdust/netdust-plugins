@@ -106,3 +106,20 @@ and the cluster panel on such a package includes `netdust-wp:ntdst-drift-reviewe
 `invariant-auditor`) at STANDARD tier, not only at FULL. This is what
 `netdust-wp/CLAUDE.md` already says; the failure was the controller not doing it.
 
+---
+
+## `cluster-open` is a promise the machine layer does not keep yet (2026-09-03)
+
+**Problem:** SKILL.md's behaviour lane says "write `cluster-open` to the loop ledger
+naming it (the hook's tolerance reads that event)". Grep the 0.21.x cache:
+`hooks/subagent-stop.py` and `bin/` contain no such tolerance — the string exists only in
+the skill text. An implementer closing the first task of a behaviour cluster reports the
+cluster RED as a red suite and the stop hook blocks the close.
+
+**Until it is implemented:** dispatch a behaviour cluster's tasks as ONE implementer
+dispatch with one commit per task, so the cluster RED is written first, watched failing,
+and goes green inside the same dispatch; the evidence line is then honestly `exit=0`.
+Never name a partial suite in `suite=` to dodge the hook. **To implement:** the stop hook
+reads a `cluster-open <test path>` line from the plan workspace ledger and tolerates
+exactly that file's failures for role=implementer until a `cluster-close` line follows.
+
