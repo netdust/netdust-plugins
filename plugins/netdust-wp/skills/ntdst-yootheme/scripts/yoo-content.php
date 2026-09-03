@@ -195,11 +195,19 @@ function yc_patch(object $root, string $path, $value): void
     $segs = array_values(array_filter(explode('/', trim($path, '/')), 'strlen'));
     if (!$segs) WP_CLI::error('empty path');
     $last = array_pop($segs);
-    $ref = $root;
+    // Walk by reference: a `children` list is a PHP array, and an array copy
+    // silently swallows the write while the object branch persists it.
+    $ref = &$root;
     foreach ($segs as $s) {
-        $next = is_array($ref) ? ($ref[$s] ?? null) : ($ref->$s ?? null);
-        if ($next === null) WP_CLI::error("path segment `$s` does not exist in the LIVE copy — nothing written (re-fetch and look).");
-        $ref = $next;
+        if (is_array($ref)) {
+            if (!array_key_exists($s, $ref)) WP_CLI::error("path segment `$s` does not exist in the LIVE copy — nothing written (re-fetch and look).");
+            $ref = &$ref[$s];
+        } elseif (is_object($ref)) {
+            if (!isset($ref->$s)) WP_CLI::error("path segment `$s` does not exist in the LIVE copy — nothing written (re-fetch and look).");
+            $ref = &$ref->$s;
+        } else {
+            WP_CLI::error("path segment `$s` sits under a scalar — nothing written.");
+        }
     }
     if (is_array($ref)) {
         if (!array_key_exists($last, $ref)) WP_CLI::error("`$last` does not exist at the end of the path — nothing written.");

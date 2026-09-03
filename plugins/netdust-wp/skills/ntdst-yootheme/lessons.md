@@ -85,6 +85,10 @@ Not mechanical:
   `archive-<type>` template. Templates match in stored order; the catch-all goes last.
 - Templates and library items are COPIES on insert; `patch` the live copy for one-prop
   edits — a get → edit → set cycle loses a concurrent human save.
+- **`patch` can replace a whole node** (`children/4` = a section JSON), not only a
+  prop. Until 2026-09-03 a path ending in a `children` list reported "Success" and
+  wrote nothing — PHP copied the array; `yc_patch` walks by reference now. Prove a
+  structural patch by the node count in the Success line, not by the word.
 
 ## 3. Site chrome
 
