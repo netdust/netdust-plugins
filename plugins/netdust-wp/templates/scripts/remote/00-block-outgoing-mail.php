@@ -23,7 +23,7 @@ add_action( 'muplugins_loaded', function () {
     // skip its own sending and report success, so nothing downstream errors.
     add_filter( 'pre_wp_mail', function ( $null, $atts ) {
         $to = is_array( $atts['to'] ?? '' ) ? implode( ',', $atts['to'] ) : (string) ( $atts['to'] ?? '' );
-        error_log( sprintf( '[vad-mail-block] suppressed mail to %s — %s', $to, $atts['subject'] ?? '(no subject)' ) );
+        error_log( sprintf( '[ntdst-mail-block] suppressed mail to %s — %s', $to, $atts['subject'] ?? '(no subject)' ) );
         return true;
     }, PHP_INT_MAX, 2 );
 

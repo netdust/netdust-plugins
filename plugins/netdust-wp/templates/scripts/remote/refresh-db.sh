@@ -13,7 +13,10 @@ SRC="$1"; DST="$2"; SRC_URL="$3"; DST_URL="$4"; STATE_DIR="$5"; ENV_NAME="$6"; W
 WP_FLAG=()
 [ -n "$WP_PATH" ] && WP_FLAG=(--path="$WP_PATH")
 STAMP=$(date +%Y%m%d-%H%M%S)
-DUMP="/tmp/vad-refresh-$STAMP.sql"
+DUMP="/tmp/ntdst-refresh-$ENV_NAME-$STAMP-$$.sql"
+# All sites share this host, so the name must be unique and the dump must
+# never outlive the run — it holds production data.
+trap 'rm -f "$DUMP"' EXIT
 
 if [ "$ENV_NAME" = "production" ] || [ "$DST" = "$SRC" ]; then
   echo "refresh-db: refused — target is production" >&2
@@ -39,7 +42,6 @@ echo "Exporting production database..."
 
 echo "Importing into $ENV_NAME..."
 ( cd "$DST" && wp db import "$DUMP" "${WP_FLAG[@]}" )
-rm -f "$DUMP"
 
 echo "Rewriting URLs: $SRC_URL -> $DST_URL"
 ( cd "$DST" && wp search-replace "$SRC_URL" "$DST_URL" --all-tables --precise --skip-columns=guid "${WP_FLAG[@]}" --quiet )

@@ -124,7 +124,7 @@ setup: ## Complete local setup
 		echo "$(YELLOW)✓ Created .env - Please configure it!$(RESET)"; \
 	fi
 	@if ! ddev describe >/dev/null 2>&1; then \
-		ddev config --docroot=$$($(SITE) local.webroot) --project-type=wordpress --project-name=$$($(SITE) local.ddev_project) && \
+		ddev config --docroot=$$($(SITE) structure.webroot) --project-type=wordpress --project-name=$$($(SITE) local.ddev_project) && \
 		echo "$(GREEN)✓ DDEV configured$(RESET)"; \
 	fi
 	@ddev start
@@ -443,7 +443,7 @@ health: ## Fleet health: ledger, server drift, deploy guards, branch topology, p
 	done
 	@echo ""
 	@echo "$(BLUE)Drift — has anyone edited a server by hand?$(RESET)"
-	@EXCL=""; for x in $$($(SITE) deploy.exclude 2>/dev/null); do EXCL="$$EXCL --exclude=$$x"; done; \
+	@set -f; EXCL=""; for x in $$($(SITE) deploy.exclude 2>/dev/null); do EXCL="$$EXCL --exclude=$$x"; done; set +f; \
 	for e in $$($(SITE) environments); do \
 		H=$$($(SITE) environments.$$e.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
 		R=$$($(SITE) environments.$$e.path); \
@@ -531,7 +531,7 @@ rollback: ## Redeploy the previously deployed commit (make rollback env=producti
 	git worktree add --detach --quiet "$$WT" "$$PREV"; \
 	REMOTE=$$($(SITE) environments.$$ENV.path); \
 	EXCL=""; \
-	for e in $$($(SITE) deploy.exclude); do EXCL="$$EXCL --exclude=$$e"; done; \
+	set -f; for e in $$($(SITE) deploy.exclude); do EXCL="$$EXCL --exclude=$$e"; done; set +f; \
 	for p in $$($(SITE) deploy.payload); do \
 		[ -d "$$WT/$(WEBROOT)/$$p" ] || continue; \
 		echo "$(BLUE)  → $$p$(RESET)"; \
@@ -623,9 +623,9 @@ _pull-db:
 	ssh -qn "$$HOST" "cd $$SRC && wp db export --path=wp --default-character-set=utf8mb4 --single-transaction --quick - | gzip" \
 		| gunzip \
 		| sed -E 's/DEFINER=[^ ]+ / /g; s/SQL SECURITY DEFINER/SQL SECURITY INVOKER/g' \
-		> /tmp/vad-pull.sql || exit 1; \
-	ddev import-db --file=/tmp/vad-pull.sql || { rm -f /tmp/vad-pull.sql; exit 1; }; \
-	rm -f /tmp/vad-pull.sql; \
+		> /tmp/$(PROJECT_NAME)-pull.sql || exit 1; \
+	ddev import-db --file=/tmp/$(PROJECT_NAME)-pull.sql || { rm -f /tmp/$(PROJECT_NAME)-pull.sql; exit 1; }; \
+	rm -f /tmp/$(PROJECT_NAME)-pull.sql; \
 	echo "$(YELLOW)Rewriting URLs: $$SRC_URL → $$LOCAL_URL$(RESET)"; \
 	ddev wp search-replace "$$SRC_URL" "$$LOCAL_URL" --all-tables --precise --skip-columns=guid --quiet || exit 1; \
 	echo "$(YELLOW)Forcing mail simulation locally...$(RESET)"; \
@@ -758,7 +758,7 @@ _deploy-rsync:
 	HOST=$$($(SITE) environments.$$ENV.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
 	REMOTE=$$($(SITE) environments.$$ENV.path); \
 	EXCL=""; \
-	for e in $$($(SITE) deploy.exclude); do EXCL="$$EXCL --exclude=$$e"; done; \
+	set -f; for e in $$($(SITE) deploy.exclude); do EXCL="$$EXCL --exclude=$$e"; done; set +f; \
 	for p in $$($(SITE) deploy.payload); do \
 		if [ ! -d "$(WEBROOT)/$$p" ]; then \
 			echo "$(RED)✗ Payload path missing locally: $(WEBROOT)/$$p$(RESET)"; exit 1; \

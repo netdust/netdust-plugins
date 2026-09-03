@@ -144,7 +144,12 @@ assert_eq "the mail block is parameterised, not hardcoded" \
 echo
 echo "promote — one feature, not the whole integration branch"
 assert_refuses "refuses promote without a name"  "Usage: make promote name=" make -s promote
-assert_refuses "refuses an unknown feature branch" "No such branch"         make -s promote name=definitely-not-a-real-feature
+# The flow floor runs first: without an origin, promote refuses for that reason.
+if git remote get-url origin >/dev/null 2>&1; then
+  assert_refuses "refuses an unknown feature branch" "No such branch"        make -s promote name=definitely-not-a-real-feature
+else
+  assert_refuses "refuses an unknown feature branch" "no 'origin' remote"   make -s promote name=definitely-not-a-real-feature
+fi
 
 echo
 echo "transport — one workflow, pluggable file movement"

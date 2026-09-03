@@ -1,6 +1,6 @@
 {
   "name": "netdust-wp",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "1.1.0: ntdst-yootheme v2 — the baseline yootheme module instead of a per-project source, yoo-lint (16 silent-trap codes against the installed parent), yoo-measure + yoo-recompile, yoo_layout.py + a section catalogue, workflow.md (the Figma → LESS → sections → assemble → measure loop), lessons by task; anchored on YOOtheme 5.0.43 with 5.0.41 as the CVE floor. Netdust WordPress plugin — WP discipline (security, database, bedrock-composer), WP planning (plan-requirements injects WP-security four-pillar + ntdst-core pattern requirements + the matching golden-path slice into the plan at harnessed-development Stage 1), WP reference (frontend, testing, infra), ntdst-core framework (architecture, data, patterns + four golden-path feature exemplars mined from real Stride/Rossi, yootheme), and WP commands (/wp-new-project, /scaffold-plugin, /sync-db, /setup-tests). Layers on top of netdust-core for memory conventions, dev-stack, server management, cross-domain skills, and /deploy (live hooks in netdust-agent). 1.0.0: teaches ntdst-core 5.2.0 — the v5 contract (three doors, retired list, traps), golden paths on the v5 doors, a drift reviewer that runs core's invariants live, and evals anchored on the 5.2.0 tag.",
   "author": {
     "name": "Stefan Vermeulen",
