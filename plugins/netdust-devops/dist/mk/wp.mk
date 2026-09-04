@@ -23,6 +23,7 @@ _help-stack:
 	@echo "$(YELLOW)DATA$(RESET)         moves backward only — never into production"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "pull env=E"        "DB + third-party plugins → local (uploads=yes for media)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "refresh env=E"     "production data → staging or development"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "push env=E"        "local DB → a NON-production environment"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "block-mail env=E"  "install the outgoing-mail block"
 	@echo ""
 
@@ -90,6 +91,38 @@ block-mail: ## Install the outgoing-mail block on a non-production environment
 		| ssh -q "$$HOST" "cat > $$REMOTE/$(CONTENT_DIR)/mu-plugins/00-block-outgoing-mail.php" || exit 1; \
 	echo "$(YELLOW)  self-disables if it ever lands on $$PROD$(RESET)"; \
 	echo "$(GREEN)✓ mail block installed on $$ENV$(RESET)"
+
+.PHONY: push
+push: ## Push the LOCAL database up to a non-production environment (make push env=staging)
+	@ENV="$(env)"; \
+	$(MAKE) --no-print-directory _refuse-production env=$$ENV || exit 1; \
+	$(MAKE) --no-print-directory _check-ddev; \
+	$(MAKE) --no-print-directory _need-tty verb="push env=$$ENV"; \
+	HOST=$$($(SITE) environments.$$ENV.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
+	DST=$$($(SITE) environments.$$ENV.path); \
+	DST_URL=$$($(SITE) environments.$$ENV.url); \
+	LOCAL_URL=$$($(SITE) local.url); \
+	echo "$(RED)╔══════════════════════════════════════════════════════╗$(RESET)"; \
+	echo "$(RED)║  REPLACE $$ENV'\''S DATABASE WITH YOUR LOCAL ONE$(RESET)"; \
+	echo "$(RED)╚══════════════════════════════════════════════════════╝$(RESET)"; \
+	echo "$(YELLOW)  $$LOCAL_URL → $$DST_URL$(RESET)"; \
+	echo "$(YELLOW)  a backup of $$ENV is taken first$(RESET)"; \
+	read -p "Type 'yes' to continue: " reply; \
+	if [ "$$reply" != "yes" ]; then echo "$(RED)✗ Cancelled$(RESET)"; exit 1; fi; \
+	$(MAKE) --no-print-directory _backup-data env=$$ENV || exit 1; \
+	$(MAKE) --no-print-directory block-mail env=$$ENV || exit 1; \
+	echo "$(YELLOW)Exporting local database...$(RESET)"; \
+	ddev wp db export --add-drop-table --skip-lock-tables - \
+		| sed -E 's/DEFINER=[^ ]+ / /g; s/SQL SECURITY DEFINER/SQL SECURITY INVOKER/g' \
+		| gzip > /tmp/$(PROJECT_NAME)-push.sql.gz || exit 1; \
+	echo "$(YELLOW)Importing on $$ENV...$(RESET)"; \
+	gunzip -c /tmp/$(PROJECT_NAME)-push.sql.gz \
+		| ssh -q "$$HOST" "cd $$DST && wp db import --path=$(WP_CORE) -" \
+		|| { rm -f /tmp/$(PROJECT_NAME)-push.sql.gz; exit 1; }; \
+	rm -f /tmp/$(PROJECT_NAME)-push.sql.gz; \
+	echo "$(YELLOW)Rewriting URLs: $$LOCAL_URL → $$DST_URL$(RESET)"; \
+	ssh -qn "$$HOST" "cd $$DST && wp search-replace '$$LOCAL_URL' '$$DST_URL' --path=$(WP_CORE) --all-tables --precise --skip-columns=guid --quiet" || exit 1; \
+	echo "$(GREEN)✅ $$ENV now carries your local database$(RESET)"
 
 # `make ship` calls this before touching production.
 _backup-data:
@@ -202,5 +235,5 @@ _refresh-plugins:
 	ssh -qn "$$HOST" "rsync -a --delete $$TEXCL $$SRC/$(CONTENT_DIR)/themes/ $$DST/$(CONTENT_DIR)/themes/" || exit 1; \
 	echo "$(GREEN)✓ third-party plugins and themes mirrored (mu-plugins untouched)$(RESET)"
 
-.PHONY: _help-stack _backup-data _pull-db _pull-plugins _pull-uploads \
+.PHONY: _help-stack push _backup-data _pull-db _pull-plugins _pull-uploads \
         _refresh-db _refresh-uploads _refresh-plugins

@@ -24,6 +24,17 @@ structure:
   type: {{STACK_TYPE}}                # bedrock | custom-app | custom-site | statamic | bun-react | static
   webroot: {{WEBROOT}}                # bedrock: web · custom-app: app · statamic/laravel: public · node: dist · custom-site: .
   wpcli_path: {{WPCLI_PATH}}          # WP only — matches wp-cli.yml --path. Leave blank otherwise.
+  theme_flavour: {{THEME_FLAVOUR}}    # WP only — yootheme | custom | tbd. There is no
+                                      # default theme base on this fleet, so `tbd` means
+                                      # tbd. Read by netdust-wp:wp-frontend before it
+                                      # touches a template or a stylesheet.
+                                      #   yootheme = YOOtheme Pro parent + thin child; the
+                                      #     builder renders, styling lives in
+                                      #     less/theme.<slug>.less, the child carries no
+                                      #     template files and no CSS toolchain. The
+                                      #     licensed parent is gitignored — install per host.
+                                      #   custom   = self-rendering theme with its own
+                                      #     templates (Tailwind/Alpine/Vite).
 
 hosting:
   provider: {{HOSTING_PROVIDER}}      # ploi | combell | other

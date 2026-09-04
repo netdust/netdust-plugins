@@ -54,7 +54,8 @@ fi
 # Per-stack defaults. A new stack is a row here, never a forked template.
 case "$STACK" in
     wp)       TYPE=bedrock;    WEBROOT=web;    WPCLI=web/wp; WP_PATH=web/wp; CONTENT=web/app
-              TEST='ddev composer test:unit'; GATE='composer gate'; METHOD=rsync ;;
+              TEST='ddev composer test:unit'; GATE='composer gate'; METHOD=rsync
+              FLAVOUR=tbd ;;
     statamic) TYPE=statamic;   WEBROOT=public; WPCLI=;       WP_PATH=;       CONTENT=
               TEST='ddev exec php artisan test'; GATE='composer gate'; METHOD=rsync ;;
     node)     TYPE=bun-react;  WEBROOT=dist;   WPCLI=;       WP_PATH=;       CONTENT=
@@ -72,6 +73,7 @@ render() {
         -e "s|{{STACK_TYPE}}|$TYPE|g" \
         -e "s|{{WEBROOT}}|$WEBROOT|g" \
         -e "s|{{WPCLI_PATH}}|$WPCLI|g" \
+        -e "s|{{THEME_FLAVOUR}}|${FLAVOUR:-}|g" \
         -e "s|{{WP_PATH}}|$WP_PATH|g" \
         -e "s|{{CONTENT_DIR}}|$CONTENT|g" \
         -e "s|{{HOSTING_PROVIDER}}|ploi|g" \

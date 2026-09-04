@@ -42,6 +42,17 @@ else
     ok "core defines no stack hooks"
 fi
 
+# Every {{TOKEN}} in a template must be rendered by the scaffolder. A token
+# added to site.yml.tmpl without a matching -e in bin/new-project ships a
+# literal "{{THEME_FLAVOUR}}" into a real project's site.yml, where the first
+# thing to read it gets the placeholder as a value.
+missing=""
+for tok in $(grep -oE '\{\{[A-Z_]+\}\}' "$(dirname "${BASH_SOURCE[0]}")/../templates"/*.tmpl | sed 's/.*{{\(.*\)}}/\1/' | sort -u); do
+    grep -q "{{$tok}}" "$(dirname "${BASH_SOURCE[0]}")/../bin/new-project" || missing="$missing $tok"
+done
+[ -z "$missing" ] && ok "every template token is rendered by new-project" \
+                  || bad "every template token is rendered by new-project" "unrendered:$missing"
+
 echo "── behaviour ──"
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 P="$WORK/proj"; mkdir -p "$P/web/app/plugins/p" "$P/web/app/themes/t"; cd "$P"
