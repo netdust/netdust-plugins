@@ -23,7 +23,7 @@ at the seam). The lane sets the dispatch shape, the model, the tests owed and th
 owed — the two paths are spelled out below; nothing in this skill applies to both lanes
 unless it says so.
 
-**On a project carrying `site.yml`, every branch decision is `netdust-core:dev-stack`'s**
+**On a project carrying `site.yml`, every branch decision is `netdust-devops:devops`'s**
 — `make feature` / `make hotfix` to start, `make finish` to close, a worktree based on
 the integration branch read from `site.yml` (never a hard-coded `master`); the
 superpowers finish skill's merge/PR options are not offered there. Models per dispatch
@@ -36,7 +36,7 @@ name=<x>` (`make hotfix` for Class D) first, or hand back; a rung branch is depl
 and `hooks/pretooluse-guard.py` denies a raw `git commit` / merge / push there, naming
 the verb. Stage 3 closes with `make finish`; `make health` runs before any `make
 release`; `make ship` and a production `/deploy` happen only on the operator's explicit
-ask in that turn (dev-stack's rule). The flow itself is tested — `make test` runs
+ask in that turn (the devops rule). The flow itself is tested — `make test` runs
 `scripts/tests/flow-test.sh` — so "the Makefile is broken" is a finding to file, never a
 reason to route around it.
 
@@ -144,7 +144,7 @@ A behaviour-lane cluster carries no marker and buys no panel: its review is the 
    branch under `standard` or `low` stakes is LIGHT — one `reviewer`, ladder: sonnet; a
    branch carrying contract-lane clusters takes the branch's tier with the panel rules
    above. Under herdr the branch reviewer runs in its own pane with the report in a tab
-   (herdr-moments). Then finish: `make finish` on a `site.yml` project (dev-stack), else
+   (herdr-moments). Then finish: `make finish` on a `site.yml` project (devops), else
    `superpowers:finishing-a-development-branch`.
 3. Report the whole-branch verify-budget line with the summary. Then invoke `compounding`
    — the learning loop: what the spec taught lands in CODE-MAP / skill lessons / evals as

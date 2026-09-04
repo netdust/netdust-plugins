@@ -5,11 +5,19 @@
 #
 # Asserts on RULES, never on this project's names: the temp site.yml declares
 # its own three rungs. Runs from any project that carries this script; the
-# Makefile and scripts/site under test are the ones of the calling project.
+# vendored core and scripts/site under test are the ones of the calling project.
+#
+# The temp project pins STACK := generic on purpose. The flow verbs are
+# stack-agnostic, and a stack layer would drag ddev into a test that must never
+# need it.
 set -uo pipefail
 cd "$(dirname "$0")/../.."
-PROJECT_MAKEFILE="$PWD/Makefile"
+PROJECT_CORE="$PWD/Makefile.netdust"
+PROJECT_MK="$PWD/mk"
 PROJECT_SITE="$PWD/scripts/site"
+for f in "$PROJECT_CORE" "$PROJECT_SITE"; do
+    [ -e "$f" ] || { echo "flow-test: missing $f — run 'make devops-update' first" >&2; exit 2; }
+done
 
 PASS=0; FAIL=0
 ok()   { PASS=$((PASS+1)); printf '  ok   %s\n' "$1"; }
@@ -28,11 +36,14 @@ git config --global init.defaultBranch main
 
 # ── the repo under test ─────────────────────────────────────────────────────
 git init -q --bare "$TMP/origin.git"
-W="$TMP/work"; mkdir -p "$W/scripts" "$W/web"
-cp "$PROJECT_MAKEFILE" "$W/Makefile"; cp "$PROJECT_SITE" "$W/scripts/site"; chmod +x "$W/scripts/site"
+W="$TMP/work"; mkdir -p "$W/scripts" "$W/web" "$W/mk"
+cp "$PROJECT_CORE" "$W/Makefile.netdust"
+cp "$PROJECT_MK"/*.mk "$W/mk/"
+cp "$PROJECT_SITE" "$W/scripts/site"; chmod +x "$W/scripts/site"
+printf 'STACK := generic\ninclude Makefile.netdust\n' > "$W/Makefile"
 cat > "$W/site.yml" <<'YAML'
 site: {name: flowtest, domain: flowtest.test, risk: low}
-structure: {type: bedrock, webroot: web}
+structure: {type: bedrock, stack: generic, webroot: web}
 deploy: {method: rsync, ssh_host: nowhere, wp_path: web/wp, content_dir: web/app, state_dir: /tmp/flowtest-state, payload: [app/mu-plugins]}
 environments:
   development: {branch: development, url: https://dev.flowtest.test, path: /srv/dev, role: sandbox, confirm: false}

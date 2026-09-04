@@ -1,109 +1,75 @@
 ---
-description: Scaffold a new Netdust WordPress project (CLAUDE.md, site.yml, memory/, tasks/, Makefile)
+description: Scaffold a new Netdust WordPress project — delegates the project layer to netdust-devops, then adds the WP-specific harness rules.
 allowed_tools: ["Bash", "Read", "Write", "AskUserQuestion"]
 ---
 
-Scaffold a new Netdust WordPress project in the current working directory using the harness templates.
+Scaffold a Netdust **WordPress** project in the current working directory.
 
-**Confirm cwd is empty or has nothing to overwrite first.**
+**Confirm the directory is empty, or that nothing there will be overwritten.**
 
-1. Ask the user (via `AskUserQuestion`):
-   - Project name (kebab-case, becomes the SSH alias suffix and DDEV project name)
-   - Risk level: `low` / `medium` / `high`
-   - Stack type: `bedrock` / `custom-app` / `custom-site`
-   - Hosting provider: `ploi` / `combell` / `other`
-   - Deploy method:
-     1. `rsync` — shared Makefile moves a closed payload over SSH (Combell / custom-app)
-     2. `git-push` — shared Makefile pushes, pulls on the server, then runs
-        `deploy.post_deploy` (Ploi / Bedrock). NOT auto-deploy: a push alone
-        does nothing when Ploi has no repository connected to the site.
-     3. `ftp` — PhpStorm auto-upload via FTP
-     4. `autogit` — Combell autogit symlinks
-     5. `manual` — no automation, direct edits
-     6. `tbd` — not yet decided
+## 1. The project layer is not yours to write
 
-2. Generate `site.yml` from `~/.claude/plugins/netdust-wp/templates/site.yml.tmpl`, substituting the answers.
+Run the devops scaffolder. It owns `site.yml`, `Makefile`, the vendored devops
+core, `memory/`, `tasks/`, `.gitignore` and the three rung branches:
 
-3. Generate `CLAUDE.md` from `~/.claude/plugins/netdust-wp/templates/project-CLAUDE.md.tmpl`, with the project name and `@~/.claude/plugins/netdust-wp/CLAUDE.md` import.
+```bash
+~/.claude/plugins/netdust-devops/bin/new-project <name> --stack=wp --domain=<domain>
+```
 
-4. Create:
-   ```
-   memory/
-   ├── STATE.md     (seeded with: "# <project> — Project State\n_Created YYYY-MM-DD_\n\n## Current Phase: bootstrap\n")
-   └── lessons.md   (empty)
-   tasks/
-   └── todo.md      (empty)
-   ```
+**Do not hand-write `site.yml` or a `Makefile`.** One renderer, one set of
+templates — a hand-written `site.yml` is how the schema forked last time, and
+the Makefile is vendored so a fix made once reaches every project. See
+`netdust-devops:devops`; load it if it is not already loaded.
 
-5. Set up deploy. Every project that deploys over SSH gets the SAME workflow —
-   the gate (clean tree, right branch, HEAD pushed), the ledger (`make deployed`,
-   `deployed/<env>` tags, `make rollback`), and the promotion path. Only the
-   transport differs.
+## 2. Add the WordPress harness layer
 
-   Copy `templates/Makefile` and `templates/scripts/` into the project verbatim —
-   neither carries a project-specific value, so nothing is substituted. Then fill
-   `site.yml`'s `environments:` and `deploy:` blocks.
+Render `CLAUDE.md` from `~/.claude/plugins/netdust-wp/templates/project-CLAUDE.md.tmpl`
+— it carries the WP-specific rules (harnessed-development routing, the
+framework skills, the plan gates, the test bindings) and imports
+`@~/.claude/plugins/netdust-wp/CLAUDE.md`. This **replaces** the generic
+`CLAUDE.md` the scaffolder wrote.
 
-   No per-project skill is needed: `netdust-core:dev-stack` maps "fix this",
-   "push to staging" and "ship it" onto the make targets for every project.
+Append `~/.claude/plugins/netdust-wp/templates/gitignore.tmpl` to `.gitignore`.
 
-   | Method | Scaffold action |
-   |---|---|
-   | `rsync` | `deploy.method: rsync`. Fill `deploy.payload` with the custom plugins/themes this project owns, plus `wp_path`, `content_dir`, `state_dir` and each environment's `path`. The environment directory is the web root. Supersedes the old `makefile`, `git-bundle-makefile` and `rsync-staging-prod` methods — the git-bundle deploy required a `.git` on the target and did not survive contact with production. |
-   | `git-push` | `deploy.method: git-push` (Ploi/Bedrock). Fill `deploy.post_deploy` with the steps a push does not perform — typically `composer install --no-dev --no-interaction` and an FPM reload. A push alone does NOT deploy when Ploi has no repository connected, and FPM with `opcache.validate_timestamps=0` keeps the pull invisible until reloaded. |
-   | `ftp` | No Makefile. Deploy is PhpStorm/IDE FTP auto-upload — note in `site.yml` `deploy.note` that there is no CLI deploy. |
-   | `autogit` | No Makefile. Combell autogit symlinks handle deploy on push — note the watched branch in `site.yml`. |
-   | `manual` | No Makefile. Note in `deploy.note` that deploys are manual — `/deploy` will refuse and tell the user. |
+## 3. Fill in the WordPress-shaped `site.yml` values
 
+Ask via `AskUserQuestion` where you cannot infer:
 
-   For any "No Makefile" method, do NOT create a `Makefile`; instead make sure `site.yml` carries enough in `deploy.*` that a later session (or `/deploy`) knows what to do.
+- `structure.type` — `bedrock` (webroot `web`, WP at `web/wp`, content at
+  `web/app`) or `custom-app` (webroot `app`, WP at `app/wp`)
+- `structure.wpcli_path` — must match `wp-cli.yml`'s `--path`
+- `deploy.wp_path` / `deploy.content_dir` — the same two, **on the server**,
+  relative to each environment's `path`
+- `deploy.payload` — the closed list of custom plugins and themes this project
+  owns. Every entry must exist locally **and be tracked in git**: an untracked
+  one deploys as an empty directory and a rollback `--delete`s it off the
+  server. `make test` asserts this.
+- `deploy.state_dir` — the ledger, **outside every web root**
+- `environments.<env>.path` — absolute paths on the server
+- `site.risk`
 
-5b. **Ask the theme flavour**, and record it in `site.yml` as `stack.theme_flavour`:
+### Deploy method
 
-   | Flavour | Meaning |
-   |---|---|
-   | `yootheme` | YOOtheme Pro parent + a thin child theme. The builder renders; styling lives in one LESS style. **Most Netdust marketing sites.** |
-   | `custom` | A self-rendering theme with its own templates (Tailwind/Alpine/Vite or similar). |
-   | `tbd` | Not decided yet — record it so the gap is explicit. |
+`rsync` unless the host dictates otherwise. `git-push` for Ploi/Bedrock — and
+then `deploy.post_deploy_hooks` must carry what a push does not do (typically
+`composer install --no-dev --no-interaction` and an FPM reload). A push alone
+does NOT deploy when Ploi has no repository connected, and FPM with
+`opcache.validate_timestamps=0` keeps the pull invisible until reloaded.
 
-   **If `yootheme`, do NOT scaffold a classic/Tailwind theme and convert it later.**
-   That conversion is pure deletion — measured once at ~3,900 lines across 26 files
-   (10 template files, Tailwind + PostCSS + stylelint configs, `src/css/*`, lockfile
-   churn) — and it is entirely avoidable by starting in the right shape.
+For a site with no CLI deploy at all (IDE FTP upload, Combell autogit, manual),
+say so in `deploy.note` and leave `environments.<env>.path` empty. The verbs
+refuse by name rather than pretending.
 
-   Load **`netdust-wp:ntdst-yootheme`** and follow `references/yootheme-less.md`
-   ("Converting a classic theme" in reverse — build it born-correct):
+## 4. Verify, then report
 
-   - Child theme with **NO** template files. No `header/footer/front-page/page/
-     single/index/404/searchform.php`, no `partials/`, no nav walker or fallback
-     menu — they override the parent and bypass the builder.
-   - `style.css` header carrying `Template: <parent-slug>` (this is what makes it
-     a child; WordPress also needs the file to see the theme at all).
-   - `less/theme.<slug>.less` from `templates/theme.child.less.md`.
-   - **No CSS toolchain.** No Tailwind, PostCSS or stylelint. Keep Vite + Alpine
-     for JS only, and set Vite's `base` to match the real content layout
-     (`/content/…` on stackedWP — the Bedrock default `/app/themes/…` is wrong there).
-   - `phpstan.neon` must **exclude the YOOtheme parent** (~41 MB of licensed vendor
-     code → 1000+ errors otherwise).
-   - `.gitignore` ignores `themes/*` and re-includes only the child — the parent is
-     licensed, updates in place, and must be installed separately per host.
-   - After activating: verify `get_template_directory()` points at the PARENT.
-     Activating a child does not rewrite the `template` option, so a theme that was
-     ever activated standalone silently never uses the parent.
+```bash
+make doctor
+```
 
-   Note the E2E/smoke consequence: YOOtheme renders no header until a menu is
-   assigned to one of ITS locations (`navbar`), not the theme's own `primary`.
-   A fresh install therefore fails a "page has a header/nav" smoke test until a
-   menu exists — seed one, or scope the test.
+Read its output — tools, SSH reachability, payload, devops version — before
+telling the user the project is ready. Then report what was created, what is
+still `TODO` in `site.yml`, and the next verb.
 
-6. Initialize git if `.git/` does not exist, then commit the scaffold:
-   ```bash
-   git init -q && git add . && git commit -q -m "scaffold: netdust-wp harness project"
-   ```
-
-7. Print a summary of what was created and what to do next:
-   - "Run `ddev start` to bring up local."
-   - "Edit `site.yml` to fill in SSH aliases and remote paths."
-   - "Open this project in a fresh Claude Code session — the SessionStart hook will load the new memory + site.yml."
-
-**Do not** scaffold WordPress itself (Bedrock installer, composer init, etc.) — that's project-specific. The user runs `composer create-project roots/bedrock .` or copies from their own template after this command lays down the agent config.
+**The WordPress install itself is not done here.** No composer, no
+`wp core install`. `netdust-wp-manager`'s `new-site.sh` does that and calls
+this layer for the project config.

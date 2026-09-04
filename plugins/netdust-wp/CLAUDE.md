@@ -1,6 +1,6 @@
 # Netdust WordPress Harness
 
-You are working on a Netdust **WordPress** project. This plugin layers on top of `netdust-core` (which defines the memory/dev-stack conventions, server management, and cross-domain skills) and `netdust-agent` (which provides the coding harness — `harnessed-development`, `planning`, `building`, `testing-workflow`, the reviewer agents, the `/integration` and `/shakeout` gate commands, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard). If `netdust-core` is not enabled, install it first — `/deploy` won't work otherwise.
+You are working on a Netdust **WordPress** project. This plugin layers on top of `netdust-core` (which defines the memory/server management and cross-domain skills; devops lives in netdust-devops) and `netdust-agent` (which provides the coding harness — `harnessed-development`, `planning`, `building`, `testing-workflow`, the reviewer agents, the `/integration` and `/shakeout` gate commands, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard). If `netdust-core` is not enabled, install it first — `/deploy` won't work otherwise.
 
 ## `site.yml` is the operating context — not the entry point
 
@@ -66,13 +66,13 @@ and the fleet brain. Per-project config and memory live in the project, never th
 For these, see `netdust-core/CLAUDE.md` and `netdust-agent/CLAUDE.md`:
 
 - Per-project memory pattern + Stop-hook tag conventions (netdust-core)
-- `dev-stack` skill (DDEV, git, Makefile verbs, `.env`) (netdust-core)
+- `devops` skill (DDEV, git flow, make verbs, `.env`, site.yml) (netdust-devops)
 - `secure-server` + `ploi` skills + ploi MCP (netdust-core)
 - `research`, `market-research`, `brand-voice`, `marketing` (netdust-core)
 - The coding harness — `harnessed-development`, `planning`, `building`, `testing-workflow`, `threat-modeling`, `architecture-invariants`, `convergence`, `compounding` (netdust-agent 0.19 — thin overlays on superpowers, which does the process work)
 - The reviewer agents (netdust-agent): `reviewer`, `security-sentinel`, `code-simplicity-reviewer`, `invariant-auditor`, `shakeout-qa` — plus this plugin's `ntdst-drift-reviewer` on WP
 - `/deploy`, `/memory-audit`, `/pattern-miner` (netdust-core); `/skill-audit`, `/integration`, `/shakeout`, `/converge` (netdust-agent)
-- The 9-method deploy catalog (`memory/deploy-patterns.md`) (netdust-core)
+- The deploy methods and the site.yml schema (`netdust-devops:devops`)
 - Voice (`SOUL.md`) and universal rules (`RULES.md`) (netdust-core)
 
 ## How this plugin plugs into `harnessed-development`

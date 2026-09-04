@@ -40,19 +40,23 @@ start of every session. Operational config (stack, hosting, deploy, risk): `site
 6. Commit atomically per task. Update `memory/STATE.md` and `tasks/todo.md` as you go;
    at spec-close, `compounding` harvests what the session taught.
 
-7. **Every Makefile, branch or deploy action enters through `netdust-core:dev-stack`** —
-   `make` verbs, the promotion path, the deploy gate, `.env`, DDEV. Load it BEFORE the
-   first `make` call, the way rule 1 is loaded before the first edit. Name it; do not
-   wait for its description to trigger. A deploy is never `make deploy` alone: anything
-   git does not carry (a gitignored build artifact, the database, widgets) must be
-   re-applied on the target in the same sitting, or the environment ships half-updated.
+7. **Every Makefile, branch or deploy action enters through `netdust-devops:devops`** —
+   `make` verbs, the promotion path, the deploy gate and ledger, `site.yml`, `.env`,
+   DDEV. Load it BEFORE the first `make` call or the first git command, the way rule 1
+   is loaded before the first edit. Name it; do not wait for its description to trigger.
+   The branches under `environments:` in `site.yml` are rungs — deploy-only. Never
+   commit, merge, rebase or push to one by hand; `make` lists the verb that does it.
+   A deploy is never `make deploy` alone: anything git does not carry (a gitignored
+   build artifact, the database, widgets) must be re-applied on the target in the
+   same sitting, or the environment ships half-updated.
 
 ## Conventions
 
 - WP rules: `~/.claude/plugins/netdust-wp/RULES.md` (sanitize/escape/nonce/cap,
   `$wpdb->prepare()` always, prefix everything, i18n, never edit WP core or
   `{{WPCLI_PATH}}/`). Universal rules: `netdust-core/RULES.md`.
-- Deploy via `/deploy` — never to prod without explicit confirmation.
+- Deploy via `make deploy env=<env>` (or `/deploy`) — never to production
+  without the user asking for it in that turn.
 
 ## Project memory
 

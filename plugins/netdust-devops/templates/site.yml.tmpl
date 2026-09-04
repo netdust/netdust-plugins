@@ -1,0 +1,128 @@
+# site.yml — the one operational description of this project.
+#
+# SCHEMA VERSION 2. Read by three consumers, which must never disagree:
+#   · scripts/site        the Makefile's reader (python3 + PyYAML)
+#   · the fleet manager   discovery only: name, risk, sla, project directory
+#   · the session-start hook, which summarises it into every agent's context
+#
+# Retired in v2 — do NOT reintroduce them, the Makefile cannot read them:
+#   hosting.remote_path_staging / remote_path_production  → environments.<env>.path
+#   deploy.staging_command / production_command           → the make verbs themselves
+#   deploy.method: makefile | git-bundle-makefile | rsync-staging-prod
+#
+schema: 2
+
+site:
+  name: {{PROJECT_NAME}}
+  domain: {{DOMAIN}}                  # production domain, e.g. example.com
+  description: {{DESCRIPTION}}        # one line: what this site is
+  risk: {{RISK}}                      # low | medium | high — "high" means triple-check destructive ops
+  sla: false                          # fleet manager: include in the weekly update sweep
+
+structure:
+  stack: {{STACK}}                    # wp | statamic | node | generic — selects mk/<stack>.mk
+  type: {{STACK_TYPE}}                # bedrock | custom-app | custom-site | statamic | bun-react | static
+  webroot: {{WEBROOT}}                # bedrock: web · custom-app: app · statamic/laravel: public · node: dist · custom-site: .
+  wpcli_path: {{WPCLI_PATH}}          # WP only — matches wp-cli.yml --path. Leave blank otherwise.
+
+hosting:
+  provider: {{HOSTING_PROVIDER}}      # ploi | combell | other
+  ssh_staging: {{SSH_STAGING}}
+  ssh_production: {{SSH_PRODUCTION}}
+
+# The promotion targets, and the only place a branch is bound to a server.
+# Promotion is linear: development → staging → production. One branch per
+# environment, named for it. A `staging:` entry whose branch is `main` means
+# every push to production's branch lands on the client's URL — the Makefile
+# derives BR_INTEG / BR_REVIEW / BR_PROD from exactly these three entries.
+#
+# Fewer servers than rungs is fine: declare production with its branch and
+# leave path out, and `make ship` refuses by name while the ladder stays true.
+# Collapsing two rungs onto one branch is how staging ends up meaning main.
+environments:
+  # development:                      # optional — a sandbox you may break
+  #   url: https://dev.{{DOMAIN}}
+  #   path: TODO                      # absolute path on the server
+  #   branch: development
+  #   role: "sandbox — may break"
+  #   confirm: false
+  staging:
+    url: https://staging.{{DOMAIN}}
+    path: TODO                        # absolute path on the server
+    branch: staging
+    role: "colleague-facing — keep stable"
+    confirm: false
+    # ssh_host: overrides deploy.ssh_host for this environment
+  production:
+    url: https://{{DOMAIN}}
+    path: TODO                        # absolute path on the server
+    branch: main
+    role: "live"
+    confirm: true                     # production ALWAYS prompts
+    backup_before: true
+
+deploy:
+  # rsync    — move a closed payload; the environment directory is the web root
+  # git-push — push, pull on the server, then post_deploy_hooks (Ploi/Bedrock)
+  method: {{DEPLOY_METHOD}}
+  ssh_host: {{SSH_STAGING}}           # default; an environment may override it
+  state_dir: TODO                     # the ledger, OUTSIDE every web root (env dirs are served)
+
+  # rsync only. A closed list — nothing outside it ever crosses the wire: not
+  # wp/, not vendor/, not uploads/, not a third-party plugin. Every entry must
+  # exist locally AND be tracked in git, or it deploys as an empty directory
+  # and a rollback --deletes it off the server.
+  payload: []
+  exclude:
+    # Never add "*.map" — font-encoding tables are not JavaScript source maps.
+    - ".git*"
+    - "node_modules"
+    - "*.log"
+    - "/memory/"                      # agent notes — the web root is served
+    - "/tasks/"
+
+  # git-push only. A push alone does NOT deploy: Ploi may have no repository
+  # connected, and PHP-FPM often runs opcache.validate_timestamps=0, so the
+  # pull stays invisible until FPM is reloaded. Declare the steps here.
+  post_deploy_hooks: []
+  #  - composer install --no-dev --no-interaction
+  #  - sudo service php8.4-fpm reload
+
+  # ── stack-specific ──────────────────────────────────────────────────────
+  # wp:  where WordPress and wp-content live ON THE SERVER, relative to the
+  #      environment path. bedrock: web/wp + web/app · custom-app: wp + content
+  wp_path: {{WP_PATH}}
+  content_dir: {{CONTENT_DIR}}
+  # wp:  third-party plugin directories `make pull` / `make refresh` must NOT
+  #      mirror — a plugin this project owns but does not ship in the payload.
+  pull_exclude: []
+  # statamic: the content directories a deploy does not carry, backed up by ship
+  # data_paths: [content, users, storage]
+  # node/generic: this project keeps no server-side data, so ship has nothing
+  #      to back up. Never set this on a stack that has a database.
+  # skip_data_backup: false
+
+  note: {{DEPLOY_NOTE}}               # anything non-obvious about this site's deploy
+
+# Files OUTSIDE deploy.payload that carry a local patch. A deploy never touches
+# these, so an upstream update silently reverts them and nothing notices.
+# `make health` asserts the needle is still present on every environment.
+# Format: path|needle  (path is relative to the environment root)
+# health:
+#   markers:
+#     - "content/plugins/some-plugin/some-file.php|MY hotfix"
+
+local:
+  ddev_project: {{PROJECT_NAME}}
+  url: https://{{PROJECT_NAME}}.ddev.site
+
+commands:
+  # Agent bindings: per-task test suite + the full gate. `make gate` runs the
+  # gate value below; `make test` runs the deploy tooling's own tests, which
+  # never contact a server. The gate's exit code is the single source of truth.
+  test: {{TEST_COMMAND}}
+  gate: {{GATE_COMMAND}}
+  # node stack only — the local loop and the build
+  # install: bun install
+  # dev: bun run dev
+  # build: bun run build

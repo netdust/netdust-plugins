@@ -5,7 +5,7 @@
     "email": "stefan@netdust.be"
   },
   "metadata": {
-    "description": "Netdust harness plugins — core (cross-stack discipline, hooks, memory), wp (WordPress framework knowledge), statamic (Statamic 6 + Peak). Stack-agnostic core; layered WP + Statamic plugins.",
+    "description": "Netdust harness plugins — devops (the one branch flow, deploy gate/ledger and site.yml schema), core (business/content/ops skills), agent (the build harness: gates, hooks, reviewer agents), wp / statamic / react (stack knowledge). Stack-agnostic devops + core; the stack plugins layer on top.",
     "version": "1.0.0"
   },
   "plugins": [
@@ -14,6 +14,13 @@
       "source": "./plugins/netdust-core",
       "description": "0.4.1: dev-stack — an env var in front of `ddev wp` never reaches the container. Netdust business + ops + content core: the per-project memory convention (STATE/lessons/todo — live hooks in netdust-agent), content/marketing skills (brand-voice, marketing, market-research), the design-builder skill (measured-motion reference recreation), the research skill, ops/infra skills (ploi, secure-server, dev-stack — DDEV/branch-flow/.env), the 9-method /deploy dispatcher, /memory-audit + /pattern-miner knowledge commands, and the ploi MCP. NOT a coding harness — the build harness (gates, craft skills, reviewer agents, TDD/threat-model/shake-out, /integration + /shakeout) lives in netdust-agent. Stack-agnostic. Layered on by netdust-wp, netdust-statamic.",
       "version": "0.4.1",
+      "strict": false
+    },
+    {
+      "name": "netdust-devops",
+      "source": "./plugins/netdust-devops",
+      "description": "0.1.0: the single source of truth for Netdust devops — the branch flow, the deploy gate and ledger, and the project/fleet contract. Ships a stack-split Makefile core (Makefile.netdust + mk/wp|statamic|node|generic|ddev) that projects VENDOR rather than copy: `make devops-update` writes a checksummed .netdust-devops stamp, so `make doctor` names any project that is behind or has a managed file edited in place. Owns site.yml schema 2 — environments: is the only place a branch is bound to a server; hosting.remote_path_*, deploy.staging_command/production_command and the makefile/git-bundle-makefile/rsync-staging-prod methods are retired. One scaffolder (bin/new-project --stack=), one skill, one /deploy. Replaces the flow half of netdust-core:dev-stack and both former /deploy commands. Project layer does everything; the fleet layer (netdust-wp-manager) reads and reports only.",
+      "version": "0.1.0",
       "strict": false
     },
     {

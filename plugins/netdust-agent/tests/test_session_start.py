@@ -222,6 +222,77 @@ def test_herdr_lines() -> tuple[bool, str]:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_site_yml_summary_carries_environments() -> tuple[bool, str]:
+    """The site.yml summary must surface `environments:` — the branch-to-server
+    binding every make verb and the PreToolUse flow guard read.
+
+    Until 2026-09-04 the grep matched only the retired schema
+    (hosting.remote_path_*, deploy.staging_command/production_command) and had
+    no `environments` anchor at all, so every session opened with the live
+    topology stripped out: the agent could not see which branch belonged to
+    which environment, and reached for raw git on rung branches instead.
+    """
+    tmp = Path(tempfile.mkdtemp(prefix="netdust-test-"))
+    try:
+        (tmp / "site.yml").write_text(
+            "schema: 2\n"
+            "site:\n  name: envproj\n  risk: low\n"
+            "structure:\n  stack: wp\n  webroot: web\n"
+            "environments:\n"
+            "  staging:\n"
+            "    url: https://staging.example.com\n"
+            "    path: /srv/staging\n"
+            "    branch: staging\n"
+            "    role: \"colleague-facing\"\n"
+            "    confirm: false\n"
+            "  production:\n"
+            "    url: https://example.com\n"
+            "    path: /srv/prod\n"
+            "    branch: main\n"
+            "    role: \"live\"\n"
+            "    confirm: true\n"
+            "deploy:\n  method: rsync\n  state_dir: /srv/.state\n"
+        )
+        rc, stdout, _ = _run_hook(tmp)
+        if rc != 0:
+            return False, f"environments: hook exited {rc}"
+
+        summary = stdout.split("## site.yml summary", 1)[-1]
+        checks = [
+            ("environments:" in summary, "`environments:` anchor missing"),
+            ("staging:" in summary and "production:" in summary, "environment names missing"),
+            ("branch: staging" in summary, "staging branch binding missing"),
+            ("branch: main" in summary, "production branch binding missing"),
+            ("confirm: true" in summary, "production confirm flag missing"),
+            ("path: /srv/prod" in summary, "environment path missing"),
+            ("stack: wp" in summary, "structure.stack missing — selects mk/<stack>.mk"),
+            ("rung" in stdout, "no rung warning emitted for a project with environments"),
+            ("netdust-devops:devops" in stdout, "devops skill not named"),
+        ]
+        failures = [msg for ok, msg in checks if not ok]
+        if failures:
+            return False, "environments: " + "; ".join(failures)
+        return True, "site.yml summary carries environments (branch/path/role/confirm) + the rung warning"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_site_yml_summary_omits_rung_warning_without_environments() -> tuple[bool, str]:
+    """A site.yml with no `environments:` is not a flow project — the rung
+    warning would be noise, and naming branches that do not exist is worse."""
+    tmp = Path(tempfile.mkdtemp(prefix="netdust-test-"))
+    try:
+        (tmp / "site.yml").write_text("site:\n  name: flat\n  risk: low\n")
+        rc, stdout, _ = _run_hook(tmp)
+        if rc != 0:
+            return False, f"no-env: hook exited {rc}"
+        if "rung" in stdout:
+            return False, "no-env: rung warning emitted for a project without environments"
+        return True, "no rung warning when site.yml declares no environments"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def run() -> list[tuple[bool, str]]:
     return [
         test_empty_cwd_emits_nothing_but_logs(),
@@ -230,4 +301,6 @@ def run() -> list[tuple[bool, str]]:
         test_skill_audit_nudge_when_stamp_missing(),
         test_no_skill_audit_nudge_when_stamp_fresh(),
         test_herdr_lines(),
+        test_site_yml_summary_carries_environments(),
+        test_site_yml_summary_omits_rung_warning_without_environments(),
     ]

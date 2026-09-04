@@ -167,10 +167,10 @@ CLI auth: `ploi token` once per machine.
 ## See also
 
 - `secure-server` — the 9-step VPS hardening workflow (invoked after provisioning)
-- `dev-stack` (core) — broader deploy + DDEV environment patterns
+- `netdust-devops:devops` — the branch flow, deploy gate and ledger, DDEV
 - `wp-infra` (netdust-wp) — WP-CLI + Bedrock-specific deploy variants
 - `bedrock-composer` — what gets deployed
-- `memory/deploy-patterns.md` — the 9 deploy methods catalog
+- `netdust-devops` — `deploy.method` is `rsync` or `git-push`; nothing else
 - `/deploy` — slash command that dispatches deploys per `site.yml`
 - `~/mcp/ploi-mcp-server/README.md` — MCP setup + auth
 - `ploi` CLI: `ploi list` for all commands

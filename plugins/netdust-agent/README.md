@@ -35,12 +35,12 @@ What the harness *loads* at each step. Each craft skill **layers on top of its s
 | `designing-apis` | *(addy: api-and-interface-design)* | Stage 1 — contract-first; designs in the convergence points |
 | `building-frontend` | `frontend-design` plugin | Stage 2 — component/state/a11y/responsive on UI tasks |
 | `engineering-context` | *(addy: context-engineering)* | session start / task switch — packs from the 3-layer memory |
-| `versioning-with-git` | `superpowers:using-git-worktrees` | Stage 2/3 — atomic commit-craft (branch-flow stays in dev-stack) |
+| `versioning-with-git` | `superpowers:using-git-worktrees` | Stage 2/3 — atomic commit-craft (branch-flow stays in netdust-devops) |
 | `driving-the-browser` | `superpowers-chrome:browsing` | feature-acceptance / debugging — *how* to drive Chrome |
 | `sourcing-from-docs` | *(addy: source-driven-development)* | any stage — cite official docs before asserting API behavior |
 | `doubting-decisions` | *(addy: doubt-driven-development)* | post-plan — adversarial fresh-context attack on a decision |
 | `simplifying-code` | *(addy: code-simplification)* | Stage 3 — reduce complexity, behavior preserved |
-| `deploying` | `/deploy` + `dev-stack` | Stage 3 finish — route to the deploy dispatcher with guardrails |
+| `deploying` | `/deploy` + `netdust-devops:devops` | Stage 3 finish — route to the deploy dispatcher with guardrails |
 
 **Naming convention:** *gerund = craft (how); phase/gate noun = harness (when/whether).* Read the skill list, know the layer.
 
@@ -100,7 +100,7 @@ netdust-agent/
 │   │                            #   engineering-context, versioning-with-git,
 │   │                            #   driving-the-browser, refining-ideas,
 │   │                            #   sourcing-from-docs, doubting-decisions,
-│   │                            #   simplifying-code, deploying, dev-stack
+│   │                            #   simplifying-code, deploying, devops
 │   ├── */references/            # on-demand checklists (security, accessibility,
 │   │                            #   performance, sweep-*, failure-modes, …)
 │   └── _shared/                 # shared reference (finding-verification)

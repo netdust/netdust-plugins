@@ -1,6 +1,6 @@
 # netdust-statamic
 
-Statamic 6 + Peak layer of the Netdust harness for Claude Code. Layers on top of [`netdust-core`](../netdust-core/README.md) (memory conventions, dev-stack, server management, cross-domain skills) and [`netdust-agent`](../netdust-agent/README.md) (the coding harness — `harnessed-development`, `testing-workflow`, `shake-out`, the reviewer agents, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard).
+Statamic 6 + Peak layer of the Netdust harness for Claude Code. Layers on top of [`netdust-devops`](../netdust-devops/README.md) (branch flow, deploy, site.yml), [`netdust-core`](../netdust-core/README.md) (memory conventions, server management, cross-domain skills) and [`netdust-agent`](../netdust-agent/README.md) (the coding harness — `harnessed-development`, `testing-workflow`, `shake-out`, the reviewer agents, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard).
 
 ## What this plugin adds
 
@@ -67,7 +67,7 @@ netdust-statamic depends on netdust-core for:
 - **Memory conventions** (per-project STATE.md / lessons.md / tasks; live tag-scanner hook runs in netdust-agent)
 - **Voice + universal rules** (SOUL.md, RULES.md)
 - **/deploy** command (9-method dispatcher; reads `site.yml.deploy.method`. Statamic projects typically use `git-push` to Ploi.)
-- **`dev-stack` skill** (DDEV, git, Makefile verbs, `.env` discipline — generic)
+- **`devops` skill** (DDEV, the branch flow, make verbs, deploy, `.env` — netdust-devops)
 - **`secure-server` + `ploi` skills + ploi MCP** (server management)
 - **`research`, `market-research`, `brand-voice`, `marketing`** (cross-domain)
 - **`/skill-audit`, `/pattern-miner`, `/red-test`**
@@ -106,7 +106,7 @@ All depend on `netdust-core`; all coexist in the `netdust-plugins` marketplace.
 
 ## Not in scope
 
-- Memory conventions, dev-stack, server — those are netdust-core.
+- Memory conventions, server — netdust-core. Branch flow, deploy — netdust-devops.
 - The coding harness, review agents, and live hooks (SessionStart injector, Stop-hook tag capture, PreToolUse guard) — those are netdust-agent.
 - WordPress, Bun/React, etc. — those get their own plugins.
 - Engineering process — defer to `obra/superpowers`.

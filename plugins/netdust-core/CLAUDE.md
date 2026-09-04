@@ -8,7 +8,7 @@ This plugin is **not** a coding/build harness. The coding/build harness (gates, 
 
 - **Memory + observability** — the per-project `memory/STATE.md` + `lessons.md` convention and its discipline. The live hooks that load and capture memory (SessionStart injector, Stop-hook `DECISION:`/`RISK:`/`LESSON:`/`TODO:` tag scanner, PreToolUse destructive-command guard) live in **netdust-agent** — core defines the memory convention; agent runs it. Every hook fire logs to `~/.claude/logs/memory-hook.log`.
 - **Content + marketing** — `brand-voice` (Stefan/Netdust voice as artifact), `marketing` (SEO + copy structure + meta/schema), `market-research` (audiences/competitors/pricing), `research` (technical + business investigation).
-- **Ops + infra** — `dev-stack` (DDEV, git branching staging/feature/hotfix, Makefile verbs, `.env` discipline), `secure-server` (harden a fresh Hetzner+Ploi VPS), `ploi` (full server/site lifecycle: MCP + CLI + UI). The `ploi` MCP is auto-loaded.
+- **Ops + infra** — `secure-server` (harden a fresh Hetzner+Ploi VPS), `ploi` (full server/site lifecycle: MCP + CLI + UI). The `ploi` MCP is auto-loaded.
 - **Deploy + knowledge commands** — `/deploy` (9-method dispatcher), `/memory-audit` (staleness report on STATE/lessons/todo), `/pattern-miner` (mine cross-project memory for promotable patterns).
 - **MCP** — the `ploi` MCP server (server + site management via the Ploi API).
 
