@@ -207,6 +207,56 @@ else
     bad "make test runs under the split layout" "$(printf '%s' "$out" | tail -3)"
 fi
 
+echo "── adopting an existing project ──"
+# A project that predates this plugin must be able to gain `make` WITHOUT
+# losing the site.yml someone filled in by hand. Without --adopt the only
+# options were "refuse" and "--force, which overwrites site.yml" — i.e. copy
+# the files in by hand, the exact thing this plugin exists to end.
+AD="$WORK/adopt"; mkdir -p "$AD/memory" "$AD/tasks" "$AD/web/app/plugins/p"; cd "$AD"
+cat > site.yml <<'ADYML'
+site: {name: adopted, domain: adopted.invalid, risk: high}
+structure: {stack: wp, type: bedrock, webroot: web, wpcli_path: web/wp}
+environments:
+  production: {url: "https://adopted.invalid", path: /srv/a, branch: main, role: live, confirm: true}
+deploy: {method: rsync, ssh_host: nobody@adopted.invalid, state_dir: /srv/.s, wp_path: web/wp, content_dir: web/app, payload: [app/plugins/p]}
+local: {ddev_project: adopted, url: "https://adopted.ddev.site"}
+commands: {test: "true", gate: "true"}
+ADYML
+printf 'HAND WRITTEN STATE\n'  > memory/STATE.md
+printf -- '- [ ] a real task\n' > tasks/todo.md
+printf 'MY OWN RULES\n'         > CLAUDE.md
+printf 'legacy:\n\t@echo old\n' > Makefile
+git init -q . && git add -A && git -c user.email=t@t -c user.name=T commit -qm pre
+AD_BEFORE=$(git rev-parse HEAD)
+
+adopt_out=$("$SCAFF" adopted --stack=wp --adopt 2>&1)
+if [ $? -ne 0 ]; then
+    bad "--adopt succeeds on an existing project" "$(printf '%s' "$adopt_out" | tail -2)"
+else
+    ok "--adopt succeeds on an existing project"
+    grep -q 'risk: high' site.yml && grep -q 'app/plugins/p' site.yml \
+        && ok "--adopt keeps the existing site.yml" \
+        || bad "--adopt keeps the existing site.yml" "it was overwritten"
+    grep -q 'HAND WRITTEN STATE' memory/STATE.md && grep -q 'a real task' tasks/todo.md \
+        && grep -q 'MY OWN RULES' CLAUDE.md \
+        && ok "--adopt keeps notes and CLAUDE.md" \
+        || bad "--adopt keeps notes and CLAUDE.md" "one was overwritten"
+    grep -q 'old' Makefile.pre-devops 2>/dev/null \
+        && ok "--adopt preserves the old Makefile beside the new one" \
+        || bad "--adopt preserves the old Makefile" "Makefile.pre-devops missing"
+    [ "$AD_BEFORE" = "$(git rev-parse HEAD)" ] \
+        && ok "--adopt never touches git" \
+        || bad "--adopt never touches git" "it committed or branched"
+    [ -f Makefile.netdust ] && [ -f scripts/site ] && [ -f .netdust-devops ] \
+        && ok "--adopt vendors the core" \
+        || bad "--adopt vendors the core" "missing Makefile.netdust / scripts/site / .netdust-devops"
+    make status >/dev/null 2>&1 \
+        && ok "make runs in the adopted project" \
+        || bad "make runs in the adopted project" "$(make status 2>&1 | head -2)"
+fi
+cd "$P"
+
+echo
 echo "── vendoring ──"
 printf '\n# edited by hand\n' >> mk/wp.mk
 out=$(NETDUST_DEVOPS_DIST="$DIST" scripts/devops-version --check 2>&1 | strip)

@@ -238,6 +238,22 @@ project layer so there is one renderer and one set of templates.
 Then: fill in the `TODO`s in `site.yml`, add `origin`, push the three rungs,
 and run `make doctor`.
 
+### A project that predates this plugin
+
+`--adopt`, from inside it:
+
+```bash
+~/.claude/plugins/netdust-devops/bin/new-project <name> --stack=<stack> --adopt
+```
+
+It vendors the core and writes a `Makefile`, and leaves `site.yml`, `CLAUDE.md`,
+`memory/`, `tasks/` and git exactly as they are. An existing `Makefile` is moved
+to `Makefile.pre-devops` rather than deleted — move any project-specific targets
+across, then remove it. `make doctor` names whatever `site.yml` is still missing.
+
+After that the project is on the vendored core, so `make devops-update` keeps it
+current and `make doctor` reports when it drifts.
+
 ---
 
 ## `.env` discipline

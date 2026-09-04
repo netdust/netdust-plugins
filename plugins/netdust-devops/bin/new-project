@@ -9,6 +9,11 @@
 # --template  the project SHAPE within that stack (wp: bedrock | stackwp).
 #             Defaults to the first template listed for the stack.
 # --list      print the registry and exit.
+# --adopt     add the devops layer to an EXISTING project: vendor the core and
+#             write a Makefile, but never touch a site.yml, CLAUDE.md, memory/
+#             or tasks/ that already exists, and never touch git. This is how a
+#             project that predates the plugin gets `make` without losing the
+#             site.yml someone filled in by hand.
 # --set K=V   override any render token (repeatable). The fleet installer uses
 #             this to pass per-stack values the registry cannot know — hosting
 #             provider, ssh aliases, the deploy note. A row in a dispatch table,
@@ -43,7 +48,7 @@ list_registry() {
     rows | awk -F'\t' '{printf "%-10s %-12s %-13s %-8s %s\n", $1, $2, $3, $4, ($14=="-"?"(none)":$14)}'
 }
 
-NAME="" STACK="" TEMPLATE="" DIR="" DOMAIN="" FORCE=0
+NAME="" STACK="" TEMPLATE="" DIR="" DOMAIN="" FORCE=0 ADOPT=0
 declare -A OVERRIDE=()
 want_set=0
 for arg in "$@"; do
@@ -62,6 +67,7 @@ for arg in "$@"; do
         --dir=*)      DIR="${arg#*=}" ;;
         --domain=*)   DOMAIN="${arg#*=}" ;;
         --force)      FORCE=1 ;;
+        --adopt)      ADOPT=1 ;;
         -h|--help)  sed -n '2,25p' "$0" | sed 's/^# \?//'; exit 0 ;;
         -*)         echo "unknown option: $arg" >&2; exit 2 ;;
         *)          [[ -z "$NAME" ]] && NAME="$arg" || { echo "unexpected argument: $arg" >&2; exit 2; } ;;
@@ -96,15 +102,21 @@ blank() { [[ "$1" == "-" ]] && printf '' || printf '%s' "$1"; }
 WPCLI=$(blank "$WPCLI"); WP_PATH=$(blank "$WP_PATH"); CONTENT=$(blank "$CONTENT")
 INSTALL_CMD=$(blank "$INSTALL_CMD"); DEV_CMD=$(blank "$DEV_CMD"); BUILD_CMD=$(blank "$BUILD_CMD")
 
-[[ -n "$DIR" ]]    || DIR="$NAME"
+# Adopting works IN PLACE by default: you run it from inside the project that
+# needs the layer. Scaffolding creates a directory named for the project.
+if [[ -z "$DIR" ]]; then
+    [[ $ADOPT -eq 1 ]] && DIR="." || DIR="$NAME"
+fi
 [[ -n "$DOMAIN" ]] || DOMAIN="$NAME.be"
 [[ "$STACK" == "wp" ]] && FLAVOUR="tbd" || FLAVOUR=""
 
 mkdir -p "$DIR"; cd "$DIR"
 
-if [[ -f site.yml && $FORCE -eq 0 ]]; then
-    echo "✗ site.yml already exists here. Re-run with --force to overwrite it," >&2
-    echo "  or run 'make devops-update' to refresh just the vendored core." >&2
+if [[ -f site.yml && $FORCE -eq 0 && $ADOPT -eq 0 ]]; then
+    echo "✗ site.yml already exists here." >&2
+    echo "  --adopt   add the devops layer, leaving site.yml and your notes alone" >&2
+    echo "  --force   overwrite everything (you lose this site.yml)" >&2
+    echo "  Already adopted? 'make devops-update' refreshes just the vendored core." >&2
     exit 1
 fi
 
@@ -150,8 +162,21 @@ for k in "${!OVERRIDE[@]}"; do
     printf -v "$k" '%s' "${OVERRIDE[$k]}"
 done
 
-render "$TPL/site.yml.tmpl"          site.yml
-render "$TPL/Makefile.tmpl"          Makefile
+if [[ $ADOPT -eq 1 && -f site.yml ]]; then
+    echo "  keeping the existing site.yml"
+else
+    render "$TPL/site.yml.tmpl" site.yml
+fi
+if [[ $ADOPT -eq 1 && -f Makefile ]]; then
+    # A pre-devops Makefile is the whole 900-line copy. Keep it beside the new
+    # one rather than deleting it: it may carry project-specific targets worth
+    # moving across, and silently discarding someone's file is never right.
+    mv Makefile Makefile.pre-devops
+    echo "  existing Makefile saved as Makefile.pre-devops"
+    render "$TPL/Makefile.tmpl" Makefile
+else
+    render "$TPL/Makefile.tmpl" Makefile
+fi
 render "$TPL/memory-STATE.md.tmpl"   /tmp/ndp-state.$$
 render "$TPL/memory-lessons.md.tmpl" /tmp/ndp-lessons.$$
 render "$TPL/tasks-todo.md.tmpl"     /tmp/ndp-todo.$$
@@ -181,13 +206,34 @@ if [[ -n "$leftover" ]]; then
     exit 1
 fi
 
-if [[ ! -d .git ]]; then
+if [[ $ADOPT -eq 1 ]]; then
+    :   # never touch git on an existing project — no init, no branches, no commit
+elif [[ ! -d .git ]]; then
     git init -q .
     git add -A
     git -c commit.gpgsign=false commit -qm "Scaffold $NAME ($STACK/$TEMPLATE) — netdust-devops project layer"
     git branch -M main
     git branch staging main
     git branch development main
+fi
+
+if [[ $ADOPT -eq 1 ]]; then
+cat <<ADOPTED
+
+✅ $NAME adopted the devops layer in $(pwd)
+   stack: $STACK   ·   template: $TEMPLATE
+
+   Kept as they were: site.yml, CLAUDE.md, memory/, tasks/, and git.
+   Added: Makefile, Makefile.netdust, mk/, scripts/, .netdust-devops
+
+Next:
+  1. check the Makefile — it sets STACK := $STACK; adjust if that is wrong
+  2. if a Makefile.pre-devops was saved, move any project-specific targets
+     into the new Makefile, then delete it
+  3. make doctor        — it will name what site.yml is still missing
+  4. make               — the verb list
+ADOPTED
+exit 0
 fi
 
 cat <<DONE
