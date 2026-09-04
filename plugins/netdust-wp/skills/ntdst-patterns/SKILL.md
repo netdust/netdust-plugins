@@ -5,7 +5,7 @@ description: Use when scaffolding new Netdust WordPress projects, creating new m
 
 # NTDST Patterns — folder & file structure
 
-This skill covers WHERE things go in a Netdust WordPress project. For HOW classes wire together (DI container, bootstrap, routing), see `ntdst-framework`. For data + APIs, see `ntdst-framework`. For deploy + infra, see `wp-infra` (this plugin) and `dev-stack` (netdust-core).
+This skill covers WHERE things go in a Netdust WordPress project. For HOW classes wire together (DI container, bootstrap, routing), see `ntdst-framework`. For data + APIs, see `ntdst-framework`. For deploy + infra, see `wp-infra` (this plugin) and `netdust-devops:devops`.
 
 **Canonical implementation: `~/Sites/stride/`.** When in doubt, copy what Stride does.
 
@@ -161,7 +161,7 @@ Activated/deactivated per environment via the loader.
 - `ntdst-framework` — DI container, service lifecycle, routing, templating
 - `ntdst-framework` — data models, repositories, REST API
 - `wp-infra` — WP-CLI, Vite-for-WP, Bedrock Makefile patterns
-- `dev-stack` (netdust-core) — generic DDEV, git, Makefile verbs, .env
+- `netdust-devops:devops` — the branch flow, make verbs, deploy, .env
 - `ntdst-yootheme` — YOOtheme variant (when project uses YOOtheme Pro instead of FSE/block theme)
 - `bedrock-composer` — Bedrock layout fundamentals
 - `~/Sites/stride/` — canonical implementation

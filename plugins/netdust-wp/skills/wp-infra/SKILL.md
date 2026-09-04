@@ -1,11 +1,11 @@
 ---
 name: wp-infra
-description: Use when working on WordPress-specific infra — WP-CLI commands, ddev wp, Bedrock project layout (web/wp + web/app), Vite-for-WP asset pipelines, WP-aware Makefile targets, rewrite flush, cache flush, wp db, plugin/theme management via WP-CLI. Triggers on file edits to wp-cli.yml, web/wp/* (you should not edit core), web/app/themes/*/vite.config.*, mu-plugins/* loader files. Activates on keywords WP-CLI, wp cli, ddev wp, --path=web/wp, --path=app/wp, wp cache flush, wp rewrite flush, wp db, wp plugin, wp theme, wp option, Bedrock-Makefile, ntdstheme, theme-config. Symptoms include needing a WP-CLI command, debugging "wp not loading", configuring DDEV's WP-CLI integration, setting up Vite for a WP theme, Bedrock layout questions. For generic dev-stack (DDEV core commands, git, Makefile contract, .env), see dev-stack. For Bedrock + Composer dependency rules, see bedrock-composer.
+description: Use when working on WordPress-specific infra — WP-CLI commands, ddev wp, Bedrock project layout (web/wp + web/app), Vite-for-WP asset pipelines, WP-aware Makefile targets, rewrite flush, cache flush, wp db, plugin/theme management via WP-CLI. Triggers on file edits to wp-cli.yml, web/wp/* (you should not edit core), web/app/themes/*/vite.config.*, mu-plugins/* loader files. Activates on keywords WP-CLI, wp cli, ddev wp, --path=web/wp, --path=app/wp, wp cache flush, wp rewrite flush, wp db, wp plugin, wp theme, wp option, Bedrock-Makefile, ntdstheme, theme-config. Symptoms include needing a WP-CLI command, debugging "wp not loading", configuring DDEV's WP-CLI integration, setting up Vite for a WP theme, Bedrock layout questions. For the branch flow, make verbs, deploy and site.yml, see netdust-devops:devops. For Bedrock + Composer dependency rules, see bedrock-composer.
 ---
 
 # WordPress infrastructure
 
-WP-specific bits of the Netdust dev stack. Generic dev-loop stuff (DDEV start/stop, git branching, Makefile verbs, .env discipline) lives in the `dev-stack` skill — this one only covers what's WP-flavored.
+WP-specific bits of the Netdust dev stack. The branch flow, the make verbs, the deploy gate and `.env` discipline live in `netdust-devops:devops` — this one only covers what's WP-flavored.
 
 ## Project layout (Bedrock)
 
@@ -90,7 +90,7 @@ location ~ ^/app/logs/ { deny all; return 404; }
 
 ## Bedrock-aware Makefile targets
 
-Beyond the generic verbs in `dev-stack`, WP/Bedrock projects add:
+Beyond the generic verbs in `netdust-devops:devops`, WP/Bedrock projects add:
 
 | Target | What |
 |---|---|
@@ -168,10 +168,10 @@ shift with it. Composer rules, WP-CLI and Vite work the same across all three.
 
 ## See also
 
-- `dev-stack` (in netdust-core) — generic DDEV, git, Makefile verbs, .env discipline
+- `netdust-devops:devops` — the branch flow, make verbs, deploy gate and ledger, site.yml
 - `bedrock-composer` — Bedrock layout fundamentals, Composer dependency rules
 - `wp-frontend` — theme.json, blocks, asset pipeline details
 - `wp-security` / `wp-database` — discipline skills for WP-specific work
 - `ntdst-framework` / `ntdst-patterns` / `ntdst-framework` — the framework conventions inside `<project>-core`
 - `/deploy` — slash command that dispatches per `site.yml`'s `deploy.method`
-- `memory/deploy-patterns.md` (in netdust-core) — the 9 deploy methods catalog
+- `netdust-devops` — `dist/mk/wp.mk` carries the WP data verbs (pull, refresh, block-mail)

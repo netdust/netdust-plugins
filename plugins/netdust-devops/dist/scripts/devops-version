@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# devops-version — vendor the netdust-devops core into this project, and tell
+# the truth about how far it has drifted.
+#
+#   scripts/devops-version            # what version is vendored here
+#   scripts/devops-version --check    # version + per-file drift (exit 1 if stale/edited)
+#   scripts/devops-version --update   # re-vendor from the installed plugin
+#
+# The problem this solves: every project used to COPY the shared Makefile at
+# scaffold time and then fork silently. A fix made once had to be re-applied by
+# hand everywhere, and nothing could tell you which projects were behind. Here
+# the vendored files are checksummed into .netdust-devops, so `--check` names
+# both a stale version AND a file someone edited in place.
+#
+# Source of truth, in order: $NETDUST_DEVOPS_DIST, then the installed plugin.
+
+set -euo pipefail
+
+STAMP=".netdust-devops"
+
+# Files this tool owns in a project. A project's own Makefile is NOT in this
+# list — it is the one file that stays yours.
+MANAGED=(
+    "Makefile.netdust"
+    "mk/ddev.mk"
+    "mk/generic.mk"
+    "mk/node.mk"
+    "mk/statamic.mk"
+    "mk/wp.mk"
+    "scripts/site"
+    "scripts/deploy-context"
+    "scripts/devops-version"
+    "scripts/work-audit.sh"
+    "scripts/README.md"
+    "scripts/remote/00-block-outgoing-mail.php"
+    "scripts/remote/refresh-db.sh"
+    "scripts/tests/deploy-test.sh"
+    "scripts/tests/flow-test.sh"
+)
+
+find_dist() {
+    if [[ -n "${NETDUST_DEVOPS_DIST:-}" ]]; then
+        printf '%s\n' "$NETDUST_DEVOPS_DIST"; return 0
+    fi
+    local c
+    for c in \
+        "$HOME/.claude/plugins/netdust-devops/dist" \
+        "$HOME/.claude/plugins/netdust-plugins/plugins/netdust-devops/dist"
+    do
+        [[ -d "$c" ]] && { printf '%s\n' "$c"; return 0; }
+    done
+    return 1
+}
+
+sum() { sha256sum "$1" 2>/dev/null | awk '{print $1}'; }
+
+cmd_show() {
+    if [[ -f "$STAMP" ]]; then head -1 "$STAMP"; else
+        echo "not stamped — run: make devops-update"; return 1; fi
+}
+
+cmd_check() {
+    local dist rc=0 vendored latest
+    if ! dist=$(find_dist); then
+        echo "  ⚠  netdust-devops plugin not found — cannot compare"
+        echo "     set NETDUST_DEVOPS_DIST or install the plugin"
+        return 1
+    fi
+    latest=$(cat "$dist/VERSION" 2>/dev/null || echo "unknown")
+
+    if [[ ! -f "$STAMP" ]]; then
+        echo "  ⚠  not stamped — this project predates devops vendoring"
+        echo "     run: make devops-update   (plugin has $latest)"
+        return 1
+    fi
+    vendored=$(head -1 "$STAMP")
+
+    if [[ "$vendored" == "$latest" ]]; then
+        echo "  ✅ $vendored (current)"
+    else
+        echo "  ⚠  $vendored vendored, $latest available — run: make devops-update"
+        rc=1
+    fi
+
+    # A file edited in place is worse than a stale version: the next update
+    # silently reverts it, and whatever it was fixing breaks again.
+    local f expect actual edited=0
+    for f in "${MANAGED[@]}"; do
+        [[ -f "$f" ]] || continue
+        expect=$(awk -v k="$f" '$2 == k {print $1}' "$STAMP")
+        [[ -n "$expect" ]] || continue
+        actual=$(sum "$f")
+        if [[ "$expect" != "$actual" ]]; then
+            echo "  ❌ EDITED IN PLACE: $f — devops-update will revert it"
+            edited=1
+        fi
+    done
+    [[ $edited -eq 1 ]] && {
+        echo "     Move the change into the project's own Makefile, or upstream it"
+        echo "     into the netdust-devops plugin. Do not keep it here."
+        rc=1
+    }
+    return $rc
+}
+
+cmd_update() {
+    local dist version f
+    if ! dist=$(find_dist); then
+        echo "✗ netdust-devops plugin not found." >&2
+        echo "  Install it, or set NETDUST_DEVOPS_DIST to its dist/ directory." >&2
+        exit 1
+    fi
+    version=$(cat "$dist/VERSION" 2>/dev/null || echo "unknown")
+
+    for f in "${MANAGED[@]}"; do
+        [[ -f "$dist/$f" ]] || continue
+        mkdir -p "$(dirname "$f")"
+        cp "$dist/$f" "$f"
+        case "$f" in
+            scripts/*|*.sh) chmod +x "$f" ;;
+        esac
+    done
+
+    { printf '%s\n' "$version"
+      for f in "${MANAGED[@]}"; do
+          [[ -f "$f" ]] && printf '%s  %s\n' "$(sum "$f")" "$f"
+      done
+    } > "$STAMP"
+
+    echo "✅ netdust-devops $version vendored"
+    echo "   $(( ${#MANAGED[@]} )) managed files + .netdust-devops stamp"
+    echo "   Your own Makefile was not touched."
+}
+
+case "${1:-}" in
+    ""|--show)  cmd_show ;;
+    --check)    cmd_check ;;
+    --update)   cmd_update ;;
+    *) echo "usage: devops-version [--show|--check|--update]" >&2; exit 2 ;;
+esac

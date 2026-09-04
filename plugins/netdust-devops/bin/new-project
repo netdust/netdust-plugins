@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+# new-project — lay down the Netdust project layer in a directory.
+#
+#   bin/new-project <name> --stack=wp|statamic|node|generic [--dir=PATH]
+#                          [--domain=example.com] [--force]
+#
+# What it creates: site.yml, Makefile, the vendored devops core, memory/,
+# tasks/, CLAUDE.md, .gitignore — and the three rung branches.
+#
+# What it does NOT do: install the application. No composer, no wp core
+# install, no ddev start. That belongs to the stack's own installer
+# (netdust-wp-manager's new-site.sh for WordPress), which calls this for the
+# project layer so there is one renderer and one set of templates.
+#
+# Re-runnable: without --force it refuses to overwrite an existing site.yml,
+# so it can safely add the devops layer to a project that predates it.
+
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DIST="$HERE/dist"
+TPL="$HERE/templates"
+
+NAME="" STACK="" DIR="" DOMAIN="" FORCE=0
+for arg in "$@"; do
+    case "$arg" in
+        --stack=*)  STACK="${arg#*=}" ;;
+        --dir=*)    DIR="${arg#*=}" ;;
+        --domain=*) DOMAIN="${arg#*=}" ;;
+        --force)    FORCE=1 ;;
+        -*)         echo "unknown option: $arg" >&2; exit 2 ;;
+        *)          [[ -z "$NAME" ]] && NAME="$arg" || { echo "unexpected argument: $arg" >&2; exit 2; } ;;
+    esac
+done
+
+[[ -n "$NAME" ]]  || { echo "usage: new-project <name> --stack=wp|statamic|node|generic [--dir=PATH] [--domain=D]" >&2; exit 2; }
+[[ "$NAME" =~ ^[a-z][a-z0-9-]*$ ]] || { echo "✗ name must be lowercase letters, digits and dashes: $NAME" >&2; exit 2; }
+case "$STACK" in
+    wp|statamic|node|generic) ;;
+    "") echo "✗ --stack is required (wp | statamic | node | generic)" >&2; exit 2 ;;
+    *)  echo "✗ unknown stack: $STACK — expected wp, statamic, node or generic" >&2; exit 2 ;;
+esac
+[[ -n "$DIR" ]]    || DIR="$NAME"
+[[ -n "$DOMAIN" ]] || DOMAIN="$NAME.be"
+
+mkdir -p "$DIR"; cd "$DIR"
+
+if [[ -f site.yml && $FORCE -eq 0 ]]; then
+    echo "✗ site.yml already exists here. Re-run with --force to overwrite it," >&2
+    echo "  or run 'make devops-update' to refresh just the vendored core." >&2
+    exit 1
+fi
+
+# Per-stack defaults. A new stack is a row here, never a forked template.
+case "$STACK" in
+    wp)       TYPE=bedrock;    WEBROOT=web;    WPCLI=web/wp; WP_PATH=web/wp; CONTENT=web/app
+              TEST='ddev composer test:unit'; GATE='composer gate'; METHOD=rsync
+              FLAVOUR=tbd ;;
+    statamic) TYPE=statamic;   WEBROOT=public; WPCLI=;       WP_PATH=;       CONTENT=
+              TEST='ddev exec php artisan test'; GATE='composer gate'; METHOD=rsync ;;
+    node)     TYPE=bun-react;  WEBROOT=dist;   WPCLI=;       WP_PATH=;       CONTENT=
+              TEST='bun test'; GATE='bun run gate'; METHOD=rsync ;;
+    generic)  TYPE=custom-site; WEBROOT=.;     WPCLI=;       WP_PATH=;       CONTENT=
+              TEST='true'; GATE='true'; METHOD=rsync ;;
+esac
+
+render() {
+    sed -e "s|{{PROJECT_NAME}}|$NAME|g" \
+        -e "s|{{DOMAIN}}|$DOMAIN|g" \
+        -e "s|{{DESCRIPTION}}|TODO|g" \
+        -e "s|{{RISK}}|low|g" \
+        -e "s|{{STACK}}|$STACK|g" \
+        -e "s|{{STACK_TYPE}}|$TYPE|g" \
+        -e "s|{{WEBROOT}}|$WEBROOT|g" \
+        -e "s|{{WPCLI_PATH}}|$WPCLI|g" \
+        -e "s|{{THEME_FLAVOUR}}|${FLAVOUR:-}|g" \
+        -e "s|{{WP_PATH}}|$WP_PATH|g" \
+        -e "s|{{CONTENT_DIR}}|$CONTENT|g" \
+        -e "s|{{HOSTING_PROVIDER}}|ploi|g" \
+        -e "s|{{SSH_STAGING}}|TODO|g" \
+        -e "s|{{SSH_PRODUCTION}}|TODO|g" \
+        -e "s|{{DEPLOY_METHOD}}|$METHOD|g" \
+        -e "s|{{DEPLOY_NOTE}}|TODO|g" \
+        -e "s|{{TEST_COMMAND}}|$TEST|g" \
+        -e "s|{{GATE_COMMAND}}|$GATE|g" \
+        "$1"
+}
+
+render "$TPL/site.yml.tmpl"  > site.yml
+render "$TPL/Makefile.tmpl"  > Makefile
+
+mkdir -p scripts memory tasks
+cp "$DIST/scripts/devops-version" scripts/devops-version
+chmod +x scripts/devops-version
+NETDUST_DEVOPS_DIST="$DIST" scripts/devops-version --update
+
+[[ -f .gitignore ]] || cat > .gitignore <<'GI'
+.env
+.env.*
+!.env.example
+node_modules/
+vendor/
+backups/
+*.log
+.DS_Store
+GI
+
+[[ -f memory/STATE.md ]] || printf '# STATE — %s\n\nCurrent state, decisions and risks. Read at session start, updated at session end.\n' "$NAME" > memory/STATE.md
+[[ -f memory/lessons.md ]] || printf '# Lessons — %s\n\nAppend-only. After any correction, the rule that prevents the repeat.\n' "$NAME" > memory/lessons.md
+[[ -f tasks/todo.md ]] || printf '# TODO — %s\n\nThe active list for the current branch.\n' "$NAME" > tasks/todo.md
+
+[[ -f CLAUDE.md ]] || cat > CLAUDE.md <<CM
+# CLAUDE.md — $NAME
+
+A Netdust **$STACK** project. Operational config: \`site.yml\`.
+
+## Devops
+
+Every branch, deploy and environment action goes through \`make\`.
+Load the \`netdust-devops:devops\` skill before the first \`make\` call —
+name it, do not wait for its description to trigger.
+
+Run \`make\` for the verb list. Never reach for raw git on a rung branch —
+the branches named in \`site.yml\`'s \`environments:\` are written by the flow
+verbs only, and the guard denies raw git writes to them by name.
+
+## Project memory
+
+- \`memory/STATE.md\` — living snapshot; read at session start, update at session end.
+- \`memory/lessons.md\` — after any correction, a rule that prevents the repeat.
+- \`tasks/todo.md\` — the active list for the current branch.
+CM
+
+if [[ ! -d .git ]]; then
+    git init -q .
+    git add -A
+    git -c commit.gpgsign=false commit -qm "Scaffold $NAME ($STACK) — netdust-devops project layer"
+    git branch -M main
+    git branch staging main
+    git branch development main
+fi
+
+cat <<DONE
+
+✅ $NAME scaffolded in $(pwd)
+   stack: $STACK   ·   branches: development → staging → main
+
+Next:
+  1. fill in the TODOs in site.yml (paths, ssh hosts, state_dir, payload)
+  2. git remote add origin <url> && git push -u origin main staging development
+  3. make doctor        — check tools, SSH reachability and the payload
+  4. make               — the verb list
+DONE

@@ -5,7 +5,7 @@ set -uo pipefail
 
 # Defaults to the sibling script. Resolved ABSOLUTE — the fixture cd's away, so a
 # relative path silently becomes "no such file" and every assertion fails as RED.
-AUDIT="${1:-$(dirname "$0")/work-audit.sh}"
+AUDIT="${1:-$(dirname "$0")/../dist/scripts/work-audit.sh}"
 AUDIT="$(cd "$(dirname "$AUDIT")" && pwd)/$(basename "$AUDIT")"
 [ -f "$AUDIT" ] || { echo "no such script: $AUDIT" >&2; exit 2; }
 TMP="$(mktemp -d)"

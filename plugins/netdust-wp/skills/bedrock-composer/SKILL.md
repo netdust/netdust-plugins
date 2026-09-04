@@ -161,7 +161,7 @@ git commit -m "deps: add ACF Pro via Composer"
 ## See also
 
 - `wp-infra` (this plugin) — WP-CLI + Bedrock-specific Makefile patterns
-- `dev-stack` (netdust-core) — generic dev-loop and the 9 deploy methods
+- `netdust-devops:devops` — the dev loop, the branch flow and the deploy gate
 - `wp-security` for the broader rule on never committing secrets.
 - [Bedrock docs](https://roots.io/bedrock/docs/)
 - [WPackagist](https://wpackagist.org/)

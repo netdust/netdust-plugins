@@ -40,7 +40,7 @@ A task close that touches `.ts`/`.tsx` runs tests + typecheck + lint. Typecheck 
 ## What lives in netdust-core / netdust-agent (not here)
 
 - Memory + tag conventions (`DECISION:`, `RISK:`, `LESSON:`, `TODO:`) — netdust-core
-- `ploi`, `secure-server`, `dev-stack`, `/deploy` — netdust-core
+- `ploi`, `secure-server`, `netdust-devops:devops`, `/deploy` — netdust-devops
 - The harness — `harnessed-development`, `planning`, `building`, `testing-workflow`, `standards-gate`, `threat-modeling`, `architecture-invariants`, `feature-acceptance`, `test-effectiveness`, `shake-out`, `compounding` — netdust-agent
 - The reviewer agents (`reviewer`, `security-sentinel`, `performance-oracle`, `code-simplicity-reviewer`, `invariant-auditor`, `shakeout-qa`) — netdust-agent
 - Generic frontend craft — `netdust-agent:building-frontend` and the `frontend-design` plugin

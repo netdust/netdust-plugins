@@ -201,10 +201,22 @@ SITE_YML="$ROOT/site.yml"
 note site_yml "$SITE_YML"
 if [[ -f "$SITE_YML" ]]; then
   OUTPUT+="## site.yml summary (project operational config)\n"
-  # Surface the keys Claude needs to know BEFORE being asked to deploy
+  # Surface the keys Claude needs BEFORE being asked to branch or deploy.
+  #
+  # `environments:` and its sub-keys are the important half: they bind a branch
+  # to a server, and they are what every make verb and the PreToolUse flow
+  # guard actually read. Omitting them (as this grep did until 2026-09-04)
+  # handed every session a summary of the retired schema — staging_command,
+  # production_command, hosting.remote_path_* — with the live topology stripped
+  # out, so the agent could not see which branch belonged to which environment.
+  # Third-level indent is included so environments.<env>.branch/path/role show.
   OUTPUT+='```yaml\n'
-  OUTPUT+="$(grep -E '^(site|structure|hosting|deploy|local|commands):|^  (name|domain|risk|description|type|webroot|wpcli_path|provider|ssh_staging|ssh_production|method|staging_command|production_command|command|note|ddev_project|url|test|gate):' "$SITE_YML" 2>/dev/null | head -40)\n"
+  OUTPUT+="$(grep -E '^(schema|site|structure|hosting|environments|deploy|health|local|commands):|^  (name|domain|risk|sla|description|stack|type|webroot|wpcli_path|provider|ssh_staging|ssh_production|method|ssh_host|state_dir|wp_path|content_dir|note|ddev_project|url|test|gate|development|staging|production):|^    (branch|path|url|role|confirm):' "$SITE_YML" 2>/dev/null | head -60)\n"
   OUTPUT+='```\n\n'
+  # The one line that tells the agent what it may not do by hand.
+  if grep -q '^environments:' "$SITE_YML" 2>/dev/null; then
+    OUTPUT+="The branches under \`environments:\` are **rungs** — deploy-only. Never commit, merge, rebase or push to one by hand: use the \`make\` verbs (\`make\` lists them, \`make status\` says where you are). Load the \`netdust-devops:devops\` skill before the first \`make\` or git command.\n\n"
+  fi
 fi
 
 # ── Project state ───────────────────────────────────────────────────────────

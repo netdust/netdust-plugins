@@ -11,11 +11,11 @@ This is **not** a coding harness. For any non-trivial coding work (gates, craft 
 | **Identity** | `CLAUDE.md` (default agent context), `SOUL.md` (voice), `RULES.md` (universal non-negotiables) |
 | **Memory + hooks** | Per-project `memory/STATE.md` + `lessons.md` + `tasks/todo.md` convention and memory discipline. The live hooks — SessionStart loader, Stop-hook `DECISION:`/`RISK:`/`LESSON:`/`TODO:` tag scanner, PreToolUse destructive-command guard — live in **netdust-agent** (registration AND scripts). Core ships no hook scripts. |
 | **Content + marketing skills** | `brand-voice`, `marketing`, `market-research`, `research` |
-| **Ops + infra skills** | `dev-stack` (DDEV, git branching, Makefile verbs, `.env`), `secure-server` (VPS hardening), `ploi` (server/site lifecycle) |
-| **Slash commands** | `/deploy` (9-method dispatcher), `/memory-audit`, `/pattern-miner` |
+| **Ops + infra skills** | `secure-server` (VPS hardening), `ploi` (server/site lifecycle) |
+| **Slash commands** | `/memory-audit`, `/pattern-miner` — `/deploy` moved to **netdust-devops** |
 | **MCP** | `ploi` MCP server (server + site management via Ploi API) |
 | **Templates** | `project-CLAUDE.md.tmpl`, `site.yml.tmpl` (stack-neutral scaffolds) |
-| **Memory (harness-level)** | `GLOBAL.md` now ships in **netdust-agent** (`plugins/netdust-agent/memory/GLOBAL.md`) — its `session-start.sh` is the live injector; `memory/deploy-patterns.md` (the 9 deploy methods + per-site mapping) stays here |
+| **Memory (harness-level)** | `GLOBAL.md` ships in **netdust-agent** (`plugins/netdust-agent/memory/GLOBAL.md`) — its `session-start.sh` is the live injector. The deploy methods now live in **netdust-devops** |
 
 ## Install
 
@@ -70,7 +70,6 @@ In any existing project, you can manually add to its `CLAUDE.md`:
 ├── CLAUDE.md, SOUL.md, RULES.md, README.md
 │
 ├── commands/
-│   ├── deploy.md                   /deploy — 9-method dispatcher
 │   ├── memory-audit.md             /memory-audit — STATE/lessons/todo staleness report
 │   └── pattern-miner.md            /pattern-miner — cross-project pattern mining
 │
@@ -79,12 +78,10 @@ In any existing project, you can manually add to its `CLAUDE.md`:
 │   ├── marketing/                  ← SEO + copy structure + meta/schema
 │   ├── market-research/            ← audiences, competitors, pricing
 │   ├── research/                   ← technical + business investigation
-│   ├── dev-stack/                  ← DDEV, git, Makefile verbs, .env
 │   ├── secure-server/              ← VPS hardening
 │   └── ploi/                       ← Ploi + Hetzner lifecycle
 │
 ├── memory/
-│   └── deploy-patterns.md          ← 9 deploy methods + per-site mapping (GLOBAL.md now ships in netdust-agent)
 │
 ├── templates/
 │   ├── project-CLAUDE.md.tmpl

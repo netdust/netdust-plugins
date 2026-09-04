@@ -1,6 +1,6 @@
 # netdust-wp
 
-WordPress layer of the Netdust harness for Claude Code. Layers on top of [`netdust-core`](../netdust-core/README.md) (memory conventions, dev-stack, server management, cross-domain skills) and [`netdust-agent`](../netdust-agent/README.md) (the coding harness — `harnessed-development`, `testing-workflow`, `shake-out`, the reviewer agents, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard).
+WordPress layer of the Netdust harness for Claude Code. Layers on top of [`netdust-devops`](../netdust-devops/README.md) (branch flow, deploy, site.yml), [`netdust-core`](../netdust-core/README.md) (memory conventions, server management, cross-domain skills) and [`netdust-agent`](../netdust-agent/README.md) (the coding harness — `harnessed-development`, `testing-workflow`, `shake-out`, the reviewer agents, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard).
 
 ## What this plugin adds
 
@@ -93,7 +93,7 @@ netdust-wp depends on netdust-core for:
 - **Memory conventions** (per-project STATE.md / lessons.md / tasks; live tag-scanner hook runs in netdust-agent)
 - **Voice + universal rules** (SOUL.md, RULES.md)
 - **/deploy** command (9-method dispatcher; reads `site.yml.deploy.method`)
-- **`dev-stack` skill** (DDEV, git, Makefile verbs, `.env` discipline — generic)
+- **`devops` skill** (DDEV, the branch flow, make verbs, deploy, `.env` — netdust-devops)
 - **`secure-server` + `ploi` skills + ploi MCP** (server management)
 - **`research`, `market-research`, `brand-voice`, `marketing`** (cross-domain)
 - **`/memory-audit`, `/pattern-miner`** (`/skill-audit` lives in netdust-agent)
@@ -127,7 +127,7 @@ For discipline skills, add `red-tests.md` and run `/red-test <skill>` from core.
 
 ## Not in scope
 
-- Memory conventions, dev-stack, server — those are netdust-core.
+- Memory conventions, server — netdust-core. Branch flow, deploy — netdust-devops.
 - The coding harness, review agents, and live hooks (SessionStart injector, Stop-hook tag capture, PreToolUse guard) — those are netdust-agent.
 - Non-WP work — Statamic, Bun/React, etc. — those get their own plugins (`netdust-statamic`, `netdust-bun-react`).
 - Engineering process — defer to `obra/superpowers`.

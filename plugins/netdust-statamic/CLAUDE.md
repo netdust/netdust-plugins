@@ -1,6 +1,6 @@
 # Netdust Statamic Plugin
 
-You are working on a Netdust **Statamic** project. This plugin layers on top of `netdust-core` (memory conventions, dev-stack, server management, cross-domain skills) and `netdust-agent` (the coding harness — `harnessed-development`, `testing-workflow`, `shake-out`, the reviewer agents, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard). Install `netdust-core` first — `/deploy` won't work otherwise; memory hooks need `netdust-agent`.
+You are working on a Netdust **Statamic** project. This plugin layers on top of `netdust-devops` (the branch flow, deploy, site.yml), `netdust-core` (memory conventions, server management, cross-domain skills) and `netdust-agent` (the coding harness — `harnessed-development`, `testing-workflow`, `shake-out`, the reviewer agents, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard). Install `netdust-devops` first — `/deploy` and the make verbs won't work otherwise; memory hooks need `netdust-agent`.
 
 ## Default assumptions (project `CLAUDE.md` can override)
 
@@ -22,7 +22,7 @@ You are working on a Netdust **Statamic** project. This plugin layers on top of 
 ## What lives in netdust-core / netdust-agent (not here)
 
 - Memory + tag conventions (`DECISION:`, `RISK:`, `LESSON:`, `TODO:`, `SKILL-EDGE:`) (netdust-core)
-- `dev-stack` skill (DDEV, git branching, Makefile verbs, `.env`) (netdust-core)
+- `devops` skill (DDEV, the branch flow, make verbs, deploy, `.env`) (netdust-devops)
 - `secure-server` + `ploi` skills + ploi MCP (netdust-core)
 - The coding harness — `harnessed-development`, `testing-workflow`, `shake-out` (generic; `shake-out-statamic` here is the Statamic-specific override), `test-effectiveness`, `threat-modeling`, `architecture-invariants`, `feature-acceptance`, `compounding` (netdust-agent)
 - `research`, `market-research`, `brand-voice`, `marketing` (netdust-core)
