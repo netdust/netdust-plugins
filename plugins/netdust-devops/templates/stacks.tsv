@@ -1,0 +1,24 @@
+# stack	template	structure_type	webroot	wpcli_path	wp_path	content_dir	ddev_type	install	dev	build	test	gate	source_repo
+#
+# The project-shape registry. One row per (stack, template) pair — a new
+# project shape is a ROW HERE, never a new branch of code and never a forked
+# template tree.
+#
+#   stack           selects mk/<stack>.mk — the local loop and data ops
+#   template        the project skeleton: what the files look like on disk
+#   structure_type  site.yml structure.type
+#   webroot         relative to the project root
+#   wpcli_path      LOCAL WP core path (matches wp-cli.yml --path). WP only.
+#   wp_path         SERVER WP core path, relative to the environment path
+#   content_dir     SERVER wp-content path, relative to the environment path
+#   ddev_type       ddev config --project-type
+#   source_repo     the skeleton git remote, cloned by the fleet installer.
+#                   "-" means there is nothing to clone: the project layer is
+#                   the whole scaffold.
+#
+# A "-" is an empty value. Tabs separate; do not use spaces.
+wp	bedrock	bedrock	web	web/wp	web/wp	web/app	wordpress	ddev composer install	-	-	ddev composer test:unit	composer gate	git@github.com:netdust/bedrock.git
+wp	stackwp	custom-app	app	app/wp	app/wp	app/content	wordpress	ddev composer install	-	-	ddev composer test:unit	composer gate	git@github.com:netdust/stackedWP.git
+statamic	peak	statamic	public	-	-	-	laravel	ddev composer install	-	ddev exec npm run build	ddev exec php artisan test	composer gate	-
+node	vite-react	bun-react	dist	-	-	-	-	bun install	bun run dev	bun run build	bun test	bun run gate	-
+generic	static	custom-site	.	-	-	-	-	-	-	-	true	true	-

@@ -1,0 +1,58 @@
+# CLAUDE.md — {{PROJECT_NAME}}
+
+A Netdust **{{STACK}}** project ({{TEMPLATE}}). Operational config: `site.yml`.
+
+## Devops — every branch, deploy and environment action
+
+Load the `netdust-devops:devops` skill **before the first `make` call or the
+first git command**. Name it; do not wait for its description to trigger.
+
+Run `make` for the verb list, `make status` for where you are in the flow.
+
+The branches under `environments:` in `site.yml` are **rungs** — deploy-only.
+Never commit, merge, rebase or push to one by hand: the make verbs are the only
+door, and the guard denies raw git writes to a rung by name. A verb that fails
+is a finding to file, not permission to use raw git.
+
+`make ship` goes to production, and only ever on an explicit ask in that turn.
+
+## Project memory — write it as you go, not at the end
+
+Three files. The SessionStart hook injects all of them at the start of every
+session, so what is written here is what the next session knows.
+
+| File | Holds |
+|---|---|
+| `memory/STATE.md` | living snapshot: where the project is, open decisions, risks |
+| `memory/lessons.md` | append-only; after any correction, the rule that prevents the repeat |
+| `tasks/todo.md` | the active list for the current branch |
+
+**Tag conventions.** When something happens worth keeping, write a tagged line
+in your working notes. The Stop hook scans for these and files each one into
+the right memory file deterministically — no AI guessing, and nothing is kept
+that you did not tag:
+
+```
+DECISION: chose X over Y because Z          → memory/STATE.md
+RISK: this breaks if the queue backs up     → memory/STATE.md
+LESSON: an env var before `ddev wp` never   → memory/lessons.md
+        reaches the container
+TODO: migrate the legacy contact form       → tasks/todo.md
+```
+
+A `SKILL-EDGE: <skill>: …` line records a case an existing skill missed.
+
+Keep `memory/STATE.md` current: a stale STATE is the next session opening
+blind, and the fleet's weekly sweep (`netdust-wp-manager`'s `scripts/todos`)
+reports it as stale.
+
+## Conventions
+
+- Universal rules: `netdust-core/RULES.md`.
+- `.env` is never committed — only `.env.example`, with placeholder values.
+- Run package and dependency commands in the container, not on the host, so the
+  version matches the runtime.
+
+---
+
+**Next step:** open `memory/STATE.md`, then pick the next task from `tasks/todo.md`.

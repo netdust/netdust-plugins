@@ -133,7 +133,8 @@ commands:
   # never contact a server. The gate's exit code is the single source of truth.
   test: {{TEST_COMMAND}}
   gate: {{GATE_COMMAND}}
-  # node stack only — the local loop and the build
-  # install: bun install
-  # dev: bun run dev
-  # build: bun run build
+  # The local loop, read by mk/<stack>.mk. Empty means the stack has no such
+  # verb — a DDEV stack gets its dev loop from `ddev start`, not from here.
+  install: {{INSTALL_COMMAND}}
+  dev: {{DEV_COMMAND}}
+  build: {{BUILD_COMMAND}}

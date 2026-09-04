@@ -1,6 +1,6 @@
 # Netdust WordPress Harness
 
-You are working on a Netdust **WordPress** project. This plugin layers on top of `netdust-core` (which defines the memory/server management and cross-domain skills; devops lives in netdust-devops) and `netdust-agent` (which provides the coding harness — `harnessed-development`, `planning`, `building`, `testing-workflow`, the reviewer agents, the `/integration` and `/shakeout` gate commands, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard). If `netdust-core` is not enabled, install it first — `/deploy` won't work otherwise.
+You are working on a Netdust **WordPress** project. This plugin layers on top of `netdust-core` (which defines the memory/server management and cross-domain skills; devops lives in netdust-devops) and `netdust-agent` (which provides the coding harness — `harnessed-development`, `planning`, `building`, `testing-workflow`, the reviewer agents, the `/integration` and `/shakeout` gate commands, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard). Install `netdust-devops` first — `/deploy` and the `make` verbs won't work otherwise.
 
 ## `site.yml` is the operating context — not the entry point
 
@@ -18,8 +18,8 @@ truth for how that site is built, hosted and deployed. Do not infer these from t
 | `structure.wpcli_path` | what `--path` every WP-CLI call needs (`web/wp`, `app/wp`, or `.`) |
 | `structure.theme_flavour` | `yootheme` \| `custom` \| `tbd` — there is no default theme base on this fleet |
 | `site.risk` | `high` means triple-check every destructive operation |
-| `hosting.provider` | `ploi` \| `combell` \| other — different SSH and deploy shape |
-| `deploy.method` | one of the canonical 9; `/deploy` dispatches on it |
+| `hosting.provider` | `ploi` \| `combell` \| other — different SSH shape. A push alone does NOT deploy on Ploi |
+| `deploy.method` | `rsync` or `git-push` — the only two. `makefile`, `git-bundle-makefile` and `rsync-staging-prod` are retired |
 
 Then `memory/STATE.md` for where the project actually stands.
 
@@ -28,8 +28,9 @@ Then `memory/STATE.md` for where the project actually stands.
 - **A — atomic recall**: `~/.claude/projects/<slug>/memory/`, injected at session start.
 - **B — fleet / business**: `~/Sites/netdust-wp-manager/memory/` — cross-site
   priorities, deals, cross-project rules, `GLOBAL.md`, `projects/<site>/STATE.md`.
-  **Stefan writes this by hand.** Update it only when something *fleet-level*
-  changed, and commit from that workspace.
+  **Written by hand.** Update it only when something *fleet-level* changed, and
+  commit from that workspace. The weekly `./scripts/todos` sweep reads it and
+  reports any entry still marked DRAFT or gone stale.
 - **C — per-project**: `<project>/memory/STATE.md` · `lessons.md` — written
   automatically by the Stop hook from `DECISION:`/`RISK:`/`LESSON:`/`TODO:` tags.
 
@@ -71,7 +72,7 @@ For these, see `netdust-core/CLAUDE.md` and `netdust-agent/CLAUDE.md`:
 - `research`, `market-research`, `brand-voice`, `marketing` (netdust-core)
 - The coding harness — `harnessed-development`, `planning`, `building`, `testing-workflow`, `threat-modeling`, `architecture-invariants`, `convergence`, `compounding` (netdust-agent 0.19 — thin overlays on superpowers, which does the process work)
 - The reviewer agents (netdust-agent): `reviewer`, `security-sentinel`, `code-simplicity-reviewer`, `invariant-auditor`, `shakeout-qa` — plus this plugin's `ntdst-drift-reviewer` on WP
-- `/deploy`, `/memory-audit`, `/pattern-miner` (netdust-core); `/skill-audit`, `/integration`, `/shakeout`, `/converge` (netdust-agent)
+- `/deploy`, `/new-project`, `/fleet` (netdust-devops); `/memory-audit`, `/pattern-miner` (netdust-core); `/skill-audit`, `/integration`, `/shakeout`, `/converge` (netdust-agent)
 - The deploy methods and the site.yml schema (`netdust-devops:devops`)
 - Voice (`SOUL.md`) and universal rules (`RULES.md`) (netdust-core)
 
@@ -93,7 +94,6 @@ See this plugin's `RULES.md`. Universal rules come from netdust-core's `RULES.md
 
 ## Slash commands (WP-specific)
 
-- `/wp-new-project` — scaffold a new WP project (CLAUDE.md @-import, site.yml, memory/, tasks/, Bedrock-shaped Makefile)
+- `/wp-new-project` — scaffold a new WP project. Delegates the project layer (site.yml, Makefile, the vendored devops core, memory/, tasks/) to netdust-devops, then adds the WP harness CLAUDE.md
 - `/scaffold-plugin` — scaffold a new WP plugin with the ntdst-core architecture
-- `/sync-db` — pull remote DB into local DDEV
 - `/setup-tests` — route a project to its test stack (gate-stack projects are born gated and need no setup; this scaffolds Codeception + wp-browser for legacy Stride-family projects only)

@@ -1,47 +1,104 @@
 #!/usr/bin/env bash
 # new-project — lay down the Netdust project layer in a directory.
 #
-#   bin/new-project <name> --stack=wp|statamic|node|generic [--dir=PATH]
-#                          [--domain=example.com] [--force]
+#   bin/new-project <name> --stack=<s> [--template=<t>] [--dir=PATH]
+#                          [--domain=example.com] [--force] [--list]
+#
+# --stack     wp | statamic | node | generic — selects mk/<stack>.mk, the local
+#             loop and data ops.
+# --template  the project SHAPE within that stack (wp: bedrock | stackwp).
+#             Defaults to the first template listed for the stack.
+# --list      print the registry and exit.
+# --set K=V   override any render token (repeatable). The fleet installer uses
+#             this to pass per-stack values the registry cannot know — hosting
+#             provider, ssh aliases, the deploy note. A row in a dispatch table,
+#             never a forked template.
 #
 # What it creates: site.yml, Makefile, the vendored devops core, memory/,
-# tasks/, CLAUDE.md, .gitignore — and the three rung branches.
+# tasks/, CLAUDE.md, .gitignore — and the three rung branches. Everything is
+# rendered from templates/; nothing is authored inline, so a change reaches
+# every future project by editing one file.
 #
 # What it does NOT do: install the application. No composer, no wp core
-# install, no ddev start. That belongs to the stack's own installer
-# (netdust-wp-manager's new-site.sh for WordPress), which calls this for the
-# project layer so there is one renderer and one set of templates.
+# install, no ddev start, and it never clones a skeleton repo. That belongs to
+# the stack's own installer (netdust-wp-manager's new-site.sh for WordPress),
+# which calls THIS for the project layer so there is one scaffolder.
 #
-# Re-runnable: without --force it refuses to overwrite an existing site.yml,
-# so it can safely add the devops layer to a project that predates it.
+# Re-runnable: without --force it refuses to overwrite an existing site.yml, so
+# it can safely add the devops layer to a project that predates it.
 
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST="$HERE/dist"
 TPL="$HERE/templates"
+REGISTRY="$TPL/stacks.tsv"
 
-NAME="" STACK="" DIR="" DOMAIN="" FORCE=0
+[[ -f "$REGISTRY" ]] || { echo "✗ missing registry: $REGISTRY" >&2; exit 2; }
+
+rows() { grep -v '^#' "$REGISTRY" | awk -F'\t' 'NF > 1'; }
+
+list_registry() {
+    printf '%-10s %-12s %-13s %-8s %s\n' STACK TEMPLATE TYPE WEBROOT SKELETON
+    rows | awk -F'\t' '{printf "%-10s %-12s %-13s %-8s %s\n", $1, $2, $3, $4, ($14=="-"?"(none)":$14)}'
+}
+
+NAME="" STACK="" TEMPLATE="" DIR="" DOMAIN="" FORCE=0
+declare -A OVERRIDE=()
+want_set=0
 for arg in "$@"; do
+    if [[ $want_set -eq 1 ]]; then
+        [[ "$arg" == *=* ]] || { echo "✗ --set needs KEY=VALUE, got: $arg" >&2; exit 2; }
+        OVERRIDE["${arg%%=*}"]="${arg#*=}"; want_set=0; continue
+    fi
     case "$arg" in
-        --stack=*)  STACK="${arg#*=}" ;;
-        --dir=*)    DIR="${arg#*=}" ;;
-        --domain=*) DOMAIN="${arg#*=}" ;;
-        --force)    FORCE=1 ;;
+        --set)   want_set=1 ;;
+        --set=*) kv="${arg#--set=}"
+                 [[ "$kv" == *=* ]] || { echo "✗ --set needs KEY=VALUE, got: $kv" >&2; exit 2; }
+                 OVERRIDE["${kv%%=*}"]="${kv#*=}" ;;
+        --list)     list_registry; exit 0 ;;
+        --stack=*)    STACK="${arg#*=}" ;;
+        --template=*) TEMPLATE="${arg#*=}" ;;
+        --dir=*)      DIR="${arg#*=}" ;;
+        --domain=*)   DOMAIN="${arg#*=}" ;;
+        --force)      FORCE=1 ;;
+        -h|--help)  sed -n '2,25p' "$0" | sed 's/^# \?//'; exit 0 ;;
         -*)         echo "unknown option: $arg" >&2; exit 2 ;;
         *)          [[ -z "$NAME" ]] && NAME="$arg" || { echo "unexpected argument: $arg" >&2; exit 2; } ;;
     esac
 done
 
-[[ -n "$NAME" ]]  || { echo "usage: new-project <name> --stack=wp|statamic|node|generic [--dir=PATH] [--domain=D]" >&2; exit 2; }
+if [[ -z "$NAME" ]]; then
+    sed -n '2,25p' "$0" | sed 's/^# \?//' >&2; echo >&2; list_registry >&2; exit 2
+fi
 [[ "$NAME" =~ ^[a-z][a-z0-9-]*$ ]] || { echo "✗ name must be lowercase letters, digits and dashes: $NAME" >&2; exit 2; }
-case "$STACK" in
-    wp|statamic|node|generic) ;;
-    "") echo "✗ --stack is required (wp | statamic | node | generic)" >&2; exit 2 ;;
-    *)  echo "✗ unknown stack: $STACK — expected wp, statamic, node or generic" >&2; exit 2 ;;
-esac
+
+if [[ -z "$STACK" ]]; then
+    echo "✗ --stack is required." >&2; echo >&2; list_registry >&2; exit 2
+fi
+rows | awk -F'\t' -v s="$STACK" '$1==s{f=1} END{exit !f}' || {
+    echo "✗ unknown stack: $STACK" >&2; echo >&2; list_registry >&2; exit 2; }
+
+# Default to the stack's first template — the common shape, listed first.
+if [[ -z "$TEMPLATE" ]]; then
+    TEMPLATE=$(rows | awk -F'\t' -v s="$STACK" '$1==s{print $2; exit}')
+fi
+
+ROW=$(rows | awk -F'\t' -v s="$STACK" -v t="$TEMPLATE" '$1==s && $2==t')
+[[ -n "$ROW" ]] || {
+    echo "✗ unknown template '$TEMPLATE' for stack '$STACK'." >&2
+    echo "  Available for $STACK: $(rows | awk -F'\t' -v s="$STACK" '$1==s{printf "%s ", $2}')" >&2
+    exit 2; }
+
+IFS=$'\t' read -r _s _t TYPE WEBROOT WPCLI WP_PATH CONTENT DDEV_TYPE \
+    INSTALL_CMD DEV_CMD BUILD_CMD TEST_CMD GATE_CMD SOURCE_REPO <<<"$ROW"
+blank() { [[ "$1" == "-" ]] && printf '' || printf '%s' "$1"; }
+WPCLI=$(blank "$WPCLI"); WP_PATH=$(blank "$WP_PATH"); CONTENT=$(blank "$CONTENT")
+INSTALL_CMD=$(blank "$INSTALL_CMD"); DEV_CMD=$(blank "$DEV_CMD"); BUILD_CMD=$(blank "$BUILD_CMD")
+
 [[ -n "$DIR" ]]    || DIR="$NAME"
 [[ -n "$DOMAIN" ]] || DOMAIN="$NAME.be"
+[[ "$STACK" == "wp" ]] && FLAVOUR="tbd" || FLAVOUR=""
 
 mkdir -p "$DIR"; cd "$DIR"
 
@@ -51,90 +108,83 @@ if [[ -f site.yml && $FORCE -eq 0 ]]; then
     exit 1
 fi
 
-# Per-stack defaults. A new stack is a row here, never a forked template.
-case "$STACK" in
-    wp)       TYPE=bedrock;    WEBROOT=web;    WPCLI=web/wp; WP_PATH=web/wp; CONTENT=web/app
-              TEST='ddev composer test:unit'; GATE='composer gate'; METHOD=rsync
-              FLAVOUR=tbd ;;
-    statamic) TYPE=statamic;   WEBROOT=public; WPCLI=;       WP_PATH=;       CONTENT=
-              TEST='ddev exec php artisan test'; GATE='composer gate'; METHOD=rsync ;;
-    node)     TYPE=bun-react;  WEBROOT=dist;   WPCLI=;       WP_PATH=;       CONTENT=
-              TEST='bun test'; GATE='bun run gate'; METHOD=rsync ;;
-    generic)  TYPE=custom-site; WEBROOT=.;     WPCLI=;       WP_PATH=;       CONTENT=
-              TEST='true'; GATE='true'; METHOD=rsync ;;
-esac
+# sed-escape a replacement for the '|'-delimited s||| substitutions below.
+esc() { printf '%s' "$1" | sed -e 's/[&|]/\\&/g'; }
 
-render() {
-    sed -e "s|{{PROJECT_NAME}}|$NAME|g" \
-        -e "s|{{DOMAIN}}|$DOMAIN|g" \
-        -e "s|{{DESCRIPTION}}|TODO|g" \
-        -e "s|{{RISK}}|low|g" \
-        -e "s|{{STACK}}|$STACK|g" \
-        -e "s|{{STACK_TYPE}}|$TYPE|g" \
-        -e "s|{{WEBROOT}}|$WEBROOT|g" \
-        -e "s|{{WPCLI_PATH}}|$WPCLI|g" \
-        -e "s|{{THEME_FLAVOUR}}|${FLAVOUR:-}|g" \
-        -e "s|{{WP_PATH}}|$WP_PATH|g" \
-        -e "s|{{CONTENT_DIR}}|$CONTENT|g" \
-        -e "s|{{HOSTING_PROVIDER}}|ploi|g" \
-        -e "s|{{SSH_STAGING}}|TODO|g" \
-        -e "s|{{SSH_PRODUCTION}}|TODO|g" \
-        -e "s|{{DEPLOY_METHOD}}|$METHOD|g" \
-        -e "s|{{DEPLOY_NOTE}}|TODO|g" \
-        -e "s|{{TEST_COMMAND}}|$TEST|g" \
-        -e "s|{{GATE_COMMAND}}|$GATE|g" \
-        "$1"
+render() {  # render <template> <output>
+    local src="$1" out="$2" key val
+    cp "$src" "$out"
+    for key in PROJECT_NAME DOMAIN DESCRIPTION RISK STACK TEMPLATE STACK_TYPE \
+               WEBROOT WPCLI_PATH THEME_FLAVOUR WP_PATH CONTENT_DIR \
+               HOSTING_PROVIDER SSH_STAGING SSH_PRODUCTION DEPLOY_METHOD \
+               DEPLOY_NOTE INSTALL_COMMAND DEV_COMMAND BUILD_COMMAND \
+               TEST_COMMAND GATE_COMMAND DDEV_TYPE PAYLOAD_TODO; do
+        val="$(esc "${!key-}")"
+        sed -i "s|{{${key}}}|${val}|g" "$out"
+    done
 }
 
-render "$TPL/site.yml.tmpl"  > site.yml
-render "$TPL/Makefile.tmpl"  > Makefile
+PROJECT_NAME="$NAME"
+DESCRIPTION="TODO"
+RISK="low"
+STACK_TYPE="$TYPE"
+WPCLI_PATH="$WPCLI"
+THEME_FLAVOUR="$FLAVOUR"
+CONTENT_DIR="$CONTENT"
+HOSTING_PROVIDER="ploi"
+SSH_STAGING="TODO"
+SSH_PRODUCTION="TODO"
+DEPLOY_METHOD="rsync"
+DEPLOY_NOTE="TODO"
+INSTALL_COMMAND="$INSTALL_CMD"
+DEV_COMMAND="$DEV_CMD"
+BUILD_COMMAND="$BUILD_CMD"
+TEST_COMMAND="$TEST_CMD"
+GATE_COMMAND="$GATE_CMD"
+PAYLOAD_TODO=""
+[[ "$DEPLOY_METHOD" == "rsync" ]] && PAYLOAD_TODO=", and \`deploy.payload\` (every entry must exist locally AND be tracked in git)"
+
+# Caller overrides win over every default and registry value above. Applied
+# last so a dispatch table can set anything without the script knowing why.
+for k in "${!OVERRIDE[@]}"; do
+    printf -v "$k" '%s' "${OVERRIDE[$k]}"
+done
+
+render "$TPL/site.yml.tmpl"          site.yml
+render "$TPL/Makefile.tmpl"          Makefile
+render "$TPL/memory-STATE.md.tmpl"   /tmp/ndp-state.$$
+render "$TPL/memory-lessons.md.tmpl" /tmp/ndp-lessons.$$
+render "$TPL/tasks-todo.md.tmpl"     /tmp/ndp-todo.$$
+render "$TPL/project-CLAUDE.md.tmpl" /tmp/ndp-claude.$$
+render "$TPL/gitignore.tmpl"         /tmp/ndp-gitignore.$$
 
 mkdir -p scripts memory tasks
 cp "$DIST/scripts/devops-version" scripts/devops-version
 chmod +x scripts/devops-version
 NETDUST_DEVOPS_DIST="$DIST" scripts/devops-version --update
 
-[[ -f .gitignore ]] || cat > .gitignore <<'GI'
-.env
-.env.*
-!.env.example
-node_modules/
-vendor/
-backups/
-*.log
-.DS_Store
-GI
+# Never clobber notes or a .gitignore a caller already placed.
+[[ -f memory/STATE.md   ]] || mv /tmp/ndp-state.$$     memory/STATE.md
+[[ -f memory/lessons.md ]] || mv /tmp/ndp-lessons.$$   memory/lessons.md
+[[ -f tasks/todo.md     ]] || mv /tmp/ndp-todo.$$      tasks/todo.md
+[[ -f CLAUDE.md         ]] || mv /tmp/ndp-claude.$$    CLAUDE.md
+[[ -f .gitignore        ]] || mv /tmp/ndp-gitignore.$$ .gitignore
+rm -f /tmp/ndp-*.$$
 
-[[ -f memory/STATE.md ]] || printf '# STATE — %s\n\nCurrent state, decisions and risks. Read at session start, updated at session end.\n' "$NAME" > memory/STATE.md
-[[ -f memory/lessons.md ]] || printf '# Lessons — %s\n\nAppend-only. After any correction, the rule that prevents the repeat.\n' "$NAME" > memory/lessons.md
-[[ -f tasks/todo.md ]] || printf '# TODO — %s\n\nThe active list for the current branch.\n' "$NAME" > tasks/todo.md
-
-[[ -f CLAUDE.md ]] || cat > CLAUDE.md <<CM
-# CLAUDE.md — $NAME
-
-A Netdust **$STACK** project. Operational config: \`site.yml\`.
-
-## Devops
-
-Every branch, deploy and environment action goes through \`make\`.
-Load the \`netdust-devops:devops\` skill before the first \`make\` call —
-name it, do not wait for its description to trigger.
-
-Run \`make\` for the verb list. Never reach for raw git on a rung branch —
-the branches named in \`site.yml\`'s \`environments:\` are written by the flow
-verbs only, and the guard denies raw git writes to them by name.
-
-## Project memory
-
-- \`memory/STATE.md\` — living snapshot; read at session start, update at session end.
-- \`memory/lessons.md\` — after any correction, a rule that prevents the repeat.
-- \`tasks/todo.md\` — the active list for the current branch.
-CM
+# An unrendered {{TOKEN}} ships a placeholder into a real project, where the
+# first thing to read it takes it as a value. Fail loudly instead.
+leftover=$(grep -lE '\{\{[A-Z_]+\}\}' site.yml Makefile CLAUDE.md .gitignore \
+              memory/*.md tasks/*.md 2>/dev/null || true)
+if [[ -n "$leftover" ]]; then
+    echo "✗ unrendered template tokens in: $leftover" >&2
+    grep -ohE '\{\{[A-Z_]+\}\}' $leftover | sort -u | sed 's/^/    /' >&2
+    exit 1
+fi
 
 if [[ ! -d .git ]]; then
     git init -q .
     git add -A
-    git -c commit.gpgsign=false commit -qm "Scaffold $NAME ($STACK) — netdust-devops project layer"
+    git -c commit.gpgsign=false commit -qm "Scaffold $NAME ($STACK/$TEMPLATE) — netdust-devops project layer"
     git branch -M main
     git branch staging main
     git branch development main
@@ -143,11 +193,19 @@ fi
 cat <<DONE
 
 ✅ $NAME scaffolded in $(pwd)
-   stack: $STACK   ·   branches: development → staging → main
+   stack: $STACK   ·   template: $TEMPLATE   ·   webroot: $WEBROOT
+   branches: development → staging → main
+DONE
+[[ "$SOURCE_REPO" != "-" ]] && cat <<SKEL
+   The application itself is NOT installed. Its skeleton lives at:
+     $SOURCE_REPO
+   netdust-wp-manager's ./scripts/new-site.sh clones it and calls this script.
+SKEL
+cat <<NEXT
 
 Next:
   1. fill in the TODOs in site.yml (paths, ssh hosts, state_dir, payload)
   2. git remote add origin <url> && git push -u origin main staging development
-  3. make doctor        — check tools, SSH reachability and the payload
+  3. make doctor        — tools, SSH reachability, payload, devops version
   4. make               — the verb list
-DONE
+NEXT

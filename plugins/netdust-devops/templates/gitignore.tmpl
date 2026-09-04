@@ -1,23 +1,19 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# SHARED BLOCK — identical in every Netdust WordPress project.
-# Edit it in netdust-wp/templates/gitignore.tmpl, never in one project only.
+# Netdust project — shared base. Rendered from netdust-devops/templates/.
 #
-# This block is APPENDED to the netdust-devops base .gitignore, which already
-# carries the dotenv/dependency/editor rules. Only the WordPress-shaped paths
-# below belong here.
-#
-# NEVER ignore these — the deploy pipeline cannot work without them, and a
-# fresh clone must be able to deploy:
+# NEVER ignore these. The deploy pipeline cannot work without them, and a fresh
+# clone must be able to deploy:
 #   site.yml           every host, path, branch and hook the Makefile reads
 #   Makefile           yours: STACK + project-specific targets
 #   Makefile.netdust   the vendored devops core
 #   mk/                the vendored stack layer
 #   scripts/           scripts/site is the reader; Make cannot parse YAML
 #   .netdust-devops    the vendored version + checksums `make doctor` reads
-# daan had /site.yml ignored, so a fresh clone could not deploy (fixed 2026-08-31).
+#
+# One project once ignored /site.yml, and a fresh clone could not deploy at all.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Agent Layer-C notes — local only, never shipped to a server
+# Agent notes — local only, never shipped to a server
 memory/
 tasks/
 **/memory/.stop-hook-state.json
@@ -27,19 +23,14 @@ tasks/
 .env.*
 !.env.example
 
-# Composer
+# Dependencies
 /vendor
-auth.json
-
-# Node
 /node_modules
+auth.json
 
 # Logs and backups
 *.log
 backups/
-
-# WP-CLI
-wp-cli.local.yml
 
 # Tests
 .phpunit.cache/
@@ -47,21 +38,6 @@ playwright-report/
 test-results/
 # Playwright storageState holds a live session cookie — never commit
 tests/e2e/.auth/
-
-# WordPress core and generated content — Bedrock (web/) and custom-app (app/).
-# A pattern for a layout this project does not use is inert, so both are listed.
-web/wp
-web/.htaccess
-web/app/upgrade
-web/app/uploads/*
-!web/app/uploads/.gitkeep
-web/app/cache/*
-app/wp/*
-app/vendor/*
-app/content/upgrade
-app/content/uploads/*
-!app/content/uploads/.gitkeep
-app/content/cache/*
 
 # Editor and OS junk
 .idea/
@@ -72,6 +48,6 @@ Thumbs.db
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PROJECT-SPECIFIC — this project's own whitelists and scratch paths.
-# These CANNOT be shared: they name this project's plugins and themes, and
+# These CANNOT be shared: they name this project's own plugins and themes, and
 # copying another project's list here would untrack first-party code.
 # ─────────────────────────────────────────────────────────────────────────────

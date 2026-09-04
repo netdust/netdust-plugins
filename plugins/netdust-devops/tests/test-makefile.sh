@@ -42,16 +42,36 @@ else
     ok "core defines no stack hooks"
 fi
 
-# Every {{TOKEN}} in a template must be rendered by the scaffolder. A token
-# added to site.yml.tmpl without a matching -e in bin/new-project ships a
-# literal "{{THEME_FLAVOUR}}" into a real project's site.yml, where the first
-# thing to read it gets the placeholder as a value.
-missing=""
-for tok in $(grep -oE '\{\{[A-Z_]+\}\}' "$(dirname "${BASH_SOURCE[0]}")/../templates"/*.tmpl | sed 's/.*{{\(.*\)}}/\1/' | sort -u); do
-    grep -q "{{$tok}}" "$(dirname "${BASH_SOURCE[0]}")/../bin/new-project" || missing="$missing $tok"
-done
-[ -z "$missing" ] && ok "every template token is rendered by new-project" \
-                  || bad "every template token is rendered by new-project" "unrendered:$missing"
+# Every (stack, template) row in the registry must scaffold cleanly, with no
+# token left unrendered. A token added to a template with no matching value
+# ships a literal "{{THEME_FLAVOUR}}" into a real project's site.yml, where the
+# first thing to read it takes the placeholder as a value.
+#
+# Asserted by SCAFFOLDING, not by grepping the script: the renderer loops over
+# key names, so the literal "{{TOKEN}}" never appears in bin/new-project and a
+# grep-based check silently passes forever.
+SCAFF="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/bin/new-project"
+REG="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/templates/stacks.tsv"
+TOKWORK=$(mktemp -d)
+rowfail=""
+while IFS=$'\t' read -r st tp rest; do
+    case "$st" in ''|\#*) continue;; esac
+    out="$TOKWORK/$st-$tp"
+    if ! "$SCAFF" "tok${st}${tp//-/}" --stack="$st" --template="$tp" --dir="$out" >/dev/null 2>&1; then
+        rowfail="$rowfail $st/$tp(scaffold-failed)"; continue
+    fi
+    left=$(grep -rohE '\{\{[A-Z_]+\}\}' "$out" --exclude-dir=.git --exclude-dir=mk \
+             --exclude=Makefile.netdust 2>/dev/null | sort -u | tr '\n' ',' || true)
+    [ -n "$left" ] && rowfail="$rowfail $st/$tp($left)"
+done < "$REG"
+rm -rf "$TOKWORK"
+[ -z "$rowfail" ] && ok "every registry row scaffolds with no unrendered token" \
+                  || bad "every registry row scaffolds with no unrendered token" "$rowfail"
+
+# The registry is the only place a project shape is declared.
+regcols=$(grep -vc '^#' "$REG" 2>/dev/null || echo 0)
+[ "$regcols" -ge 5 ] && ok "the stack/template registry has $regcols rows" \
+                     || bad "the stack/template registry has rows" "found $regcols"
 
 echo "── behaviour ──"
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
