@@ -1,9 +1,11 @@
 # site.yml — the one operational description of this project.
 #
 # SCHEMA VERSION 2. Read by three consumers, which must never disagree:
-#   · scripts/site        the Makefile's reader (python3 + PyYAML)
-#   · the fleet manager   discovery only: name, risk, sla, project directory
-#   · the session-start hook, which summarises it into every agent's context
+#   · scripts/site   the Makefile's reader (python3 + PyYAML) — the only one
+#                    the verbs use
+#   · a session-start hook, which summarises it into an agent's context
+#   · any tool reporting across projects, which needs discovery only:
+#     name, risk, sla, and the directory this file sits in
 #
 # Retired in v2 — do NOT reintroduce them, the Makefile cannot read them:
 #   hosting.remote_path_staging / remote_path_production  → environments.<env>.path
@@ -17,7 +19,8 @@ site:
   domain: {{DOMAIN}}                  # production domain, e.g. example.com
   description: {{DESCRIPTION}}        # one line: what this site is
   risk: {{RISK}}                      # low | medium | high — "high" means triple-check destructive ops
-  sla: false                          # fleet manager: include in the weekly update sweep
+  sla: false                          # true = this site is under a maintenance agreement;
+                                      # reporting tools use it to scope their sweeps
 
 structure:
   stack: {{STACK}}                    # wp | statamic | node | generic — selects mk/<stack>.mk
@@ -25,8 +28,8 @@ structure:
   webroot: {{WEBROOT}}                # bedrock: web · custom-app: app · statamic/laravel: public · node: dist · custom-site: .
   wpcli_path: {{WPCLI_PATH}}          # WP only — matches wp-cli.yml --path. Leave blank otherwise.
   theme_flavour: {{THEME_FLAVOUR}}    # WP only — yootheme | custom | tbd. There is no
-                                      # default theme base on this fleet, so `tbd` means
-                                      # tbd. Read by netdust-wp:wp-frontend before it
+                                      # default theme base across these sites, so `tbd`
+                                      # means tbd. Read by netdust-wp:wp-frontend before it
                                       # touches a template or a stylesheet.
                                       #   yootheme = YOOtheme Pro parent + thin child; the
                                       #     builder renders, styling lives in

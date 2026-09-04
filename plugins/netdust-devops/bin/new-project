@@ -21,8 +21,8 @@
 #
 # What it does NOT do: install the application. No composer, no wp core
 # install, no ddev start, and it never clones a skeleton repo. That belongs to
-# the stack's own installer (netdust-wp-manager's new-site.sh for WordPress),
-# which calls THIS for the project layer so there is one scaffolder.
+# whatever installs that stack, which calls THIS for the project layer so there
+# is one scaffolder rather than two that drift.
 #
 # Re-runnable: without --force it refuses to overwrite an existing site.yml, so
 # it can safely add the devops layer to a project that predates it.
@@ -199,7 +199,8 @@ DONE
 [[ "$SOURCE_REPO" != "-" ]] && cat <<SKEL
    The application itself is NOT installed. Its skeleton lives at:
      $SOURCE_REPO
-   netdust-wp-manager's ./scripts/new-site.sh clones it and calls this script.
+   Clone it, or let your stack installer do it — it calls this script for the
+   project layer.
 SKEL
 cat <<NEXT
 

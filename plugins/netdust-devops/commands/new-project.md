@@ -64,5 +64,6 @@ What was created, what is still `TODO` in `site.yml`, and the next verb
 (`make setup`, then `make dev`).
 
 **The application itself is not installed by this.** No composer, no WordPress
-install, no `ddev start`. For a WordPress site, `netdust-wp-manager`'s
-`new-site.sh` does that and calls this for the project layer.
+install, no `ddev start`, and no skeleton repo is cloned. Whatever installs
+that stack does it, and calls this for the project layer — so the project
+layer has one author, not two that drift.

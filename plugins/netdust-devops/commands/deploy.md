@@ -8,9 +8,16 @@ Deploy the project in the current working directory. Load the
 
 ## Before anything
 
-1. **Confirm you are in a project, not the fleet manager.** A `site.yml` and a
-   `Makefile` at the repo root. If you are in `netdust-wp-manager`, stop: the
-   fleet layer never deploys. Name the project and `cd` there.
+1. **Confirm you are standing in the project you mean to deploy.** It needs a
+   `site.yml` and a `Makefile` at the repo root:
+
+   ```bash
+   test -f site.yml && test -f Makefile || echo "not a Netdust project"
+   ```
+
+   If either is missing you are somewhere else — a fleet or overview checkout,
+   a parent directory, the wrong repo. Deploying is a project action; name the
+   project and `cd` to it. Do not improvise a deploy from outside.
 
 2. **Read the state, do not assume it.**
    ```bash

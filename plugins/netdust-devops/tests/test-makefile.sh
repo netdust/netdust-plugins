@@ -63,6 +63,13 @@ while IFS=$'\t' read -r st tp rest; do
     left=$(grep -rohE '\{\{[A-Z_]+\}\}' "$out" --exclude-dir=.git --exclude-dir=mk \
              --exclude=Makefile.netdust 2>/dev/null | sort -u | tr '\n' ',' || true)
     [ -n "$left" ] && rowfail="$rowfail $st/$tp($left)"
+    # …and the SCAFFOLDED OUTPUT must name no caller either. The plugin-level
+    # check above misses this: a template can be clean in the repo and still
+    # render a caller's name into every project it creates.
+    named=$(grep -rlniE 'netdust-wp-manager|wp-manager|the fleet manager|the fleet.s weekly' \
+              "$out" --exclude-dir=.git --exclude-dir=mk --exclude=Makefile.netdust \
+              --exclude=work-audit.sh 2>/dev/null | sed "s|$out/||" | tr '\n' ' ' || true)
+    [ -n "$named" ] && rowfail="$rowfail $st/$tp(names-caller: $named)"
 done < "$REG"
 rm -rf "$TOKWORK"
 [ -z "$rowfail" ] && ok "every registry row scaffolds with no unrendered token" \
@@ -72,6 +79,22 @@ rm -rf "$TOKWORK"
 regcols=$(grep -vc '^#' "$REG" 2>/dev/null || echo 0)
 [ "$regcols" -ge 5 ] && ok "the stack/template registry has $regcols rows" \
                      || bad "the stack/template registry has rows" "found $regcols"
+
+# This plugin acts on ONE project, from inside its repo. It has no opinion
+# about what invokes it — a person, an agent, or a fleet tool reporting across
+# many repos. Naming a caller inverts the dependency (the caller knows this
+# plugin; this plugin must not know the caller) and, in a template, ships that
+# assumption into every scaffolded project regardless of stack.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+callers=$(grep -rlniE 'netdust-wp-manager|wp-manager|new-site\.sh|the fleet manager' "$ROOT" \
+            --exclude-dir=.git --exclude="$(basename "${BASH_SOURCE[0]}")" 2>/dev/null || true)
+[ -z "$callers" ] && ok "the plugin names no caller" \
+                  || bad "the plugin names no caller" "$(printf '%s' "$callers" | sed "s|$ROOT/||" | tr '\n' ' ')"
+
+# A fleet-scoped command living here is the same inversion in command form.
+fleetcmds=$(grep -rlniE '^description:.*(fleet|across (all|every) (site|project))' "$ROOT/commands" 2>/dev/null || true)
+[ -z "$fleetcmds" ] && ok "no fleet-scoped command ships in the project layer" \
+                    || bad "no fleet-scoped command ships in the project layer" "$(printf '%s' "$fleetcmds" | sed "s|$ROOT/||")"
 
 echo "── behaviour ──"
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT

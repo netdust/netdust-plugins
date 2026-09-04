@@ -1,6 +1,6 @@
 ---
 name: devops
-description: Use for EVERY branch, environment or deploy action in a Netdust project — the make verbs, the promotion path, the deploy gate and ledger, site.yml, .env, DDEV, and the fleet manager's read-only weekly sweep. Load it BEFORE the first `make` call or the first git command on a project carrying site.yml; name it rather than waiting for it to trigger. Triggers on file edits to Makefile, site.yml, .env*, mk/*.mk, .ddev/config.yaml. Activates on make dev, make save, make feature, make hotfix, make finish, make promote, make release, make deploy, make deploy-test, make ship, make deployed, make health, make doctor, make rollback, make refresh, make pull, make audit, make devops-update, ddev start, ddev wp, ddev describe, site.yml, environments, deploy gate, deploy ledger, staging branch, rung branch, git-flow, hotfix, .env.example. Fires on how the work is actually spoken, not just target names — "we work on X", "fix this", "we have a bug", "hotfix", "put it on dev", "test this", "ready for review", "colleagues can look", "push to staging", "promote", "deploy", "ship it", "go live", "release", "roll it back", "what's on prod", "what's live", "what isn't live yet", "sync from live", "staging is stale", "pull the database", "set up a new project", "which sites need updates", "check the fleet". Symptoms include starting work, choosing a branch, deciding what to commit, deploying anywhere, rolling back, refreshing a non-production environment, scaffolding a project, or a weekly fleet check. Stack-agnostic — WordPress, Statamic, Node and static projects use the same verbs. For WP-CLI, Bedrock layout and Vite see netdust-wp:wp-infra. For server provisioning see netdust-core:ploi and secure-server.
+description: Use for EVERY branch, environment or deploy action in a Netdust project — the make verbs, the promotion path, the deploy gate and ledger, site.yml, .env and DDEV. Load it BEFORE the first `make` call or the first git command on a project carrying site.yml; name it rather than waiting for it to trigger. Triggers on file edits to Makefile, site.yml, .env*, mk/*.mk, .ddev/config.yaml. Activates on make dev, make save, make feature, make hotfix, make finish, make promote, make release, make deploy, make deploy-test, make ship, make deployed, make health, make doctor, make rollback, make refresh, make pull, make audit, make devops-update, ddev start, ddev wp, ddev describe, site.yml, environments, deploy gate, deploy ledger, staging branch, rung branch, git-flow, hotfix, .env.example. Fires on how the work is actually spoken, not just target names — "we work on X", "fix this", "we have a bug", "hotfix", "put it on dev", "test this", "ready for review", "colleagues can look", "push to staging", "promote", "deploy", "ship it", "go live", "release", "roll it back", "what's on prod", "what's live", "what isn't live yet", "sync from live", "staging is stale", "pull the database", "set up a new project". Symptoms include starting work, choosing a branch, deciding what to commit, deploying anywhere, rolling back, refreshing a non-production environment, or scaffolding a project. Stack-agnostic — WordPress, Statamic, Node and static projects use the same verbs. For WP-CLI, Bedrock layout and Vite see netdust-wp:wp-infra. For server provisioning see netdust-core:ploi and secure-server.
 ---
 
 # Netdust devops
@@ -15,19 +15,15 @@ type or a Makefile you edit — it is read from `site.yml`, always.
 
 ## Two layers, and which one you are in
 
-| | **Project layer** — daily | **Fleet layer** — weekly |
-|---|---|---|
-| Where | inside one project repo | `netdust-wp-manager` |
-| What | everything: branch, build, deploy, ship, roll back | health, updates, todos |
-| Tool | `make <verb>` | the fleet scripts + dashboard |
+Everything here happens **inside one project repo**: branch, build, deploy,
+ship, roll back, pull, refresh. The verbs read that project's `site.yml` and
+act on that project's environments.
 
-**The fleet layer reads and reports. It never writes into a project.** When
-something needs doing, it names the project and hands you the command to run
-*there*. The one exception is remote WordPress plugin updates, which touch
-servers and not project repos, and which confirm per site.
-
-So: never deploy, ship, pull or refresh from the fleet layer. If you find
-yourself about to, you are in the wrong layer — `cd` to the project.
+A fleet or overview tool that reports across many projects is a *reader*. It
+can run the read-only verbs (`deployed`, `status`, `health`, `doctor`) and it
+can show you what needs doing — but the doing happens here, in the project,
+where the gate and the ledger record it. If you are about to deploy, ship,
+pull or refresh from somewhere that is not this project, `cd` here first.
 
 ---
 
@@ -187,8 +183,10 @@ and overrides go there.
 
 ## site.yml — schema 2
 
-The one operational description, read by the Makefile, the fleet manager and
-the session-start hook. Read it before any operational command.
+The one operational description of this project. The Makefile reads it, and so
+does anything else that needs to know this project's shape — a session-start
+hook, a tool reporting across many projects. Read it before any operational
+command.
 
 ```bash
 scripts/site environments                    # the environment names
@@ -277,7 +275,7 @@ in `site.yml`.
 | Reaching for raw git because a verb failed | file the failure; fix the verb |
 | A hotfix branched from `development` or `staging` | `make hotfix` — it branches from origin/production |
 | Editing `Makefile.netdust` or `mk/*.mk` in a project | fix it upstream in the plugin, then `make devops-update` |
-| Deploying, pulling or refreshing from the fleet manager | `cd` to the project and use its verbs |
+| Deploying, pulling or refreshing from outside the project | `cd` to the project; the verbs act on the repo they stand in |
 | `.env` committed | rotate every secret, then untrack. `.env.example` only |
 | Multiple `.env*` variants (`.env.dev`, `.env.prod`) | one `.env.example` + per-environment injection |
 | `composer install` / `npm install` outside the container | `ddev composer …` / `ddev exec …` so the version matches the runtime |

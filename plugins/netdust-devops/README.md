@@ -1,14 +1,14 @@
 # netdust-devops
 
 The single source of truth for Netdust devops: the branch flow, the deploy
-gate and ledger, and the contract between a project and the fleet manager.
+gate and ledger, and the site.yml schema they read.
 
 ## Why it exists
 
 The flow was previously spread across four places that disagreed: two `/deploy`
 commands with contradicting instructions, a `dev-stack` skill that gave three
 different answers about which branch a feature comes from, a `site.yml` schema
-the fleet manager and the project Makefile each read differently, and a
+two readers interpreted differently, and a
 Makefile that projects **copied** at scaffold time and then forked silently.
 
 Agents followed whichever source they read last. So did people.
@@ -47,15 +47,17 @@ Makefile              project — STACK + project-specific targets   (yours)
 
 An unknown `STACK` falls back to `mk/generic.mk` rather than failing to parse.
 
-## Project layer vs fleet layer
+## Scope
 
-The **project layer** (this plugin's verbs, run inside a repo) does everything:
-branch, build, deploy, ship, roll back.
+Everything here acts on **one project**, from inside its repo. The verbs read
+that project's `site.yml` and touch that project's environments.
 
-The **fleet layer** (`netdust-wp-manager`) reads and reports: health, updates,
-todos. It never writes into a project — when something needs doing it names the
-project and hands over the command to run there. The one exception is remote
-WordPress plugin updates, which touch servers rather than project repos.
+This plugin has no opinion about what invokes it — a person, an agent, or a
+fleet tool reporting across many repos. It exposes verbs and refuses by name
+when a precondition fails; who called is not its concern. Read-only verbs
+(`deployed`, `status`, `health`, `doctor`, `audit`) are safe for anything to
+run; the ones that write are gated on a clean tree, the right branch, a pushed
+HEAD, and — for production — a confirmation typed by a human at a terminal.
 
 ## Tests
 
