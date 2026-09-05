@@ -80,11 +80,18 @@ regcols=$(grep -vc '^#' "$REG" 2>/dev/null || echo 0)
 [ "$regcols" -ge 5 ] && ok "the stack/template registry has $regcols rows" \
                      || bad "the stack/template registry has rows" "found $regcols"
 
-# This plugin acts on ONE project, from inside its repo. It has no opinion
-# about what invokes it — a person, an agent, or a fleet tool reporting across
-# many repos. Naming a caller inverts the dependency (the caller knows this
-# plugin; this plugin must not know the caller) and, in a template, ships that
+# CALLERS vs TOOLS — the distinction this asserts.
+#
+# This plugin acts on ONE project, from inside its repo, and has no opinion
+# about what INVOKES it: a person, an agent, a fleet tool reporting across many
+# repos. Naming a caller inverts the dependency (the caller knows this plugin;
+# this plugin must not know the caller) and, in a template, ships that
 # assumption into every scaffolded project regardless of stack.
+#
+# It DOES name the tools it operates with — git, ddev, rsync, ssh, composer,
+# herdr. Those are the environment the verbs run in, not things that call them,
+# and refusing to name them would make the skills useless. The test targets
+# callers only.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 callers=$(grep -rlniE 'netdust-wp-manager|wp-manager|new-site\.sh|the fleet manager' "$ROOT" \
             --exclude-dir=.git --exclude="$(basename "${BASH_SOURCE[0]}")" 2>/dev/null || true)

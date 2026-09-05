@@ -106,7 +106,7 @@ feature: ## Start a feature (make feature name=my-feature) — branches from the
 	@if ! echo "$(name)" | grep -qE '^[a-zA-Z][a-zA-Z0-9._-]*$$'; then \
 		echo "$(RED)✗ Invalid name: use letters, digits, dot, dash, underscore$(RESET)"; exit 1; fi
 	@$(MAKE) --no-print-directory _ensure-flow
-	@$(MAKE) --no-print-directory _ensure-clean-git
+	@$(MAKE) --no-print-directory _ensure-clean-git verb=feature
 	@git fetch --quiet origin $(BR_INTEG)
 	@git checkout -b "feature/$(name)" origin/$(BR_INTEG)
 	@echo "$(GREEN)✅ On feature/$(name), branched from origin/$(BR_INTEG)$(RESET)"
@@ -117,7 +117,7 @@ hotfix: ## Start a hotfix (make hotfix name=vat-rounding) — branches from the 
 	@if ! echo "$(name)" | grep -qE '^[a-zA-Z][a-zA-Z0-9._-]*$$'; then \
 		echo "$(RED)✗ Invalid name: use letters, digits, dot, dash, underscore$(RESET)"; exit 1; fi
 	@$(MAKE) --no-print-directory _ensure-flow
-	@$(MAKE) --no-print-directory _ensure-clean-git
+	@$(MAKE) --no-print-directory _ensure-clean-git verb=hotfix
 	@git fetch --quiet origin $(BR_PROD)
 	@git checkout -b "hotfix/$(name)" origin/$(BR_PROD)
 	@echo "$(GREEN)✅ On hotfix/$(name), branched from origin/$(BR_PROD)$(RESET)"
@@ -126,7 +126,7 @@ hotfix: ## Start a hotfix (make hotfix name=vat-rounding) — branches from the 
 .PHONY: finish
 finish: ## Merge a branch one step up the promotion path (make finish [name=my-feature])
 	@$(MAKE) --no-print-directory _ensure-flow
-	@$(MAKE) --no-print-directory _ensure-clean-git
+	@$(MAKE) --no-print-directory _ensure-clean-git verb=finish
 	@: 'name= finishes a branch you are NOT standing on. A parallel agent works'
 	@: 'in its own worktree, so the rung it must merge into is checked out'
 	@: 'elsewhere and it cannot finish its own work; the worktree holding the'
@@ -192,7 +192,7 @@ promote: ## Send ONE feature to the review branch, leaving the rest of the integ
 		git branch -a --list '*feature/*' | sed 's/^/  /'; \
 		exit 1; \
 	fi
-	@$(MAKE) --no-print-directory _ensure-clean-git
+	@$(MAKE) --no-print-directory _ensure-clean-git verb=promote
 	@$(MAKE) --no-print-directory _worktree-guard rung=$(BR_REVIEW) verb="promote name=$(name)"
 	@BR="feature/$(name)"; \
 	git rev-parse --verify --quiet "$$BR" >/dev/null || git branch "$$BR" "origin/$$BR"; \
@@ -212,7 +212,7 @@ release: ## Merge the review branch into the production branch (then: make ship)
 		echo "$(RED)✗ No production environment in site.yml yet$(RESET)"; exit 1; fi
 	@$(MAKE) --no-print-directory _ensure-flow
 	@$(MAKE) --no-print-directory _need-tty verb=release
-	@$(MAKE) --no-print-directory _ensure-clean-git
+	@$(MAKE) --no-print-directory _ensure-clean-git verb=release
 	@$(MAKE) --no-print-directory _worktree-guard rung=$(BR_REVIEW) verb=release
 	@$(MAKE) --no-print-directory _worktree-guard rung=$(BR_PROD) verb=release
 	@git fetch --quiet origin
@@ -732,10 +732,26 @@ _ensure-flow:
 		fi; \
 	done
 
+# A clean tree is required by every verb that moves between branches. The
+# advice depends on WHY: for most verbs "commit first" is the whole answer, but
+# for a hotfix it is not — committing half-done feature work purely to unblock
+# a production fix is the mistake, not the fix. Name both routes there.
 _ensure-clean-git:
 	@if [ -n "$$(git status --porcelain)" ]; then \
 		echo "$(RED)❌ You have uncommitted changes$(RESET)"; \
-		echo "$(YELLOW)Run 'make save' first$(RESET)"; \
+		git status --short | head -10; \
+		case "$(verb)" in \
+			hotfix) \
+				echo ""; \
+				echo "$(YELLOW)Two routes, and the second is the one people forget:$(RESET)"; \
+				echo "$(YELLOW)  1. make save   — commit this work here, then hotfix in this checkout.$(RESET)"; \
+				echo "$(YELLOW)                   Right when the work is at a stopping point.$(RESET)"; \
+				echo "$(YELLOW)  2. Hotfix in a SEPARATE CHECKOUT — nothing here moves, and no$(RESET)"; \
+				echo "$(YELLOW)                   half-done work gets committed to look tidy.$(RESET)"; \
+				echo "$(YELLOW)                   Then: make finish name=<x> from where the rung lives.$(RESET)"; \
+				echo "$(YELLOW)  See the netdust-devops:parallel-work skill.$(RESET)";; \
+			*) echo "$(YELLOW)Run 'make save' first$(RESET)";; \
+		esac; \
 		exit 1; \
 	fi
 
