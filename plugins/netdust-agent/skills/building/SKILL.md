@@ -48,24 +48,47 @@ through the overlay below, whatever tool proposes to do the walking.
 
 The upstream skill owns dispatch and status handling. What Netdust adds depends on the lane.
 
-### Placement — decide it before each dispatch, not after (2026-09-04)
+### Placement — READ it from the plan, do not re-derive it (2026-09-04)
 
-Dispatch answers *what* runs. Placement answers *where*, and it is a separate
-decision the harness used to skip: every dispatch became a Task subagent, which
-runs in YOUR pane, YOUR context and YOUR working tree. That is right for most
-work and wrong for two cases, one of which has already cost a run — two
-implementers in one working tree, 14 and 17 phantom failures (2026-08-09).
+Dispatch answers *what* runs. Placement answers *where*, and the harness used to
+skip it: every dispatch became a Task subagent, which runs in YOUR pane, YOUR
+context and YOUR working tree. Right for most work, wrong for two cases, one of
+which already cost a run — two implementers in one working tree, 14 and 17
+phantom failures (2026-08-09).
 
-**Outside herdr (`HERDR_ENV` unset) placement does not exist: everything is a
-subagent, exactly as before.** Inside herdr, place each dispatch:
+**The plan decides this, not you.** `planning` writes `**Placement:**` on any
+cluster that dispatches 2+ `[P]` tasks, and `bin/gate-check.py` refuses a plan
+that omits it — so by the time you are here, the decision exists and has passed
+the seam. Read it; do not re-derive it and do not overrule it.
 
-| The dispatch | Placement | Why |
+**1. Before the cluster's first dispatch, read its placement line.**
+
+```bash
+awk '/^### Cluster/{c=$0} /^\*\*Placement:/{print c" -> "$0}' specs/<feature>/tasks.md
+```
+
+A cluster with a `worktree` placement means its `[P]` siblings each get their own
+checkout. A cluster with no line has none that needed declaring — the gate would
+have refused it otherwise — so its tasks are subagents here.
+
+**2. What the plan cannot foresee, you place — and only these.** A plan is
+written before the work; three things surface during it. This is the whole list:
+
+| Surfaced during the run | Placement | Why |
 |---|---|---|
-| Anything that EDITS this checkout | subagent, here | the default; nothing gained by moving it |
-| A long gate, suite or build | **its own pane**, same cwd, same branch | it reads and executes, so it cannot collide — and its output lands there, not in your context |
-| Two or more `[P]` siblings that EDIT | **one worktree each** | subagents share this tree; that is the 2026-08-09 failure, not a risk |
-| A fix in another repository (a `--prefer-source` package under `vendor/`) | **a worktree on THAT repo** | a subagent cannot have a different checkout at all |
-| A reviewer, log watcher, anything read-only | a pane, or a subagent if its report is short | either works; a pane keeps a long report out of your context |
+| A gate or suite slower than you want to wait on | **its own pane**, same cwd, same branch | it reads and executes, so it cannot collide, and its output lands there instead of in your context |
+| A bug in another repository (a `--prefer-source` package under `vendor/`) | **a worktree on THAT repo** | a subagent cannot have a different checkout at all; the PreToolUse guard will ask before the edit |
+| A reviewer or watcher whose report is long | a pane | keeps the report out of your context; a short one stays a subagent |
+
+Anything else is a subagent. If you find yourself wanting a worktree for a
+reason not on this list or in the plan, the plan was wrong — say so and hand
+back. Do not quietly re-place work the seam already approved.
+
+**Outside herdr (`HERDR_ENV` unset) none of this exists: every dispatch is a
+subagent, exactly as before, and a `**Placement:** worktree` line is satisfied by
+running those tasks in SEQUENCE rather than concurrently.** That is the honest
+fallback — the plan's constraint is "these must not share a tree", and one at a
+time also satisfies it.
 
 `netdust-devops:parallel-work` owns the rule behind that table — *does this need
 a different checkout?* — and `skills/_shared/herdr-moments.md` maps each answer
