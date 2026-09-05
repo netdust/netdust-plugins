@@ -421,7 +421,7 @@ def check_acceptance_flows(plan_text: str, spec_text: str | None, f: Findings) -
 
     triggered = spec_user_facing_triggered(spec_text) if spec_text else []
     layered = _author_flow_rows(body) if rows else []
-    screens = [t for t in triggered if SCREEN_BOX.search(t)]
+    screens = spec_screens(spec_text)
     if triggered and (is_na or not rows):
         f.add("fail", "acceptance-flows",
               "spec flags user-facing surface(s) "
@@ -1529,6 +1529,7 @@ BEHAVIOUR_BLOCK_LINES = {
         r"^\s*(?:[-*]\s+)?(?:\*\*)?Observable(?:\*\*)?:\s*(\S.*?)\s*$", re.IGNORECASE),
     "red_until": re.compile(
         r"^\s*(?:[-*]\s+)?(?:\*\*)?RED until(?:\*\*)?:\s*(\S.*?)\s*$", re.IGNORECASE),
+    "feature_tests": re.compile(r"^\s*(?:\*\*)?Feature-tests(?:\*\*)?:\s*(yes\b.*?)\s*$"),
 }
 _BLOCK_KEYS = ("behaviour", "observable", "red_until")
 BEHAVIOUR_LABEL = {"behaviour": "`Behaviour:`", "observable": "`Observable:`",
@@ -1563,6 +1564,7 @@ def parse_behaviour_clusters(tasks_text: str) -> list[dict]:
             lane = _lane_from_heading(ln)
             cur = {"name": ln.lstrip("# ").split("(")[0].strip(),
                    "behaviour": None, "observable": None, "red_until": None,
+                   "feature_tests": None,
                    "lane": lane[0] if lane else None,
                    "lane_reason": lane[1] if lane else "",
                    "lane_raw": lane[2] if lane else None,
@@ -1754,12 +1756,16 @@ def behaviour_lane_task_ids(tasks_text: str) -> set[str]:
             if c["lane"] == "behaviour" for m in c["members"]}
 
 
-def _cluster_key(name: str) -> str:
-    """`Cluster A — the checker` / `A — the checker` / `A` → `a`: the leading token,
+def _cluster_token(name: str) -> str:
+    """`Cluster A — the checker` / `A — the checker` / `A` → `A`: the leading token,
     which is how the plan's per-cluster stakes rows and the tasks headings name one."""
     n = re.sub(r"^\s*cluster\s+", "", name.strip(), flags=re.IGNORECASE)
     tok = re.match(r"([A-Za-z0-9._-]+)", n)
-    return tok.group(1).lower() if tok else n.lower()
+    return tok.group(1) if tok else n
+
+
+def _cluster_key(name: str) -> str:
+    return _cluster_token(name).lower()
 
 
 def cluster_stakes_map(plan_text: str | None) -> dict[str, str]:
@@ -2452,6 +2458,12 @@ def _layer(row: dict) -> str:
     return (row["layer"] or "").lower()
 
 
+def spec_screens(spec_text: str | None) -> list[str]:
+    """The checked user-facing boxes naming a screen — what demands a `browser` row, an
+    enumerated parity reference and a rendered-content observable."""
+    return [t for t in spec_user_facing_triggered(spec_text or "") if SCREEN_BOX.search(t)]
+
+
 def check_shakeout_access(plan_text: str, f: Findings) -> None:
     """FR-5 — a plan with `browser` rows names the ONE command that logs the shake-out in."""
     flows = section_body(plan_text, "Acceptance flows") or ""
@@ -2478,6 +2490,106 @@ def check_shakeout_access(plan_text: str, f: Findings) -> None:
     else:
         f.add("warn", "shakeout-access",
               "## Shake-out access is neither N/A nor a recipe — confirm it is intentional")
+
+
+# ── parity, rendered content, panel hints (artifact-gate FR-11/12/15/16) ──────
+
+PARITY_PHRASE = re.compile(r"\b(same\s+\w+\s+as|identical\s+to|mirrors?\b|parity\s+with)\b",
+                           re.IGNORECASE)
+PARITY_HEADING = re.compile(r"^##\s+Parity:\s*(?P<ref>.*?)\s*$", re.IGNORECASE)
+LIST_ITEM = re.compile(r"^\s*(?:[-*]|\d+\.)\s+\S")
+HTTP_URL = re.compile(r"https?://\S+")
+
+
+def _parity_phrase(spec_text: str | None, plan_text: str) -> tuple[str, str] | None:
+    """(phrase, file) for the first parity phrase — the spec's, else the plan's."""
+    for name, text in (("spec.md", spec_text), ("plan.md", plan_text)):
+        m = PARITY_PHRASE.search(strip_fenced(text or ""))
+        if m:
+            return m.group(0), name
+    return None
+
+
+def _parity_section(plan_text: str) -> tuple[str, list[str]] | None:
+    """(reference, author lines) under the first `## Parity: <reference>` heading."""
+    lines = strip_fenced(plan_text).splitlines()
+    for i, ln in enumerate(lines):
+        m = PARITY_HEADING.match(ln)
+        if not m:
+            continue
+        body = []
+        for nxt in lines[i + 1:]:
+            h = heading_text(nxt)
+            if h and h[0] <= 2:
+                break
+            if not nxt.lstrip().startswith(">"):
+                body.append(nxt)
+        return m.group("ref").split("[")[0].strip(), body
+    return None
+
+
+def check_parity(plan_text: str, spec_text: str | None, f: Findings) -> None:
+    """FR-15 — "same as X" on a screen is enumerated from the RUNNING X, never remembered."""
+    hit = _parity_phrase(spec_text, plan_text)
+    if hit is None or not spec_screens(spec_text):
+        return
+    phrase, origin = hit
+    section = _parity_section(plan_text)
+    if section is None:
+        f.add("fail", "parity",
+              f'{origin} says "{phrase}" but the plan has no `## Parity: <reference>` — list '
+              "≥3 components read from the running reference, its URL named")
+        return
+    ref, body = section
+    items = sum(1 for ln in body if LIST_ITEM.match(ln))
+    url = HTTP_URL.search("\n".join(body))
+    if items < 3 or url is None:
+        f.add("fail", "parity",
+              f"## Parity: {ref} lists {items} component(s)"
+              + ("" if url else " and names no http URL")
+              + f' — {origin} says "{phrase}": read ≥3 components from the running reference')
+        return
+    f.add("pass", "parity", f"## Parity: {ref} — {items} components read from {url.group(0)}")
+
+
+QUOTED_LITERAL = re.compile(r'"[^"]+"|\'[^\']+\'')
+SELECTOR = re.compile(r"#\w|\.\w|\[data-")
+
+
+def check_observable_content(tasks_text: str, spec_text: str | None, f: Findings) -> None:
+    """FR-16 — on a screen, a behaviour cluster's `Observable:` names rendered content."""
+    if not spec_screens(spec_text):
+        return
+    clusters = [c for c in parse_behaviour_clusters(tasks_text) if c["lane"] == "behaviour"]
+    named = []
+    for c in clusters:
+        obs = c["observable"] or ""
+        if QUOTED_LITERAL.search(obs) or SELECTOR.search(obs):
+            named.append(c["name"])
+        else:
+            f.add("fail", "observable-content",
+                  f"{c['name']}: `Observable:` names no rendered content — quote a literal "
+                  '("…") or a selector (#id, .class, [data-…]), not a status')
+    if named and len(named) == len(clusters):
+        f.add("pass", "observable-content", "rendered content named on " + ", ".join(named))
+
+
+DRIFT_PATH = re.compile(r"(^|/)(Services?|Handlers?|Repositor(y|ies)|Modules)/")
+
+
+def _touches_framework_path(c: dict) -> bool:
+    return any(DRIFT_PATH.search(p.strip()) for m in c["members"] for p in m["files"].split(","))
+
+
+def check_panel_hints(tasks_text: str, f: Findings) -> None:
+    """FR-11/FR-12 — which clusters buy a drift reviewer or a feature test-author. Never FAILs."""
+    clusters = parse_behaviour_clusters(tasks_text)
+    if not clusters:
+        return
+    drift = [_cluster_token(c["name"]) for c in clusters if _touches_framework_path(c)]
+    feature = [_cluster_token(c["name"]) for c in clusters if c["feature_tests"]]
+    f.add("pass", "panel-hints",
+          f"drift-panel: {', '.join(drift) or 'none'} · feature-tests: {', '.join(feature) or 'none'}")
 
 
 def parse_manifest_rows(text: str) -> list[dict]:
@@ -2579,6 +2691,7 @@ def run_checks(spec_dir: Path) -> Findings:
         check_threat_model(plan_text, spec_text, f)
         check_acceptance_flows(plan_text, spec_text, f)
         check_shakeout_access(plan_text, f)
+        check_parity(plan_text, spec_text, f)  # artifact-gate FR-15
         check_stakes(plan_text, spec_text, f)
         check_cluster_stakes(plan_text, f)
         check_loop_budget(plan_text, f)
@@ -2601,6 +2714,8 @@ def run_checks(spec_dir: Path) -> Findings:
         check_review_gates(tasks_text, f)
         check_review_tiers(tasks_text, f)
         check_integration_gate(tasks_text, f)
+        check_observable_content(tasks_text, spec_text, f)  # artifact-gate FR-16
+        check_panel_hints(tasks_text, f)  # artifact-gate FR-11/FR-12
     if spec_text is not None and tasks_text is not None:
         check_requirement_coverage(spec_text, tasks_text, f)  # the only cross-artifact check
     return f

@@ -1862,6 +1862,36 @@ def _plan_layers(rows: str, access: str = "") -> str:
                                  "## Acceptance flows\n\n" + _LAYER_HEAD + rows + "\n" + _FWV + access)
 
 
+# ── T03 fixtures: `## Parity:`, rendered-content observables, panel hints (FR-11/12/15/16) ──
+SPEC_PARITY = SPEC_SCREEN.replace(
+    "## Success criteria",
+    "## Overview\nGive audit the same rail as inschrijvingen: list, create, save.\n\n## Success criteria")
+PLAN_SCREEN = _plan_layers(AF1_BROWSER + AF2_WIRE, ACCESS_RECIPE)
+PLAN_PARITY_PHRASE = PLAN_SCREEN.replace("## Acceptance flows", "The audit list mirrors inschrijvingen.\n\n## Acceptance flows")
+_PARITY_HEAD = ("## Parity: inschrijvingen\n> guidance line with a - bullet the checker ignores\n"
+                "Read from https://x.ddev.site/wp/wp-admin/admin.php?page=inschrijvingen on 2026-09-06.\n")
+PARITY_BLOCK = _PARITY_HEAD + "- the list table with its columns\n- the create button\n- the save-list action\n"
+PARITY_BLOCK_SHORT = _PARITY_HEAD + "- the list table with its columns\n- the create button\n"
+PARITY_BLOCK_NO_URL = PARITY_BLOCK.replace("https://x.ddev.site/wp/wp-admin/admin.php?page=inschrijvingen", "the staging site")
+
+_HERO_HEAD = ("# Tasks: Energy page\n\n### Cluster H — the hero  (1 task)\n\nLane: behaviour\n"
+              "Behaviour: the energy page renders its hero.\n")
+_HERO_TAIL = ("RED until: `tests/HeroTest.php::test_hero_renders`\n\n"
+              "- [ ] T01 the hero template (SC-1)  (files: templates/hero.php, tests/HeroTest.php)\n\n"
+              "**Integration gate (H):** `composer gate` exits 0 and the observable above holds.\n" + _BRANCH_REVIEW)
+TASKS_OBSERVABLE_STATUS = _HERO_HEAD + "Observable: the page answers 200\n" + _HERO_TAIL
+TASKS_OBSERVABLE_CONTENT = _HERO_HEAD + 'Observable: the hero renders "Onze energie"\n' + _HERO_TAIL
+TASKS_OBSERVABLE_SELECTOR = _HERO_HEAD + "Observable: the page shows [data-hero] with the season name\n" + _HERO_TAIL
+
+TASKS_PANEL_DRIFT = TASKS_GOOD.replace("(files: lib/url.ts)", "(files: Services/Foo.php)")
+TASKS_PANEL_FEATURE = TASKS_GOOD.replace(
+    "### Cluster C2 — (irreversible: drop legacy table) — solo\n",
+    "### Cluster C2 — (irreversible: drop legacy table) — solo\nFeature-tests: yes — the export has no acceptance flow\n")
+TASKS_PANEL_FEATURE_IN_TASK = TASKS_GOOD.replace(
+    "      Test-author: split\n      Unit test: replays",
+    "      Test-author: split\n      Feature-tests: yes — inside a task, not the cluster\n      Unit test: replays")
+
+
 # The AC-6 lock: what the existing plan fixtures reported BEFORE T02, as `mark [check]`
 # per finding with the `acceptance-flows` detail kept. T02 may add `acceptance-flows`
 # WARNs and nothing else.
@@ -1876,7 +1906,7 @@ _LOCK_GATES_FULL = [
     "✓ [task-tier]", "✓ [files-segment]", "✓ [test-author-mode]", "! [proven-by]",
     "✓ [unit-test-contract]", "✓ [review-cluster]", "✓ [placement]",
     "✓ [review-gate-marker]", "✓ [review-tier]", "✓ [integration-gate]",
-    "✓ [requirement-coverage]",
+    "✓ [panel-hints]", "✓ [requirement-coverage]",
 ]
 _LOCK_FLOWS_FILLED = [
     {"✓ [acceptance-flows] ## Acceptance flows marked N/A and no user-facing spec surface flagged":
@@ -3268,6 +3298,73 @@ def run():
     rc, out = _run({"spec.md": SPEC_USER_FACING, "plan.md": PLAN_FLOWS_FILLED, "tasks.md": TASKS_GOOD})
     results.append((_lock_view(out) == _LOCK_FLOWS_FILLED,
                     "lock (g): PLAN_FLOWS_FILLED findings unchanged apart from acceptance-flows WARNs"))
+
+    # ── T03: `## Parity:`, rendered-content observables, panel hints (FR-11/12/15/16) ──
+    rc, out = _run({"spec.md": SPEC_PARITY, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [parity]" in out and "same rail as" in out and "spec.md" in out,
+                    "parity (a): \"same rail as inschrijvingen\" + a view flagged + no block → FAIL quoting the phrase"))
+
+    rc, out = _run({"spec.md": SPEC_PARITY, "plan.md": PLAN_SCREEN + PARITY_BLOCK, "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "✓ [parity]" in out and "inschrijvingen" in out and "✗ [parity]" not in out,
+                    "parity (b): a block with 3 items and a URL → PASS naming the reference"))
+
+    rc, out = _run({"spec.md": SPEC_PARITY, "plan.md": PLAN_SCREEN + PARITY_BLOCK_SHORT, "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [parity]" in out and "2 component" in out,
+                    "parity (c): a block with 2 items → FAIL naming the count"))
+
+    rc, out = _run({"spec.md": SPEC_PARITY, "plan.md": PLAN_SCREEN + PARITY_BLOCK_NO_URL, "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [parity]" in out and "URL" in out,
+                    "parity (c'): 3 items but no http URL → FAIL — the list was not read from the running reference"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC.replace("## Success criteria", "Same rail as inschrijvingen.\n\n## Success criteria"),
+                    "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "parity" not in out,
+                    "parity (d): the phrase in a spec flagging no surface → silent"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_PARITY_PHRASE, "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [parity]" in out and "mirrors" in out and "plan.md" in out,
+                    "parity (d'): the phrase in the plan alone counts, naming plan.md"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "parity" not in out,
+                    "parity (d''): a screen flagged but no phrase anywhere → silent"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_OBSERVABLE_STATUS})
+    results.append((rc == 1 and "✗ [observable-content]" in out and "Cluster H" in out,
+                    "observable (e): `Observable: the page answers 200` on a view-flagged spec → FAIL naming the cluster"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_OBSERVABLE_CONTENT})
+    results.append((rc == 0 and "✓ [observable-content]" in out and "Cluster H" in out,
+                    "observable (f): `Observable: the hero renders \"Onze energie\"` → PASS naming the cluster"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_OBSERVABLE_SELECTOR})
+    results.append((rc == 0 and "✓ [observable-content]" in out,
+                    "observable (f'): a `[data-…]` selector counts as rendered content"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_OBSERVABLE_STATUS})
+    results.append((rc == 0 and "observable-content" not in out,
+                    "observable (g): the same cluster on a spec flagging no surface → silent"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_PANEL_DRIFT})
+    results.append((rc == 0 and "✓ [panel-hints] drift-panel: C1 · feature-tests: none" in out,
+                    "hints (h): two clusters, one with `(files: Services/Foo.php)` → the line names exactly that cluster"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_PANEL_FEATURE})
+    results.append((rc == 0 and "✓ [panel-hints] drift-panel: none · feature-tests: C2" in out,
+                    "hints (i): `Feature-tests: yes — …` on a cluster → named under feature-tests"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_PANEL_FEATURE_IN_TASK})
+    results.append((rc == 0 and "feature-tests: none" in out,
+                    "hints (i'): a `Feature-tests:` line inside a task's block is that task's prose, not the cluster's"))
+
+    rc, out = _run({"tasks.md": TASKS_LANE_BEHAVIOUR_BARE})  # tasks-only, as the lane cases run it
+    results.append((rc == 0 and "✓ [panel-hints] drift-panel: none · feature-tests: none" in out
+                    and "parity" not in out and "observable-content" not in out,
+                    "hints (j): TASKS_LANE_BEHAVIOUR_BARE → `none · none`, no other change"))
+
+    rc, out = _run({"tasks.md": TASKS_BEHAVIOUR_OUTSIDE})
+    results.append(("panel-hints" not in out,
+                    "hints (j'): a tasks.md with no `### Cluster` headings → silent"))
 
     return results
 
