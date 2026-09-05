@@ -95,8 +95,8 @@ and security-sentinel on WordPress reads a maintained review checklist.
 - **FR-3:** `bin/gate-check.py --shakeout specs/<feature>` is a new mode. It reads the
   plan's acceptance rows and the manifest and FAILs when: a plan row has no manifest row;
   a `browser` row is not a pass under FR-2; a `wire` or `cli` row is `fail` or
-  `unverified`. A row may instead carry `[HUMAN] accepted: <reason>` in Evidence, which
-  passes it and is reported as a ruling. Exit 0 or the panel does not run. Source: same
+  `unverified`. A row may instead carry `Ruling: <reason>` in Evidence — a human's
+  accepted exception — which passes it and is reported as a ruling. Exit 0 or the panel does not run. Source: same
   ruling.
 - **FR-4:** The plan's `## Acceptance flows` rows gain a `Layer` cell. `check_acceptance_flows`
   FAILs when the spec flags a view/screen/admin surface and no row is `browser`, and
