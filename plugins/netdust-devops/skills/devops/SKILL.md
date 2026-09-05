@@ -159,6 +159,44 @@ PHP does not, which looks like a cache bug and is not. Those steps belong in
 
 ---
 
+## The FIRST bring-up of an environment is not a deploy
+
+A deploy moves the payload — a closed list of **tracked directories**. On an
+empty webroot that carries almost nothing that matters: WP core, `vendor/`,
+`.env`, `wp-config.php`, `index.php`, `.htaccess`, third-party plugins, uploads
+and the database are gitignored, outside the payload, or both. Shipping the
+payload alone yields a dead site *and* stamps the ledger as deployed, which
+tells every later session the environment is live.
+
+Enumerate what you need BEFORE touching the server — DB host/name/credentials,
+GitHub access for any private composer package, licensed assets, DNS, TLS — and
+ask for all of it in one pass. Discovering them one at a time turns a bring-up
+into a dozen round trips.
+
+The order that works:
+
+```
+.env  →  wp core download  →  wp-config.php / index.php / .htaccess
+      →  composer install  →  MAIL BLOCK  →  db import  →  search-replace
+      →  wp rewrite flush --hard  →  payload deploy  →  licensed assets  →  uploads
+```
+
+- **The mail block goes in before the database**, not after — the import brings
+  the source environment's mail settings with it.
+- **`composer install --prefer-source` when any package is a private repo.**
+  Composer's dist path fetches a GitHub API zipball over HTTPS, which an SSH
+  deploy key cannot authenticate (404). `--prefer-source` clones over SSH.
+- **`wp rewrite flush --hard` is mandatory** — search-replace empties
+  `rewrite_rules` and every permalink 404s until it runs.
+- **Licensed assets are gitignored, not missing.** A licensed theme or plugin
+  usually sits in the project's own working tree at the right version — look in
+  `content/themes/` and `content/plugins/` before asking the human for a zip. No
+  verb carries them, so they are re-applied by hand on every new environment.
+- **Diff every route against local before calling it broken.** A 404 on a fresh
+  environment usually predates the migration.
+
+---
+
 ## The project is vendored, not copied
 
 `Makefile.netdust`, `mk/*.mk` and `scripts/*` are **vendored** from this plugin

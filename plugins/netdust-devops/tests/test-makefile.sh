@@ -103,6 +103,44 @@ fleetcmds=$(grep -rlniE '^description:.*(fleet|across (all|every) (site|project)
 [ -z "$fleetcmds" ] && ok "no fleet-scoped command ships in the project layer" \
                     || bad "no fleet-scoped command ships in the project layer" "$(printf '%s' "$fleetcmds" | sed "s|$ROOT/||")"
 
+# The mail block self-disables on production. A SUBSTRING test against WP_HOME
+# is wrong whenever staging is a subdomain of production —
+# strpos('https://staging.example.com','example.com') matches, so the block
+# disabled itself on staging and let real mail out. 5 of 7 fleet projects were
+# shaped that way (josworld, 2026-09-05).
+BLOCK="$DIST/scripts/remote/00-block-outgoing-mail.php"
+if grep -q 'strpos( *\$home' "$BLOCK" 2>/dev/null; then
+    bad "mail block matches the production host exactly" "still uses strpos on WP_HOME"
+else
+    ok "mail block matches the production host exactly"
+fi
+
+# The decision must be behaviourally correct, not merely strpos-free.
+if [ -f "$BLOCK" ] && command -v php >/dev/null 2>&1; then
+    verdict=$(php -r '
+        function add_action($a,$b,$c=10,$d=1){} function add_filter($a,$b,$c=10,$d=1){}
+        $s = str_replace("__PRODUCTION_HOST__", "example.com", file_get_contents($argv[1]));
+        eval(preg_replace("/^<\?php/", "", $s, 1));
+        $bad = [];
+        foreach (["https://staging.example.com" => false, "https://notexample.com" => false,
+                  "" => false, "https://example.com" => true, "https://EXAMPLE.com" => true] as $home => $want) {
+            if (ntdst_mail_block_is_production($home, "example.com") !== $want) { $bad[] = $home === "" ? "(empty)" : $home; }
+        }
+        echo $bad ? implode(",", $bad) : "ok";
+    ' "$BLOCK" 2>&1)
+    [ "$verdict" = "ok" ] && ok "mail block: staging subdomain stays blocked, production disables, empty fails closed" \
+                          || bad "mail block host decision" "wrong verdict for: $verdict"
+fi
+
+# The block is installed INTO a payload directory that deploys rsync with
+# --delete, and it exists only on the server — so the template must exclude it
+# or every deploy removes it and mail silently resumes.
+if grep -q '00-block-outgoing-mail\.php' "$DIST/../templates/site.yml.tmpl" 2>/dev/null; then
+    ok "site.yml template excludes the mail block from --delete"
+else
+    bad "site.yml template excludes the mail block from --delete" "deploy.exclude is missing the entry"
+fi
+
 echo "── behaviour ──"
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 P="$WORK/proj"; mkdir -p "$P/web/app/plugins/p" "$P/web/app/themes/t"; cd "$P"

@@ -94,6 +94,11 @@ deploy:
     - "*.log"
     - "/memory/"                      # agent notes — the web root is served
     - "/tasks/"
+    # The outgoing-mail block lives in a payload directory rsynced with
+    # --delete but exists ONLY on the server. Without this line every deploy
+    # deletes it and the environment silently resumes sending real mail.
+    # Excluded paths are protected from --delete.
+    - "00-block-outgoing-mail.php"
 
   # git-push only. A push alone does NOT deploy: Ploi may have no repository
   # connected, and PHP-FPM often runs opcache.validate_timestamps=0, so the

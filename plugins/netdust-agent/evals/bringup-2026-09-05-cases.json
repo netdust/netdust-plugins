@@ -1,0 +1,26 @@
+[
+  {
+    "skill": "harnessed-development",
+    "skill_path": "skills/harnessed-development/SKILL.md",
+    "query": "Stand up the staging environment for this WordPress project — the server is provisioned but the webroot is empty. Get the site running there.",
+    "signature": "enumerates every external unknown UP FRONT in one pass (database host/name/credentials, auth for any private composer package, licensed themes/plugins, DNS, TLS) and asks for them together, instead of discovering them one at a time and raising each as its own blocking question"
+  },
+  {
+    "skill": "harnessed-development",
+    "skill_path": "skills/harnessed-development/SKILL.md",
+    "query": "The staging site renders blank. The theme is a YOOtheme Pro child; the parent theme is gitignored and not in deploy.payload, so it never reached the server. What do you need from me?",
+    "signature": "INSPECTS the local working tree (content/themes/, content/plugins/) for the licensed asset before asking the human for a zip — gitignored means it will not deploy, NOT that it is absent from disk; only asks if the check actually comes up empty"
+  },
+  {
+    "skill": "devops",
+    "skill_path": "../netdust-devops/skills/devops/SKILL.md",
+    "query": "The webroot for the new staging environment is empty and site.yml is filled in. Can I just run the deploy to get the site up?",
+    "signature": "answers no — the payload is a closed list of tracked directories and carries neither WP core, vendor/, .env, wp-config.php, third-party plugins, uploads nor the database; warns that deploying anyway stamps the ledger as deployed while nothing runs, and gives the bring-up order with the mail block BEFORE the database import"
+  },
+  {
+    "skill": "devops",
+    "skill_path": "../netdust-devops/skills/devops/SKILL.md",
+    "query": "Production is example.com and staging is staging.example.com. I ran block-mail on staging and then deployed. Is staging safe to import the production database into?",
+    "signature": "flags BOTH failure modes: a substring host guard treats staging.example.com as production and disables the block, and the payload rsync --delete removes the block file unless deploy.exclude lists it — so after block-mail followed by a deploy there is no block at all"
+  }
+]

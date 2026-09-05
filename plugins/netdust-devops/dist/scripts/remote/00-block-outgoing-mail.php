@@ -12,10 +12,23 @@
  * Do not edit on the server — edit scripts/remote/ in the repo.
  */
 
+/**
+ * Exact host match, never a substring: staging is commonly a SUBDOMAIN of
+ * production, and strpos( 'https://staging.example.com', 'example.com' )
+ * matches — which silently disabled this block on staging and let real mail
+ * out. An empty or unparseable WP_HOME is not production either, so the guard
+ * fails closed and the block stays active.
+ */
+function ntdst_mail_block_is_production( $home, $production_host ) {
+    $host = strtolower( (string) parse_url( (string) $home, PHP_URL_HOST ) );
+
+    return '' !== $host && $host === strtolower( (string) $production_host );
+}
+
 // Self-disable if this ever lands on production by accident.
 add_action( 'muplugins_loaded', function () {
     $home = defined( 'WP_HOME' ) ? WP_HOME : '';
-    if ( false !== strpos( $home, '__PRODUCTION_HOST__' ) ) {
+    if ( ntdst_mail_block_is_production( $home, '__PRODUCTION_HOST__' ) ) {
         return; // production — do nothing
     }
 

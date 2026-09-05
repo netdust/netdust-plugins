@@ -71,3 +71,18 @@ a task here encode a rule THIS project chose, or is it configuration over a fram
 that already has the rule?" — and write the answer after the dash of the `Lane:` line.
 A cluster whose reason you cannot finish in one sentence is behaviour.
 
+
+## Enumerate the external unknowns in ONE pass, and inspect before asking
+
+A first-time environment bring-up (josworld → Combell, 2026-09-05) cost four
+sequential blocking questions — SSH host key, database host, GitHub auth for a
+private composer package, licensed plugin zips — each raised only when the
+previous step hit it. Every one was foreseeable at intake.
+Rule: for any task touching an environment this session has not used before,
+list every credential, permission and asset it will need BEFORE the first
+remote command, and ask for all of them together.
+Second rule, from the fourth question: **inspect before asking the human for a
+file.** "Gitignored and outside `deploy.payload`" means it will never deploy —
+it does NOT mean it is missing locally. The licensed theme and plugin were
+sitting in the project's own working tree at exactly the right versions; one
+`ls` would have saved a round trip. Eval: `evals/bringup-2026-09-05-cases.json`.
