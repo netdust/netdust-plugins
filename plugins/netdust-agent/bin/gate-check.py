@@ -436,6 +436,24 @@ def check_acceptance_flows(plan_text: str, spec_text: str | None, f: Findings) -
         f.add("warn", "acceptance-flows",
               "## Acceptance flows is neither N/A nor a filled-in matrix — confirm it is "
               "intentional")
+    if is_na or not rows:
+        return
+    layered = parse_flow_rows(strip_fenced(author).splitlines())
+    if not layered:
+        f.add("warn", "acceptance-flows",
+              "the matrix has no `#` column, so no row can carry a Layer or be joined to a "
+              "shake-out manifest")
+    for r in layered:
+        layer = _layer(r)
+        if layer not in LAYERS:
+            f.add("warn", "acceptance-flows",
+                  f"row {r['n']} carries {f'Layer `{layer}`' if layer else 'no Layer'} — "
+                  "name one of browser · wire · cli")
+    screens = [t for t in triggered if SCREEN_BOX.search(t)]
+    if screens and not any(_layer(r) == "browser" for r in layered):
+        f.add("fail", "acceptance-flows",
+              f"spec flags a screen [{', '.join(screens[:3])}] but no row has Layer `browser` "
+              "— the shake-out has nothing to drive in a browser")
 
 
 TIER = re.compile(r"\[Tier\s+[AB]\]", re.IGNORECASE)
@@ -2421,6 +2439,44 @@ def parse_flow_rows(body_lines: list[str]) -> list[dict]:
     return _pipe_table(body_lines, {"n": "#", "flow": "Flow", "layer": "Layer"})
 
 
+LAYERS = ("browser", "wire", "cli")
+SCREEN_BOX = re.compile(r"\b(view|screen|page|admin)\b", re.IGNORECASE)
+NA_REASON = re.compile(r"^N/?A\b[\s—–:-]*(?P<reason>.*)", re.IGNORECASE)
+
+
+def _layer(row: dict) -> str:
+    return (row["layer"] or "").lower()
+
+
+def check_shakeout_access(plan_text: str, f: Findings) -> None:
+    """FR-5 — a plan with `browser` rows names the ONE command that logs the shake-out in."""
+    flows = section_body(plan_text, "Acceptance flows") or ""
+    browser = [r["n"] for r in parse_flow_rows(strip_fenced(flows).splitlines())
+               if _layer(r) == "browser"]
+    body = section_body(plan_text, "Shake-out access")
+    if body is None and not browser:
+        return
+    author = "\n".join(ln for ln in (body or "").splitlines()
+                       if not ln.lstrip().startswith(">")).strip()
+    na = NA_REASON.match(author)
+    owed = f"rows {', '.join(browser)} are `browser`"
+    if browser and body is None:
+        f.add("fail", "shakeout-access",
+              f"no ## Shake-out access but {owed} — name the one command that mints the "
+              "shake-out's session (recipe in `netdust-wp:wp-testing`)")
+    elif browser and (na or not author):
+        f.add("fail", "shakeout-access",
+              f"## Shake-out access is {'N/A' if na else 'empty'} but {owed}")
+    elif na:
+        f.add("pass", "shakeout-access",
+              f"## Shake-out access N/A and no browser rows — {na.group('reason') or 'no reason given'}")
+    elif author:
+        f.add("pass", "shakeout-access", f"## Shake-out access: {author.splitlines()[0]}")
+    else:
+        f.add("warn", "shakeout-access",
+              "## Shake-out access is neither N/A nor a recipe — confirm it is intentional")
+
+
 def parse_manifest_rows(text: str) -> list[dict]:
     rows = _pipe_table(strip_fenced(text).splitlines(),
                        {"n": "#", "flow": "Flow", "layer": "Layer",
@@ -2519,6 +2575,7 @@ def run_checks(spec_dir: Path) -> Findings:
         check_plan_gates(plan_text, f)
         check_threat_model(plan_text, spec_text, f)
         check_acceptance_flows(plan_text, spec_text, f)
+        check_shakeout_access(plan_text, f)
         check_stakes(plan_text, spec_text, f)
         check_cluster_stakes(plan_text, f)
         check_loop_budget(plan_text, f)

@@ -1834,6 +1834,70 @@ def test_shakeout_browser_row_without_evidence_fails() -> tuple[bool, str]:
             "shakeout (a): a `browser` row marked pass with no `Browser:` evidence FAILs naming AF-1")
 
 
+# ── T02 fixtures: `Layer` on acceptance rows + `## Shake-out access` (FR-4 / FR-5) ──
+SPEC_SCREEN = SPEC_USER_FACING.replace(
+    "- [x] A form / wizard / multi-step flow\n- [ ] A view / screen / page",
+    "- [ ] A form / wizard / multi-step flow\n- [x] A view / screen / page")
+SPEC_ENDPOINT_ONLY = SPEC_USER_FACING.replace(
+    "- [x] A form / wizard / multi-step flow",
+    "- [x] An endpoint a client or agent drives")
+
+_LAYER_HEAD = "| # | Flow | Layer | Expected | Edges |\n|---|---|---|---|---|\n"
+AF1_BROWSER = "| AF-1 | issue an invoice | browser | PDF stored, editor sees it listed | empty: no line items → blocked |\n"
+AF1_WIRE = AF1_BROWSER.replace("| browser |", "| wire |")
+AF2_WIRE = "| AF-2 | email the invoice | wire | recipient receives it once | denied: viewer cannot send |\n"
+AF3_NO_LAYER = "| AF-3 | list invoices |  | one row per invoice | empty state |\n"
+AF4_BAD_LAYER = "| AF-4 | export invoices | mobile | a CSV downloads | 0 invoices → empty file |\n"
+_FWV = PLAN_FLOWS_FILLED[PLAN_FLOWS_FILLED.index("## First working version"):
+                         PLAN_FLOWS_FILLED.index("## Architecture invariants touched")]
+ACCESS_RECIPE = ("## Shake-out access\n`ddev wp login create shakeout --url-only --expires=900` — "
+                 "valid on the DDEV site only; recipe in `netdust-wp:wp-testing`.\n")
+ACCESS_NA = "## Shake-out access\nN/A — agent tooling, no screen to log in to.\n"
+
+
+def _plan_layers(rows: str, access: str = "") -> str:
+    return PLAN_FLOWS_NA.replace("## Acceptance flows\nN/A — small feature.",
+                                 "## Acceptance flows\n\n" + _LAYER_HEAD + rows + "\n" + _FWV + access)
+
+
+# The AC-6 lock: what the existing plan fixtures reported BEFORE T02, as `mark [check]`
+# per finding with the `acceptance-flows` detail kept. T02 may add `acceptance-flows`
+# WARNs and nothing else.
+_LOCK_GATES_FULL = [
+    "✓ [clarify-halt]", "✓ [success-criteria]", "✓ [security-surfaces]",
+    "✓ [user-facing-surfaces]",
+    "✓ [plan-gate-heading]", "✓ [plan-gate-heading]", "✓ [plan-gate-heading]",
+    "✓ [plan-gate-heading]", "✓ [plan-gate-heading]", "✓ [plan-gate-heading]",
+    "✓ [threat-model]",
+    "✓ [acceptance-flows] ## Acceptance flows marked N/A and no user-facing spec surface flagged",
+    "✓ [stakes]", "✓ [loop-budget]", "✓ [deliverable-first]", "! [cluster-lane]",
+    "✓ [task-tier]", "✓ [files-segment]", "✓ [test-author-mode]", "! [proven-by]",
+    "✓ [unit-test-contract]", "✓ [review-cluster]", "✓ [placement]",
+    "✓ [review-gate-marker]", "✓ [review-tier]", "✓ [integration-gate]",
+    "✓ [requirement-coverage]",
+]
+_LOCK_FLOWS_FILLED = [
+    {"✓ [acceptance-flows] ## Acceptance flows marked N/A and no user-facing spec surface flagged":
+     "✓ [acceptance-flows] ## Acceptance flows carries 2 filled-in flow row(s)",
+     "✓ [stakes]": "! [stakes]"}.get(x, x) for x in _LOCK_GATES_FULL]
+_FINDING_LINE = re.compile(r"^\s+([✓!✗]) \[([\w-]+)\] (.*)$")
+
+
+def _lock_view(out: str) -> list[str]:
+    view = []
+    for ln in out.splitlines():
+        m = _FINDING_LINE.match(ln)
+        if not m:
+            continue
+        mark, check, detail = m.groups()
+        if check == "acceptance-flows":
+            if mark != "!":
+                view.append(f"{mark} [{check}] {detail}")
+        else:
+            view.append(f"{mark} [{check}]")
+    return view
+
+
 def _run(files: dict) -> tuple[int, str]:
     with tempfile.TemporaryDirectory() as d:
         for name, content in files.items():
@@ -3090,8 +3154,8 @@ def run():
 
     rc, out = _run({"tasks.md": TASKS_GOOD, "plan.md": PLAN_SHAKEOUT,
                     "shakeout.md": MANIFEST_BROWSER_NO_EVIDENCE})
-    results.append(("shakeout-" not in out,
-                    "shakeout (j): plain mode on a dir carrying a manifest emits zero shakeout findings"))
+    results.append(("shakeout-manifest" not in out,
+                    "shakeout (j): plain mode on a dir carrying a manifest emits zero manifest findings"))
 
     # edges beyond the brief's letters
     rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_ONLY}, PNG)
@@ -3116,6 +3180,70 @@ def run():
         json_ok = False
     results.append((rc == 1 and json_ok,
                     "shakeout: `--shakeout --json` emits the same findings as JSON"))
+
+    # ── T02: `Layer` on acceptance rows + `## Shake-out access` (FR-4 / FR-5) ──
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": _plan_layers(AF1_WIRE + AF2_WIRE),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [acceptance-flows]" in out and "browser" in out,
+                    "layer (a): spec flags a view, every row is `wire` → FAIL naming the missing browser layer"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN,
+                    "plan.md": _plan_layers(AF1_BROWSER + AF2_WIRE, ACCESS_RECIPE),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "✓ [acceptance-flows]" in out and "! [acceptance-flows]" not in out,
+                    "layer (b): one `browser` row → PASS, no WARN"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN,
+                    "plan.md": _plan_layers(AF1_BROWSER + AF3_NO_LAYER, ACCESS_RECIPE),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "! [acceptance-flows]" in out and "AF-3" in out,
+                    "layer (c): a row with an empty Layer cell → WARN naming AF-3"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN,
+                    "plan.md": _plan_layers(AF1_BROWSER + AF4_BAD_LAYER, ACCESS_RECIPE),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "! [acceptance-flows]" in out and "AF-4" in out and "mobile" in out,
+                    "layer (c'): a Layer outside browser/wire/cli → WARN naming AF-4 and the value"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": _plan_layers(AF1_BROWSER + AF2_WIRE),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [shakeout-access]" in out,
+                    "access (d): `browser` rows and no ## Shake-out access → FAIL"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": _plan_layers(AF1_BROWSER + AF2_WIRE, ACCESS_NA),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [shakeout-access]" in out,
+                    "access (d'): `browser` rows and ## Shake-out access marked N/A → FAIL"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN,
+                    "plan.md": _plan_layers(AF1_BROWSER + AF2_WIRE, ACCESS_RECIPE),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "✓ [shakeout-access]" in out,
+                    "access (e): `browser` rows + a `wp login create` recipe → PASS"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_FLOWS_NA + ACCESS_NA,
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "✓ [shakeout-access]" in out and "no screen to log in to" in out,
+                    "access (f): N/A section, no browser rows → PASS echoing the reason"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "shakeout-access" not in out,
+                    "access (f'): no section, no browser rows → silent"))
+
+    rc, out = _run({"spec.md": SPEC_ENDPOINT_ONLY,
+                    "plan.md": _plan_layers(AF1_WIRE + AF2_WIRE), "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "✗ [acceptance-flows]" not in out,
+                    "layer: an endpoint box alone does not demand a `browser` row"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_GOOD})
+    results.append((_lock_view(out) == _LOCK_GATES_FULL,
+                    "lock (g): PLAN_GATES_FULL findings unchanged apart from acceptance-flows WARNs"))
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_FLOWS_NA, "tasks.md": TASKS_GOOD})
+    results.append((_lock_view(out) == _LOCK_GATES_FULL,
+                    "lock (g): PLAN_FLOWS_NA findings unchanged apart from acceptance-flows WARNs"))
+    rc, out = _run({"spec.md": SPEC_USER_FACING, "plan.md": PLAN_FLOWS_FILLED, "tasks.md": TASKS_GOOD})
+    results.append((_lock_view(out) == _LOCK_FLOWS_FILLED,
+                    "lock (g): PLAN_FLOWS_FILLED findings unchanged apart from acceptance-flows WARNs"))
 
     return results
 

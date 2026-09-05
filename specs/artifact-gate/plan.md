@@ -61,7 +61,11 @@ Simplicity first: no new hook, no new script beyond one installer, no new artifa
 
 ## Acceptance flows [GATE]
 
-N/A — the spec flags no user-facing surface. The behavioural contract is the per-task test cases and the self-hosting gate-check run (SC-7). `## Shake-out access`: N/A — agent tooling, no screen to log in to.
+N/A — the spec flags no user-facing surface. The behavioural contract is the per-task test cases and the self-hosting gate-check run (SC-7).
+
+## Shake-out access
+
+N/A — agent tooling, no screen to log in to.
 
 ## Architecture invariants touched [GATE]
 
