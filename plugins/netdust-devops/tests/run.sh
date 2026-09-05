@@ -3,7 +3,7 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 RC=0
-for t in test-makefile.sh test-work-audit.sh; do
+for t in test-makefile.sh test-work-audit.sh test-marketplace.sh; do
     printf '\n═══ %s ═══\n' "$t"
     bash "$t" || RC=1
 done
