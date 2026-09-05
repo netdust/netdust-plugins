@@ -420,12 +420,18 @@ def check_acceptance_flows(plan_text: str, spec_text: str | None, f: Findings) -
     rows = _flow_rows(author_lines)
 
     triggered = spec_user_facing_triggered(spec_text) if spec_text else []
+    layered = _author_flow_rows(body) if rows else []
+    screens = [t for t in triggered if SCREEN_BOX.search(t)]
     if triggered and (is_na or not rows):
         f.add("fail", "acceptance-flows",
               "spec flags user-facing surface(s) "
               f"[{', '.join(triggered[:3])}] but the plan's ## Acceptance flows is "
               f"{'N/A' if is_na else 'empty/placeholder'} — the 1g gate is not satisfied, so "
               "shake-out would re-discover the flows free-form instead of driving them")
+    elif screens and not any(_layer(r) == "browser" for r in layered):
+        f.add("fail", "acceptance-flows",
+              f"spec flags a screen [{', '.join(screens[:3])}] but none of the {rows} row(s) "
+              "has Layer `browser` — the shake-out has nothing to drive in a browser")
     elif rows:
         f.add("pass", "acceptance-flows",
               f"## Acceptance flows carries {rows} filled-in flow row(s)")
@@ -436,10 +442,7 @@ def check_acceptance_flows(plan_text: str, spec_text: str | None, f: Findings) -
         f.add("warn", "acceptance-flows",
               "## Acceptance flows is neither N/A nor a filled-in matrix — confirm it is "
               "intentional")
-    if is_na or not rows:
-        return
-    layered = parse_flow_rows(strip_fenced(author).splitlines())
-    if not layered:
+    if rows and not layered:
         f.add("warn", "acceptance-flows",
               "the matrix has no `#` column, so no row can carry a Layer or be joined to a "
               "shake-out manifest")
@@ -449,11 +452,6 @@ def check_acceptance_flows(plan_text: str, spec_text: str | None, f: Findings) -
             f.add("warn", "acceptance-flows",
                   f"row {r['n']} carries {f'Layer `{layer}`' if layer else 'no Layer'} — "
                   "name one of browser · wire · cli")
-    screens = [t for t in triggered if SCREEN_BOX.search(t)]
-    if screens and not any(_layer(r) == "browser" for r in layered):
-        f.add("fail", "acceptance-flows",
-              f"spec flags a screen [{', '.join(screens[:3])}] but no row has Layer `browser` "
-              "— the shake-out has nothing to drive in a browser")
 
 
 TIER = re.compile(r"\[Tier\s+[AB]\]", re.IGNORECASE)
@@ -2439,8 +2437,14 @@ def parse_flow_rows(body_lines: list[str]) -> list[dict]:
     return _pipe_table(body_lines, {"n": "#", "flow": "Flow", "layer": "Layer"})
 
 
+def _author_flow_rows(body: str) -> list[dict]:
+    """The plan's own acceptance rows — fenced samples and `>` guidance dropped."""
+    lines = [ln for ln in strip_fenced(body).splitlines() if not ln.lstrip().startswith(">")]
+    return parse_flow_rows(lines)
+
+
 LAYERS = ("browser", "wire", "cli")
-SCREEN_BOX = re.compile(r"\b(view|screen|page|admin)\b", re.IGNORECASE)
+SCREEN_BOX = re.compile(r"\b(view|screen|page|admin|form|wizard|multi-step)\b", re.IGNORECASE)
 NA_REASON = re.compile(r"^N/?A\b[\s—–:-]*(?P<reason>.*)", re.IGNORECASE)
 
 
@@ -2451,8 +2455,7 @@ def _layer(row: dict) -> str:
 def check_shakeout_access(plan_text: str, f: Findings) -> None:
     """FR-5 — a plan with `browser` rows names the ONE command that logs the shake-out in."""
     flows = section_body(plan_text, "Acceptance flows") or ""
-    browser = [r["n"] for r in parse_flow_rows(strip_fenced(flows).splitlines())
-               if _layer(r) == "browser"]
+    browser = [r["n"] for r in _author_flow_rows(flows) if _layer(r) == "browser"]
     body = section_body(plan_text, "Shake-out access")
     if body is None and not browser:
         return
@@ -2527,7 +2530,7 @@ def run_shakeout_checks(spec_dir: Path) -> Findings:
     if plan.exists():
         body = section_body(plan.read_text(), "Acceptance flows")
         if body is not None:
-            plan_rows = parse_flow_rows(strip_fenced(body).splitlines())
+            plan_rows = _author_flow_rows(body)
     browser_owed = [r["n"] for r in plan_rows if (r["layer"] or "").lower() == "browser"]
 
     if not manifest.exists():

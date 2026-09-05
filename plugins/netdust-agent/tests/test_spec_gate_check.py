@@ -559,15 +559,18 @@ PLAN_FLOWS_EMPTY_TABLE = PLAN_FLOWS_NA.replace(
 # user-facing sections and the Stakes: dial became mandatory grammar (the paired case's
 # assertions are unchanged and unweakened; a user-facing plan simply must now name its
 # first demoable slice to be a green fixture). Names TASKS_GOOD's T01: position 1,
-# non-test file (lib/url.ts).
+# non-test file (lib/url.ts). Since T02 the rows carry `#` + `Layer` (one `browser`) and the
+# plan names its shake-out access — a wizard demands a browser row and a login recipe.
+ACCESS_RECIPE = ("## Shake-out access\n`ddev wp login create shakeout --url-only --expires=900` — "
+                 "valid on the DDEV site only; recipe in `netdust-wp:wp-testing`.\n")
 PLAN_FLOWS_FILLED = PLAN_FLOWS_NA.replace(
     "## Acceptance flows\nN/A — small feature.",
     """## Acceptance flows
 
-| Flow | Expected | Edges |
-|---|---|---|
-| issue an invoice | PDF stored, editor sees it listed | empty: no line items → blocked with a message; denied: viewer role refused; re-entry: back-then-submit does not double-issue; concurrent: double-submit issues one; boundary: 0.00 total refused; mid-flow failure: storage error rolls the record back |
-| email the invoice | recipient receives it once | empty: no recipient → blocked; denied: viewer cannot send; re-entry: resend is idempotent per invoice; concurrent: two sends deliver one; boundary: 500-char subject truncated; mid-flow failure: SMTP error leaves it queued, not sent |
+| # | Flow | Layer | Expected | Edges |
+|---|---|---|---|---|
+| AF-1 | issue an invoice | browser | PDF stored, editor sees it listed | empty: no line items → blocked with a message; denied: viewer role refused; re-entry: back-then-submit does not double-issue; concurrent: double-submit issues one; boundary: 0.00 total refused; mid-flow failure: storage error rolls the record back |
+| AF-2 | email the invoice | wire | recipient receives it once | empty: no recipient → blocked; denied: viewer cannot send; re-entry: resend is idempotent per invoice; concurrent: two sends deliver one; boundary: 500-char subject truncated; mid-flow failure: SMTP error leaves it queued, not sent |
 
 ## First working version
 
@@ -575,7 +578,7 @@ PLAN_FLOWS_FILLED = PLAN_FLOWS_NA.replace(
 **Demonstrates:** a wired validator an editor can exercise from the first cluster
 **Verify by:** drive the wizard's first screen and watch an RFC1918 target refused
 """,
-)
+) + ACCESS_RECIPE
 
 # ── `files-segment` fixtures — the declared task-line grammar, and what it protects ──
 # THE demonstration case: a Tier-B task doing auth + payment work, with no `(files: …)`
@@ -1847,11 +1850,10 @@ AF1_BROWSER = "| AF-1 | issue an invoice | browser | PDF stored, editor sees it 
 AF1_WIRE = AF1_BROWSER.replace("| browser |", "| wire |")
 AF2_WIRE = "| AF-2 | email the invoice | wire | recipient receives it once | denied: viewer cannot send |\n"
 AF3_NO_LAYER = "| AF-3 | list invoices |  | one row per invoice | empty state |\n"
+AF9_QUOTED = "> | AF-9 | example only | browser | never driven | none |\n"
 AF4_BAD_LAYER = "| AF-4 | export invoices | mobile | a CSV downloads | 0 invoices → empty file |\n"
 _FWV = PLAN_FLOWS_FILLED[PLAN_FLOWS_FILLED.index("## First working version"):
                          PLAN_FLOWS_FILLED.index("## Architecture invariants touched")]
-ACCESS_RECIPE = ("## Shake-out access\n`ddev wp login create shakeout --url-only --expires=900` — "
-                 "valid on the DDEV site only; recipe in `netdust-wp:wp-testing`.\n")
 ACCESS_NA = "## Shake-out access\nN/A — agent tooling, no screen to log in to.\n"
 
 
@@ -1880,6 +1882,7 @@ _LOCK_FLOWS_FILLED = [
     {"✓ [acceptance-flows] ## Acceptance flows marked N/A and no user-facing spec surface flagged":
      "✓ [acceptance-flows] ## Acceptance flows carries 2 filled-in flow row(s)",
      "✓ [stakes]": "! [stakes]"}.get(x, x) for x in _LOCK_GATES_FULL]
+_LOCK_FLOWS_FILLED.insert(_LOCK_FLOWS_FILLED.index("! [stakes]"), "✓ [shakeout-access]")
 _FINDING_LINE = re.compile(r"^\s+([✓!✗]) \[([\w-]+)\] (.*)$")
 
 
@@ -3184,8 +3187,9 @@ def run():
     # ── T02: `Layer` on acceptance rows + `## Shake-out access` (FR-4 / FR-5) ──
     rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": _plan_layers(AF1_WIRE + AF2_WIRE),
                     "tasks.md": TASKS_GOOD})
-    results.append((rc == 1 and "✗ [acceptance-flows]" in out and "browser" in out,
-                    "layer (a): spec flags a view, every row is `wire` → FAIL naming the missing browser layer"))
+    results.append((rc == 1 and "✗ [acceptance-flows]" in out and "browser" in out
+                    and "✓ [acceptance-flows]" not in out,
+                    "layer (a): spec flags a view, every row is `wire` → FAIL naming the missing browser layer, no PASS beside it"))
 
     rc, out = _run({"spec.md": SPEC_SCREEN,
                     "plan.md": _plan_layers(AF1_BROWSER + AF2_WIRE, ACCESS_RECIPE),
@@ -3234,6 +3238,26 @@ def run():
                     "plan.md": _plan_layers(AF1_WIRE + AF2_WIRE), "tasks.md": TASKS_GOOD})
     results.append((rc == 0 and "✗ [acceptance-flows]" not in out,
                     "layer: an endpoint box alone does not demand a `browser` row"))
+
+    rc, out = _run({"spec.md": SPEC_USER_FACING, "plan.md": _plan_layers(AF1_WIRE + AF2_WIRE),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [acceptance-flows]" in out and "browser" in out,
+                    "layer: the form/wizard box demands a `browser` row too"))
+
+    rc, out = _run({"spec.md": SPEC_ENDPOINT_ONLY,
+                    "plan.md": _plan_layers(AF1_WIRE + AF9_QUOTED), "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "shakeout-access" not in out and "AF-9" not in out,
+                    "blockquote: a `> |` quoted browser row owes no access recipe and draws no row finding"))
+
+    rc, out = _run({"spec.md": SPEC_ENDPOINT_ONLY,
+                    "plan.md": _plan_layers(AF9_QUOTED + AF1_BROWSER), "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [shakeout-access]" in out and "AF-1" in out and "AF-9" not in out,
+                    "blockquote: a quoted row does not hide the real browser row after it from shakeout-access"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": _plan_layers(AF1_WIRE + AF9_QUOTED),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [acceptance-flows]" in out and "browser" in out,
+                    "blockquote: a quoted browser row does not satisfy the browser-row demand"))
 
     rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_GOOD})
     results.append((_lock_view(out) == _LOCK_GATES_FULL,
