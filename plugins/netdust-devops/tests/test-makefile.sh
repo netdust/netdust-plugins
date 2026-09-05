@@ -207,6 +207,70 @@ else
     bad "make test runs under the split layout" "$(printf '%s' "$out" | tail -3)"
 fi
 
+echo "── worktrees: parallel agents each get one ──"
+# Every promoting verb does `git checkout <rung>`, and a rung checked out in
+# another worktree cannot be checked out here. Without a guard, `make finish`
+# in a linked worktree died mid-verb on a raw git error —
+#   fatal: 'development' is already used by worktree at ...
+# — the exact shape _ensure-flow exists to prevent, and the normal case for any
+# orchestrator that gives each parallel agent its own worktree.
+WT="$WORK/wt"; mkdir -p "$WT"; cd "$WT"
+git init -q --bare origin.git && git clone -q origin.git base 2>/dev/null && cd base
+mkdir -p scripts web
+cp "$DIST/scripts/devops-version" scripts/ && chmod +x scripts/devops-version
+cat > site.yml <<'WTYML'
+site: {name: wt, domain: wt.invalid, risk: low}
+structure: {stack: generic, type: custom-site, webroot: web}
+environments:
+  development: {url: "https://dev.wt.invalid", path: /srv/d, branch: development, role: sandbox, confirm: false}
+  staging:     {url: "https://stg.wt.invalid", path: /srv/s, branch: staging, role: review, confirm: false}
+  production:  {url: "https://wt.invalid", path: /srv/p, branch: main, role: live, confirm: true}
+deploy: {method: rsync, ssh_host: nobody@wt.invalid, state_dir: /srv/.s, payload: [], exclude: [".git*"]}
+local: {ddev_project: wt, url: "https://wt.ddev.site"}
+commands: {test: "true", gate: "true"}
+WTYML
+NETDUST_DEVOPS_DIST="$DIST" scripts/devops-version --update >/dev/null 2>&1
+printf 'STACK := generic\ninclude Makefile.netdust\n' > Makefile
+touch web/.gitkeep
+git add -A && git -c user.email=t@t -c user.name=T commit -qm init >/dev/null && git branch -M main
+git push -q -u origin main 2>/dev/null
+git push -q origin main:staging 2>/dev/null && git push -q origin main:development 2>/dev/null
+git checkout -q -b development origin/development
+git worktree add -q ../agent -b feature/par origin/development
+cd ../agent && echo work > web/f.txt
+git add -A && git -c user.email=t@t -c user.name=T commit -qm "parallel work" >/dev/null
+
+wtout=$(timeout 60 make finish < /dev/null 2>&1 | strip)
+if printf '%s' "$wtout" | grep -q 'already used by worktree'; then
+    bad "finish refuses by name in a linked worktree" "it died on the raw git error"
+elif printf '%s' "$wtout" | grep -q 'checked out in another worktree'; then
+    ok "finish refuses by name in a linked worktree"
+else
+    bad "finish refuses by name in a linked worktree" "$(printf '%s' "$wtout" | tail -2)"
+fi
+printf '%s' "$wtout" | grep -q 'make finish name=par' \
+    && ok "the refusal names the command that actually works" \
+    || bad "the refusal names the command that actually works" "$(printf '%s' "$wtout" | grep -i 'cd ' | head -1)"
+
+cd "$WT/base"
+finout=$(timeout 60 make finish name=par < /dev/null 2>&1 | strip)
+printf '%s' "$finout" | grep -q 'Merged to development' \
+    && ok "finish name=<x> merges a branch held by another worktree" \
+    || bad "finish name=<x> merges a branch held by another worktree" "$(printf '%s' "$finout" | tail -2)"
+git log --oneline development 2>/dev/null | grep -q 'Merge feature/par' \
+    && ok "the parallel work actually landed on the rung" \
+    || bad "the parallel work actually landed" "no merge commit on development"
+printf '%s' "$finout" | grep -q 'kept — it is checked out in a worktree' \
+    && ok "a branch still held by a worktree is kept, not silently left half-deleted" \
+    || bad "a held branch is reported" "$(printf '%s' "$finout" | tail -1)"
+
+missout=$(timeout 60 make finish name=nosuch < /dev/null 2>&1 | strip)
+printf '%s' "$missout" | grep -q 'No feature/nosuch or hotfix/nosuch' \
+    && ok "finish name=<unknown> refuses and lists what is in flight" \
+    || bad "finish name=<unknown> refuses" "$(printf '%s' "$missout" | tail -2)"
+cd "$P"
+
+echo
 echo "── adopting an existing project ──"
 # A project that predates this plugin must be able to gain `make` WITHOUT
 # losing the site.yml someone filled in by hand. Without --adopt the only

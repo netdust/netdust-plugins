@@ -124,16 +124,45 @@ hotfix: ## Start a hotfix (make hotfix name=vat-rounding) — branches from the 
 	@echo "$(YELLOW)   Fix, commit, then: make finish$(RESET)"
 
 .PHONY: finish
-finish: ## Merge the current branch one step up the promotion path
+finish: ## Merge a branch one step up the promotion path (make finish [name=my-feature])
 	@$(MAKE) --no-print-directory _ensure-flow
 	@$(MAKE) --no-print-directory _ensure-clean-git
+	@: 'name= finishes a branch you are NOT standing on. A parallel agent works'
+	@: 'in its own worktree, so the rung it must merge into is checked out'
+	@: 'elsewhere and it cannot finish its own work; the worktree holding the'
+	@: 'rung can, but it is not on the feature branch. name= is that seam.'
 	@BRANCH=$$(git branch --show-current); \
+	if [ -n "$(name)" ]; then \
+		if git rev-parse --verify --quiet "feature/$(name)" >/dev/null; then BRANCH="feature/$(name)"; \
+		elif git rev-parse --verify --quiet "hotfix/$(name)" >/dev/null; then BRANCH="hotfix/$(name)"; \
+		else \
+			echo "$(RED)✗ No feature/$(name) or hotfix/$(name) in this repository$(RESET)"; \
+			echo "$(YELLOW)Branches in flight:$(RESET)"; \
+			git branch --list 'feature/*' 'hotfix/*' | sed 's/^/  /'; \
+			exit 1; \
+		fi; \
+		HOLDER=$$(git worktree list --porcelain 2>/dev/null \
+			| awk -v b="refs/heads/$$BRANCH" '/^worktree /{w=substr($$0,10)} /^branch /{if ($$2==b) {print w; exit}}'); \
+		if [ -n "$$HOLDER" ] && [ -n "$$(git -C "$$HOLDER" status --porcelain)" ]; then \
+			echo "$(RED)✗ $$BRANCH has uncommitted changes in $$HOLDER$(RESET)"; \
+			echo "$(YELLOW)  Commit them there first: cd $$HOLDER && make save$(RESET)"; \
+			exit 1; \
+		fi; \
+		echo "$(BLUE)finishing $$BRANCH (checked out in $${HOLDER:-no worktree})$(RESET)"; \
+	fi; \
+	case "$$BRANCH" in \
+		hotfix/*) for r in $(BR_PROD) $(BR_REVIEW) $(BR_INTEG); do \
+			$(MAKE) --no-print-directory _worktree-guard rung=$$r verb=finish || exit 1; done;; \
+		*) $(MAKE) --no-print-directory _worktree-guard rung=$(BR_INTEG) verb=finish || exit 1;; \
+	esac; \
 	case "$$BRANCH" in \
 		feature/*) \
 			echo "$(YELLOW)$$BRANCH → $(BR_INTEG)$(RESET)"; \
 			git checkout $(BR_INTEG) && git pull --quiet --ff-only && \
 			git merge --no-ff "$$BRANCH" -m "Merge $$BRANCH" && \
-			git push && git branch -d "$$BRANCH" && \
+			git push && \
+			{ git branch -d "$$BRANCH" 2>/dev/null || \
+			  echo "$(YELLOW)  $$BRANCH kept — it is checked out in a worktree. Remove it with: git worktree remove <path>$(RESET)"; } && \
 			echo "$(GREEN)✅ Merged to $(BR_INTEG). Deploy: make deploy env=development$(RESET)";; \
 		hotfix/*) \
 			echo "$(YELLOW)$$BRANCH → $(BR_PROD), then back down into $(BR_REVIEW) and $(BR_INTEG)$(RESET)"; \
@@ -164,6 +193,7 @@ promote: ## Send ONE feature to the review branch, leaving the rest of the integ
 		exit 1; \
 	fi
 	@$(MAKE) --no-print-directory _ensure-clean-git
+	@$(MAKE) --no-print-directory _worktree-guard rung=$(BR_REVIEW) verb="promote name=$(name)"
 	@BR="feature/$(name)"; \
 	git rev-parse --verify --quiet "$$BR" >/dev/null || git branch "$$BR" "origin/$$BR"; \
 	$(MAKE) --no-print-directory _need-tty verb=promote; \
@@ -183,6 +213,8 @@ release: ## Merge the review branch into the production branch (then: make ship)
 	@$(MAKE) --no-print-directory _ensure-flow
 	@$(MAKE) --no-print-directory _need-tty verb=release
 	@$(MAKE) --no-print-directory _ensure-clean-git
+	@$(MAKE) --no-print-directory _worktree-guard rung=$(BR_REVIEW) verb=release
+	@$(MAKE) --no-print-directory _worktree-guard rung=$(BR_PROD) verb=release
 	@git fetch --quiet origin
 	@git checkout $(BR_REVIEW) && git pull --quiet --ff-only
 	@git checkout $(BR_PROD) && git pull --quiet --ff-only
@@ -575,6 +607,44 @@ _backup-payload:
 	echo "$(GREEN)✓ payload backed up: $$ARCHIVE ($$(( SIZE / 1024 )) KB)$(RESET)"
 
 
+# A rung checked out in ANOTHER worktree cannot be checked out here, and every
+# promoting verb does `git checkout <rung>`. Without this, `make finish` inside
+# a linked worktree died on a raw git error mid-verb —
+#   fatal: 'development' is already used by worktree at ...
+# — which is exactly the shape `_ensure-flow` exists to prevent: a half-run
+# verb dying on a git error is what taught agents to fall back to raw git.
+#
+# Parallel agents each get their own worktree, so this is the normal case there,
+# not an edge one. Refusing is also the right answer on the merits: N agents
+# merging into one shared rung concurrently is a race. The merge serialises
+# through whichever worktree holds the rung.
+#
+# Usage: $(MAKE) _worktree-guard rung=<branch> verb=<name>
+_worktree-guard:
+	@RUNG="$(rung)"; [ -n "$$RUNG" ] || exit 0; \
+	HOLDER=$$(git worktree list --porcelain 2>/dev/null \
+		| awk -v b="refs/heads/$$RUNG" \
+			'/^worktree /{w=substr($$0,10)} /^branch /{if ($$2==b) {print w; exit}}'); \
+	[ -n "$$HOLDER" ] || exit 0; \
+	HERE=$$(git rev-parse --show-toplevel 2>/dev/null); \
+	[ "$$HOLDER" = "$$HERE" ] && exit 0; \
+	echo "$(RED)✗ make $(verb) needs to check out '$$RUNG', which is checked out in another worktree$(RESET)"; \
+	echo "$(YELLOW)  held by: $$HOLDER$(RESET)"; \
+	echo "$(YELLOW)  here:    $$HERE$(RESET)"; \
+	echo ""; \
+	BR=$$(git branch --show-current); \
+	case "$$BR" in \
+		feature/*|hotfix/*) \
+			echo "$(YELLOW)  Finish it from there, naming this branch:$(RESET)"; \
+			echo "$(YELLOW)    cd $$HOLDER && make finish name=$${BR#*/}$(RESET)";; \
+		*) \
+			echo "$(YELLOW)  Run the verb where the rung lives:$(RESET)"; \
+			echo "$(YELLOW)    cd $$HOLDER && make $(verb)$(RESET)";; \
+	esac; \
+	echo "$(YELLOW)  Your commits are already visible from there — a worktree shares$(RESET)"; \
+	echo "$(YELLOW)  the repository, so nothing needs pushing first.$(RESET)"; \
+	exit 1
+
 # Where am I in the flow, and what is the next verb — printed FIRST by help,
 # status and doctor, so the answer is on screen before anything is typed.
 _flow-state:
@@ -689,4 +759,4 @@ _check-requirements:
 .PHONY: _deploy-transport _deploy-rsync _deploy-gitpush _deploy-gate _deploy-confirm \
         _deploy-stamp _deploy-opcache _backup-payload _flow-state \
         _branch-role _ensure-safe-branch _warn-rung-branch _need-tty _ensure-flow \
-        _ensure-clean-git _refuse-production _check-requirements
+        _ensure-clean-git _refuse-production _check-requirements _worktree-guard
