@@ -1,6 +1,6 @@
 {
   "name": "netdust-devops",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "0.6.0: the promoting verbs survive worktrees. --adopt for projects that predate the plugin. the plugin names no caller; /fleet moved to the fleet repo. one scaffolder driven by templates/stacks.tsv. make push env=<env> and structure.theme_flavour. The single source of truth for Netdust devops: the branch flow, the deploy gate and ledger, and the project/fleet contract. Ships a stack-split Makefile core (mk/wp, statamic, node, generic) that every project vendors rather than copies, so a fix made once reaches every project and `make doctor` names any project that is behind or edited in place. Owns site.yml schema 2 — environments: binds a branch to a server, and nothing else may. Replaces the flow half of netdust-core:dev-stack and both /deploy commands.",
   "author": {
     "name": "Stefan Vermeulen",
