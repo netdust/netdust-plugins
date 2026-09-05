@@ -160,6 +160,94 @@ def transcript_has_skill(transcript_path: str, skill: str) -> bool:
     return False
 
 
+# ── The vendored-package floor (2026-09-04) ─────────────────────────────────
+#
+# Netdust projects install netdust/ntdst-core, ntdst-baseline and netdust-flow
+# with `composer --prefer-source`, so `vendor/<vendor>/<pkg>/` is a REAL git
+# checkout of another repository. Editing one in place looks like it works and
+# does not:
+#
+#   · `vendor/` is outside this project's deploy.payload, so the fix never
+#     reaches a server — the deploy is a closed list and does not carry it;
+#   · the next `composer install` / `composer update` overwrites it silently;
+#   · the change is committed to nothing — it is not in this repo's history and
+#     not in the package's either.
+#
+# The fix belongs in that package's own checkout, on its own branch, through
+# its own flow, then released and pulled back by composer.
+#
+# `ask`, not `deny`, per this guard's policy: a temporary probe while debugging
+# is legitimate, and a human seeing the path is enough to catch the case where
+# it was meant to be a real fix. node_modules/ is the same shape for JS.
+VENDOR_DIRS = ("vendor", "node_modules")
+
+
+def _vendor_package_root(file_path: str) -> tuple[str, str] | None:
+    """(<vendor-dir>, <package root>) when file_path sits inside a vendored
+    package, else None. The package root is the directory two levels below the
+    vendor dir (composer's <vendor>/<name>), or the vendor dir itself when the
+    path is shallower."""
+    try:
+        parts = Path(file_path).resolve().parts
+    except Exception:
+        parts = Path(file_path).parts
+    for i in range(len(parts) - 1, -1, -1):
+        if parts[i] in VENDOR_DIRS:
+            pkg = parts[: i + 3] if len(parts) >= i + 3 else parts[: i + 1]
+            return parts[i], str(Path(*pkg))
+    return None
+
+
+def check_vendor_floor(hook_input: dict) -> dict | None:
+    """Ask before writing inside a vendored package. None to pass through."""
+    tool_input = hook_input.get("tool_input") or {}
+    if not isinstance(tool_input, dict):
+        return None
+    file_path = tool_input.get("file_path", "")
+    if not isinstance(file_path, str) or not file_path:
+        return None
+
+    found = _vendor_package_root(file_path)
+    if found is None:
+        return None
+    vendor_dir, pkg_root = found
+
+    # A package with its own .git is a --prefer-source checkout: it HAS a real
+    # home to fix this in, and saying so is the whole point of the message.
+    try:
+        is_checkout = (Path(pkg_root) / ".git").exists()
+    except Exception:
+        is_checkout = False
+
+    if is_checkout:
+        detail = (
+            f"{pkg_root} is a real git checkout (composer --prefer-source). "
+            f"Fix it THERE — its own branch, its own flow, release, then "
+            f"`composer update` here. See netdust-devops:parallel-work."
+        )
+    else:
+        detail = (
+            f"{pkg_root} is dependency-managed. Change it upstream, or record a "
+            f"patch your dependency tool re-applies — never by hand here."
+        )
+
+    reason = (
+        f"netdust-agent guard: this writes inside `{vendor_dir}/`. That edit "
+        f"does not survive and does not ship: `{vendor_dir}/` is outside this "
+        f"project's deploy.payload, so it never reaches a server, and the next "
+        f"install overwrites it. {detail} "
+        f"Confirm only if this is a deliberate throwaway probe."
+    )
+    log(f"ask reason=vendor-floor path={file_path!r} pkg={pkg_root!r} checkout={is_checkout}")
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "ask",
+            "permissionDecisionReason": reason,
+        }
+    }
+
+
 def check_upstream_floor(hook_input: dict) -> dict | None:
     """Return a deny decision when a seam artifact is being CREATED without its
     upstream superpowers skill in the transcript; None to pass through."""
@@ -460,13 +548,16 @@ def main() -> None:
         return  # fail OPEN
 
     tool_name = hook_input.get("tool_name", "")
-    if tool_name == "Write":
-        decision = check_upstream_floor(hook_input)
+    if tool_name in ("Write", "Edit", "NotebookEdit"):
+        # The vendored-package floor covers Edit too: before 2026-09-04 only
+        # Write was inspected, so an Edit into vendor/ passed silently.
+        decision = check_vendor_floor(hook_input)
+        if decision is None and tool_name == "Write":
+            decision = check_upstream_floor(hook_input)
         if decision is not None:
             print(json.dumps(decision))
         return
     if tool_name != "Bash":
-        # Bash denylist + the Write upstream floor are the guard's two jobs.
         return  # passthrough
 
     tool_input = hook_input.get("tool_input") or {}

@@ -176,8 +176,60 @@ def _flow_case(desc: str, branch: str, cmd: str, expected: str, **repo_kw) -> tu
     return ok, f"flow {desc}: on {branch!r}, {cmd!r} -> {expected} (got {got})"
 
 
+def _vendor_case(desc: str, rel: str, expected: str, tool: str = "Edit",
+                 as_checkout: bool = False) -> tuple[bool, str]:
+    """Write/Edit at <tmp>/<rel>; expect 'ask' or 'passthrough'.
+
+    Before 2026-09-04 only Write reached a floor at all, so an Edit into
+    vendor/ passed silently — and vendor/ is where composer --prefer-source
+    puts real git checkouts of ntdst-core, ntdst-baseline and netdust-flow.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        target = Path(tmp) / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("x")
+        if as_checkout:
+            # composer --prefer-source leaves a real .git in the package root.
+            pkg = Path(tmp) / Path(*Path(rel).parts[:3])
+            (pkg / ".git").mkdir(parents=True, exist_ok=True)
+        payload = {"tool_name": tool, "tool_input": {"file_path": str(target)}, "cwd": tmp}
+        result = subprocess.run(["python3", str(HOOK)], input=json.dumps(payload),
+                                capture_output=True, text=True, timeout=20)
+    out = result.stdout.strip()
+    if not out:
+        got = "passthrough"
+    else:
+        try:
+            got = json.loads(out)["hookSpecificOutput"]["permissionDecision"]
+        except Exception:
+            got = f"unparseable:{out[:40]}"
+    ok = got == expected
+    if ok and expected == "ask" and as_checkout:
+        ok = "prefer-source" in out
+    return ok, f"vendor {desc}: {tool} {rel} -> {expected} (got {got})"
+
+
 def run() -> list[tuple[bool, str]]:
     r: list[tuple[bool, str]] = []
+
+    # === The vendored-package floor ===
+    r.append(_vendor_case("Edit in a --prefer-source package",
+                          "vendor/netdust/ntdst-core/src/Boot.php", "ask", as_checkout=True))
+    r.append(_vendor_case("Write in a --prefer-source package",
+                          "vendor/netdust/ntdst-baseline/src/M.php", "ask",
+                          tool="Write", as_checkout=True))
+    r.append(_vendor_case("Edit in a plain vendored package",
+                          "vendor/other/lib/x.php", "ask"))
+    r.append(_vendor_case("Edit in node_modules",
+                          "node_modules/pkg/index.js", "ask"))
+    # A project file must never be caught, including one whose NAME contains
+    # the word — the floor matches path SEGMENTS, not substrings.
+    r.append(_vendor_case("ordinary project file",
+                          "web/app/plugins/mine/mine.php", "passthrough"))
+    r.append(_vendor_case("file merely named vendor-something",
+                          "web/app/plugins/mine/vendor-report.php", "passthrough"))
+    r.append(_vendor_case("directory merely named vendors",
+                          "web/app/vendors/thing.php", "passthrough"))
 
     # === Attack 1: rm -rf on broad paths → ask ===
     r.append(_bash_case("rm -rf /", "rm -rf /", "ask"))

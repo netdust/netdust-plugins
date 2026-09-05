@@ -15,7 +15,14 @@ the primitives that skill already decided.
 | **Stage 2 overview** | one `status` tab per feature, unfocused, watching `bin/loop-check.py <feature>` and `git status --short` together | not per cluster, not per task; one tab for the run |
 | **Unattended run** (`/loop` armed) | the doorbell: `scripts/herdr-watcher.sh` from herdr-orchestration on the working pane, in the background | an attended run needs no doorbell; the operator is the doorbell |
 | **The branch review** (Stage 3) | the reviewer as a herdr agent in its own pane, its report opened in a `review` tab; the pane stays after the report so the operator can question it | contract-lane cluster panels stay subagents — cheaper, and their findings go to the ledger, not the operator |
+| **A flow verb refuses on a dirty tree** (`make hotfix` mid-feature: production is broken and the feature is half-done) | a worktree workspace off `origin/<production branch>`, unfocused; hotfix there, then `make finish name=<x>` from wherever the rung lives | when the feature work is at a natural stopping point — commit it and hotfix in this checkout. Never `make save` on unfinished work purely to unblock the hotfix |
+| **A bug in an imported package** (`ntdst-core`, `ntdst-baseline`, `netdust-flow` — `--prefer-source` puts real git checkouts under `vendor/`) | a workspace on THAT repository's own checkout; fix it on its own branch through its own flow, release, then `composer update` here | never edit it in place: `vendor/` is outside this project's `deploy.payload`, so the fix never deploys, and the next `composer install` overwrites it |
+| **A long gate or test run** | a sibling pane, same cwd, same branch — it reads and executes, it edits nothing | never a worktree or workspace: no second checkout means no second dependency install and no second container. The win is the run being beside you, not a faster run |
 | **Spec-close** (`compounding`) | read `memory/session-review/*-proposals.md` from the session-review pane and fold them into the manifest | never write a skill from the pane's proposals without the operator's approval — same rule as compounding itself |
+
+**Whether a moment needs a different checkout at all is `netdust-devops:parallel-work`'s
+question, not this file's.** It owns the decision (pane vs worktree, and why); this table
+says which primitive the answer maps to. If the two disagree, the decision is upstream.
 
 Two rules from herdr-orchestration that bite the harness specifically:
 
