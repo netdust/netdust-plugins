@@ -48,6 +48,58 @@ through the overlay below, whatever tool proposes to do the walking.
 
 The upstream skill owns dispatch and status handling. What Netdust adds depends on the lane.
 
+### Placement — decide it before each dispatch, not after (2026-09-04)
+
+Dispatch answers *what* runs. Placement answers *where*, and it is a separate
+decision the harness used to skip: every dispatch became a Task subagent, which
+runs in YOUR pane, YOUR context and YOUR working tree. That is right for most
+work and wrong for two cases, one of which has already cost a run — two
+implementers in one working tree, 14 and 17 phantom failures (2026-08-09).
+
+**Outside herdr (`HERDR_ENV` unset) placement does not exist: everything is a
+subagent, exactly as before.** Inside herdr, place each dispatch:
+
+| The dispatch | Placement | Why |
+|---|---|---|
+| Anything that EDITS this checkout | subagent, here | the default; nothing gained by moving it |
+| A long gate, suite or build | **its own pane**, same cwd, same branch | it reads and executes, so it cannot collide — and its output lands there, not in your context |
+| Two or more `[P]` siblings that EDIT | **one worktree each** | subagents share this tree; that is the 2026-08-09 failure, not a risk |
+| A fix in another repository (a `--prefer-source` package under `vendor/`) | **a worktree on THAT repo** | a subagent cannot have a different checkout at all |
+| A reviewer, log watcher, anything read-only | a pane, or a subagent if its report is short | either works; a pane keeps a long report out of your context |
+
+`netdust-devops:parallel-work` owns the rule behind that table — *does this need
+a different checkout?* — and `skills/_shared/herdr-moments.md` maps each answer
+onto its primitive. Cite them; do not restate them here.
+
+**Syntax: run `herdr --skill` before the first placement call**, and `herdr
+worktree` for the worktree verbs. The one form confirmed against herdr v0.8.2 is
+the pane split:
+
+```bash
+herdr pane split --current --direction right --cwd "$PWD" --no-focus   # → .result.pane.pane_id
+herdr pane run <pane-id> "make gate"
+herdr pane read <pane-id> --source recent-unwrapped --lines 120        # read the result
+```
+
+Workspace and worktree flags are NOT reproduced here because they were not
+verifiable at the time of writing — read them from `herdr --skill` rather than
+guessing, and correct this file if what you find differs.
+
+**Three rules that make placement safe rather than clever:**
+
+1. **`--no-focus`, always.** Placement must never move the operator's cursor
+   mid-run. Then TELL them the pane exists — they will not find it otherwise.
+2. **Read the result from the artefact, never from the pane's pixels.** A gate's
+   verdict is its exit code and its suite output; a worktree dispatch's result is
+   what is committed in that worktree. `pane read` is for showing a human.
+3. **Placement never changes the contract.** A dispatch in a pane still owes the
+   same `HARNESS-EVIDENCE:` close-out line, and `hooks/subagent-stop.py` still
+   governs a subagent close. Moving work does not exempt it.
+
+If a placement call fails — herdr not running, a flag this file got wrong — fall
+back to a subagent and say so. A failed placement is a finding to file, never a
+reason to skip the dispatch.
+
 ### Behaviour lane — the default for declarative work
 
 The cluster's behaviour block is the whole test contract: ONE RED, observable from

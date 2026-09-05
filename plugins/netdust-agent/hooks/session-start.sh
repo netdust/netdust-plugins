@@ -324,7 +324,8 @@ if [[ "${HERDR_ENV:-}" == "1" ]]; then
   if [[ -n "${HERDR_PANE_ID:-}${HERDR_TAB_ID:-}${HERDR_WORKSPACE_ID:-}" ]]; then
     OUTPUT+="- this session: pane \`${HERDR_PANE_ID:-?}\` · tab \`${HERDR_TAB_ID:-?}\` · workspace \`${HERDR_WORKSPACE_ID:-?}\`\n"
   fi
-  OUTPUT+="- harness moments → herdr primitives: \`${CLAUDE_PLUGIN_ROOT}/skills/_shared/herdr-moments.md\` (syntax: \`herdr --skill\`; channels/topology: \`netdust-core:herdr-orchestration\`)\n\n"
+  OUTPUT+="- harness moments → herdr primitives: \`${CLAUDE_PLUGIN_ROOT}/skills/_shared/herdr-moments.md\` (syntax: \`herdr --skill\`; channels/topology: \`netdust-core:herdr-orchestration\`)\n"
+  OUTPUT+="- **PLACEMENT is live here.** A dispatch is not automatically a subagent: a long gate or suite gets its OWN PANE (same cwd, same branch — it only reads and executes), and work needing a different checkout — parallel \`[P]\` editors, a fix in a \`vendor/\` package — gets a WORKTREE. Everything else stays a subagent. The rule is \`netdust-devops:parallel-work\`; \`--no-focus\` always, then say the pane exists.\n\n"
 fi
 
 # ── Log every fire ──────────────────────────────────────────────────────────

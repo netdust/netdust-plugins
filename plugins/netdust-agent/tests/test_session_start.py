@@ -208,8 +208,12 @@ def test_herdr_lines() -> tuple[bool, str]:
             ("## herdr" not in out0, "block emitted without HERDR_ENV"),
             ("## herdr" in out1 and "w3:p4" in out1 and "w3:t2" in out1 and "herdr-moments.md" in out1,
              "ids or pointer missing under HERDR_ENV=1"),
-            ("## herdr" in out2 and "herdr-moments.md" in out2 and "pane" not in out2.split("## herdr", 1)[1].split("\n\n", 1)[0],
-             "ids unset should emit the pointer only"),
+            # Assert on the ADDRESS LINE, not on the word "pane". The block's
+            # prose legitimately mentions panes (the placement default), so a
+            # substring check here fails on wording rather than on behaviour.
+            ("## herdr" in out2 and "herdr-moments.md" in out2
+             and "this session:" not in out2.split("## herdr", 1)[1].split("\n\n", 1)[0],
+             "ids unset should emit the pointer but no address line"),
             ("## herdr" not in out3, "HERDR_ENV=0 must not emit the block"),
             # byte-identical outside herdr, apart from the injected-size line that counts its own bytes
             (out0 == out3, "HERDR_ENV=0 output differs from unset output"),
