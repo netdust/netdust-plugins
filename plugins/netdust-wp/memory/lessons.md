@@ -50,3 +50,42 @@ it belongs in `netdust-agent`, or nowhere.
   written down. Now: the baseline module, `yoo-lint.php` (run before every write),
   `yoo-measure.mjs`, `workflow.md`, lessons by task. Gates: `evals/yootheme-anchor.sh`,
   `yootheme-budget.sh`, `yootheme-cases.sh`, `tests/yootheme/run.sh`.
+
+- **2026-09-05 — scaffolding citizenne took five runs; every cause was in our own
+  tooling, not the site.** The transferable parts:
+
+  **Never read an exit code through `tee`.** `new-site.sh … | tee log` reports *tee's*
+  status, so a run that died at step 5 of 13 was recorded as success and the first
+  diagnosis went looking in the wrong place entirely. Redirect (`> log 2>&1`) and echo
+  `$?`, or you are debugging a lie.
+
+  **Never disable errexit to test code that runs under it.** `scaffold_project_meta`
+  aborted on the CLEAN-render path — `grep` exits 1 on no match, pipefail propagated
+  it, errexit killed the function — and the contract test passed throughout because it
+  ran the function under `set +e`. The one line that mattered was the one the harness
+  switched off. A test that relaxes the caller's shell options is not testing the
+  caller.
+
+  **Put repo hygiene ABOVE the gate, not below it.** The theme whitelist, the born-gated
+  commit and (now) the rung branches all sat below step 13. A red gate aborted under
+  `set -e` before them, so each failed attempt left the site's own theme untracked with
+  zero commits — meaning every retry was a full wipe and re-run rather than a resume.
+  Anything that makes the tree *recoverable* belongs before the thing that can fail.
+
+  **The wp-starter payload's example tests drift against ntdst-core.** Two of them
+  asserted an API that no longer exists — `Container::make()/forget()`, removed by core
+  commit `6a14e5a` (core-trim T07), and `ntdst_model_create_after`, a hook core never
+  fires (it is `ntdst/model/created`). Born-gated only means something if the payload
+  tracks the framework; re-check these whenever core's surface changes.
+
+  **`wp core download` has no stall detection and a 600s ceiling.** A wedged transfer
+  burns the full ten minutes then dies (seen at 30.0MB of 35.4MB). `WP_CLI_CACHE_DIR`
+  pointed at `/mnt/ddev-global-cache` is shared across every DDEV project, so warming it
+  once makes core arrive in ~3s offline, forever.
+
+  **`bin/new-project` only creates the three rung branches when it initialises the repo
+  itself.** `new-site.sh` clones the template first, so `.git` exists, that arm never
+  fires, and the site had no ladder for `make feature` / `make finish` / `make deploy`.
+
+  Regression pins live in `netdust-wp-manager/scripts/tests/` (187 passing), not here —
+  the fixes are script behaviour, and that suite is where they are held.
