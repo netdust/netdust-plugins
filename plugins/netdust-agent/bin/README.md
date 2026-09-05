@@ -56,6 +56,7 @@ be disarmed by default. The artifacts are authored, not filled in.
 # the blocking gate — run it, do not trust a transcript that says it was run
 python3 plugins/netdust-agent/bin/gate-check.py specs/<feature>
 python3 plugins/netdust-agent/bin/gate-check.py --json specs/<feature>
+python3 plugins/netdust-agent/bin/gate-check.py --shakeout specs/<feature>   # the shake-out manifest
 
 # report-only
 python3 plugins/netdust-agent/bin/run-trace.py show --durations specs/<feature>
@@ -66,6 +67,11 @@ python3 plugins/netdust-agent/bin/run-cost.py
 `gate-check.py` checks whatever of `spec.md` / `plan.md` / `tasks.md` exists in the
 directory, so the same script serves Stage 0.5 (spec only) and Stage 1.5 (all three).
 WARN findings never fail the gate; FAIL findings exit 1.
+
+`--shakeout` is the second mode: it reads `shakeout.md` (`# | Flow | Layer | Verdict | Evidence`)
+against the plan's `## Acceptance flows` and exits 1 unless every `browser` row carries
+`Browser: <url> · <screenshot>` with the file on disk (or a `Ruling:`), no `wire`/`cli` row is
+`fail`/`unverified`, and no evidence cell leaks a credential. `/shakeout` runs it before the panel.
 
 ## The `[P]` vs `── REVIEW GATE ──` reconciliation
 

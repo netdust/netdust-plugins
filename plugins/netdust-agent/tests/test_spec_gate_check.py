@@ -6,6 +6,7 @@ spec/plan/tasks set that skips a gate, and PASS one that carries them. The load-
 case (ADR Phase B gate): a spec that flags a security surface but whose plan leaves the
 ## Threat model as N/A must FAIL — that is the proactive 1a gate the harness exists to keep.
 """
+import json
 import re
 import subprocess
 import sys
@@ -1761,6 +1762,78 @@ TASKS_NEW_PAYLOAD_DECLARED = TASKS_NEW_PAYLOAD.replace(
 )
 
 
+# ── `--shakeout` fixtures (artifact-gate T01, FR-1..FR-3) ─────────────────────
+# A browser row passes on evidence — `Browser: <url> · <png>` with the PNG on disk —
+# never on the verdict word. The PNG is written as bytes beside the manifest.
+
+PLAN_SHAKEOUT = """# Plan: audit screen
+
+## Acceptance flows [GATE]
+
+| # | Flow | Layer | Expectation | Edges |
+|---|---|---|---|---|
+| AF-1 | Audit page lists the rows | browser | a table with one row per record | empty state |
+| AF-2 | REST list returns the rows | wire | 200 with a JSON array | 401 anonymous |
+"""
+
+PLAN_SHAKEOUT_WIRE_ONLY = """# Plan: audit endpoint
+
+## Acceptance flows [GATE]
+
+| # | Flow | Layer | Expectation | Edges |
+|---|---|---|---|---|
+| AF-2 | REST list returns the rows | wire | 200 with a JSON array | 401 anonymous |
+"""
+
+_MANIFEST_HEAD = """# Shake-out — audit screen
+
+| # | Flow | Layer | Verdict | Evidence |
+|---|---|---|---|---|
+"""
+_WIRE_PASS = "| AF-2 | REST list returns the rows | wire | pass | curl -s https://x.ddev.site/wp-json/audit/v1/rows → 200, 3 items |\n"
+BROWSER_EVIDENCE = "Browser: https://x.ddev.site/wp/wp-admin/admin.php?page=audit · shakeout/af-1.png"
+
+MANIFEST_BROWSER_NO_EVIDENCE = _MANIFEST_HEAD + (
+    "| AF-1 | Audit page lists the rows | browser | pass | looked at it, table renders |\n") + _WIRE_PASS
+MANIFEST_BROWSER_DRIVEN = _MANIFEST_HEAD + (
+    f"| AF-1 | Audit page lists the rows | browser | pass | {BROWSER_EVIDENCE} |\n") + _WIRE_PASS
+MANIFEST_BROWSER_UNVERIFIED = _MANIFEST_HEAD + (
+    f"| AF-1 | Audit page lists the rows | browser | unverified-no-browser | {BROWSER_EVIDENCE} |\n") + _WIRE_PASS
+MANIFEST_BROWSER_RULING = _MANIFEST_HEAD + (
+    "| AF-1 | Audit page lists the rows | browser | pass | Ruling: no browser on this box, driven by Stefan 09-06 |\n") + _WIRE_PASS
+MANIFEST_BROWSER_CREDENTIAL = _MANIFEST_HEAD + (
+    "| AF-1 | Audit page lists the rows | browser | pass | Ruling: driven by Stefan 09-06 — https://x.ddev.site/wp/wp-login.php?login=abc123 |\n") + _WIRE_PASS
+MANIFEST_WIRE_ONLY_PASS = _MANIFEST_HEAD + _WIRE_PASS
+MANIFEST_WIRE_FAIL = _MANIFEST_HEAD + (
+    f"| AF-1 | Audit page lists the rows | browser | pass | {BROWSER_EVIDENCE} |\n"
+    "| AF-2 | REST list returns the rows | wire | fail | curl → 500 |\n")
+MANIFEST_BROWSER_ONLY = _MANIFEST_HEAD + (
+    f"| AF-1 | Audit page lists the rows | browser | pass | {BROWSER_EVIDENCE} |\n")
+MANIFEST_FENCED_SAMPLE = "```\n| AF-9 | sample | browser | pass | none |\n```\n" + MANIFEST_BROWSER_DRIVEN
+
+PNG = {"shakeout/af-1.png": b"\x89PNG"}
+
+
+def _run_shakeout(files: dict, binaries: dict | None = None,
+                  flags: tuple = ("--shakeout",)) -> tuple[int, str]:
+    with tempfile.TemporaryDirectory() as d:
+        for name, content in files.items():
+            (Path(d) / name).write_text(content)
+        for name, data in (binaries or {}).items():
+            path = Path(d) / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        proc = subprocess.run([sys.executable, str(CHECKER), *flags, d],
+                               capture_output=True, text=True, timeout=15)
+        return proc.returncode, proc.stdout + proc.stderr
+
+
+def test_shakeout_browser_row_without_evidence_fails() -> tuple[bool, str]:
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_NO_EVIDENCE})
+    return (rc == 1 and "✗ [shakeout-manifest]" in out and "AF-1" in out,
+            "shakeout (a): a `browser` row marked pass with no `Browser:` evidence FAILs naming AF-1")
+
+
 def _run(files: dict) -> tuple[int, str]:
     with tempfile.TemporaryDirectory() as d:
         for name, content in files.items():
@@ -2977,6 +3050,72 @@ def run():
     rc, out = _run({"tasks.md": tasks_conflict})
     results.append(("! [cluster-lane]" in out and "disagree" in out and "heading wins" in out,
                     "lane: heading `lane: contract` beside a `Lane: behaviour` line → WARN naming both, heading wins"))
+
+    # ── 31. `--shakeout` — the manifest gate (artifact-gate T01, FR-1..FR-3) ──
+    results.append(test_shakeout_browser_row_without_evidence_fails())
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_DRIVEN}, PNG)
+    results.append((rc == 0 and "shakeout: 2 rows, 1 browser rows driven" in out,
+                    "shakeout (b): `Browser: <url> · <png>` with the PNG on disk → exit 0 + summary"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_DRIVEN})
+    results.append((rc == 1 and any("✗ [shakeout-manifest]" in ln and "shakeout/af-1.png" in ln
+                                    for ln in out.splitlines()),
+                    "shakeout (c): evidence names a PNG that is not on disk → FAIL naming the path"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_UNVERIFIED}, PNG)
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "AF-1" in out,
+                    "shakeout (d): a `browser` row `unverified-no-browser` FAILs even with evidence"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_RULING})
+    results.append((rc == 0 and "✓ [shakeout-ruling]" in out and "AF-1" in out
+                    and "no browser on this box" in out and "✗ [shakeout-manifest]" not in out,
+                    "shakeout (e): `Ruling: <reason>` replaces the row's FAIL with one ruling PASS"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_CREDENTIAL})
+    results.append((rc == 1 and "✗ [shakeout-credential]" in out and "AF-1" in out,
+                    "shakeout (f): `?login=abc123` in evidence FAILs `shakeout-credential`, ruling or not"))
+
+    rc, out = _run_shakeout({"shakeout.md": MANIFEST_WIRE_ONLY_PASS})
+    results.append((rc == 0 and "shakeout: 1 rows, 0 browser rows driven" in out,
+                    "shakeout (g): a `wire` row `pass` on curl evidence passes; a missing plan.md is accepted"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_WIRE_FAIL}, PNG)
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "AF-2" in out,
+                    "shakeout (h): a `wire` row `fail` FAILs naming AF-2"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT})
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "no shakeout.md" in out,
+                    "shakeout (i): plan has a `browser` row and no shakeout.md → FAIL `no shakeout.md`"))
+
+    rc, out = _run({"tasks.md": TASKS_GOOD, "plan.md": PLAN_SHAKEOUT,
+                    "shakeout.md": MANIFEST_BROWSER_NO_EVIDENCE})
+    results.append(("shakeout-" not in out,
+                    "shakeout (j): plain mode on a dir carrying a manifest emits zero shakeout findings"))
+
+    # edges beyond the brief's letters
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_ONLY}, PNG)
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "AF-2" in out,
+                    "shakeout: a plan row with no manifest row FAILs naming it"))
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT_WIRE_ONLY})
+    results.append((rc == 0 and "no browser rows, no manifest owed" in out,
+                    "shakeout: no browser rows and no manifest → PASS, nothing owed"))
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_FENCED_SAMPLE}, PNG)
+    results.append((rc == 0 and "shakeout: 2 rows, 1 browser rows driven" in out,
+                    "shakeout: a fenced sample row in the manifest is not a row"))
+    escaped = MANIFEST_BROWSER_DRIVEN.replace("shakeout/af-1.png", str(CHECKER))
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": escaped}, PNG)
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "AF-1" in out,
+                    "shakeout: a screenshot path outside the feature dir is not evidence, even if the file exists"))
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_NO_EVIDENCE},
+                            flags=("--shakeout", "--json"))
+    try:
+        payload = json.loads(out)
+        json_ok = payload["failed"] and any(x["check"] == "shakeout-manifest" for x in payload["findings"])
+    except (ValueError, KeyError, TypeError):
+        json_ok = False
+    results.append((rc == 1 and json_ok,
+                    "shakeout: `--shakeout --json` emits the same findings as JSON"))
 
     return results
 

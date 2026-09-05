@@ -17,6 +17,7 @@ non-test gates into a verifiable check — the sibling of subagent-stop.py for t
 Usage:
     gate-check.py <feature-spec-dir>      # dir containing spec.md / plan.md / tasks.md
     gate-check.py --json <dir>
+    gate-check.py --shakeout <dir>       # shakeout.md vs the plan's acceptance rows
 
 Exit code: 0 if no FAIL findings, 1 otherwise. WARN findings never fail the gate.
 """
@@ -2377,6 +2378,122 @@ def check_clusters(tasks_text: str, f: Findings) -> None:
               f"{len(clusters)} cluster(s): all <=4 tasks; irreversible steps solo & non-[P]")
 
 
+# ── the shake-out manifest (artifact-gate FR-1..FR-3) ─────────────────────────
+# `specs/<feature>/shakeout.md`: `| # | Flow | Layer | Verdict | Evidence |`. A `browser`
+# row passes on evidence — a URL plus a screenshot on disk — never on the verdict word.
+
+BROWSER_EVIDENCE = re.compile(r"Browser:\s*(?P<url>\S+)\s*·\s*(?P<path>\S+)")
+RULING = re.compile(r"Ruling:\s*(?P<reason>.+)")
+CREDENTIAL = re.compile(r"login=|token=|app[-_ ]?password|storageState", re.IGNORECASE)
+
+
+def _split_cells(line: str) -> list[str] | None:
+    m = FLOW_ROW.match(line)
+    if not m:
+        return None
+    return [c.strip() for c in m.group("cells").rstrip("|").split("|")]
+
+
+def _pipe_table(lines: list[str], columns: dict[str, str]) -> list[dict]:
+    """Rows of the first pipe table whose header names a `#` column, keyed by `columns`
+    (key → header name, case-insensitive). A column the header lacks reads None."""
+    index, rows = None, []
+    for i, ln in enumerate(lines):
+        if TABLE_SEPARATOR.match(ln):
+            continue
+        cells = _split_cells(ln)
+        if index is None:
+            if cells and "#" in cells and i + 1 < len(lines) and TABLE_SEPARATOR.match(lines[i + 1]):
+                names = [c.lower() for c in cells]
+                index = {k: names.index(h.lower()) if h.lower() in names else None
+                         for k, h in columns.items()}
+            continue
+        if cells is None:
+            break
+        rows.append({k: (cells[j] if j is not None and j < len(cells) else None)
+                     for k, j in index.items()})
+    return [r for r in rows if r["n"]]
+
+
+def parse_flow_rows(body_lines: list[str]) -> list[dict]:
+    """The plan's acceptance rows as `[{n, flow, layer}]`; `layer` is None when the
+    table has no Layer column."""
+    return _pipe_table(body_lines, {"n": "#", "flow": "Flow", "layer": "Layer"})
+
+
+def parse_manifest_rows(text: str) -> list[dict]:
+    rows = _pipe_table(strip_fenced(text).splitlines(),
+                       {"n": "#", "flow": "Flow", "layer": "Layer",
+                        "verdict": "Verdict", "evidence": "Evidence"})
+    return [{k: (v or "") for k, v in r.items()} for r in rows]
+
+
+def _screenshot_missing(path: str, spec_dir: Path) -> bool:
+    target = (spec_dir / path).resolve()
+    return not (target.is_file() and target.is_relative_to(spec_dir.resolve()))
+
+
+def _row_problem(row: dict, spec_dir: Path) -> str | None:
+    layer, verdict, evidence = row["layer"].lower(), row["verdict"].lower(), row["evidence"]
+    if layer != "browser":
+        if verdict == "fail" or verdict.startswith("unverified"):
+            return f"{layer or 'unlayered'} row verdict `{row['verdict']}`"
+        return None
+    if verdict != "pass":
+        return f"browser row verdict `{row['verdict']}` — not driven"
+    m = BROWSER_EVIDENCE.search(evidence)
+    if not m:
+        return "browser row without `Browser: <url> · <screenshot path>` evidence"
+    if _screenshot_missing(m.group("path"), spec_dir):
+        return f"screenshot `{m.group('path')}` not found under the feature dir"
+    return None
+
+
+def _check_manifest_row(row: dict, spec_dir: Path, f: Findings) -> bool:
+    """Report the row; True when it is a browser row driven by a browser."""
+    n = row["n"]
+    if CREDENTIAL.search(row["evidence"]):
+        f.add("fail", "shakeout-credential",
+              f"{n}: evidence carries a credential (login=/token=/app password/storageState)")
+    problem = _row_problem(row, spec_dir)
+    ruling = RULING.search(row["evidence"])
+    if ruling:
+        f.add("pass", "shakeout-ruling", f"{n}: ruling — {ruling.group('reason').strip()}")
+    elif problem:
+        f.add("fail", "shakeout-manifest", f"{n}: {problem}")
+    return row["layer"].lower() == "browser" and problem is None
+
+
+def run_shakeout_checks(spec_dir: Path) -> Findings:
+    f = Findings()
+    plan, manifest = spec_dir / "plan.md", spec_dir / "shakeout.md"
+    plan_rows: list[dict] = []
+    if plan.exists():
+        body = section_body(plan.read_text(), "Acceptance flows")
+        if body is not None:
+            plan_rows = parse_flow_rows(strip_fenced(body).splitlines())
+    browser_owed = [r["n"] for r in plan_rows if (r["layer"] or "").lower() == "browser"]
+
+    if not manifest.exists():
+        if browser_owed:
+            f.add("fail", "shakeout-manifest",
+                  f"no shakeout.md — the plan has {len(browser_owed)} browser row(s) to drive "
+                  f"({', '.join(browser_owed)})")
+        else:
+            f.add("pass", "shakeout-manifest", "no browser rows, no manifest owed")
+        return f
+
+    rows = parse_manifest_rows(manifest.read_text())
+    seen = {r["n"] for r in rows}
+    for r in plan_rows:
+        if r["n"] not in seen:
+            f.add("fail", "shakeout-manifest",
+                  f"{r['n']} is in the plan's acceptance flows but has no manifest row")
+    driven = sum(_check_manifest_row(r, spec_dir, f) for r in rows)
+    f.add("pass", "shakeout-manifest", f"shakeout: {len(rows)} rows, {driven} browser rows driven")
+    return f
+
+
 # ── driver ────────────────────────────────────────────────────────────────────
 
 def run_checks(spec_dir: Path) -> Findings:
@@ -2433,9 +2550,11 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="netdust harness gate checker")
     ap.add_argument("spec_dir", type=Path)
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--shakeout", action="store_true",
+                    help="check shakeout.md against the plan's acceptance rows instead")
     args = ap.parse_args(argv)
 
-    f = run_checks(args.spec_dir)
+    f = run_shakeout_checks(args.spec_dir) if args.shakeout else run_checks(args.spec_dir)
 
     if args.json:
         print(json.dumps({"failed": f.failed,
