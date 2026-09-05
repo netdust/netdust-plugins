@@ -20,6 +20,43 @@ the primitives that skill already decided.
 | **A long gate or test run** | a sibling pane, same cwd, same branch — it reads and executes, it edits nothing | never a worktree or workspace: no second checkout means no second dependency install and no second container. The win is the run being beside you, not a faster run |
 | **Spec-close** (`compounding`) | read `memory/session-review/*-proposals.md` from the session-review pane and fold them into the manifest | never write a skill from the pane's proposals without the operator's approval — same rule as compounding itself |
 
+## The two recipes, verified against herdr v0.8.2 on 2026-09-04
+
+Syntax elsewhere in this file defers to `herdr --skill`. These two were run and
+their output read, so they are written out — correct them here if herdr moves.
+
+**A gate or suite beside you.** `wait-output` blocks until a sentinel appears
+AND returns the pane text in the same result, so there is no second read call:
+
+```bash
+id=$(herdr pane split --current --direction right --cwd "$PWD" --no-focus \
+     | jq -r .result.pane.pane_id)                       # → "w9:p2", workspace-qualified
+herdr pane run "$id" 'make gate; echo GATE-EXIT=$?'
+herdr pane wait-output "$id" --regex '^GATE-EXIT=[0-9]+' --timeout 900000 \
+     | jq -r '.result.read.text' | tail -60              # blocks, then the tail only
+```
+
+**ANCHOR the sentinel.** The pane's text includes the command line itself, so
+`--match 'GATE-EXIT='` matches the ECHO of the command that will produce it and
+returns before the gate has run. `^` distinguishes them: the command line starts
+with a shell prompt, the output line starts with the sentinel. Verified — a bare
+`--match` returned `matched_line` pointing at the command, not the result.
+
+`pane read` on a fresh pane needs no `--source`: the default (`visible`) carries
+the content, while `--source recent-unwrapped` returns EMPTY until there is
+scrollback beyond the viewport. Prefer the text `wait-output` already gives you.
+
+**A different checkout.** `herdr worktree` (flags confirmed from `herdr worktree`):
+
+```bash
+herdr worktree create --cwd <repo> --base <ref> --branch <name> --label <name> --no-focus
+herdr worktree list [--workspace ID | --cwd PATH]
+herdr worktree remove --workspace ID [--force]
+```
+
+Removal is by WORKSPACE id, so the worktree and the workspace holding it go
+together — which is why a worktree gets its own workspace rather than a tab.
+
 **Whether a moment needs a different checkout at all is `netdust-devops:parallel-work`'s
 question, not this file's.** It owns the decision (pane vs worktree, and why); this table
 says which primitive the answer maps to. If the two disagree, the decision is upstream.

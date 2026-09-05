@@ -94,19 +94,15 @@ time also satisfies it.
 a different checkout?* — and `skills/_shared/herdr-moments.md` maps each answer
 onto its primitive. Cite them; do not restate them here.
 
-**Syntax: run `herdr --skill` before the first placement call**, and `herdr
-worktree` for the worktree verbs. The one form confirmed against herdr v0.8.2 is
-the pane split:
+**Syntax lives in `skills/_shared/herdr-moments.md`**, which carries the two
+recipes verified against herdr v0.8.2 — the gate-in-a-pane (one blocking
+`wait-output` that returns the output, no polling) and `herdr worktree create`.
+Read it rather than reconstructing the flags; `herdr --skill` is the authority
+if it has moved.
 
-```bash
-herdr pane split --current --direction right --cwd "$PWD" --no-focus   # → .result.pane.pane_id
-herdr pane run <pane-id> "make gate"
-herdr pane read <pane-id> --source recent-unwrapped --lines 120        # read the result
-```
-
-Workspace and worktree flags are NOT reproduced here because they were not
-verifiable at the time of writing — read them from `herdr --skill` rather than
-guessing, and correct this file if what you find differs.
+One trap worth knowing before you write a sentinel: the pane's text includes the
+command line, so `--match 'GATE-EXIT='` matches the echo of the command that
+will produce it and returns early. Anchor it — `--regex '^GATE-EXIT=[0-9]+'`.
 
 **Three rules that make placement safe rather than clever:**
 
