@@ -1706,6 +1706,61 @@ def test_lane_behaviour_bare_members_pass() -> tuple[bool, str]:
             "lane (a): behaviour-lane cluster with 4 bare members exits 0 with the ✓ line")
 
 
+# ── placement + deploy (2026-09-04) ──────────────────────────────────────────
+# Two [P] tasks that EDIT, dispatched into one working tree, is the 2026-08-09
+# failure verbatim: two implementers, one tree, 14 and 17 phantom failures. The
+# plan can already express it and nothing has ever refused it — the rule lived
+# in herdr-moments, which no gate reads.
+TASKS_TWO_P_EDITORS = """# Tasks: Parallel editors
+
+## Phase 1 — build
+
+### Cluster C1  (2 tasks · provisional tier: FULL)
+- [ ] T01 [P] [Tier A] add the validator (SC-1)  (files: lib/url.ts)
+      Test-author: split
+      Unit test: rejects an RFC1918 target
+- [ ] T02 [P] [Tier A] add the sender (SC-2)  (files: lib/send.ts)
+      Test-author: split
+      Unit test: retries once on a 5xx
+
+**Integration gate (C1):** a real request reaches the handler and is refused end to end.
+
+── REVIEW GATE ──  *(STOP: commit C1, `/integration`, `/code-review` — tier FULL)*
+"""
+
+# The same plan, with the isolation the parallel dispatch needs declared.
+TASKS_TWO_P_ISOLATED = TASKS_TWO_P_EDITORS.replace(
+    "### Cluster C1  (2 tasks · provisional tier: FULL)",
+    "### Cluster C1  (2 tasks · provisional tier: FULL)\n**Placement:** worktree — two [P] editors must not share a tree",
+)
+
+# One [P] task is not parallel dispatch: nothing to collide with.
+TASKS_ONE_P = TASKS_TWO_P_EDITORS.replace(
+    "- [ ] T02 [P] [Tier A] add the sender", "- [ ] T02 [Tier A] add the sender")
+
+# A plan that creates a custom plugin says nothing about deploy.payload. On a
+# WP project that means the code ships nowhere: payload is a CLOSED list, and a
+# path missing from it deploys as an empty directory.
+TASKS_NEW_PAYLOAD = """# Tasks: New booking plugin
+
+## Phase 1 — build
+
+### Cluster C1  (1 task · provisional tier: FULL)
+- [ ] T01 [Tier A] create the booking plugin (SC-1)  (files: web/app/plugins/ntdst-booking/booking.php)
+      Test-author: split
+      Unit test: registers the booking post type
+
+**Integration gate (C1):** the plugin activates and the post type is queryable.
+
+── REVIEW GATE ──  *(STOP: commit C1, `/integration`, `/code-review` — tier FULL)*
+"""
+
+TASKS_NEW_PAYLOAD_DECLARED = TASKS_NEW_PAYLOAD.replace(
+    "## Phase 1 — build",
+    "## Deploy\n\n- **Payload:** + `app/plugins/ntdst-booking` — add to `deploy.payload` in site.yml before the first deploy\n- **Non-git steps:** none\n\n## Phase 1 — build",
+)
+
+
 def _run(files: dict) -> tuple[int, str]:
     with tempfile.TemporaryDirectory() as d:
         for name, content in files.items():
@@ -1717,6 +1772,33 @@ def _run(files: dict) -> tuple[int, str]:
 
 def run():
     results = []
+
+    # === placement: parallel editors must declare isolation ===
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL,
+                    "tasks.md": TASKS_TWO_P_EDITORS})
+    results.append((rc == 1 and "placement" in out,
+                    "two [P] editors with no declared isolation FAILS"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL,
+                    "tasks.md": TASKS_TWO_P_ISOLATED})
+    results.append((rc == 0,
+                    "two [P] editors WITH a worktree placement PASSES"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL,
+                    "tasks.md": TASKS_ONE_P})
+    results.append((rc == 0,
+                    "a single [P] task needs no placement (nothing to collide with)"))
+
+    # === deploy: a new payload path must be declared ===
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL,
+                    "tasks.md": TASKS_NEW_PAYLOAD})
+    results.append((rc == 0 and "! [deploy-payload]" in out,
+                    "a plan touching a plugin/theme with no Deploy block WARNS (never blocks)"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL,
+                    "tasks.md": TASKS_NEW_PAYLOAD_DECLARED})
+    results.append((rc == 0,
+                    "the same plan with a Deploy/Payload block PASSES"))
 
     # 1. THE load-bearing case: triggered surface + N/A threat model → FAIL
     rc, out = _run({"spec.md": SPEC_TRIGGERED, "plan.md": PLAN_THREATMODEL_NA, "tasks.md": TASKS_GOOD})

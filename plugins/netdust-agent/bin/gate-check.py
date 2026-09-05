@@ -2213,6 +2213,144 @@ def check_deliverable_first(plan_text: str, spec_text: str | None,
               "non-test deliverable files")
 
 
+# ── placement: parallel editors may not share a working tree ─────────────────
+#
+# `[P]` tells the controller it MAY dispatch those tasks concurrently. Until
+# now the plan could say so and nothing asked where they would run — and the
+# default, a Task subagent, runs in the controller's own working tree. Two
+# implementers editing one tree is not a hazard to weigh; it happened, on
+# 2026-08-09, and produced 14 and 17 phantom test failures that cost a run to
+# diagnose. The rule against it was written in herdr-moments, which no gate
+# reads.
+#
+# So: a cluster with TWO OR MORE `[P]` tasks must declare isolation. One `[P]`
+# task is not parallel dispatch — there is nothing to collide with — and is
+# never asked for anything.
+#
+# The check is deliberately ASYMMETRIC. It constrains only the dangerous
+# direction: parallel editors must be isolated. It never objects to isolation
+# that turns out to be unnecessary, and it never requires a placement for
+# anything else — the executor may move any dispatch to a pane it did not plan
+# to, without the plan being wrong. A gate that refused over a placement guess
+# would teach people to write `worktree` everywhere to stay quiet, which is how
+# a gate becomes noise.
+PLACEMENT_LINE = re.compile(
+    r"^\s*\**Placement:?\**\s*:?\s*(.+?)\s*$", re.IGNORECASE | re.MULTILINE)
+ISOLATED_TOKEN = re.compile(r"\b(worktree|workspace|separate checkout)\b", re.IGNORECASE)
+
+
+def check_placement(tasks_text: str, f: Findings) -> None:
+    """FAIL a cluster whose 2+ `[P]` tasks declare no isolated placement."""
+    text = strip_fenced(tasks_text)
+    lines = text.splitlines()
+    # Slice the file into clusters: heading → the lines until the next heading.
+    bounds: list[tuple[str, int, int]] = []
+    for i, ln in enumerate(lines):
+        m = CLUSTER_HEADING.match(ln)
+        if m:
+            if bounds:
+                bounds[-1] = (bounds[-1][0], bounds[-1][1], i)
+            bounds.append((m.group(1).strip() or f"@{i+1}", i, len(lines)))
+    if not bounds:
+        return  # no clusters — nothing to place
+
+    offenders = []
+    for name, start, end in bounds:
+        # TASK_LINE is compiled WITHOUT re.MULTILINE (line 34), so it must be
+        # matched per line — finditer over a joined block silently finds nothing.
+        body_lines = lines[start:end]
+        p_tasks, p_open = [], []
+        for bl in body_lines:
+            stripped = bl.strip()
+            t = TASK_LINE.match(stripped)
+            if t and "[P]" in t.group(2):
+                p_tasks.append(t)
+                # Placement constrains a dispatch that has NOT happened yet. A
+                # cluster whose [P] tasks are all `[x]` already ran — refusing
+                # it now teaches nothing and would fail every completed plan in
+                # the repository, which is how a gate becomes noise people
+                # route around. Checked, not waived: no marker to maintain.
+                if stripped[3:4] == " ":
+                    p_open.append(t)
+        body = "\n".join(body_lines)
+        if len(p_tasks) < 2 or len(p_open) < 2:
+            continue  # one [P] is not parallel dispatch; a done cluster cannot be dispatched
+        decl = PLACEMENT_LINE.search(body)
+        if decl and ISOLATED_TOKEN.search(decl.group(1)):
+            continue
+        ids = ", ".join(t.group(1) for t in p_open)
+        offenders.append(f"{name.strip('— ').strip()} ({ids})")
+
+    if offenders:
+        f.add("fail", "placement",
+              "cluster(s) dispatch 2+ `[P]` tasks concurrently with no isolated "
+              "placement: " + "; ".join(offenders) + ". Subagents share the "
+              "controller's working tree — two implementers in one tree produced "
+              "14 and 17 phantom failures (2026-08-09). Add a `**Placement:** "
+              "worktree — <why>` line to the cluster, or drop `[P]` and run them "
+              "in sequence. See netdust-devops:parallel-work.")
+    else:
+        f.add("pass", "placement",
+              "every concurrently-dispatched cluster declares its isolation")
+
+
+# ── deploy: a new payload path must be declared before it can ship ───────────
+#
+# `deploy.payload` is a CLOSED list. A custom plugin or theme that is not in it
+# does not deploy — and worse, it deploys as an EMPTY DIRECTORY, and a rollback
+# `--delete`s it off the server. A plan that creates one and never says so
+# produces code that passes every gate here and ships nowhere.
+#
+# This is a WARN, not a FAIL, and the distinction is deliberate. Placement is an
+# INVARIANT — two open `[P]` editors share a tree, definitively, and the gate can
+# prove it from the artifact. "Is this plugin NEW?" is a HEURISTIC: a plan that
+# touches `content/themes/yootheme/` is reading the licensed parent theme, which
+# is gitignored and installed per host, not adding a payload path. That exact
+# case failed specs/yootheme-skill-v2 when this shipped as a FAIL.
+#
+# A gate that refuses plans over a guess gets routed around, and takes the real
+# invariants with it. So this surfaces the trap and never blocks: it cannot read
+# the project's site.yml from a spec directory, and does not pretend to.
+#
+# Matching is restricted to a task's `(files: ...)` clause — a path merely
+# discussed in prose is not a file the plan creates.
+PAYLOAD_PATH = re.compile(
+    r"\b(?:web/app|app/content|content|app)/(?:plugins|themes|mu-plugins)/([A-Za-z0-9._-]+)/")
+FILES_CLAUSE = re.compile(r"\(files:\s*([^)]*)\)", re.IGNORECASE)
+DEPLOY_HEADING = re.compile(r"^#{1,6}\s+Deploy\b.*$", re.IGNORECASE | re.MULTILINE)
+PAYLOAD_DECL = re.compile(r"payload", re.IGNORECASE)
+
+
+def check_deploy_payload(tasks_text: str, plan_text: str | None, f: Findings) -> None:
+    """FAIL when tasks create a payload-shaped path and nothing declares it."""
+    text = strip_fenced(tasks_text)
+    created = sorted({
+        pm.group(1)
+        for fm in FILES_CLAUSE.finditer(text)
+        for pm in PAYLOAD_PATH.finditer(fm.group(1))
+    })
+    if not created:
+        return  # nothing payload-shaped — silent, this is not a WP-only gate
+
+    haystacks = [text] + ([strip_fenced(plan_text)] if plan_text else [])
+    for h in haystacks:
+        m = DEPLOY_HEADING.search(h)
+        if m and PAYLOAD_DECL.search(h[m.end():m.end() + 800]):
+            f.add("pass", "deploy-payload",
+                  f"a Deploy block declares the payload for: {', '.join(created)}")
+            return
+
+    f.add("warn", "deploy-payload",
+          "tasks touch custom plugin/theme path(s) — " + ", ".join(created) +
+          " — and no `## Deploy` block mentions the payload. If any of those is NEW, "
+          "note it: deploy.payload is a CLOSED list, and a path missing from it "
+          "deploys as an EMPTY DIRECTORY that a rollback --deletes off the server. "
+          "A `## Deploy` section should name "
+          "the payload additions and any step git does not carry (a build "
+          "artifact, a database change, widgets) — those must be re-applied on the "
+          "target in the same sitting or the environment ships half-updated.")
+
+
 def check_clusters(tasks_text: str, f: Findings) -> None:
     clusters = parse_clusters(tasks_text)
     if not clusters:
@@ -2281,6 +2419,8 @@ def run_checks(spec_dir: Path) -> Findings:
         check_unit_test_contract(tasks_text, f, repo_root=root, exempt=exempt)
         check_behaviour_clusters(tasks_text, f, repo_root=root)  # FR-6/FR-7
         check_clusters(tasks_text, f)
+        check_placement(tasks_text, f)
+        check_deploy_payload(tasks_text, plan_text, f)
         check_review_gates(tasks_text, f)
         check_review_tiers(tasks_text, f)
         check_integration_gate(tasks_text, f)

@@ -89,6 +89,57 @@ and read as all-contract. The grammar is `bin/gate-check.py` and this file
 Order clusters by the named ask, riskiest first — when a session dies mid-plan, what
 survives must be the thing that was asked for.
 
+### Two fields the plan owes the executor (2026-09-04)
+
+The plan already decides reviews, tiers, lanes and batching. Two more decisions
+belong here rather than being improvised at dispatch time, because the planner
+has the information and `gate-check.py` can check an artifact — a skill is only
+advice the executor may skip.
+
+**`**Placement:**` on a cluster that dispatches 2+ `[P]` tasks.** `[P]` says the
+controller MAY run those concurrently; the default dispatch is a Task subagent,
+which runs in the controller's own working tree. Two implementers in one tree
+is not a hazard to weigh — it happened on 2026-08-09 and produced 14 and 17
+phantom test failures. Declare the isolation:
+
+```
+### Cluster C2  (3 tasks · provisional tier: STANDARD)
+**Placement:** worktree — T05 and T06 both edit, and share a suite
+```
+
+Only the dangerous direction is enforced. Nothing asks for a placement on a
+single `[P]` task, on sequential work, or anywhere else, and the executor may
+still move any dispatch to a pane it did not plan to — a gate that refused over
+a placement guess would teach everyone to write `worktree` everywhere. A
+cluster whose `[P]` tasks are all `[x]` is finished and never asked.
+
+**`## Deploy`, when tasks create a custom plugin or theme.** `deploy.payload` is
+a CLOSED list: a path missing from it deploys as an EMPTY DIRECTORY, and a
+rollback `--delete`s it off the server. A plan that creates one and never says
+so produces code that passes every gate and ships nowhere.
+
+```
+## Deploy
+
+- **Payload:** + `app/plugins/ntdst-booking` — add to `deploy.payload` in site.yml
+- **Non-git steps:** re-import the seed widgets after the first deploy
+```
+
+The second line matters as much as the first: anything git does not carry — a
+gitignored build artifact, a database change, widgets — must be re-applied on
+the target in the same sitting, or the environment ships half-updated.
+
+This one **warns, never blocks**, and the difference from placement is the
+point. Placement is an invariant the gate can prove from the artifact: two open
+`[P]` tasks share a tree, definitively. "Is this plugin NEW?" is a guess — a
+plan touching `content/themes/yootheme/` is reading the licensed parent theme,
+gitignored and installed per host, not adding a payload path. A gate that
+refuses plans over a guess gets routed around, and takes the real invariants
+with it.
+
+`netdust-devops:parallel-work` owns the placement rule; `netdust-devops:devops`
+owns the payload one.
+
 ## Stage 1.5 — The machine check
 
 ```bash
