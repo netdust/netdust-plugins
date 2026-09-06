@@ -2,6 +2,16 @@
 
 You are working on a Netdust **WordPress** project. This plugin layers on top of `netdust-core` (which defines the memory/server management and cross-domain skills; devops lives in netdust-devops) and `netdust-agent` (which provides the coding harness — `harnessed-development`, `planning`, `building`, `testing-workflow`, the reviewer agents, the `/integration` and `/shakeout` gate commands, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard). Install `netdust-devops` first — `/deploy` and the `make` verbs won't work otherwise.
 
+## Setup — the upstream WordPress skills
+
+Once per box, after `/plugin install`, run `bash bin/wp-upstream-skills.sh`. It installs the
+official `WordPress/agent-skills` set this plugin cites instead of restating —
+`wp-plugin-development`, `wp-rest-api`, `wp-wpcli-and-ops`, `wp-phpstan` — into
+`~/.claude/skills/` at the commit pinned in the script (`PIN`, bumped only by a reviewed
+commit here), copied from a local clone so nothing is fetched by tag or branch. `--check`
+prints the pin and which of the four are present (exit 1 if any is missing); `--dry-run`
+prints the commands and touches nothing.
+
 ## `site.yml` is the operating context — not the entry point
 
 **The entry point for any code-changing request is `netdust-agent:harnessed-development`**,
