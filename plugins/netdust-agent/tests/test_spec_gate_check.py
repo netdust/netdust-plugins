@@ -3228,6 +3228,16 @@ def run():
         results.append((rc == 0 and "shakeout-credential" not in out,
                         f"shakeout (f-negative {label}): `{label}` is not a credential value — the floor does not fire"))
 
+    fenced = MANIFEST_BROWSER_DRIVEN + "\n## How I logged in\n\n```\ncurl -u shakeout:s3cr3tPw https://x.ddev.site/wp-json/\n```\n"
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": fenced}, PNG)
+    results.append((rc == 1 and "✗ [shakeout-credential] line 11:" in out,
+                    "shakeout (f-whole-file): a fenced curl transcript below the table FAILs naming its line"))
+
+    magic = MANIFEST_BROWSER_RULING.replace("Stefan 09-06", "Stefan 09-06 via https://x.ddev.site/3f9a1c2b/7a3c1d9e2f-b41c8d7e-9f0a2b3c4d")
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": magic})
+    results.append((rc == 1 and "✓ [shakeout-ruling] AF-1: ruling present" in out and "3f9a1c2b" not in out,
+                    "shakeout (f-ruling-echo): a ruling carrying a credential is reported as `ruling present`, never echoed"))
+
     rc, out = _run_shakeout({"shakeout.md": MANIFEST_WIRE_ONLY_PASS})
     results.append((rc == 0 and "shakeout: 1 rows, 0 browser rows driven" in out,
                     "shakeout (g): a `wire` row `pass` on curl evidence passes; a missing plan.md is accepted"))

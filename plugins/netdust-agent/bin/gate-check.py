@@ -2633,7 +2633,8 @@ def _row_problem(row: dict, spec_dir: Path) -> str | None:
 def _check_manifest_row(row: dict, spec_dir: Path, plan_layer: dict[str, str], f: Findings) -> bool:
     """A credential FAILs before any `Ruling:` is read — a ruling excuses the row, never the leak."""
     n, layer = row["n"], row["layer"].lower()
-    if CREDENTIAL.search(row["evidence"]):
+    leaked = bool(CREDENTIAL.search(row["evidence"]))
+    if leaked:
         f.add("fail", "shakeout-credential",
               f"{n}: evidence carries a credential (login link, token, app password, basic auth or storageState)")
     if plan_layer.get(n) and layer and layer != plan_layer[n]:
@@ -2643,7 +2644,8 @@ def _check_manifest_row(row: dict, spec_dir: Path, plan_layer: dict[str, str], f
     problem = _row_problem(row, spec_dir)
     ruling = RULING.search(row["evidence"])
     if ruling:
-        f.add("pass", "shakeout-ruling", f"{n}: ruling — {ruling.group('reason').strip()}")
+        f.add("pass", "shakeout-ruling",
+              f"{n}: ruling present" if leaked else f"{n}: ruling — {ruling.group('reason').strip()}")
     elif problem:
         f.add("fail", "shakeout-manifest", f"{n}: {problem}")
     return row["layer"].lower() == "browser" and problem is None
@@ -2669,7 +2671,11 @@ def run_shakeout_checks(spec_dir: Path) -> Findings:
             f.add("pass", "shakeout-manifest", "no browser rows, no manifest owed")
         return f
 
-    rows = parse_manifest_rows(manifest.read_text())
+    text = manifest.read_text()
+    for i, ln in enumerate(text.splitlines(), 1):
+        if CREDENTIAL.search(ln):
+            f.add("fail", "shakeout-credential", f"line {i}: carries a credential — the whole file is committed")
+    rows = parse_manifest_rows(text)
     seen = {r["n"] for r in rows}
     for r in plan_rows:
         if r["n"] not in seen:
