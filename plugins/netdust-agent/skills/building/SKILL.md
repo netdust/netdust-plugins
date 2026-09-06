@@ -162,11 +162,12 @@ never weakened. Netdust adds:
   the RED first, and the implementer greens it unweakened — is reserved for Tier-A
   security-boundary tasks at effective-high stakes. The sensitive-path floor in the hook
   backstops misclassification against the paths actually edited.
-- **Feature tests after each contract-lane cluster** — when its tasks are green, dispatch the
-  `test-author` to write the cluster's FEATURE tests: the behaviour the cluster promised
-  (its `Behaviour:`/`Observable:` block, or its integration-gate line), driven through the
-  real harness, denial paths included. Features get independent tests; tasks get the
-  implementer's own TDD. Then run the cluster's `Integration gate:` line.
+- **Feature tests are opt-in per cluster** — the post-cluster `test-author` dispatch
+  happens only on a cluster carrying `Feature-tests: yes — <reason>`; the gate's
+  `✓ [panel-hints] … feature-tests: <clusters>` line lists them. On every other cluster
+  the shake-out's committed flows ARE the feature tests (`commands/shakeout.md`, Step 2).
+  `Test-author: split` on Tier-A tasks is unchanged. When the tasks are green, run the
+  cluster's `Integration gate:` line.
 - **A user-facing cluster's integration gate closes on a COMPARISON, not a look.** Name
   the source of truth (the design file, the spec's acceptance rows, the reference
   implementation), enumerate the properties it constrains, and check each against values
@@ -182,40 +183,49 @@ never weakened. Netdust adds:
 A behaviour-lane cluster carries no marker and buys no panel: its review is the ONE
 `── BRANCH REVIEW ──` at the end of the file (Stage 3). For contract-lane clusters:
 
-- **Artifact first**: before any reviewer is dispatched on a user-facing cluster, load the
+- **Artifact first**: at the marker on a user-facing cluster, reviewer or not, load the
   artifact once — page, screen, or command — and record `Artifact-load: <what> → <seen>`.
   Ten seconds of looking beats a dispatch of reasoning about markup. This is the
   reviewer's cheap prior, NOT the correctness check — that happened at the integration
   gate above.
-- **Independent reviewers, tier-scaled**: LIGHT — one generalist `reviewer`; STANDARD —
-  `reviewer` + `code-simplicity-reviewer`; FULL (any security surface, invariant, or
-  data-layer/migration touch) — add `security-sentinel`, and `invariant-auditor` whenever
-  the project carries an `ARCHITECTURE-INVARIANTS.md` (the no-drift check: bypasses AND
-  reinvented solutions). **On a WordPress project, or any package that consumes
-  ntdst-core, `netdust-wp:ntdst-drift-reviewer` sits on EVERY panel — LIGHT, STANDARD and
-  FULL, and the branch review — not only at shake-out** (Stefan's ruling 2026-09-03, after
-  six approved tasks built plain WordPress on top of the framework). The author never
-  reviews its own diff; escalation to FULL is one-way. Record the verify-budget telemetry line
-  (`bin/verify-budget.py` — reports, never interrupts) in the cluster evidence.
+- **The cluster panel, by tier** (the branch panel is `commands/shakeout.md` Step 5's —
+  not restated here):
+  - FULL — `security-sentinel` + `invariant-auditor` (when the project or a framework
+    package it consumes carries `ARCHITECTURE-INVARIANTS.md`; else
+    `netdust-wp:ntdst-drift-reviewer` stands in on WordPress).
+  - STANDARD and LIGHT — no reviewer dispatch. The marker still halts: the integration
+    gate, the artifact look (`Artifact-load:`) and the `Artifact-diff:` line close it.
+
+  The author never reviews its own diff; escalation to FULL is one-way. Record the
+  verify-budget telemetry line (`bin/verify-budget.py` — reports, never interrupts) in the
+  cluster evidence.
+- **Drift review joins the clusters the gate names**: the gate's
+  `✓ [panel-hints] drift-panel: <clusters>` line lists the clusters whose `(files:)` touch
+  `Services/`, `Handlers/`, `Repositories/` or `Modules/`; `netdust-wp:ntdst-drift-reviewer`
+  joins THOSE cluster gates at any tier. Read the line, do not re-derive it. Everywhere
+  else drift is the branch review's job (ruling 2026-09-06, `lessons.md`).
 - **Findings close by ledger arithmetic**: Criticals (and Importants at effective-high
   stakes) become task lines closing on a named check; other Importants are triaged
   fix-now / park / reject — default park. Fleet findings (defects not reachable through
   this feature's surfaces) are parked to `memory/STATE.md`, never fixed in-branch
   (`press-kit-fleet-bleed`).
 - **The stop rule**: a round with zero new Criticals closes review — verify fixes by their
-  named checks only. Hard cap two rounds per cluster (`press-kit-five-generations`).
+  named checks only. One fix round per cluster gate; a second round is a human ruling
+  (`Ruling:` in the ledger) or the finding is parked to the branch review
+  (`press-kit-five-generations`).
 
 ## Stage 3 — Close (spec-complete only; Class E/C skip it)
 
-1. Drive the plan's `## Acceptance flows` matrix through the real browser / un-mocked
-   wire (`shakeout-qa` agent, ladder: sonnet; no UI flow passes without a browser having
-   driven it). **Only when the matrix is not N/A** — a branch with no user-facing surface
-   has nothing to drive, and a shake-out dispatch over nothing is a token sink.
+1. `/shakeout` — the five steps live in `commands/shakeout.md`: suite + telemetry;
+   `shakeout-qa` drives the `## Acceptance flows` matrix through the real browser /
+   un-mocked wire and commits the flows it drove as tests (skipped when the matrix is
+   N/A — nothing to drive); `gate-check --shakeout` loops until it exits 0; the `[HUMAN]`
+   screenshot yield; then the branch panel.
 2. **The branch review** at the `── BRANCH REVIEW ──` marker's tier: an all-behaviour
    branch under `standard` or `low` stakes is LIGHT — one `reviewer`, ladder: sonnet; a
-   branch carrying contract-lane clusters takes the branch's tier with the panel rules
-   above. Under herdr the branch reviewer runs in its own pane with the report in a tab
-   (herdr-moments). Then finish: `make finish` on a `site.yml` project (devops), else
+   branch carrying contract-lane clusters takes the branch's tier with the branch panel
+   in `commands/shakeout.md` (Step 5). Under herdr the branch reviewer runs in its own
+   pane with the report in a tab (herdr-moments). Then finish: `make finish` on a `site.yml` project (devops), else
    `superpowers:finishing-a-development-branch`.
 3. Report the whole-branch verify-budget line with the summary. Then invoke `compounding`
    — the learning loop: what the spec taught lands in CODE-MAP / skill lessons / evals as

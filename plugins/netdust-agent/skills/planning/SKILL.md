@@ -79,7 +79,15 @@ gates require, beyond upstream's own craft:
   `covered by cluster behaviour` (`behaviour-cluster` check).
 - **Acceptance flows** (`## Acceptance flows`) — required when the spec flags a
   user-facing surface: one row per intended flow, edges enumerated (empty, denied,
-  re-entry, concurrent, boundary, mid-flow failure). Stage 3 drives this matrix.
+  re-entry, concurrent, boundary, mid-flow failure), each row carrying a `Layer` cell
+  (`browser | wire | cli`) — `acceptance-flows`. A plan with `browser` rows carries
+  `## Shake-out access`: the one command that yields an authenticated session
+  (`netdust-wp:wp-testing` owns the recipe) — `shakeout-access`. A spec or plan saying
+  "same X as / identical to / mirrors / parity with" an existing surface carries
+  `## Parity: <reference>` — ≥3 components read from the running reference, a URL, and
+  the new surface's rows naming which components they cover — `parity`. A user-facing
+  behaviour cluster's `Observable:` names rendered content, a quoted literal or a
+  selector — `observable-content`. Stage 3 drives this matrix.
 
 Do not copy the shape of an existing `tasks.md` in the project: an earlier plan is a
 snapshot of the harness version that wrote it, and plans before 0.21 carry no `Lane:`

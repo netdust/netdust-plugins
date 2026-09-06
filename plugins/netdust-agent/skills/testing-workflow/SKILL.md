@@ -47,6 +47,8 @@ the unit suite.
 Anything needing WordPress or the database runs through DDEV. `hooks/subagent-stop.py`
 backstops the close: suite ran, implementer-green, linter not skipped.
 
-Feature-level tests — the behaviour a task GROUP promised — are the `test-author`'s job
-after the cluster lands (see `building`), not extra weight on each task. When a suite
+Feature-level tests — the behaviour a task GROUP promised — are the shake-out's committed
+flows (`commands/shakeout.md`, Step 2), not extra weight on each task. A cluster that
+needs its own before the shake-out opts in with `Feature-tests: yes — <reason>`; only then
+does the `test-author` dispatch after the cluster lands (see `building`). When a suite
 feels oversized, the ladder was skipped: check what rung 1–3 already proved.
