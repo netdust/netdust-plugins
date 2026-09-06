@@ -1532,6 +1532,7 @@ _BLOCK_KEYS = ("behaviour", "observable", "red_until")
 BEHAVIOUR_LABEL = {"behaviour": "`Behaviour:`", "observable": "`Observable:`",
                    "red_until": "`RED until:`"}
 CLUSTER_COVERED = re.compile(r"^covered by cluster behaviour\b", re.IGNORECASE)
+ARTIFACT_DIFF_LINE = re.compile(r"^\s*(?:[-*]\s+)?\**Artifact-diff\**:", re.IGNORECASE)
 
 
 def _covered_by_cluster(cont: list[str]) -> bool:
@@ -1566,7 +1567,7 @@ def parse_behaviour_clusters(tasks_text: str) -> list[dict]:
                    "lane_reason": lane[1] if lane else "",
                    "lane_raw": lane[2] if lane else None,
                    "lane_conflict": None,   # (heading value, body value) when both are stated
-                   "members": []}
+                   "artifact_diff": False, "members": []}
             i += 1
             continue
         h = heading_text(ln)
@@ -1587,9 +1588,14 @@ def parse_behaviour_clusters(tasks_text: str) -> list[dict]:
             cur["members"].append({"id": tm.group(1),
                                    "files": seg.group(1) if seg else "",
                                    "rest": tm.group(2), "cont": cont,
+                                   "done": bool(CHECKED_BOX.match(ln)),
                                    "covered": _covered_by_cluster(cont)})
+            if any(ARTIFACT_DIFF_LINE.match(c) for c in cont):
+                cur["artifact_diff"] = True
             i = j
             continue
+        if cur is not None and ARTIFACT_DIFF_LINE.match(ln):
+            cur["artifact_diff"] = True
         if cur is not None and not cur["members"]:
             lm = LANE_LINE.match(ln)
             if lm:
@@ -2665,12 +2671,30 @@ def _check_manifest_row(row: dict, spec_dir: Path, plan_layer: dict[str, str], f
     return row["layer"].lower() == "browser" and problem is None
 
 
+def check_artifact_diff(tasks_text: str, spec_text: str | None, f: Findings) -> None:
+    """FR-17 — a closed user-facing behaviour cluster records what the artifact showed."""
+    if not spec_screens(spec_text):
+        return
+    closed = [c["name"] for c in parse_behaviour_clusters(tasks_text)
+              if c["lane"] == "behaviour" and c["members"]
+              and all(m["done"] for m in c["members"]) and not c["artifact_diff"]]
+    if closed:
+        f.add("fail", "shakeout-artifact-diff",
+              f"user-facing behaviour cluster(s) closed without Artifact-diff: {', '.join(closed)}")
+
+
 def run_shakeout_checks(spec_dir: Path) -> Findings:
     f = Findings()
     if not spec_dir.is_dir():
         f.add("fail", "shakeout-manifest", f"{spec_dir} is not a directory")
         return f
     plan, manifest = spec_dir / "plan.md", spec_dir / "shakeout.md"
+    tasks, spec = spec_dir / "tasks.md", spec_dir / "spec.md"
+    if tasks.exists():
+        try:
+            check_artifact_diff(tasks.read_text(), spec.read_text() if spec.exists() else None, f)
+        except (OSError, ValueError) as e:
+            f.add("fail", "shakeout-artifact-diff", f"tasks.md/spec.md could not be read ({e.__class__.__name__})")
     plan_rows: list[dict] = []
     if plan.exists():
         body = section_body(plan.read_text(), "Acceptance flows")

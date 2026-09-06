@@ -1854,6 +1854,34 @@ SPEC_ENDPOINT_ONLY = SPEC_USER_FACING.replace(
     "- [x] A form / wizard / multi-step flow",
     "- [x] An endpoint a client or agent drives")
 
+# ── `--shakeout` — the Artifact-diff rule (artifact-gate T04, FR-17) ──────────
+# A `Lane: behaviour` cluster ticked to completion on a spec that flags a screen owes an
+# `Artifact-diff:` line between its heading and the next heading.
+
+TASKS_BEHAVIOUR_CLOSED = """# Tasks: audit screen
+
+## Phase 1
+
+### Cluster C1  (2 tasks · provisional tier: STANDARD)
+{lane}Behaviour: the audit page lists the rows
+Observable: the "Audit log" heading and one `.audit-row` per record
+RED until: tests/e2e/audit.spec.ts::lists rows
+- [x] T01 first task  (files: a.py, tests/e2e/audit.spec.ts)
+- [{t2}] T02 second task  (files: b.py)
+
+**Integration gate (C1):** the two tasks compose end to end.
+{diff}
+── BRANCH REVIEW ──  *(tier STANDARD)*
+"""
+ARTIFACT_DIFF = "Artifact-diff: Figma frame 625-2790 → 12 of 12 components present\n"
+
+
+def _tasks_behaviour(diff: str = "", lane: str = "Lane: behaviour\n", t2: str = "x") -> str:
+    return TASKS_BEHAVIOUR_CLOSED.format(diff=diff, lane=lane, t2=t2)
+
+
+SPEC_NO_SURFACE = "# Spec\n\n## User-facing surfaces\n\n- [x] None of the above\n"
+
 _LAYER_HEAD = "| # | Flow | Layer | Expected | Edges |\n|---|---|---|---|---|\n"
 AF1_BROWSER = "| AF-1 | issue an invoice | browser | PDF stored, editor sees it listed | empty: no line items → blocked |\n"
 AF1_WIRE = AF1_BROWSER.replace("| browser |", "| wire |")
@@ -3322,6 +3350,30 @@ def run():
         json_ok = False
     results.append((rc == 1 and json_ok,
                     "shakeout: `--shakeout --json` emits the same findings as JSON"))
+
+    # ── T04: `--shakeout` FAILs a closed user-facing behaviour cluster without Artifact-diff (FR-17) ──
+    rc, out = _run_shakeout({"tasks.md": _tasks_behaviour(), "spec.md": SPEC_SCREEN})
+    results.append((rc == 1 and "✗ [shakeout-artifact-diff]" in out and "Cluster C1" in out,
+                    "shakeout (T04-e): all-checked behaviour cluster, screen spec, no Artifact-diff → ✗ [shakeout-artifact-diff] naming it"))
+    rc, out = _run_shakeout({"tasks.md": _tasks_behaviour(diff=ARTIFACT_DIFF), "spec.md": SPEC_SCREEN})
+    results.append((rc == 0 and "✗ [shakeout-artifact-diff]" not in out,
+                    "shakeout (T04-e-negative): the Artifact-diff line present → no finding"))
+    rc, out = _run_shakeout({"tasks.md": _tasks_behaviour(diff="- **Artifact-diff:** none — no Figma, 3 of 3 components present\n"),
+                             "spec.md": SPEC_SCREEN})
+    results.append((rc == 0 and "✗ [shakeout-artifact-diff]" not in out,
+                    "shakeout (T04-e-negative bold-bullet): `- **Artifact-diff:**` is the same line"))
+    rc, out = _run_shakeout({"tasks.md": _tasks_behaviour(lane="Lane: contract — checker logic\n"), "spec.md": SPEC_SCREEN})
+    results.append((rc == 0 and "✗ [shakeout-artifact-diff]" not in out,
+                    "shakeout (T04-e-contract): a contract-lane cluster owes no Artifact-diff"))
+    rc, out = _run_shakeout({"tasks.md": _tasks_behaviour(t2=" "), "spec.md": SPEC_SCREEN})
+    results.append((rc == 0 and "✗ [shakeout-artifact-diff]" not in out,
+                    "shakeout (T04-e-open): a behaviour cluster with an unchecked member is not closed yet"))
+    rc, out = _run_shakeout({"tasks.md": _tasks_behaviour(), "spec.md": SPEC_NO_SURFACE})
+    results.append((rc == 0 and "✗ [shakeout-artifact-diff]" not in out,
+                    "shakeout (T04-e-no-surface): a spec flagging no surface owes no Artifact-diff"))
+    rc, out = _run_shakeout({"tasks.md": _tasks_behaviour()})
+    results.append((rc == 0 and "✗ [shakeout-artifact-diff]" not in out,
+                    "shakeout (T04-e-no-spec): no spec.md beside tasks.md → no Artifact-diff owed"))
 
     # ── T02: `Layer` on acceptance rows + `## Shake-out access` (FR-4 / FR-5) ──
     rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": _plan_layers(AF1_WIRE + AF2_WIRE),

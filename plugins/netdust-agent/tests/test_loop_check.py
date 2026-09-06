@@ -49,6 +49,54 @@ FENCED_EXAMPLE = """
 """
 
 
+# ── T04 (artifact-gate FR-17): a user-facing behaviour cluster ticked without its
+# `Artifact-diff:` line is not FINISHED. The rule is keyed on the spec flagging a
+# screen, the cluster's `Lane: behaviour`, and every member being `[x]`.
+
+SPEC_SURFACE = """# Spec: demo
+
+## Success criteria
+
+- **SC-1:** the audit page lists 100% of the records, measured by the e2e row count.
+
+## Security-relevant surfaces
+
+- [x] None of the above
+
+## User-facing surfaces
+
+- [{view}] A new or changed public page / view / listing
+- [{none}] None of the above
+"""
+SPEC_VIEW = SPEC_SURFACE.format(view="x", none=" ")
+SPEC_NO_SURFACE = SPEC_SURFACE.format(view=" ", none="x")
+
+BEHAVIOUR = """# Tasks: demo
+
+## Phase 1
+
+### Cluster C1  (2 tasks · provisional tier: STANDARD{heading_lane})
+{lane}Behaviour: the audit page lists the rows
+Observable: the "Audit log" heading and one `.audit-row` per record
+RED until: tests/e2e/audit.spec.ts::lists rows
+- [x] T01 first task  (files: a.py, tests/e2e/audit.spec.ts)
+- [x] T02 second task (SC-1)  (files: b.py)
+
+**Integration gate (C1):** the two tasks compose end to end.
+{diff}
+── BRANCH REVIEW ──  *(tier STANDARD)*
+"""
+ARTIFACT_DIFF = "Artifact-diff: Figma frame 625-2790 → 12 of 12 components present\n"
+
+
+def behaviour(diff: str = "", lane: str = "Lane: behaviour\n", heading_lane: str = "") -> str:
+    return BEHAVIOUR.format(diff=diff, lane=lane, heading_lane=heading_lane)
+
+
+CONTRACT = TIERED.replace("tier: STANDARD)\n", "tier: STANDARD)\nLane: contract — checker logic\n", 1) \
+    .replace("second task  (files", "second task (SC-1)  (files", 1)
+
+
 def check(feature_dir: Path) -> tuple[int, str]:
     p = subprocess.run(
         [sys.executable, str(LOOP_CHECK), str(feature_dir)],
@@ -57,11 +105,13 @@ def check(feature_dir: Path) -> tuple[int, str]:
     return p.returncode, p.stdout
 
 
-def make_feature(tmp: str, tasks: str | None) -> Path:
+def make_feature(tmp: str, tasks: str | None, spec: str | None = None) -> Path:
     d = Path(tmp) / "specs" / "demo"
     d.mkdir(parents=True)
     if tasks is not None:
         (d / "tasks.md").write_text(tasks)
+    if spec is not None:
+        (d / "spec.md").write_text(spec)
     return d
 
 
@@ -241,5 +291,52 @@ def run() -> list[tuple[bool, str]]:
         rc, out = check(make_feature(tmp, tasks))
         case("gate-check FAIL -> CONTINUE (1) pointing at plan artifacts",
              rc == 1 and "gate-check FAIL" in out)
+
+    # ── T04: a user-facing behaviour cluster is not FINISHED without its Artifact-diff ──
+
+    with tempfile.TemporaryDirectory() as tmp:
+        d = make_feature(tmp, behaviour(), SPEC_VIEW)
+        green_event(d, git_repo(tmp))     # green is CURRENT — only the new rule can hold it
+        rc, out = check(d)
+        case("T04 (a): all-checked behaviour cluster, view-flagged spec, no Artifact-diff "
+             "-> CONTINUE (1) naming the cluster",
+             rc == 1 and "closed without Artifact-diff" in out and "Cluster C1" in out)
+        case("T04 (a): the Artifact-diff CONTINUE still prints the progress line",
+             "progress: done=2 total=2" in out)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        d = make_feature(tmp, behaviour(heading_lane=" · lane: behaviour", lane=""), SPEC_VIEW)
+        green_event(d, git_repo(tmp))
+        rc, out = check(d)
+        case("T04 (a'): `lane: behaviour` on the heading counts the same as the Lane: line",
+             rc == 1 and "closed without Artifact-diff" in out)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        d = make_feature(tmp, behaviour(diff=ARTIFACT_DIFF), SPEC_VIEW)
+        git_repo(tmp)                     # no green event
+        rc, out = check(d)
+        case("T04 (b): with the Artifact-diff line the loop falls through to the sha check",
+             rc == 1 and "evidence stale/missing" in out and "Artifact-diff" not in out)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        d = make_feature(tmp, behaviour(diff=ARTIFACT_DIFF), SPEC_VIEW)
+        green_event(d, git_repo(tmp))
+        rc, out = check(d)
+        case("T04 (b'): Artifact-diff recorded + current green -> FINISHED (0)",
+             rc == 0 and "FINISHED" in out)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        d = make_feature(tmp, CONTRACT.format(t1="x", t2="x", t3="x", human=""), SPEC_VIEW)
+        green_event(d, git_repo(tmp))
+        rc, out = check(d)
+        case("T04 (c): a contract-lane cluster owes no Artifact-diff -> FINISHED (0)",
+             rc == 0 and "FINISHED" in out)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        d = make_feature(tmp, behaviour(), SPEC_NO_SURFACE)
+        green_event(d, git_repo(tmp))
+        rc, out = check(d)
+        case("T04 (d): spec flags no user-facing surface -> the rule is silent, FINISHED (0)",
+             rc == 0 and "FINISHED" in out)
 
     return results

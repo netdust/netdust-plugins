@@ -17,7 +17,9 @@ gate-check.py; consumed by hooks/loop-gate.py (and usable standalone by
 
     usage: loop-check.py <feature-dir>
 
-    exit 0  FINISHED  — every task in tasks.md is checked AND the latest
+    exit 0  FINISHED  — every task in tasks.md is checked, every closed
+                        user-facing behaviour cluster carries its
+                        `Artifact-diff:` line (FR-17), AND the latest
                         suite-green trace event is current (no code-touching
                         commit since it); Stage 2 is complete. Stage 3
                         (shake-out) is deliberately OUT of loop scope: it is
@@ -86,17 +88,21 @@ def is_freshness_code_path(path: str) -> bool:
 TASK_RE = re.compile(r"^- \[( |x|X)\] (T\d+)\b(.*)$")
 
 
-def parse_tasks(tasks_md: str) -> list[dict]:
-    """Task lines outside fenced code blocks (the template's format examples
-    live inside fences and must not count as work)."""
-    tasks = []
+def unfenced(text: str):
+    """Lines outside fenced code blocks (the template's format examples live
+    inside fences and must not count as work)."""
     in_fence = False
-    for line in tasks_md.splitlines():
+    for line in text.splitlines():
         if line.lstrip().startswith("```"):
             in_fence = not in_fence
             continue
-        if in_fence:
-            continue
+        if not in_fence:
+            yield line
+
+
+def parse_tasks(tasks_md: str) -> list[dict]:
+    tasks = []
+    for line in unfenced(tasks_md):
         m = TASK_RE.match(line)
         if m:
             tasks.append({
@@ -106,6 +112,61 @@ def parse_tasks(tasks_md: str) -> list[dict]:
                 "human": "[HUMAN]" in line,
             })
     return tasks
+
+
+CLUSTER_HEADING = re.compile(r"^###\s+Cluster\b(.*)$", re.IGNORECASE)
+SECTION_HEADING = re.compile(r"^#{2,3}\s")
+LANE_BEHAVIOUR = re.compile(
+    r"^\s*(?:[-*]\s+)?\**Lane\**:\s*behaviou?r\b|\blane:\s*behaviou?r\b", re.IGNORECASE)
+ARTIFACT_DIFF = re.compile(r"^\s*(?:[-*]\s+)?\**Artifact-diff\**:", re.IGNORECASE)
+CHECKED_BOX = re.compile(r"^\s*- \[[xX]\]\s+(.*)$")
+# Same predicate as gate-check's SCREEN_BOX — keep the regex text identical.
+SCREEN_BOX = re.compile(r"\b(view|screen|page|admin|form|wizard|multi-step)\b", re.IGNORECASE)
+
+
+def spec_flags_surface(spec_text: str) -> bool:
+    """A checked box under `## User-facing surfaces` naming a screen."""
+    in_section = False
+    for line in spec_text.splitlines():
+        if line.startswith("## "):
+            in_section = line[3:].strip().lower().startswith("user-facing surfaces")
+            continue
+        m = CHECKED_BOX.match(line) if in_section else None
+        if m and SCREEN_BOX.search(m.group(1)):
+            return True
+    return False
+
+
+def artifact_diff_missing(tasks_text: str, spec_text: str) -> list[str]:
+    """Names of `Lane: behaviour` clusters whose members are all `[x]` with no
+    `Artifact-diff:` line before the next heading, on a spec that flags a
+    user-facing surface (FR-17). Ticked boxes are testimony; the diff is the
+    record that someone looked at the artifact."""
+    if not spec_flags_surface(spec_text):
+        return []
+    clusters, cur = [], None
+    for line in unfenced(tasks_text):
+        hm = CLUSTER_HEADING.match(line)
+        if hm:
+            cur = {"name": line.lstrip("# ").split("(")[0].strip(),
+                   "behaviour": bool(LANE_BEHAVIOUR.search(hm.group(1))),
+                   "members": [], "diff": False}
+            clusters.append(cur)
+            continue
+        if SECTION_HEADING.match(line):
+            cur = None
+            continue
+        if cur is None:
+            continue
+        tm = TASK_RE.match(line)
+        if tm:
+            cur["members"].append(tm.group(1).lower() == "x")
+        elif LANE_BEHAVIOUR.match(line):
+            cur["behaviour"] = True
+        elif ARTIFACT_DIFF.match(line):
+            cur["diff"] = True
+    return [c["name"] for c in clusters
+            if c["behaviour"] and c["members"] and all(c["members"]) and not c["diff"]]
 
 
 def latest_suite_green_sha(feature_dir: Path) -> str | None:
@@ -199,7 +260,8 @@ def main() -> int:
               "the loop needs a machine-readable tasks.md)")
         return 2
 
-    tasks = parse_tasks(tasks_path.read_text())
+    tasks_text = tasks_path.read_text()
+    tasks = parse_tasks(tasks_text)
     if not tasks:
         print(f"LOOP: BLOCKED — tasks.md has no `- [ ] Tnn` task lines")
         return 2
@@ -216,6 +278,14 @@ def main() -> int:
 
     nxt = next((t for t in tasks if not t["done"]), None)
     if nxt is None:
+        spec_path = feature_dir / "spec.md"
+        spec_text = spec_path.read_text() if spec_path.exists() else ""
+        unrecorded = artifact_diff_missing(tasks_text, spec_text)
+        if unrecorded:
+            print("LOOP: CONTINUE — user-facing behaviour cluster(s) closed without "
+                  f"Artifact-diff: {', '.join(unrecorded)}")
+            print(progress)
+            return 1
         # All boxes checked — testimony. FINISHED additionally requires the
         # machine fact: the latest suite-green evidence still current (no
         # code-touching commit since its sha).
