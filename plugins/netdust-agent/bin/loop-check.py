@@ -115,7 +115,9 @@ def parse_tasks(tasks_md: str) -> list[dict]:
 
 
 CLUSTER_HEADING = re.compile(r"^###\s+Cluster\b(.*)$", re.IGNORECASE)
-SECTION_HEADING = re.compile(r"^#{2,3}\s")
+# gate-check's parse_behaviour_clusters closes a cluster only on H1/H2 (`h[0] <= 2`);
+# a non-Cluster `###` inside the body is inert.
+PHASE_HEADING = re.compile(r"^#{1,2}\s")
 LANE_BEHAVIOUR = re.compile(
     r"^\s*(?:[-*]\s+)?\**Lane\**:\s*behaviou?r\b|\blane:\s*behaviou?r\b", re.IGNORECASE)
 ARTIFACT_DIFF = re.compile(r"^\s*(?:[-*]\s+)?\**Artifact-diff\**:", re.IGNORECASE)
@@ -138,10 +140,8 @@ def spec_flags_surface(spec_text: str) -> bool:
 
 
 def artifact_diff_missing(tasks_text: str, spec_text: str) -> list[str]:
-    """Names of `Lane: behaviour` clusters whose members are all `[x]` with no
-    `Artifact-diff:` line before the next heading, on a spec that flags a
-    user-facing surface (FR-17). Ticked boxes are testimony; the diff is the
-    record that someone looked at the artifact."""
+    """FR-17: ticked boxes are testimony; the `Artifact-diff:` line is the record
+    that someone looked at the artifact."""
     if not spec_flags_surface(spec_text):
         return []
     clusters, cur = [], None
@@ -153,7 +153,7 @@ def artifact_diff_missing(tasks_text: str, spec_text: str) -> list[str]:
                    "members": [], "diff": False}
             clusters.append(cur)
             continue
-        if SECTION_HEADING.match(line):
+        if PHASE_HEADING.match(line):
             cur = None
             continue
         if cur is None:
@@ -161,7 +161,8 @@ def artifact_diff_missing(tasks_text: str, spec_text: str) -> list[str]:
         tm = TASK_RE.match(line)
         if tm:
             cur["members"].append(tm.group(1).lower() == "x")
-        elif LANE_BEHAVIOUR.match(line):
+        elif not cur["members"] and LANE_BEHAVIOUR.match(line):
+            # only before the first task, as gate-check does — a task's continuation is its own prose
             cur["behaviour"] = True
         elif ARTIFACT_DIFF.match(line):
             cur["diff"] = True

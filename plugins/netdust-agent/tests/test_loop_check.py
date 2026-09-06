@@ -19,6 +19,7 @@ import tempfile
 from pathlib import Path
 
 LOOP_CHECK = Path(__file__).resolve().parent.parent / "bin" / "loop-check.py"
+GATE_CHECK = LOOP_CHECK.with_name("gate-check.py")
 
 TIERED = """# Tasks: demo
 
@@ -103,6 +104,14 @@ def check(feature_dir: Path) -> tuple[int, str]:
         capture_output=True, text=True, timeout=60,
     )
     return p.returncode, p.stdout
+
+
+def shakeout(feature_dir: Path) -> int:
+    """`gate-check.py --shakeout` on the same fixture — the two ledgers must agree."""
+    return subprocess.run(
+        [sys.executable, str(GATE_CHECK), "--shakeout", str(feature_dir)],
+        capture_output=True, text=True, timeout=60,
+    ).returncode
 
 
 def make_feature(tmp: str, tasks: str | None, spec: str | None = None) -> Path:
@@ -338,5 +347,31 @@ def run() -> list[tuple[bool, str]]:
         rc, out = check(d)
         case("T04 (d): spec flags no user-facing surface -> the rule is silent, FINISHED (0)",
              rc == 0 and "FINISHED" in out)
+
+    # ── Cluster B review: loop-check's parser must agree with gate-check's on the two
+    # boundary rules — a cluster closes only on an H1/H2 heading, and `Lane:` is read
+    # only between the heading and the first task.
+
+    with tempfile.TemporaryDirectory() as tmp:
+        interior = "### Notes\nthe reviewer wanted the comparison kept here\n" + ARTIFACT_DIFF
+        d = make_feature(tmp, behaviour(diff=interior), SPEC_VIEW)
+        green_event(d, git_repo(tmp))
+        rc, out = check(d)
+        case("boundary: a non-Cluster `###` heading does not close the cluster — the "
+             "Artifact-diff under it still counts -> FINISHED (0)",
+             rc == 0 and "FINISHED" in out)
+        case("boundary: gate-check --shakeout agrees (exit 0)", shakeout(d) == 0)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tasks = CONTRACT.format(t1="x", t2="x", t3="x", human="").replace(
+            "      Unit test: no unit test: Tier B, glue\n",
+            "      Unit test: no unit test: Tier B, glue\n      Lane: behaviour\n", 1)
+        d = make_feature(tmp, tasks, SPEC_VIEW)
+        green_event(d, git_repo(tmp))
+        rc, out = check(d)
+        case("lane guard: `Lane: behaviour` inside a task's continuation is that task's "
+             "prose — the contract cluster owes no Artifact-diff -> FINISHED (0)",
+             rc == 0 and "FINISHED" in out)
+        case("lane guard: gate-check --shakeout agrees (exit 0)", shakeout(d) == 0)
 
     return results
