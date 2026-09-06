@@ -1,5 +1,5 @@
 ---
-description: Spec-complete gate. Run when all task groups in a spec are done — before merging the branch. Five steps in order — suite + telemetry; shakeout-qa drives the artifact, writes specs/<feature>/shakeout.md and commits the flows it drove as tests; gate-check.py --shakeout must exit 0 (fix, re-drive, re-check) before anything else runs; the human is shown one screenshot per surface; then the reviewer panel on the full branch diff by tier (LIGHT = reviewer, STANDARD = reviewer + code-simplicity-reviewer, FULL = those + security-sentinel + invariant-auditor; ntdst-drift-reviewer joins on WordPress).
+description: Spec-complete gate. Run when all task groups in a spec are done — before merging the branch. Five steps in order — suite + telemetry; shakeout-qa drives the artifact, writes specs/<feature>/shakeout.md and commits the flows it drove as tests; gate-check.py --shakeout must exit 0 (fix, re-drive, re-check) before anything else runs; the human is shown one screenshot per surface; then the reviewer panel on the full branch diff, panel size set by the branch tier (table in Step 5).
 allowed_tools: ["Bash", "Read", "Glob", "Skill", "Agent"]
 ---
 
@@ -41,15 +41,12 @@ having driven it.
 python3 "$PLUGIN_DIR/bin/gate-check.py" --shakeout specs/<feature>
 ```
 
-It reads the plan's acceptance rows against the manifest: a plan row with no manifest row,
-a `browser` row without `Browser: <url> · shakeout/<name>.png` and a real screenshot on
-disk, a `wire`/`cli` row on `fail` or `unverified`, a layer that disagrees with the plan
-(`shakeout-manifest`); a credential anywhere in the file (`shakeout-credential`, no
-override); a closed user-facing behaviour cluster without its `Artifact-diff:`
-(`shakeout-artifact-diff`). A `Ruling: <reason>` the human wrote passes its row
-(`shakeout-ruling`). On exit 1: dispatch one `implementer` per `fail` row (one TDD cycle
-each, Class C), re-dispatch `shakeout-qa` to re-drive the affected flows, re-run the
-check — and loop until it exits 0. **The panel does not run while this fails.**
+It enforces the manifest grammar `agents/shakeout-qa.md` defines under `## The manifest`
+— four findings: `shakeout-manifest`, `shakeout-credential` (no override),
+`shakeout-artifact-diff`, `shakeout-ruling` (a human `Ruling:` passes its row). On exit 1:
+dispatch one `implementer` per `fail` row (one TDD cycle each, Class C), re-dispatch
+`shakeout-qa` to re-drive the affected flows, re-run the check — and loop until it exits 0.
+**The panel does not run while this fails.**
 
 ## Step 4 — `[HUMAN]` The screenshot yield
 

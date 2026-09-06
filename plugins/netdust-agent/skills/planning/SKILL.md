@@ -84,8 +84,9 @@ gates require, beyond upstream's own craft:
   `## Shake-out access`: the one command that yields an authenticated session
   (`netdust-wp:wp-testing` owns the recipe) — `shakeout-access`. A spec or plan saying
   "same X as / identical to / mirrors / parity with" an existing surface carries
-  `## Parity: <reference>` — ≥3 components read from the running reference, a URL, and
-  the new surface's rows naming which components they cover — `parity`. A user-facing
+  `## Parity: <reference>` — ≥3 components (list items) read from the running reference
+  and its http URL — `parity`; that the new surface's rows name which components they
+  cover is the plan author's obligation, not machine-checked. A user-facing
   behaviour cluster's `Observable:` names rendered content, a quoted literal or a
   selector — `observable-content`. Stage 3 drives this matrix.
 

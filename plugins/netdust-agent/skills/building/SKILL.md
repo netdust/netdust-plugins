@@ -138,7 +138,12 @@ outside the file, named by `RED until:`. Execute it as:
    in a contract cluster; correct the plan, don't argue with the hook.
 3. **Close the cluster on three things and nothing else:** the cluster RED is GREEN
    (`cluster-close`), the `Integration gate:` line holds, and — on a user-facing cluster —
-   the `Artifact-diff:` comparison below. No `test-author` feature-test dispatch (the
+   the `Artifact-diff:` comparison below. The line names its source; when the plan carries
+   `## Parity:`, that block IS the source and the line reads `Artifact-diff: Parity
+   <reference> → <n> of <m> components present`. `bin/loop-check.py` and `gate-check
+   --shakeout` refuse a closed user-facing behaviour cluster without the line
+   (`shakeout-artifact-diff`); the form itself is not machine-checked. No `test-author`
+   feature-test dispatch (the
    cluster RED IS the feature test), no reviewer dispatch, no review-gate stop.
 
 ### Contract lane — today's grammar, unchanged
@@ -172,7 +177,12 @@ never weakened. Netdust adds:
   the source of truth (the design file, the spec's acceptance rows, the reference
   implementation), enumerate the properties it constrains, and check each against values
   read from the RUNNING artifact — committed as a test, not observed once. Record
-  `Artifact-diff: <source> → <n> properties checked, <n> divergent`. Build-output evidence
+  `Artifact-diff: <source> → <n> properties checked, <n> divergent`. The line names its
+  source; when the plan carries `## Parity:`, that block IS the source and the line reads
+  `Artifact-diff: Parity <reference> → <n> of <m> components present`. The machine
+  (`bin/loop-check.py`, `gate-check --shakeout`, `shakeout-artifact-diff`) refuses a
+  missing line only on a `Lane: behaviour` cluster and never checks the form; on a
+  contract-lane marker the line is owed by this gate, unchecked. Build-output evidence
   (it compiled; the values are in the bundle) never closes this gate — it cannot see a
   different variable winning, a guard skipping the rule, or a stale file on disk. Any
   value deferred to a later cluster is named HERE as "will still look wrong", never left
@@ -194,7 +204,8 @@ A behaviour-lane cluster carries no marker and buys no panel: its review is the 
     package it consumes carries `ARCHITECTURE-INVARIANTS.md`; else
     `netdust-wp:ntdst-drift-reviewer` stands in on WordPress).
   - STANDARD and LIGHT — no reviewer dispatch. The marker still halts: the integration
-    gate, the artifact look (`Artifact-load:`) and the `Artifact-diff:` line close it.
+    gate, the artifact look (`Artifact-load:`) and the `Artifact-diff:` line — this
+    gate's own record, not the checker's — close it.
 
   The author never reviews its own diff; escalation to FULL is one-way. Record the
   verify-budget telemetry line (`bin/verify-budget.py` — reports, never interrupts) in the
@@ -220,7 +231,7 @@ A behaviour-lane cluster carries no marker and buys no panel: its review is the 
    `shakeout-qa` drives the `## Acceptance flows` matrix through the real browser /
    un-mocked wire and commits the flows it drove as tests (skipped when the matrix is
    N/A — nothing to drive); `gate-check --shakeout` loops until it exits 0; the `[HUMAN]`
-   screenshot yield; then the branch panel.
+   screenshot yield.
 2. **The branch review** at the `── BRANCH REVIEW ──` marker's tier: an all-behaviour
    branch under `standard` or `low` stakes is LIGHT — one `reviewer`, ladder: sonnet; a
    branch carrying contract-lane clusters takes the branch's tier with the branch panel
