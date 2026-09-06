@@ -2616,16 +2616,18 @@ SCREENSHOT_BYTES = (1024, 2 * 1024 * 1024)
 def _screenshot_problem(path: str, spec_dir: Path) -> str | None:
     if not (path.startswith("shakeout/") and path.endswith(".png")):
         return f"screenshot `{path}` must be `shakeout/<name>.png`"
-    target = (spec_dir / path).resolve()
-    if not (target.is_file() and target.is_relative_to(spec_dir.resolve())):
-        return f"screenshot `{path}` not found under the feature dir"
-    size = target.stat().st_size
-    if not SCREENSHOT_BYTES[0] <= size <= SCREENSHOT_BYTES[1]:
-        return f"screenshot `{path}` is {size} bytes — a viewport PNG is 1 KB to 2 MB"
-    with target.open("rb") as fh:
-        if fh.read(8) != PNG_MAGIC:
-            return f"screenshot `{path}` does not open with the PNG magic"
-    return None
+    try:
+        target = (spec_dir / path).resolve()
+        if not (target.is_file() and target.is_relative_to(spec_dir.resolve())):
+            return f"screenshot `{path}` not found under the feature dir"
+        size = target.stat().st_size
+        if not SCREENSHOT_BYTES[0] <= size <= SCREENSHOT_BYTES[1]:
+            return f"screenshot `{path}` is {size} bytes — a viewport PNG is 1 KB to 2 MB"
+        with target.open("rb") as fh:
+            magic = fh.read(8)
+    except (OSError, ValueError) as e:
+        return f"screenshot `{path!r}` could not be read ({e.__class__.__name__})"
+    return None if magic == PNG_MAGIC else f"screenshot `{path}` does not open with the PNG magic"
 
 
 def _row_problem(row: dict, spec_dir: Path) -> str | None:
@@ -2665,6 +2667,9 @@ def _check_manifest_row(row: dict, spec_dir: Path, plan_layer: dict[str, str], f
 
 def run_shakeout_checks(spec_dir: Path) -> Findings:
     f = Findings()
+    if not spec_dir.is_dir():
+        f.add("fail", "shakeout-manifest", f"{spec_dir} is not a directory")
+        return f
     plan, manifest = spec_dir / "plan.md", spec_dir / "shakeout.md"
     plan_rows: list[dict] = []
     if plan.exists():
@@ -2683,7 +2688,11 @@ def run_shakeout_checks(spec_dir: Path) -> Findings:
             f.add("pass", "shakeout-manifest", "no browser rows, no manifest owed")
         return f
 
-    text = manifest.read_text()
+    try:
+        text = manifest.read_text()
+    except (OSError, ValueError) as e:
+        f.add("fail", "shakeout-manifest", f"shakeout.md could not be read ({e.__class__.__name__})")
+        return f
     for i, ln in enumerate(text.splitlines(), 1):
         if CREDENTIAL.search(ln):
             f.add("fail", "shakeout-credential", f"line {i}: carries a credential — the whole file is committed")

@@ -3287,6 +3287,22 @@ def run():
     results.append((rc == 0 and "shakeout: 2 rows, 1 browser rows driven" in out,
                     "shakeout (png-real): a ≥1 KB file under shakeout/ opening with the PNG magic is evidence"))
 
+    with tempfile.TemporaryDirectory() as d:
+        proc = subprocess.run([sys.executable, str(CHECKER), "--shakeout", f"{d}/no-such-feature"],
+                              capture_output=True, text=True, timeout=15)
+        rc, out = proc.returncode, proc.stdout + proc.stderr
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "is not a directory" in out,
+                    "shakeout (dir): a spec_dir that is not a directory FAILs — a typo'd feature never passes"))
+
+    nul = MANIFEST_BROWSER_DRIVEN.replace("shakeout/af-1.png", "shakeout/af-1\x00.png")
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": nul}, PNG)
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "AF-1" in out and "Traceback" not in out,
+                    "shakeout (nul): a NUL in the screenshot path is a FAIL finding, not a traceback"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT}, {"shakeout.md": b"\xff\xfe| AF-1 | x | browser | pass | y |\n"})
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "shakeout.md" in out and "Traceback" not in out,
+                    "shakeout (bytes): a non-UTF-8 shakeout.md is a FAIL finding naming the file, not a traceback"))
+
     rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_NO_EVIDENCE},
                             flags=("--shakeout", "--json"))
     try:
