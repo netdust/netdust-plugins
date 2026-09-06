@@ -2,6 +2,16 @@
 
 You are working on a Netdust **WordPress** project. This plugin layers on top of `netdust-core` (which defines the memory/server management and cross-domain skills; devops lives in netdust-devops) and `netdust-agent` (which provides the coding harness — `harnessed-development`, `planning`, `building`, `testing-workflow`, the reviewer agents, the `/integration` and `/shakeout` gate commands, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard). Install `netdust-devops` first — `/deploy` and the `make` verbs won't work otherwise.
 
+## Setup — the upstream WordPress skills
+
+Once per box, after `/plugin install`, run `bash bin/wp-upstream-skills.sh`. It installs the
+official `WordPress/agent-skills` set this plugin cites instead of restating —
+`wp-plugin-development`, `wp-rest-api`, `wp-wpcli-and-ops`, `wp-phpstan` — into
+`~/.claude/skills/` at the commit pinned in the script (`PIN`, bumped only by a reviewed
+commit here), copied from a local clone so nothing is fetched by tag or branch. `--check`
+prints the pin and which of the four are present (exit 1 if any is missing); `--dry-run`
+prints the commands and touches nothing.
+
 ## `site.yml` is the operating context — not the entry point
 
 **The entry point for any code-changing request is `netdust-agent:harnessed-development`**,
@@ -84,7 +94,7 @@ For these, see `netdust-core/CLAUDE.md` and `netdust-agent/CLAUDE.md`:
 - **What the WP skills own inside that.** They **layer on** brainstorming, they do not replace it. Brainstorming + the human own INTENT — what we are building and why. `ntdst-framework` (service lifecycle, DI, boundaries), `ntdst-framework` (data layer, CPTs, repositories, REST) and `ntdst-patterns` (where files live) own the TECHNICAL DESIGN SHAPE on this stack. A netdust skill that restates upstream superpowers content is a defect, not thoroughness.
 - **Plan-time security/data gates.** The `netdust-agent:threat-modeling` + `netdust-agent:architecture-invariants` gates still fire per their triggers; on WP, `wp-security` and `wp-database` self-trigger on PHP edits and reinforce them.
 - **Testing (Stage 2).** Already automatic — `netdust-agent:testing-workflow` picks the tier and the runner; `wp-testing` self-triggers on `phpunit.unit.xml` / `bin/gate.sh` / `Cest` / `WPTestCase` and routes to the right stack. **The gate stack is primary** (Brain Monkey unit + wp-phpunit integration + Vitest + Playwright, under `composer gate`); Codeception/wp-browser is the LEGACY stack, Stride family only.
-- **Review gates and shake-out.** `netdust-wp:ntdst-drift-reviewer` sits on EVERY cluster review gate (LIGHT, STANDARD, FULL) and on the branch review on a WordPress project or an ntdst-core consumer package — not only at `/shakeout`. And every implementer dispatch names `netdust-wp:ntdst-framework` + `wp-testing`. (Stefan, 2026-09-03: six approved tasks had built plain WordPress on the framework because neither happened.)
+- **Review gates and shake-out.** Prevention first: every implementer dispatch names `netdust-wp:ntdst-framework` + `wp-testing`. (Stefan, 2026-09-03: six approved tasks had built plain WordPress on the framework because neither happened.) Detection: on a WordPress project or an ntdst-core consumer package, drift review runs at the branch review and on the clusters the gate's `✓ [panel-hints] drift-panel:` line names — read the line, do not re-derive it. Which files buy that line, and the cluster panel by tier, are `netdust-agent:building`'s to say; this file does not restate them. (Re-ruled 2026-09-06, `specs/artifact-gate`: fifteen every-gate panel runs found one Critical, outside a panel.)
 
 There is no `ntdst-brainstorm` skill and there should not be one — `superpowers:brainstorming` is the workhorse, reached through the router. The three framework skills above are what gets layered on top of it.
 

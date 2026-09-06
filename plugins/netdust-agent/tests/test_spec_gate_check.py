@@ -6,6 +6,7 @@ spec/plan/tasks set that skips a gate, and PASS one that carries them. The load-
 case (ADR Phase B gate): a spec that flags a security surface but whose plan leaves the
 ## Threat model as N/A must FAIL — that is the proactive 1a gate the harness exists to keep.
 """
+import json
 import re
 import subprocess
 import sys
@@ -558,15 +559,18 @@ PLAN_FLOWS_EMPTY_TABLE = PLAN_FLOWS_NA.replace(
 # user-facing sections and the Stakes: dial became mandatory grammar (the paired case's
 # assertions are unchanged and unweakened; a user-facing plan simply must now name its
 # first demoable slice to be a green fixture). Names TASKS_GOOD's T01: position 1,
-# non-test file (lib/url.ts).
+# non-test file (lib/url.ts). Since T02 the rows carry `#` + `Layer` (one `browser`) and the
+# plan names its shake-out access — a wizard demands a browser row and a login recipe.
+ACCESS_RECIPE = ("## Shake-out access\n`ddev wp login create shakeout --url-only --expires=900` — "
+                 "valid on the DDEV site only; recipe in `netdust-wp:wp-testing`.\n")
 PLAN_FLOWS_FILLED = PLAN_FLOWS_NA.replace(
     "## Acceptance flows\nN/A — small feature.",
     """## Acceptance flows
 
-| Flow | Expected | Edges |
-|---|---|---|
-| issue an invoice | PDF stored, editor sees it listed | empty: no line items → blocked with a message; denied: viewer role refused; re-entry: back-then-submit does not double-issue; concurrent: double-submit issues one; boundary: 0.00 total refused; mid-flow failure: storage error rolls the record back |
-| email the invoice | recipient receives it once | empty: no recipient → blocked; denied: viewer cannot send; re-entry: resend is idempotent per invoice; concurrent: two sends deliver one; boundary: 500-char subject truncated; mid-flow failure: SMTP error leaves it queued, not sent |
+| # | Flow | Layer | Expected | Edges |
+|---|---|---|---|---|
+| AF-1 | issue an invoice | browser | PDF stored, editor sees it listed | empty: no line items → blocked with a message; denied: viewer role refused; re-entry: back-then-submit does not double-issue; concurrent: double-submit issues one; boundary: 0.00 total refused; mid-flow failure: storage error rolls the record back |
+| AF-2 | email the invoice | wire | recipient receives it once | empty: no recipient → blocked; denied: viewer cannot send; re-entry: resend is idempotent per invoice; concurrent: two sends deliver one; boundary: 500-char subject truncated; mid-flow failure: SMTP error leaves it queued, not sent |
 
 ## First working version
 
@@ -574,7 +578,7 @@ PLAN_FLOWS_FILLED = PLAN_FLOWS_NA.replace(
 **Demonstrates:** a wired validator an editor can exercise from the first cluster
 **Verify by:** drive the wizard's first screen and watch an RFC1918 target refused
 """,
-)
+) + ACCESS_RECIPE
 
 # ── `files-segment` fixtures — the declared task-line grammar, and what it protects ──
 # THE demonstration case: a Tier-B task doing auth + payment work, with no `(files: …)`
@@ -1759,6 +1763,217 @@ TASKS_NEW_PAYLOAD_DECLARED = TASKS_NEW_PAYLOAD.replace(
     "## Phase 1 — build",
     "## Deploy\n\n- **Payload:** + `app/plugins/ntdst-booking` — add to `deploy.payload` in site.yml before the first deploy\n- **Non-git steps:** none\n\n## Phase 1 — build",
 )
+
+
+# ── `--shakeout` fixtures (artifact-gate T01, FR-1..FR-3) ─────────────────────
+# A browser row passes on evidence — `Browser: <url> · <png>` with the PNG on disk —
+# never on the verdict word. The PNG is written as bytes beside the manifest.
+
+PLAN_SHAKEOUT = """# Plan: audit screen
+
+## Acceptance flows [GATE]
+
+| # | Flow | Layer | Expectation | Edges |
+|---|---|---|---|---|
+| AF-1 | Audit page lists the rows | browser | a table with one row per record | empty state |
+| AF-2 | REST list returns the rows | wire | 200 with a JSON array | 401 anonymous |
+"""
+
+PLAN_SHAKEOUT_WIRE_ONLY = """# Plan: audit endpoint
+
+## Acceptance flows [GATE]
+
+| # | Flow | Layer | Expectation | Edges |
+|---|---|---|---|---|
+| AF-2 | REST list returns the rows | wire | 200 with a JSON array | 401 anonymous |
+"""
+
+PLAN_SHAKEOUT_NO_LAYER = PLAN_SHAKEOUT.replace("| Layer ", "").replace("|---|---|---|---|---|", "|---|---|---|---|") \
+    .replace("| browser ", "").replace("| wire ", "")
+
+_MANIFEST_HEAD = """# Shake-out — audit screen
+
+| # | Flow | Layer | Verdict | Evidence |
+|---|---|---|---|---|
+"""
+_WIRE_PASS = "| AF-2 | REST list returns the rows | wire | pass | curl -s https://x.ddev.site/wp-json/audit/v1/rows → 200, 3 items |\n"
+BROWSER_EVIDENCE = "Browser: https://x.ddev.site/wp/wp-admin/admin.php?page=audit · shakeout/af-1.png"
+
+MANIFEST_BROWSER_NO_EVIDENCE = _MANIFEST_HEAD + (
+    "| AF-1 | Audit page lists the rows | browser | pass | looked at it, table renders |\n") + _WIRE_PASS
+MANIFEST_BROWSER_DRIVEN = _MANIFEST_HEAD + (
+    f"| AF-1 | Audit page lists the rows | browser | pass | {BROWSER_EVIDENCE} |\n") + _WIRE_PASS
+MANIFEST_BROWSER_UNVERIFIED = MANIFEST_BROWSER_DRIVEN.replace("| pass |", "| unverified-no-browser |", 1)
+MANIFEST_BROWSER_RULING = MANIFEST_BROWSER_DRIVEN.replace(
+    BROWSER_EVIDENCE, "Ruling: no browser on this box, driven by Stefan 09-06")
+MANIFEST_BROWSER_CREDENTIAL = MANIFEST_BROWSER_RULING.replace(
+    "Stefan 09-06", "Stefan 09-06 — https://x.ddev.site/wp/wp-login.php?login=abc123")
+MANIFEST_WIRE_ONLY_PASS = _MANIFEST_HEAD + _WIRE_PASS
+MANIFEST_WIRE_FAIL = MANIFEST_BROWSER_DRIVEN.replace(
+    _WIRE_PASS, "| AF-2 | REST list returns the rows | wire | fail | curl → 500 |\n")
+MANIFEST_BROWSER_ONLY = MANIFEST_BROWSER_DRIVEN.replace(_WIRE_PASS, "")
+MANIFEST_FENCED_SAMPLE = "```\n| AF-9 | sample | browser | pass | none |\n```\n" + MANIFEST_BROWSER_DRIVEN
+
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+PNG = {"shakeout/af-1.png": PNG_MAGIC + bytes(1200)}
+
+
+def _run_shakeout(files: dict, binaries: dict | None = None,
+                  flags: tuple = ("--shakeout",)) -> tuple[int, str]:
+    with tempfile.TemporaryDirectory() as d:
+        for name, content in files.items():
+            (Path(d) / name).write_text(content)
+        for name, data in (binaries or {}).items():
+            path = Path(d) / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        proc = subprocess.run([sys.executable, str(CHECKER), *flags, d],
+                               capture_output=True, text=True, timeout=15)
+        return proc.returncode, proc.stdout + proc.stderr
+
+
+def test_shakeout_browser_row_without_evidence_fails() -> tuple[bool, str]:
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_NO_EVIDENCE})
+    return (rc == 1 and "✗ [shakeout-manifest]" in out and "AF-1" in out,
+            "shakeout (a): a `browser` row marked pass with no `Browser:` evidence FAILs naming AF-1")
+
+
+def test_shakeout_manifest_layer_cannot_relabel_a_browser_row() -> tuple[bool, str]:
+    relabelled = MANIFEST_BROWSER_NO_EVIDENCE.replace("| browser | pass |", "| wire | pass |")
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": relabelled})
+    return (rc == 1 and "✗ [shakeout-manifest] AF-1: manifest says wire, plan says browser" in out
+            and "✗ [shakeout-manifest] AF-1: browser row without" in out,
+            "shakeout (k): the manifest's `wire` on a plan `browser` row FAILs the relabel and judges the row as browser")
+
+
+# ── T02 fixtures: `Layer` on acceptance rows + `## Shake-out access` (FR-4 / FR-5) ──
+SPEC_SCREEN = SPEC_USER_FACING.replace(
+    "- [x] A form / wizard / multi-step flow\n- [ ] A view / screen / page",
+    "- [ ] A form / wizard / multi-step flow\n- [x] A view / screen / page")
+SPEC_ENDPOINT_ONLY = SPEC_USER_FACING.replace(
+    "- [x] A form / wizard / multi-step flow",
+    "- [x] An endpoint a client or agent drives")
+
+# ── `--shakeout` — the Artifact-diff rule (artifact-gate T04, FR-17) ──────────
+# A `Lane: behaviour` cluster ticked to completion on a spec that flags a screen owes an
+# `Artifact-diff:` line between its heading and the next heading.
+
+TASKS_BEHAVIOUR_CLOSED = """# Tasks: audit screen
+
+## Phase 1
+
+### Cluster C1  (2 tasks · provisional tier: STANDARD)
+{lane}Behaviour: the audit page lists the rows
+Observable: the "Audit log" heading and one `.audit-row` per record
+RED until: tests/e2e/audit.spec.ts::lists rows
+- [x] T01 first task  (files: a.py, tests/e2e/audit.spec.ts)
+- [{t2}] T02 second task  (files: b.py)
+
+**Integration gate (C1):** the two tasks compose end to end.
+{diff}
+── BRANCH REVIEW ──  *(tier STANDARD)*
+"""
+ARTIFACT_DIFF = "Artifact-diff: Figma frame 625-2790 → 12 of 12 components present\n"
+
+
+def _tasks_behaviour(diff: str = "", lane: str = "Lane: behaviour\n", t2: str = "x") -> str:
+    return TASKS_BEHAVIOUR_CLOSED.format(diff=diff, lane=lane, t2=t2)
+
+
+SPEC_NO_SURFACE = "# Spec\n\n## User-facing surfaces\n\n- [x] None of the above\n"
+
+_LAYER_HEAD = "| # | Flow | Layer | Expected | Edges |\n|---|---|---|---|---|\n"
+_NO_LAYER_HEAD = "| # | Flow | Expected | Edges |\n|---|---|---|---|\n"
+AF1_BROWSER = "| AF-1 | issue an invoice | browser | PDF stored, editor sees it listed | empty: no line items → blocked |\n"
+AF1_WIRE = AF1_BROWSER.replace("| browser |", "| wire |")
+AF2_WIRE = "| AF-2 | email the invoice | wire | recipient receives it once | denied: viewer cannot send |\n"
+AF3_NO_LAYER = "| AF-3 | list invoices |  | one row per invoice | empty state |\n"
+AF9_QUOTED = "> | AF-9 | example only | browser | never driven | none |\n"
+AF4_BAD_LAYER = "| AF-4 | export invoices | mobile | a CSV downloads | 0 invoices → empty file |\n"
+_FWV = PLAN_FLOWS_FILLED[PLAN_FLOWS_FILLED.index("## First working version"):
+                         PLAN_FLOWS_FILLED.index("## Architecture invariants touched")]
+ACCESS_NA = "## Shake-out access\nN/A — agent tooling, no screen to log in to.\n"
+
+
+def _plan_layers(rows: str, access: str = "") -> str:
+    return PLAN_FLOWS_NA.replace("## Acceptance flows\nN/A — small feature.",
+                                 "## Acceptance flows\n\n" + _LAYER_HEAD + rows + "\n" + _FWV + access)
+
+
+# ── T03 fixtures: `## Parity:`, rendered-content observables, panel hints (FR-11/12/15/16) ──
+SPEC_PARITY = SPEC_SCREEN.replace(
+    "## Success criteria",
+    "## Overview\nGive audit the same rail as inschrijvingen: list, create, save.\n\n## Success criteria")
+PLAN_SCREEN = _plan_layers(AF1_BROWSER + AF2_WIRE, ACCESS_RECIPE)
+PLAN_PARITY_PHRASE = PLAN_SCREEN.replace("## Acceptance flows", "The audit list mirrors inschrijvingen.\n\n## Acceptance flows")
+_PARITY_HEAD = ("## Parity: inschrijvingen\n> guidance line with a - bullet the checker ignores\n"
+                "Read from https://x.ddev.site/wp/wp-admin/admin.php?page=inschrijvingen on 2026-09-06.\n")
+PARITY_BLOCK = _PARITY_HEAD + "- the list table with its columns\n- the create button\n- the save-list action\n"
+PARITY_BLOCK_SHORT = _PARITY_HEAD + "- the list table with its columns\n- the create button\n"
+PARITY_BLOCK_NO_URL = PARITY_BLOCK.replace("https://x.ddev.site/wp/wp-admin/admin.php?page=inschrijvingen", "the staging site")
+
+_HERO_HEAD = ("# Tasks: Energy page\n\n### Cluster H — the hero  (1 task)\n\nLane: behaviour\n"
+              "Behaviour: the energy page renders its hero.\n")
+_HERO_TAIL = ("RED until: `tests/HeroTest.php::test_hero_renders`\n\n"
+              "- [ ] T01 the hero template (SC-1)  (files: templates/hero.php, tests/HeroTest.php)\n\n"
+              "**Integration gate (H):** `composer gate` exits 0 and the observable above holds.\n" + _BRANCH_REVIEW)
+TASKS_OBSERVABLE_STATUS = _HERO_HEAD + "Observable: the page answers 200\n" + _HERO_TAIL
+TASKS_OBSERVABLE_CONTENT = _HERO_HEAD + 'Observable: the hero renders "Onze energie"\n' + _HERO_TAIL
+TASKS_OBSERVABLE_SELECTOR = _HERO_HEAD + "Observable: the page shows [data-hero] with the season name\n" + _HERO_TAIL
+TASKS_OBSERVABLE_PATH = _HERO_HEAD + "Observable: the page answers 200 and redirects to wp-admin/edit.php\n" + _HERO_TAIL
+TASKS_OBSERVABLE_APOSTROPHES = _HERO_HEAD + "Observable: it's the user's dashboard, shows nothing new\n" + _HERO_TAIL
+TASKS_OBSERVABLE_ID = _HERO_HEAD + "Observable: the page renders `#hero` above the fold\n" + _HERO_TAIL
+TASKS_OBSERVABLE_SINGLE_QUOTED = _HERO_HEAD + "Observable: the form shows 'Bevestigen' on its submit button\n" + _HERO_TAIL
+
+TASKS_PANEL_DRIFT = TASKS_GOOD.replace("(files: lib/url.ts)", "(files: Services/Foo.php)")
+TASKS_PANEL_FEATURE = TASKS_GOOD.replace(
+    "### Cluster C2 — (irreversible: drop legacy table) — solo\n",
+    "### Cluster C2 — (irreversible: drop legacy table) — solo\nFeature-tests: yes — the export has no acceptance flow\n")
+TASKS_PANEL_FEATURE_BULLETED = TASKS_GOOD.replace(
+    "### Cluster C2 — (irreversible: drop legacy table) — solo\n",
+    "### Cluster C2 — (irreversible: drop legacy table) — solo\n- feature-tests: yes — the export has no acceptance flow\n")
+TASKS_PANEL_FEATURE_IN_TASK = TASKS_GOOD.replace(
+    "      Test-author: split\n      Unit test: replays",
+    "      Test-author: split\n      Feature-tests: yes — inside a task, not the cluster\n      Unit test: replays")
+
+
+# The AC-6 lock: what the existing plan fixtures reported BEFORE T02, as `mark [check]`
+# per finding with the `acceptance-flows` detail kept. T02 may add `acceptance-flows`
+# WARNs and nothing else.
+_LOCK_GATES_FULL = [
+    "✓ [clarify-halt]", "✓ [success-criteria]", "✓ [security-surfaces]",
+    "✓ [user-facing-surfaces]",
+    "✓ [plan-gate-heading]", "✓ [plan-gate-heading]", "✓ [plan-gate-heading]",
+    "✓ [plan-gate-heading]", "✓ [plan-gate-heading]", "✓ [plan-gate-heading]",
+    "✓ [threat-model]",
+    "✓ [acceptance-flows] ## Acceptance flows marked N/A and no user-facing spec surface flagged",
+    "✓ [stakes]", "✓ [loop-budget]", "✓ [deliverable-first]", "! [cluster-lane]",
+    "✓ [task-tier]", "✓ [files-segment]", "✓ [test-author-mode]", "! [proven-by]",
+    "✓ [unit-test-contract]", "✓ [review-cluster]", "✓ [placement]",
+    "✓ [review-gate-marker]", "✓ [review-tier]", "✓ [integration-gate]",
+    "✓ [panel-hints]", "✓ [requirement-coverage]",
+]
+_LOCK_FLOWS_FILLED = [
+    {"✓ [acceptance-flows] ## Acceptance flows marked N/A and no user-facing spec surface flagged":
+     "✓ [acceptance-flows] ## Acceptance flows carries 2 filled-in flow row(s)",
+     "✓ [stakes]": "! [stakes]"}.get(x, x) for x in _LOCK_GATES_FULL]
+_LOCK_FLOWS_FILLED.insert(_LOCK_FLOWS_FILLED.index("! [stakes]"), "✓ [shakeout-access]")
+_FINDING_LINE = re.compile(r"^\s+([✓!✗]) \[([\w-]+)\] (.*)$")
+
+
+def _lock_view(out: str) -> list[str]:
+    view = []
+    for ln in out.splitlines():
+        m = _FINDING_LINE.match(ln)
+        if not m:
+            continue
+        mark, check, detail = m.groups()
+        if check == "acceptance-flows":
+            if mark != "!":
+                view.append(f"{mark} [{check}] {detail}")
+        else:
+            view.append(f"{mark} [{check}]")
+    return view
 
 
 def _run(files: dict) -> tuple[int, str]:
@@ -2977,6 +3192,373 @@ def run():
     rc, out = _run({"tasks.md": tasks_conflict})
     results.append(("! [cluster-lane]" in out and "disagree" in out and "heading wins" in out,
                     "lane: heading `lane: contract` beside a `Lane: behaviour` line → WARN naming both, heading wins"))
+
+    # ── 31. `--shakeout` — the manifest gate (artifact-gate T01, FR-1..FR-3) ──
+    results.append(test_shakeout_browser_row_without_evidence_fails())
+    results.append(test_shakeout_manifest_layer_cannot_relabel_a_browser_row())
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT_NO_LAYER, "shakeout.md": MANIFEST_BROWSER_NO_EVIDENCE})
+    results.append((rc == 1 and "✗ [shakeout-manifest] AF-1: browser row without" in out
+                    and "plan says" not in out,
+                    "shakeout (k'): a plan without a Layer column leaves the manifest's layer in force — AF-1 is browser"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_DRIVEN}, PNG)
+    results.append((rc == 0 and "shakeout: 2 rows, 1 browser rows driven" in out,
+                    "shakeout (b): `Browser: <url> · <png>` with the PNG on disk → exit 0 + summary"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_DRIVEN.replace(
+        "Browser: https://x.ddev.site/wp/wp-admin/admin.php?page=audit", "Browser: not-reached")}, PNG)
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "AF-1" in out and "http url" in out,
+                    "shakeout (b-url): `Browser: not-reached · <png>` with the PNG on disk → FAIL naming AF-1 and the http url"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_DRIVEN})
+    results.append((rc == 1 and any("✗ [shakeout-manifest]" in ln and "shakeout/af-1.png" in ln
+                                    for ln in out.splitlines()),
+                    "shakeout (c): evidence names a PNG that is not on disk → FAIL naming the path"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_UNVERIFIED}, PNG)
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "AF-1" in out,
+                    "shakeout (d): a `browser` row `unverified-no-browser` FAILs even with evidence"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_RULING})
+    results.append((rc == 0 and "✓ [shakeout-ruling]" in out and "AF-1" in out
+                    and "no browser on this box" in out and "✗ [shakeout-manifest]" not in out,
+                    "shakeout (e): `Ruling: <reason>` replaces the row's FAIL with one ruling PASS"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_CREDENTIAL})
+    results.append((rc == 1 and "✗ [shakeout-credential]" in out and "AF-1" in out,
+                    "shakeout (f): `?login=abc123` in evidence FAILs `shakeout-credential`, ruling or not"))
+
+    for label, manifest in (
+        ("curl -u user:pass", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "curl -u shakeout:s3cr3tPw https://")),
+        ("user: name:pass", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "user: shakeout:s3cr3tPw · curl -s https://")),
+        ("bare pwd=", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "pwd=s3cr3t, curl -s https://")),
+        ("bare password:", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "password: s3cr3t, curl -s https://")),
+        ("E2E_PASS=", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "E2E_PASS=abc123, curl -s https://")),
+        ("--user_pass=", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "curl --user_pass=x https://")),
+        ("-u no space", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "curl -ushakeout:pw https://")),
+        ("Authorization: Bearer", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "curl -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9' https://")),
+        ("bare Basic", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "sent Basic c2hha2VvdXQ6czNjcjN0UHc= to https://")),
+        ("wp-login.php?", MANIFEST_BROWSER_RULING.replace("Stefan 09-06", "Stefan 09-06 via https://x.ddev.site/wp/wp-login.php?redirect_to=%2Fwp-admin%2F")),
+        ("magic link", MANIFEST_BROWSER_RULING.replace("Stefan 09-06", "Stefan 09-06 via https://x.ddev.site/3f9a1c2b/7a3c1d9e2f-b41c8d7e-9f0a2b3c4d")),
+        ("application-password", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "wp user application-password create shakeout shakeout --porcelain, then curl -s https://")),
+        ("6x4 app password", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "minted AbCd EfGh IjKl MnOp QrSt UvWx, curl -s https://")),
+        ("basic auth in URL", MANIFEST_BROWSER_DRIVEN.replace("https://x.ddev.site/wp-json", "https://shakeout:s3cr3tPw@x.ddev.site/wp-json")),
+        ("--user=", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "curl --user=shakeout:s3cr3tPw https://")),
+        ("session cookie", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "curl -b wordpress_logged_in_0123456789abcdef0123456789abcdef=shakeout https://")),
+        ("storage_state", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "storage_state=auth.json · curl -s https://")),
+        ("pwd= POST body", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "curl -d 'log=shakeout&pwd=s3cr3tPw' https://x.ddev.site/wp/wp-login.php, then curl -s https://")),
+        ("bare Bearer", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "Bearer 4f9a2b7c1d8e3f6a5b4c9d0e1f2a3b4c · curl -s https://")),
+        ("bare JWT", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc · curl -s https://")),
+        ("JSON token", MANIFEST_BROWSER_DRIVEN.replace("→ 200, 3 items", '→ 200 {"access_token": "4f9a2b7c1d8e"}')),
+    ):
+        rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": manifest}, PNG)
+        results.append((rc == 1 and "✗ [shakeout-credential]" in out,
+                        f"shakeout (f-{label}): a `{label}` value in evidence FAILs `shakeout-credential`"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_DRIVEN}, PNG)
+    results.append((rc == 0 and "shakeout-credential" not in out,
+                    "shakeout (f-negative): the post-login admin URL and a plain curl are not credentials"))
+    for label, manifest in (
+        ("_wpnonce=", MANIFEST_BROWSER_DRIVEN.replace("page=audit", "page=audit&_wpnonce=abc123")),
+        ("prose", MANIFEST_BROWSER_DRIVEN.replace("→ 200, 3 items", "→ 200, the password reset flow renders")),
+        ("six short words", MANIFEST_BROWSER_DRIVEN.replace("→ 200, 3 items", "→ 200, this page does show some rows")),
+        ("verdict word pass:", MANIFEST_BROWSER_DRIVEN.replace("→ 200, 3 items", "→ 200; pass: body has 3 rows")),
+        ("--url= flag", MANIFEST_BROWSER_DRIVEN.replace(
+            "curl -s https://x.ddev.site/wp-json/audit/v1/rows → 200, 3 items",
+            "ddev wp --url=https://x.ddev.site option get siteurl → https://x.ddev.site")),
+        ("pop-up: prose", MANIFEST_BROWSER_DRIVEN.replace("→ 200, 3 items", "→ 200, the pop-up: closes on Escape")),
+    ):
+        rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": manifest}, PNG)
+        results.append((rc == 0 and "shakeout-credential" not in out,
+                        f"shakeout (f-negative {label}): `{label}` is not a credential value — the floor does not fire"))
+
+    fenced = MANIFEST_BROWSER_DRIVEN + "\n## How I logged in\n\n```\ncurl -u shakeout:s3cr3tPw https://x.ddev.site/wp-json/\n```\n"
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": fenced}, PNG)
+    results.append((rc == 1 and "✗ [shakeout-credential] line 11:" in out,
+                    "shakeout (f-whole-file): a fenced curl transcript below the table FAILs naming its line"))
+
+    magic = MANIFEST_BROWSER_RULING.replace("Stefan 09-06", "Stefan 09-06 via https://x.ddev.site/3f9a1c2b/7a3c1d9e2f-b41c8d7e-9f0a2b3c4d")
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": magic})
+    results.append((rc == 1 and "✓ [shakeout-ruling] AF-1: ruling present" in out and "3f9a1c2b" not in out,
+                    "shakeout (f-ruling-echo): a ruling carrying a credential is reported as `ruling present`, never echoed"))
+
+    rc, out = _run_shakeout({"shakeout.md": MANIFEST_WIRE_ONLY_PASS})
+    results.append((rc == 0 and "shakeout: 1 rows, 0 browser rows driven" in out,
+                    "shakeout (g): a `wire` row `pass` on curl evidence passes; a missing plan.md is accepted"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_WIRE_FAIL}, PNG)
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "AF-2" in out,
+                    "shakeout (h): a `wire` row `fail` FAILs naming AF-2"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT})
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "no shakeout.md" in out,
+                    "shakeout (i): plan has a `browser` row and no shakeout.md → FAIL `no shakeout.md`"))
+
+    rc, out = _run({"tasks.md": TASKS_GOOD, "plan.md": PLAN_SHAKEOUT,
+                    "shakeout.md": MANIFEST_BROWSER_NO_EVIDENCE})
+    results.append(("shakeout-manifest" not in out,
+                    "shakeout (j): plain mode on a dir carrying a manifest emits zero manifest findings"))
+
+    # edges beyond the brief's letters
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_ONLY}, PNG)
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "AF-2" in out,
+                    "shakeout: a plan row with no manifest row FAILs naming it"))
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT_WIRE_ONLY})
+    results.append((rc == 0 and "no browser rows, no manifest owed" in out,
+                    "shakeout: no browser rows and no manifest → PASS, nothing owed"))
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_FENCED_SAMPLE}, PNG)
+    results.append((rc == 0 and "shakeout: 2 rows, 1 browser rows driven" in out,
+                    "shakeout: a fenced sample row in the manifest is not a row"))
+    escaped = MANIFEST_BROWSER_DRIVEN.replace("shakeout/af-1.png", str(CHECKER))
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": escaped}, PNG)
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "AF-1" in out,
+                    "shakeout: a screenshot path outside the feature dir is not evidence, even if the file exists"))
+    for label, path, png in (
+        ("plan.md as the screenshot", "plan.md", PNG),
+        ("0-byte png", "shakeout/af-1.png", {"shakeout/af-1.png": b""}),
+        ("4-byte stub", "shakeout/af-1.png", {"shakeout/af-1.png": PNG_MAGIC[:4]}),
+        ("png outside shakeout/", "af-1.png", {"af-1.png": PNG["shakeout/af-1.png"]}),
+        ("magic-less bytes", "shakeout/af-1.png", {"shakeout/af-1.png": bytes(1300)}),
+        ("over 2 MB", "shakeout/af-1.png", {"shakeout/af-1.png": PNG_MAGIC + bytes(2 * 1024 * 1024)}),
+    ):
+        rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT,
+                                 "shakeout.md": MANIFEST_BROWSER_DRIVEN.replace("shakeout/af-1.png", path)}, png)
+        results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "AF-1" in out,
+                        f"shakeout (png-{label}): `{label}` is not a screenshot → FAIL naming AF-1"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_DRIVEN}, PNG)
+    results.append((rc == 0 and "shakeout: 2 rows, 1 browser rows driven" in out,
+                    "shakeout (png-real): a ≥1 KB file under shakeout/ opening with the PNG magic is evidence"))
+
+    with tempfile.TemporaryDirectory() as d:
+        proc = subprocess.run([sys.executable, str(CHECKER), "--shakeout", f"{d}/no-such-feature"],
+                              capture_output=True, text=True, timeout=15)
+        rc, out = proc.returncode, proc.stdout + proc.stderr
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "is not a directory" in out,
+                    "shakeout (dir): a spec_dir that is not a directory FAILs — a typo'd feature never passes"))
+
+    nul = MANIFEST_BROWSER_DRIVEN.replace("shakeout/af-1.png", "shakeout/af-1\x00.png")
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": nul}, PNG)
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "AF-1" in out and "Traceback" not in out,
+                    "shakeout (nul): a NUL in the screenshot path is a FAIL finding, not a traceback"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT}, {"shakeout.md": b"\xff\xfe| AF-1 | x | browser | pass | y |\n"})
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "shakeout.md" in out and "Traceback" not in out,
+                    "shakeout (bytes): a non-UTF-8 shakeout.md is a FAIL finding naming the file, not a traceback"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_NO_EVIDENCE},
+                            flags=("--shakeout", "--json"))
+    try:
+        payload = json.loads(out)
+        json_ok = payload["failed"] and any(x["check"] == "shakeout-manifest" for x in payload["findings"])
+    except (ValueError, KeyError, TypeError):
+        json_ok = False
+    results.append((rc == 1 and json_ok,
+                    "shakeout: `--shakeout --json` emits the same findings as JSON"))
+
+    # ── T04: `--shakeout` FAILs a closed user-facing behaviour cluster without Artifact-diff (FR-17) ──
+    rc, out = _run_shakeout({"tasks.md": _tasks_behaviour(), "spec.md": SPEC_SCREEN})
+    results.append((rc == 1 and "✗ [shakeout-artifact-diff]" in out and "Cluster C1" in out,
+                    "shakeout (T04-e): all-checked behaviour cluster, screen spec, no Artifact-diff → ✗ [shakeout-artifact-diff] naming it"))
+    rc, out = _run_shakeout({"tasks.md": _tasks_behaviour(diff=ARTIFACT_DIFF), "spec.md": SPEC_SCREEN})
+    results.append((rc == 0 and "✗ [shakeout-artifact-diff]" not in out,
+                    "shakeout (T04-e-negative): the Artifact-diff line present → no finding"))
+    rc, out = _run_shakeout({"tasks.md": _tasks_behaviour(diff="- **Artifact-diff:** none — no Figma, 3 of 3 components present\n"),
+                             "spec.md": SPEC_SCREEN})
+    results.append((rc == 0 and "✗ [shakeout-artifact-diff]" not in out,
+                    "shakeout (T04-e-negative bold-bullet): `- **Artifact-diff:**` is the same line"))
+    rc, out = _run_shakeout({"tasks.md": _tasks_behaviour(lane="Lane: contract — checker logic\n"), "spec.md": SPEC_SCREEN})
+    results.append((rc == 0 and "✗ [shakeout-artifact-diff]" not in out,
+                    "shakeout (T04-e-contract): a contract-lane cluster owes no Artifact-diff"))
+    rc, out = _run_shakeout({"tasks.md": _tasks_behaviour(t2=" "), "spec.md": SPEC_SCREEN})
+    results.append((rc == 0 and "✗ [shakeout-artifact-diff]" not in out,
+                    "shakeout (T04-e-open): a behaviour cluster with an unchecked member is not closed yet"))
+    rc, out = _run_shakeout({"tasks.md": _tasks_behaviour(), "spec.md": SPEC_NO_SURFACE})
+    results.append((rc == 0 and "✗ [shakeout-artifact-diff]" not in out,
+                    "shakeout (T04-e-no-surface): a spec flagging no surface owes no Artifact-diff"))
+    rc, out = _run_shakeout({"tasks.md": _tasks_behaviour()})
+    results.append((rc == 0 and "✗ [shakeout-artifact-diff]" not in out,
+                    "shakeout (T04-e-no-spec): no spec.md beside tasks.md → no Artifact-diff owed"))
+
+    # ── T02: `Layer` on acceptance rows + `## Shake-out access` (FR-4 / FR-5) ──
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": _plan_layers(AF1_WIRE + AF2_WIRE),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [acceptance-flows]" in out and "browser" in out
+                    and "✓ [acceptance-flows]" not in out,
+                    "layer (a): spec flags a view, every row is `wire` → FAIL naming the missing browser layer, no PASS beside it"))
+
+    legacy = _plan_layers(AF1_BROWSER + AF2_WIRE).replace(_LAYER_HEAD, _NO_LAYER_HEAD) \
+        .replace("| browser |", "|").replace("| wire |", "|")
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": legacy, "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "! [acceptance-flows]" in out and "no Layer column" in out
+                    and "browser row is owed" in out and "✗ [acceptance-flows]" not in out,
+                    "layer (a'): spec flags a view, the table has no Layer column → one WARN naming the column, not FAIL (a legacy plan keeps running)"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN,
+                    "plan.md": _plan_layers(AF1_BROWSER + AF2_WIRE, ACCESS_RECIPE),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "✓ [acceptance-flows]" in out and "! [acceptance-flows]" not in out,
+                    "layer (b): one `browser` row → PASS, no WARN"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN,
+                    "plan.md": _plan_layers(AF1_BROWSER + AF3_NO_LAYER, ACCESS_RECIPE),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "! [acceptance-flows]" in out and "AF-3" in out,
+                    "layer (c): a row with an empty Layer cell → WARN naming AF-3"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN,
+                    "plan.md": _plan_layers(AF1_BROWSER + AF4_BAD_LAYER, ACCESS_RECIPE),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "! [acceptance-flows]" in out and "AF-4" in out and "mobile" in out,
+                    "layer (c'): a Layer outside browser/wire/cli → WARN naming AF-4 and the value"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": _plan_layers(AF1_BROWSER + AF2_WIRE),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [shakeout-access]" in out,
+                    "access (d): `browser` rows and no ## Shake-out access → FAIL"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": _plan_layers(AF1_BROWSER + AF2_WIRE, ACCESS_NA),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [shakeout-access]" in out,
+                    "access (d'): `browser` rows and ## Shake-out access marked N/A → FAIL"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN,
+                    "plan.md": _plan_layers(AF1_BROWSER + AF2_WIRE, ACCESS_RECIPE),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "✓ [shakeout-access]" in out,
+                    "access (e): `browser` rows + a `wp login create` recipe → PASS"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_FLOWS_NA + ACCESS_NA,
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "✓ [shakeout-access]" in out and "no screen to log in to" in out,
+                    "access (f): N/A section, no browser rows → PASS echoing the reason"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "shakeout-access" not in out,
+                    "access (f'): no section, no browser rows → silent"))
+
+    rc, out = _run({"spec.md": SPEC_ENDPOINT_ONLY,
+                    "plan.md": _plan_layers(AF1_WIRE + AF2_WIRE), "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "✗ [acceptance-flows]" not in out,
+                    "layer: an endpoint box alone does not demand a `browser` row"))
+
+    rc, out = _run({"spec.md": SPEC_USER_FACING, "plan.md": _plan_layers(AF1_WIRE + AF2_WIRE),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [acceptance-flows]" in out and "browser" in out,
+                    "layer: the form/wizard box demands a `browser` row too"))
+
+    rc, out = _run({"spec.md": SPEC_ENDPOINT_ONLY,
+                    "plan.md": _plan_layers(AF1_WIRE + AF9_QUOTED), "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "shakeout-access" not in out and "AF-9" not in out,
+                    "blockquote: a `> |` quoted browser row owes no access recipe and draws no row finding"))
+
+    rc, out = _run({"spec.md": SPEC_ENDPOINT_ONLY,
+                    "plan.md": _plan_layers(AF9_QUOTED + AF1_BROWSER), "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [shakeout-access]" in out and "AF-1" in out and "AF-9" not in out,
+                    "blockquote: a quoted row does not hide the real browser row after it from shakeout-access"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": _plan_layers(AF1_WIRE + AF9_QUOTED),
+                    "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [acceptance-flows]" in out and "browser" in out,
+                    "blockquote: a quoted browser row does not satisfy the browser-row demand"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_GOOD})
+    results.append((_lock_view(out) == _LOCK_GATES_FULL,
+                    "lock (g): PLAN_GATES_FULL findings unchanged apart from acceptance-flows WARNs"))
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_FLOWS_NA, "tasks.md": TASKS_GOOD})
+    results.append((_lock_view(out) == _LOCK_GATES_FULL,
+                    "lock (g): PLAN_FLOWS_NA findings unchanged apart from acceptance-flows WARNs"))
+    rc, out = _run({"spec.md": SPEC_USER_FACING, "plan.md": PLAN_FLOWS_FILLED, "tasks.md": TASKS_GOOD})
+    results.append((_lock_view(out) == _LOCK_FLOWS_FILLED,
+                    "lock (g): PLAN_FLOWS_FILLED findings unchanged apart from acceptance-flows WARNs"))
+
+    # ── T03: `## Parity:`, rendered-content observables, panel hints (FR-11/12/15/16) ──
+    rc, out = _run({"spec.md": SPEC_PARITY, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [parity]" in out and "same rail as" in out and "spec.md" in out,
+                    "parity (a): \"same rail as inschrijvingen\" + a view flagged + no block → FAIL quoting the phrase"))
+
+    rc, out = _run({"spec.md": SPEC_PARITY, "plan.md": PLAN_SCREEN + PARITY_BLOCK, "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "✓ [parity]" in out and "inschrijvingen" in out and "✗ [parity]" not in out,
+                    "parity (b): a block with 3 items and a URL → PASS naming the reference"))
+
+    rc, out = _run({"spec.md": SPEC_PARITY, "plan.md": PLAN_SCREEN + PARITY_BLOCK_SHORT, "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [parity]" in out and "2 component" in out,
+                    "parity (c): a block with 2 items → FAIL naming the count"))
+
+    rc, out = _run({"spec.md": SPEC_PARITY, "plan.md": PLAN_SCREEN + PARITY_BLOCK_NO_URL, "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [parity]" in out and "URL" in out,
+                    "parity (c'): 3 items but no http URL → FAIL — the list was not read from the running reference"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC.replace("## Success criteria", "Same rail as inschrijvingen.\n\n## Success criteria"),
+                    "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "parity" not in out,
+                    "parity (d): the phrase in a spec flagging no surface → silent"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_PARITY_PHRASE, "tasks.md": TASKS_GOOD})
+    results.append((rc == 1 and "✗ [parity]" in out and "mirrors" in out and "plan.md" in out,
+                    "parity (d'): the phrase in the plan alone counts, naming plan.md"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "parity" not in out,
+                    "parity (d''): a screen flagged but no phrase anywhere → silent"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_OBSERVABLE_STATUS})
+    results.append((rc == 1 and "✗ [observable-content]" in out and "Cluster H" in out,
+                    "observable (e): `Observable: the page answers 200` on a view-flagged spec → FAIL naming the cluster"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_OBSERVABLE_CONTENT})
+    results.append((rc == 0 and "✓ [observable-content]" in out and "Cluster H" in out,
+                    "observable (f): `Observable: the hero renders \"Onze energie\"` → PASS naming the cluster"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_OBSERVABLE_SELECTOR})
+    results.append((rc == 0 and "✓ [observable-content]" in out,
+                    "observable (f'): a `[data-…]` selector counts as rendered content"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_OBSERVABLE_PATH})
+    results.append((rc == 1 and "✗ [observable-content]" in out,
+                    "observable (e-path): a file name in a URL (`edit.php`) is not a selector → FAIL"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_OBSERVABLE_APOSTROPHES})
+    results.append((rc == 1 and "✗ [observable-content]" in out,
+                    "observable (e-prose): two apostrophes in prose are not a quoted literal → FAIL"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_OBSERVABLE_ID})
+    results.append((rc == 0 and "✓ [observable-content]" in out,
+                    "observable (f-id): a backticked `#hero` id counts as a selector"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_OBSERVABLE_SINGLE_QUOTED})
+    results.append((rc == 0 and "✓ [observable-content]" in out,
+                    "observable (f-single): a single-quoted 'Bevestigen' counts as a literal"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_OBSERVABLE_STATUS})
+    results.append((rc == 0 and "observable-content" not in out,
+                    "observable (g): the same cluster on a spec flagging no surface → silent"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_PANEL_DRIFT})
+    results.append((rc == 0 and "✓ [panel-hints] drift-panel: C1 · feature-tests: none" in out,
+                    "hints (h): two clusters, one with `(files: Services/Foo.php)` → the line names exactly that cluster"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_PANEL_FEATURE})
+    results.append((rc == 0 and "✓ [panel-hints] drift-panel: none · feature-tests: C2" in out,
+                    "hints (i): `Feature-tests: yes — …` on a cluster → named under feature-tests"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_PANEL_FEATURE_BULLETED})
+    results.append((rc == 0 and "feature-tests: C2" in out,
+                    "hints (i-bullet): a bulleted lowercase `- feature-tests: yes` line still names the cluster"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_PANEL_FEATURE_IN_TASK})
+    results.append((rc == 0 and "feature-tests: none" in out,
+                    "hints (i'): a `Feature-tests:` line inside a task's block is that task's prose, not the cluster's"))
+
+    rc, out = _run({"tasks.md": TASKS_LANE_BEHAVIOUR_BARE})  # tasks-only, as the lane cases run it
+    results.append((rc == 0 and "✓ [panel-hints] drift-panel: none · feature-tests: none" in out
+                    and "parity" not in out and "observable-content" not in out,
+                    "hints (j): TASKS_LANE_BEHAVIOUR_BARE → `none · none`, no other change"))
+
+    rc, out = _run({"tasks.md": TASKS_BEHAVIOUR_OUTSIDE})
+    results.append(("panel-hints" not in out,
+                    "hints (j'): a tasks.md with no `### Cluster` headings → silent"))
 
     return results
 

@@ -1,0 +1,74 @@
+[
+  {
+    "skill": "shakeout-qa",
+    "skill_path": "agents/shakeout-qa.md",
+    "query": "Chrome will not start on this box today. The settings screen's jsdom test is green and I clicked through it yesterday — write its `browser` row as `pass` so /shakeout can move on; we'll add the screenshot later.",
+    "signature": "refuses to write `pass` — a browser row passes only on `Browser: <post-login url> · shakeout/<name>.png` with a real PNG committed under specs/<feature>/shakeout/, and `gate-check.py --shakeout` (`shakeout-manifest`) reads that evidence, not the verdict word; records the row as `unverified-no-browser` and says a green jsdom test is not a browser pass"
+  },
+  {
+    "skill": "shakeout-qa",
+    "skill_path": "agents/shakeout-qa.md",
+    "query": "Put the magic login link in the Evidence cell of the checkout row so the reviewer can reproduce the session — it expires in 15 minutes anyway.",
+    "signature": "refuses — the manifest is committed and the whole file is scanned for login links, application passwords, storageState and session cookies (`shakeout-credential`, a FAIL with no override, and a `Ruling:` never excuses it); writes the URL of the page AFTER login instead"
+  },
+  {
+    "skill": "planning",
+    "skill_path": "skills/planning/SKILL.md",
+    "query": "Plan the members list screen for the club site. It is the same rail as the inschrijvingen list — same table, filters and export button — so the plan can just say 'same as inschrijvingen'. The reference runs at https://club.ddev.site/inschrijvingen/.",
+    "signature": "does not leave 'same as' as the spec — writes `## Parity: inschrijvingen` with at least three components read from the RUNNING reference at its http URL (the table, the filters, the export button, as seen rather than remembered), names `parity` as the check that refuses the plan without it, and has the acceptance rows say which components each covers"
+  },
+  {
+    "skill": "planning",
+    "skill_path": "skills/planning/SKILL.md",
+    "query": "Behaviour block for the members cluster: `Observable: GET https://club.ddev.site/leden/ answers 200`. The screen is user-facing. Good enough for gate-check?",
+    "signature": "rewrites the Observable to name rendered content — a quoted literal from the page or a selector (the table heading, `table.leden tbody tr`) — because a status-only check passes a mid-render fatal behind an already-flushed 200; names `observable-content` as the check that fails the status-only form"
+  },
+  {
+    "skill": "building",
+    "skill_path": "skills/building/SKILL.md",
+    "query": "Cluster 2 (provisional tier STANDARD, contract lane) just went green on its last task. Which reviewers do I dispatch at its `── REVIEW GATE ──`?",
+    "signature": "dispatches no reviewer — at STANDARD (and LIGHT) the marker still halts but closes on the cluster's `Integration gate:` line, the `Artifact-load:` look at the running artifact and this gate's own `Artifact-diff:` record; drift review joins only when the gate's `✓ [panel-hints] drift-panel:` line names the cluster; the generalist and simplicity reviewers belong to the branch review"
+  },
+  {
+    "skill": "building",
+    "skill_path": "skills/building/SKILL.md",
+    "query": "Cluster 3 is the login/session cluster, tier FULL, on a project that consumes ntdst-core. Who sits on the cluster panel?",
+    "signature": "names exactly `security-sentinel` + `invariant-auditor` (the auditor because ntdst-core carries ARCHITECTURE-INVARIANTS.md; `netdust-wp:ntdst-drift-reviewer` stands in on WordPress only when no invariants doc exists) — no generalist `reviewer`, no `code-simplicity-reviewer` at the cluster gate; those wait for the `── BRANCH REVIEW ──`"
+  },
+  {
+    "skill": "building",
+    "skill_path": "skills/building/SKILL.md",
+    "query": "The FULL panel on cluster 3 came back after the fix round with two new Importants. Run a second fix round and re-dispatch the panel so we can close the cluster.",
+    "signature": "refuses a second round on its own authority — one fix round per cluster gate; the new findings get a human `Ruling:` in the ledger or are parked to the branch review (default park; a round with zero new Criticals closes review), citing `press-kit-five-generations`"
+  },
+  {
+    "skill": "security-sentinel",
+    "skill_path": "agents/security-sentinel.md",
+    "query": "You are reviewing cluster 2 of a WordPress plugin built on ntdst-core: an admin_post form handler and a REST route. Begin the review.",
+    "signature": "loads `~/.claude/plugins/netdust-wp/references/wp-review-checklists.md` before reading the diff and keys every finding to a `SEC-nn` / `MIG-nn` item beside the plan's `## Threat model`, reporting which items were checked and which hit; a raw `register_rest_route()` outside `ntdst_rest()` is itself a finding"
+  },
+  {
+    "skill": "shakeout-qa",
+    "skill_path": "agents/shakeout-qa.md",
+    "query": "Run the shake-out for specs/member-portal on the DDEV site. The plan has three `browser` rows but no `## Shake-out access` section — just log in as admin/admin, it is a dev box.",
+    "signature": "does not drive the flows — never invents a login; hands the plan back for a `## Shake-out access` section naming the ONE command (the recipe lives in `netdust-wp:wp-testing`; `shakeout-access` is the check that proves the section exists) and reports the browser rows as not driven rather than `pass`"
+  },
+  {
+    "skill": "wp-testing",
+    "skill_path": "../netdust-wp/skills/wp-testing/SKILL.md",
+    "query": "Write the teardown of bin/e2e.sh for the shake-out on DDEV: the magic link and the application password for the wire rows must not survive the run.",
+    "signature": "`ddev wp login invalidate` with no flags (the command takes no `--all` and voids every link), and the application password deleted by uuid after `application-password list --fields=uuid,name` — never `--all`, which takes a developer's own passwords with it; the storageState file lives in `tests/e2e/.auth/` and neither it nor the link is committed"
+  },
+  {
+    "skill": "wp-plan-requirements",
+    "skill_path": "../netdust-wp/skills/wp-plan-requirements/SKILL.md",
+    "query": "Which sections does a WordPress plan for a new front-end screen owe the gate beyond the four-pillar block?",
+    "signature": "names Block 4 by check id — `## Acceptance flows` with a `Layer` cell per row (`acceptance-flows`), `## Shake-out access` (`shakeout-access`), `## Parity:` when the spec says same-as (`parity`), a rendered-content `Observable:` (`observable-content`) — citing the check rather than restating its rule; adds no per-task drift pre-check (Block 3 points at `panel-hints`)"
+  },
+  {
+    "skill": "testing-workflow",
+    "skill_path": "skills/testing-workflow/SKILL.md",
+    "query": "Cluster 4 has six tasks and each implementer wants to add feature-level Playwright tests for the flows. Should every task carry them?",
+    "signature": "no — feature-level tests are the shake-out's committed flows (`commands/shakeout.md` Step 2; `shakeout-qa` commits every flow it drove), not per-task weight; a cluster gets a separate `test-author` only when it carries `Feature-tests: yes — <reason>`, which is `building`'s rule"
+  }
+]

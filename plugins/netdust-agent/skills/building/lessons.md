@@ -101,10 +101,18 @@ the framework. Stefan caught it reading the diff.
 **Rule:** on a WordPress project (or any package that consumes ntdst-core) the controller
 loads `netdust-wp:ntdst-framework` before the first dispatch and names it, plus
 `wp-testing`, in every implementer prompt; the plan's `## Architecture invariants touched`
-cites ntdst-core's `ARCHITECTURE-INVARIANTS.md` even when the repo has none of its own;
-and the cluster panel on such a package includes `netdust-wp:ntdst-drift-reviewer` (or
-`invariant-auditor`) at STANDARD tier, not only at FULL. This is what
+cites ntdst-core's `ARCHITECTURE-INVARIANTS.md` even when the repo has none of its own
+(detection half re-ruled below, 2026-09-06). This is what
 `netdust-wp/CLAUDE.md` already says; the failure was the controller not doing it.
+
+**Re-ruled 2026-09-06** (`specs/artifact-gate/spec.md`, FR-9–FR-11): the prevention half
+stands verbatim — the framework skills ride in every dispatch, and `## Architecture
+invariants touched` cites core's doc. The detection half moves: drift review runs at the
+branch review and on the clusters the gate's `panel-hints` line names (files under
+`Services/`, `Handlers/`, `Repositories/`, `Modules/`), not on every panel. The week of
+2–5 Sept ran 15 panels and found one Critical — outside a panel; the reviewers that found
+defects were `invariant-auditor` and `security-sentinel`. So the cluster panel at FULL is
+those two, and STANDARD and LIGHT dispatch none.
 
 ---
 

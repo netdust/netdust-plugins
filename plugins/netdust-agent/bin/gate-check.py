@@ -17,6 +17,7 @@ non-test gates into a verifiable check — the sibling of subagent-stop.py for t
 Usage:
     gate-check.py <feature-spec-dir>      # dir containing spec.md / plan.md / tasks.md
     gate-check.py --json <dir>
+    gate-check.py --shakeout <dir>       # shakeout.md vs the plan's acceptance rows
 
 Exit code: 0 if no FAIL findings, 1 otherwise. WARN findings never fail the gate.
 """
@@ -319,7 +320,7 @@ def check_security_surfaces(spec_text: str, f: Findings) -> None:
 def spec_user_facing_triggered(spec_text: str) -> list[str]:
     """Any checked box under 'User-facing surfaces' that isn't 'None of the above' — the
     arming switch for the plan's 1g gate, exactly as spec_security_triggered() arms 1a."""
-    body = section_body(spec_text, "User-facing surfaces")
+    body = section_body(strip_fenced(spec_text), "User-facing surfaces")
     if body is None:
         return []
     hits = []
@@ -419,12 +420,19 @@ def check_acceptance_flows(plan_text: str, spec_text: str | None, f: Findings) -
     rows = _flow_rows(author_lines)
 
     triggered = spec_user_facing_triggered(spec_text) if spec_text else []
+    layered = _author_flow_rows(body) if rows else []
+    has_layer_column = any(r["layer"] is not None for r in layered)
+    screens = spec_screens(spec_text)
     if triggered and (is_na or not rows):
         f.add("fail", "acceptance-flows",
               "spec flags user-facing surface(s) "
               f"[{', '.join(triggered[:3])}] but the plan's ## Acceptance flows is "
               f"{'N/A' if is_na else 'empty/placeholder'} — the 1g gate is not satisfied, so "
               "shake-out would re-discover the flows free-form instead of driving them")
+    elif screens and has_layer_column and not any(_layer(r) == "browser" for r in layered):
+        f.add("fail", "acceptance-flows",
+              f"spec flags a screen [{', '.join(screens[:3])}] but none of the {rows} row(s) "
+              "has Layer `browser` — the shake-out has nothing to drive in a browser")
     elif rows:
         f.add("pass", "acceptance-flows",
               f"## Acceptance flows carries {rows} filled-in flow row(s)")
@@ -435,6 +443,16 @@ def check_acceptance_flows(plan_text: str, spec_text: str | None, f: Findings) -
         f.add("warn", "acceptance-flows",
               "## Acceptance flows is neither N/A nor a filled-in matrix — confirm it is "
               "intentional")
+    if rows and not has_layer_column:
+        f.add("warn", "acceptance-flows",
+              "the table has no Layer column — add one (browser · wire · cli per row)"
+              + ("; a browser row is owed" if screens else ""))
+    for r in layered if has_layer_column else []:
+        layer = _layer(r)
+        if layer not in LAYERS:
+            f.add("warn", "acceptance-flows",
+                  f"row {r['n']} carries {f'Layer `{layer}`' if layer else 'no Layer'} — "
+                  "name one of browser · wire · cli")
 
 
 TIER = re.compile(r"\[Tier\s+[AB]\]", re.IGNORECASE)
@@ -1512,11 +1530,14 @@ BEHAVIOUR_BLOCK_LINES = {
         r"^\s*(?:[-*]\s+)?(?:\*\*)?Observable(?:\*\*)?:\s*(\S.*?)\s*$", re.IGNORECASE),
     "red_until": re.compile(
         r"^\s*(?:[-*]\s+)?(?:\*\*)?RED until(?:\*\*)?:\s*(\S.*?)\s*$", re.IGNORECASE),
+    "feature_tests": re.compile(
+        r"^\s*(?:[-*]\s+)?(?:\*\*)?Feature-tests(?:\*\*)?:\s*(yes\b.*?)\s*$", re.IGNORECASE),
 }
 _BLOCK_KEYS = ("behaviour", "observable", "red_until")
 BEHAVIOUR_LABEL = {"behaviour": "`Behaviour:`", "observable": "`Observable:`",
                    "red_until": "`RED until:`"}
 CLUSTER_COVERED = re.compile(r"^covered by cluster behaviour\b", re.IGNORECASE)
+ARTIFACT_DIFF_LINE = re.compile(r"^\s*(?:[-*]\s+)?\**Artifact-diff\**:", re.IGNORECASE)
 
 
 def _covered_by_cluster(cont: list[str]) -> bool:
@@ -1546,11 +1567,12 @@ def parse_behaviour_clusters(tasks_text: str) -> list[dict]:
             lane = _lane_from_heading(ln)
             cur = {"name": ln.lstrip("# ").split("(")[0].strip(),
                    "behaviour": None, "observable": None, "red_until": None,
+                   "feature_tests": None,
                    "lane": lane[0] if lane else None,
                    "lane_reason": lane[1] if lane else "",
                    "lane_raw": lane[2] if lane else None,
                    "lane_conflict": None,   # (heading value, body value) when both are stated
-                   "members": []}
+                   "artifact_diff": False, "members": []}
             i += 1
             continue
         h = heading_text(ln)
@@ -1571,9 +1593,14 @@ def parse_behaviour_clusters(tasks_text: str) -> list[dict]:
             cur["members"].append({"id": tm.group(1),
                                    "files": seg.group(1) if seg else "",
                                    "rest": tm.group(2), "cont": cont,
+                                   "done": bool(CHECKED_BOX.match(ln)),
                                    "covered": _covered_by_cluster(cont)})
+            if any(ARTIFACT_DIFF_LINE.match(c) for c in cont):
+                cur["artifact_diff"] = True
             i = j
             continue
+        if cur is not None and ARTIFACT_DIFF_LINE.match(ln):
+            cur["artifact_diff"] = True
         if cur is not None and not cur["members"]:
             lm = LANE_LINE.match(ln)
             if lm:
@@ -1737,12 +1764,16 @@ def behaviour_lane_task_ids(tasks_text: str) -> set[str]:
             if c["lane"] == "behaviour" for m in c["members"]}
 
 
-def _cluster_key(name: str) -> str:
-    """`Cluster A — the checker` / `A — the checker` / `A` → `a`: the leading token,
+def _cluster_token(name: str) -> str:
+    """`Cluster A — the checker` / `A — the checker` / `A` → `A`: the leading token,
     which is how the plan's per-cluster stakes rows and the tasks headings name one."""
     n = re.sub(r"^\s*cluster\s+", "", name.strip(), flags=re.IGNORECASE)
     tok = re.match(r"([A-Za-z0-9._-]+)", n)
-    return tok.group(1).lower() if tok else n.lower()
+    return tok.group(1) if tok else n
+
+
+def _cluster_key(name: str) -> str:
+    return _cluster_token(name).lower()
 
 
 def cluster_stakes_map(plan_text: str | None) -> dict[str, str]:
@@ -2377,6 +2408,334 @@ def check_clusters(tasks_text: str, f: Findings) -> None:
               f"{len(clusters)} cluster(s): all <=4 tasks; irreversible steps solo & non-[P]")
 
 
+# ── the shake-out manifest (artifact-gate FR-1..FR-3) ─────────────────────────
+# `specs/<feature>/shakeout.md`: `| # | Flow | Layer | Verdict | Evidence |`. A `browser`
+# row passes on evidence — a URL plus a screenshot on disk — never on the verdict word.
+
+BROWSER_EVIDENCE = re.compile(r"Browser:\s*(?P<url>https?://\S+)\s*·\s*(?P<path>\S+)")
+RULING = re.compile(r"Ruling:\s*(?P<reason>.+)")
+# The words the plan names, then every value the recipe or a session can mint: app
+# passwords (the command, the 6×4 value — case-sensitive so six short words are not one),
+# basic auth in a flag or a URL, the WP session cookie, a password in a POST body or env,
+# bearer/JWT/JSON tokens, the login page, and `wp login create`'s magic link
+# (`/<8 hex>/<6-10 hex>-<6-10 hex>-<6-10 hex>`, per aaemnnosttv/wp-cli-login-command).
+CREDENTIAL = re.compile(
+    r"login=|token=|app(?:lication)?[-_ ]?password|storage[_-]?state"
+    r"|(?-i:(?![a-z ]{29})\b(?:[A-Za-z0-9]{4} ){5}[A-Za-z0-9]{4}\b)"
+    r"|(?<![\w-])(?:-u|--user)[\s=]*\S+:\S+|\buser(?:name)?:\s*\S+:\S+|https?://[^\s/@|]+:[^\s/@|]+@"
+    r"|wordpress(?:_logged_in|_sec)?_[0-9a-f]{32}"
+    r"|\b(?:pwd|passw(?:or)?d|user_pass|[A-Z0-9_]*_PASS(?:WORD)?)\s*[=:]\s*\S+"
+    r"|Authorization:\s*(?:Basic|Bearer)\s+\S+|\bBasic\s+[A-Za-z0-9+/=]{16,}"
+    r"|\bBearer\s+[A-Za-z0-9._~+/-]{20,}|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"
+    r"|\"?(?:access_)?token\"?\s*:\s*\"?\S+"
+    r"|wp-login\.php\?[^ |]*"
+    r"|https?://\S+/[0-9a-f]{8}/[0-9a-f]{6,10}-[0-9a-f]{6,10}-[0-9a-f]{6,10}\b",
+    re.IGNORECASE)
+
+
+def _split_cells(line: str) -> list[str] | None:
+    m = FLOW_ROW.match(line)
+    if not m:
+        return None
+    return [c.strip() for c in m.group("cells").rstrip("|").split("|")]
+
+
+def _pipe_table(lines: list[str], columns: dict[str, str]) -> list[dict]:
+    """Rows of the first pipe table whose header names a `#` column, keyed by `columns`
+    (key → header name, case-insensitive). A column the header lacks reads None."""
+    index, rows = None, []
+    for i, ln in enumerate(lines):
+        if TABLE_SEPARATOR.match(ln):
+            continue
+        cells = _split_cells(ln)
+        if index is None:
+            if cells and "#" in cells and i + 1 < len(lines) and TABLE_SEPARATOR.match(lines[i + 1]):
+                names = [c.lower() for c in cells]
+                index = {k: names.index(h.lower()) if h.lower() in names else None
+                         for k, h in columns.items()}
+            continue
+        if cells is None:
+            break
+        rows.append({k: (cells[j] if j is not None and j < len(cells) else None)
+                     for k, j in index.items()})
+    return [r for r in rows if r["n"]]
+
+
+def parse_flow_rows(body_lines: list[str]) -> list[dict]:
+    """The plan's acceptance rows as `[{n, flow, layer}]`; `layer` is None when the
+    table has no Layer column."""
+    return _pipe_table(body_lines, {"n": "#", "flow": "Flow", "layer": "Layer"})
+
+
+def _author_flow_rows(body: str) -> list[dict]:
+    """The plan's own acceptance rows — fenced samples and `>` guidance dropped."""
+    lines = [ln for ln in strip_fenced(body).splitlines() if not ln.lstrip().startswith(">")]
+    return parse_flow_rows(lines)
+
+
+LAYERS = ("browser", "wire", "cli")
+SCREEN_BOX = re.compile(r"\b(view|screen|page|admin|form|wizard|multi-step)\b", re.IGNORECASE)
+NA_REASON = re.compile(r"^N/?A\b[\s—–:-]*(?P<reason>.*)", re.IGNORECASE)
+
+
+def _layer(row: dict) -> str:
+    return (row["layer"] or "").lower()
+
+
+def spec_screens(spec_text: str | None) -> list[str]:
+    """The checked user-facing boxes naming a screen — what demands a `browser` row, an
+    enumerated parity reference and a rendered-content observable."""
+    return [t for t in spec_user_facing_triggered(spec_text or "") if SCREEN_BOX.search(t)]
+
+
+def check_shakeout_access(plan_text: str, f: Findings) -> None:
+    """FR-5 — a plan with `browser` rows names the ONE command that logs the shake-out in."""
+    flows = section_body(plan_text, "Acceptance flows") or ""
+    browser = [r["n"] for r in _author_flow_rows(flows) if _layer(r) == "browser"]
+    body = section_body(plan_text, "Shake-out access")
+    if body is None and not browser:
+        return
+    author = "\n".join(ln for ln in (body or "").splitlines()
+                       if not ln.lstrip().startswith(">")).strip()
+    na = NA_REASON.match(author)
+    owed = f"rows {', '.join(browser)} are `browser`"
+    if browser and body is None:
+        f.add("fail", "shakeout-access",
+              f"no ## Shake-out access but {owed} — name the one command that mints the "
+              "shake-out's session (recipe in `netdust-wp:wp-testing`)")
+    elif browser and (na or not author):
+        f.add("fail", "shakeout-access",
+              f"## Shake-out access is {'N/A' if na else 'empty'} but {owed}")
+    elif browser:
+        f.add("pass", "shakeout-access", f"## Shake-out access: {author.splitlines()[0]}")
+    elif na:
+        f.add("pass", "shakeout-access",
+              f"## Shake-out access N/A and no browser rows — {na.group('reason') or 'no reason given'}")
+
+
+# ── parity, rendered content, panel hints (artifact-gate FR-11/12/15/16) ──────
+
+PARITY_PHRASE = re.compile(r"\b(same\s+\w+\s+as|identical\s+to|mirrors?\b|parity\s+with)\b",
+                           re.IGNORECASE)
+PARITY_HEADING = re.compile(r"^##\s+Parity:\s*(?P<ref>.*?)\s*$", re.IGNORECASE)
+LIST_ITEM = re.compile(r"^\s*(?:[-*]|\d+\.)\s+\S")
+HTTP_URL = re.compile(r"https?://\S+")
+
+
+def _parity_phrase(spec_text: str | None, plan_text: str) -> tuple[str, str] | None:
+    """(phrase, file) for the first parity phrase — the spec's, else the plan's."""
+    for name, text in (("spec.md", spec_text), ("plan.md", plan_text)):
+        m = PARITY_PHRASE.search(strip_fenced(text or ""))
+        if m:
+            return m.group(0), name
+    return None
+
+
+def _parity_section(plan_text: str) -> tuple[str, list[str]] | None:
+    """(reference, author lines) under the first `## Parity: <reference>` heading."""
+    lines = strip_fenced(plan_text).splitlines()
+    for i, ln in enumerate(lines):
+        m = PARITY_HEADING.match(ln)
+        if not m:
+            continue
+        body = []
+        for nxt in lines[i + 1:]:
+            h = heading_text(nxt)
+            if h and h[0] <= 2:
+                break
+            if not nxt.lstrip().startswith(">"):
+                body.append(nxt)
+        return m.group("ref").split("[")[0].strip(), body
+    return None
+
+
+def check_parity(spec_text: str | None, plan_text: str, f: Findings) -> None:
+    """FR-15 — "same as X" on a screen is enumerated from the RUNNING X, never remembered."""
+    hit = _parity_phrase(spec_text, plan_text)
+    if hit is None or not spec_screens(spec_text):
+        return
+    phrase, origin = hit
+    section = _parity_section(plan_text)
+    if section is None:
+        f.add("fail", "parity",
+              f'{origin} says "{phrase}" but the plan has no `## Parity: <reference>` — list '
+              "≥3 components read from the running reference, its URL named")
+        return
+    ref, body = section
+    items = sum(1 for ln in body if LIST_ITEM.match(ln))
+    url = HTTP_URL.search("\n".join(body))
+    if items < 3 or url is None:
+        f.add("fail", "parity",
+              f"## Parity: {ref} lists {items} component(s)"
+              + ("" if url else " and names no http URL")
+              + f' — {origin} says "{phrase}": read ≥3 components from the running reference')
+        return
+    f.add("pass", "parity", f"## Parity: {ref} — {items} components read from {url.group(0)}")
+
+
+QUOTED_LITERAL = re.compile(r"""(?:^|[\s`(])(["'])([^"'\n]{1,80})\1(?=$|[\s`).,;:!?])""")
+SELECTOR = re.compile(r"(?:^|[\s`(])(?:#|\.)[A-Za-z_][\w-]*|\[data-")
+
+
+def check_observable_content(tasks_text: str, spec_text: str | None, f: Findings) -> None:
+    """FR-16 — on a screen, a behaviour cluster's `Observable:` names rendered content."""
+    if not spec_screens(spec_text):
+        return
+    clusters = [c for c in parse_behaviour_clusters(tasks_text) if c["lane"] == "behaviour"]
+    named = []
+    for c in clusters:
+        obs = c["observable"] or ""
+        if QUOTED_LITERAL.search(obs) or SELECTOR.search(obs):
+            named.append(c["name"])
+        else:
+            f.add("fail", "observable-content",
+                  f"{c['name']}: `Observable:` names no rendered content — quote a literal "
+                  '("…") or a selector (#id, .class, [data-…]), not a status')
+    if named and len(named) == len(clusters):
+        f.add("pass", "observable-content", "rendered content named on " + ", ".join(named))
+
+
+DRIFT_PATH = re.compile(r"(^|/)(Services?|Handlers?|Repositor(y|ies)|Modules)/")
+
+
+def _touches_framework_path(c: dict) -> bool:
+    return any(DRIFT_PATH.search(p.strip()) for m in c["members"] for p in m["files"].split(","))
+
+
+def check_panel_hints(tasks_text: str, f: Findings) -> None:
+    """FR-11/FR-12 — which clusters buy a drift reviewer or a feature test-author. Never FAILs."""
+    clusters = parse_behaviour_clusters(tasks_text)
+    if not clusters:
+        return
+    drift = [_cluster_token(c["name"]) for c in clusters if _touches_framework_path(c)]
+    feature = [_cluster_token(c["name"]) for c in clusters if c["feature_tests"]]
+    f.add("pass", "panel-hints",
+          f"drift-panel: {', '.join(drift) or 'none'} · feature-tests: {', '.join(feature) or 'none'}")
+
+
+def parse_manifest_rows(text: str) -> list[dict]:
+    rows = _pipe_table(strip_fenced(text).splitlines(),
+                       {"n": "#", "flow": "Flow", "layer": "Layer",
+                        "verdict": "Verdict", "evidence": "Evidence"})
+    return [{k: (v or "") for k, v in r.items()} for r in rows]
+
+
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+SCREENSHOT_BYTES = (1024, 2 * 1024 * 1024)
+
+
+def _screenshot_problem(path: str, spec_dir: Path) -> str | None:
+    if not (path.startswith("shakeout/") and path.endswith(".png")):
+        return f"screenshot `{path}` must be `shakeout/<name>.png`"
+    try:
+        target = (spec_dir / path).resolve()
+        if not (target.is_file() and target.is_relative_to(spec_dir.resolve())):
+            return f"screenshot `{path}` not found under the feature dir"
+        size = target.stat().st_size
+        if not SCREENSHOT_BYTES[0] <= size <= SCREENSHOT_BYTES[1]:
+            return f"screenshot `{path}` is {size} bytes — a viewport PNG is 1 KB to 2 MB"
+        with target.open("rb") as fh:
+            magic = fh.read(8)
+    except (OSError, ValueError) as e:
+        return f"screenshot `{path!r}` could not be read ({e.__class__.__name__})"
+    return None if magic == PNG_MAGIC else f"screenshot `{path}` does not open with the PNG magic"
+
+
+def _row_problem(row: dict, spec_dir: Path) -> str | None:
+    layer, verdict, evidence = row["layer"].lower(), row["verdict"].lower(), row["evidence"]
+    if layer != "browser":
+        if verdict == "fail" or verdict.startswith("unverified"):
+            return f"{layer or 'unlayered'} row verdict `{row['verdict']}`"
+        return None
+    if verdict != "pass":
+        return f"browser row verdict `{row['verdict']}` — not driven"
+    m = BROWSER_EVIDENCE.search(evidence)
+    if not m:
+        return "browser row without `Browser: <http url> · <screenshot path>` evidence"
+    return _screenshot_problem(m.group("path"), spec_dir)
+
+
+def _check_manifest_row(row: dict, spec_dir: Path, plan_layer: dict[str, str], f: Findings) -> bool:
+    """A credential FAILs before any `Ruling:` is read — a ruling excuses the row, never the leak."""
+    n, layer = row["n"], row["layer"].lower()
+    leaked = bool(CREDENTIAL.search(row["evidence"]))
+    if leaked:
+        f.add("fail", "shakeout-credential",
+              f"{n}: evidence carries a credential (login link, token, app password, basic auth or storageState)")
+    if plan_layer.get(n) and layer and layer != plan_layer[n]:
+        f.add("fail", "shakeout-manifest",
+              f"{n}: manifest says {layer}, plan says {plan_layer[n]} — the plan's layer decides")
+    row = {**row, "layer": plan_layer.get(n) or layer}
+    problem = _row_problem(row, spec_dir)
+    ruling = RULING.search(row["evidence"])
+    if ruling:
+        f.add("pass", "shakeout-ruling",
+              f"{n}: ruling present" if leaked else f"{n}: ruling — {ruling.group('reason').strip()}")
+    elif problem:
+        f.add("fail", "shakeout-manifest", f"{n}: {problem}")
+    return row["layer"].lower() == "browser" and problem is None
+
+
+def check_artifact_diff(tasks_text: str, spec_text: str | None, f: Findings) -> None:
+    """FR-17 — a closed user-facing behaviour cluster records what the artifact showed."""
+    if not spec_screens(spec_text):
+        return
+    closed = [c["name"] for c in parse_behaviour_clusters(tasks_text)
+              if c["lane"] == "behaviour" and c["members"]
+              and all(m["done"] for m in c["members"]) and not c["artifact_diff"]]
+    if closed:
+        f.add("fail", "shakeout-artifact-diff",
+              f"user-facing behaviour cluster(s) closed without Artifact-diff: {', '.join(closed)}")
+
+
+def run_shakeout_checks(spec_dir: Path) -> Findings:
+    f = Findings()
+    if not spec_dir.is_dir():
+        f.add("fail", "shakeout-manifest", f"{spec_dir} is not a directory")
+        return f
+    plan, manifest = spec_dir / "plan.md", spec_dir / "shakeout.md"
+    tasks, spec = spec_dir / "tasks.md", spec_dir / "spec.md"
+    if tasks.exists():
+        try:
+            check_artifact_diff(tasks.read_text(), spec.read_text() if spec.exists() else None, f)
+        except (OSError, ValueError) as e:
+            f.add("fail", "shakeout-artifact-diff", f"tasks.md/spec.md could not be read ({e.__class__.__name__})")
+    plan_rows: list[dict] = []
+    if plan.exists():
+        body = section_body(plan.read_text(), "Acceptance flows")
+        if body is not None:
+            plan_rows = _author_flow_rows(body)
+    plan_layer = {r["n"]: _layer(r) for r in plan_rows if _layer(r)}
+    browser_owed = [n for n, layer in plan_layer.items() if layer == "browser"]
+
+    if not manifest.exists():
+        if browser_owed:
+            f.add("fail", "shakeout-manifest",
+                  f"no shakeout.md — the plan has {len(browser_owed)} browser row(s) to drive "
+                  f"({', '.join(browser_owed)})")
+        else:
+            f.add("pass", "shakeout-manifest", "no browser rows, no manifest owed")
+        return f
+
+    try:
+        text = manifest.read_text()
+    except (OSError, ValueError) as e:
+        f.add("fail", "shakeout-manifest", f"shakeout.md could not be read ({e.__class__.__name__})")
+        return f
+    for i, ln in enumerate(text.splitlines(), 1):
+        if CREDENTIAL.search(ln):
+            f.add("fail", "shakeout-credential", f"line {i}: carries a credential — the whole file is committed")
+    rows = parse_manifest_rows(text)
+    seen = {r["n"] for r in rows}
+    for r in plan_rows:
+        if r["n"] not in seen:
+            f.add("fail", "shakeout-manifest",
+                  f"{r['n']} is in the plan's acceptance flows but has no manifest row")
+    driven = sum(_check_manifest_row(r, spec_dir, plan_layer, f) for r in rows)
+    f.add("pass", "shakeout-manifest", f"shakeout: {len(rows)} rows, {driven} browser rows driven")
+    return f
+
+
 # ── driver ────────────────────────────────────────────────────────────────────
 
 def run_checks(spec_dir: Path) -> Findings:
@@ -2402,6 +2761,8 @@ def run_checks(spec_dir: Path) -> Findings:
         check_plan_gates(plan_text, f)
         check_threat_model(plan_text, spec_text, f)
         check_acceptance_flows(plan_text, spec_text, f)
+        check_shakeout_access(plan_text, f)
+        check_parity(spec_text, plan_text, f)  # artifact-gate FR-15
         check_stakes(plan_text, spec_text, f)
         check_cluster_stakes(plan_text, f)
         check_loop_budget(plan_text, f)
@@ -2424,6 +2785,8 @@ def run_checks(spec_dir: Path) -> Findings:
         check_review_gates(tasks_text, f)
         check_review_tiers(tasks_text, f)
         check_integration_gate(tasks_text, f)
+        check_observable_content(tasks_text, spec_text, f)  # artifact-gate FR-16
+        check_panel_hints(tasks_text, f)  # artifact-gate FR-11/FR-12
     if spec_text is not None and tasks_text is not None:
         check_requirement_coverage(spec_text, tasks_text, f)  # the only cross-artifact check
     return f
@@ -2433,9 +2796,11 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="netdust harness gate checker")
     ap.add_argument("spec_dir", type=Path)
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--shakeout", action="store_true",
+                    help="check shakeout.md against the plan's acceptance rows instead")
     args = ap.parse_args(argv)
 
-    f = run_checks(args.spec_dir)
+    f = run_shakeout_checks(args.spec_dir) if args.shakeout else run_checks(args.spec_dir)
 
     if args.json:
         print(json.dumps({"failed": f.failed,
