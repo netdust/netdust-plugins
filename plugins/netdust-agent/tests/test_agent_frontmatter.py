@@ -51,6 +51,12 @@ def run() -> list[tuple[bool, str]]:
                     + (f" — unrouted: {unrouted}" if unrouted else "")))
     results.append((FIRST_ROW in ladder, "the ladder carries its first table row"))
 
+    # artifact-gate FR-6 / AC-7: shakeout-qa commits the flows it drove as tests
+    tools = {t.strip() for t in fms.get("shakeout-qa", {}).get("tools", "").split(",")}
+    ok = {"Edit", "Write"} <= tools
+    results.append((ok, "shakeout-qa declares Edit and Write in its tools"
+                    + ("" if ok else f" — has: {sorted(tools)}")))
+
     # SC-4: no restatement of the table anywhere else under skills/**, agents/**, commands/**
     homes = [p for d in ("skills", "agents", "commands")
              for p in (PLUGIN / d).rglob("*.md")
