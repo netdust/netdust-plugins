@@ -1814,7 +1814,8 @@ MANIFEST_WIRE_FAIL = MANIFEST_BROWSER_DRIVEN.replace(
 MANIFEST_BROWSER_ONLY = MANIFEST_BROWSER_DRIVEN.replace(_WIRE_PASS, "")
 MANIFEST_FENCED_SAMPLE = "```\n| AF-9 | sample | browser | pass | none |\n```\n" + MANIFEST_BROWSER_DRIVEN
 
-PNG = {"shakeout/af-1.png": b"\x89PNG"}
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+PNG = {"shakeout/af-1.png": PNG_MAGIC + bytes(1200)}
 
 
 def _run_shakeout(files: dict, binaries: dict | None = None,
@@ -3269,6 +3270,23 @@ def run():
     rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": escaped}, PNG)
     results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "AF-1" in out,
                     "shakeout: a screenshot path outside the feature dir is not evidence, even if the file exists"))
+    for label, path, png in (
+        ("plan.md as the screenshot", "plan.md", PNG),
+        ("0-byte png", "shakeout/af-1.png", {"shakeout/af-1.png": b""}),
+        ("4-byte stub", "shakeout/af-1.png", {"shakeout/af-1.png": PNG_MAGIC[:4]}),
+        ("png outside shakeout/", "af-1.png", {"af-1.png": PNG["shakeout/af-1.png"]}),
+        ("magic-less bytes", "shakeout/af-1.png", {"shakeout/af-1.png": bytes(1300)}),
+        ("over 2 MB", "shakeout/af-1.png", {"shakeout/af-1.png": PNG_MAGIC + bytes(2 * 1024 * 1024)}),
+    ):
+        rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT,
+                                 "shakeout.md": MANIFEST_BROWSER_DRIVEN.replace("shakeout/af-1.png", path)}, png)
+        results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "AF-1" in out,
+                        f"shakeout (png-{label}): `{label}` is not a screenshot → FAIL naming AF-1"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_DRIVEN}, PNG)
+    results.append((rc == 0 and "shakeout: 2 rows, 1 browser rows driven" in out,
+                    "shakeout (png-real): a ≥1 KB file under shakeout/ opening with the PNG magic is evidence"))
+
     rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_NO_EVIDENCE},
                             flags=("--shakeout", "--json"))
     try:

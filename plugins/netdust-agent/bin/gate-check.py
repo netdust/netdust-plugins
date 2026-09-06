@@ -2609,9 +2609,23 @@ def parse_manifest_rows(text: str) -> list[dict]:
     return [{k: (v or "") for k, v in r.items()} for r in rows]
 
 
-def _screenshot_missing(path: str, spec_dir: Path) -> bool:
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+SCREENSHOT_BYTES = (1024, 2 * 1024 * 1024)
+
+
+def _screenshot_problem(path: str, spec_dir: Path) -> str | None:
+    if not (path.startswith("shakeout/") and path.endswith(".png")):
+        return f"screenshot `{path}` must be `shakeout/<name>.png`"
     target = (spec_dir / path).resolve()
-    return not (target.is_file() and target.is_relative_to(spec_dir.resolve()))
+    if not (target.is_file() and target.is_relative_to(spec_dir.resolve())):
+        return f"screenshot `{path}` not found under the feature dir"
+    size = target.stat().st_size
+    if not SCREENSHOT_BYTES[0] <= size <= SCREENSHOT_BYTES[1]:
+        return f"screenshot `{path}` is {size} bytes — a viewport PNG is 1 KB to 2 MB"
+    with target.open("rb") as fh:
+        if fh.read(8) != PNG_MAGIC:
+            return f"screenshot `{path}` does not open with the PNG magic"
+    return None
 
 
 def _row_problem(row: dict, spec_dir: Path) -> str | None:
@@ -2625,9 +2639,7 @@ def _row_problem(row: dict, spec_dir: Path) -> str | None:
     m = BROWSER_EVIDENCE.search(evidence)
     if not m:
         return "browser row without `Browser: <url> · <screenshot path>` evidence"
-    if _screenshot_missing(m.group("path"), spec_dir):
-        return f"screenshot `{m.group('path')}` not found under the feature dir"
-    return None
+    return _screenshot_problem(m.group("path"), spec_dir)
 
 
 def _check_manifest_row(row: dict, spec_dir: Path, plan_layer: dict[str, str], f: Findings) -> bool:
