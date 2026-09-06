@@ -3201,6 +3201,16 @@ def run():
         ("bare Basic", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "sent Basic c2hha2VvdXQ6czNjcjN0UHc= to https://")),
         ("wp-login.php?", MANIFEST_BROWSER_RULING.replace("Stefan 09-06", "Stefan 09-06 via https://x.ddev.site/wp/wp-login.php?redirect_to=%2Fwp-admin%2F")),
         ("magic link", MANIFEST_BROWSER_RULING.replace("Stefan 09-06", "Stefan 09-06 via https://x.ddev.site/3f9a1c2b/7a3c1d9e2f-b41c8d7e-9f0a2b3c4d")),
+        ("application-password", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "wp user application-password create shakeout shakeout --porcelain, then curl -s https://")),
+        ("6x4 app password", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "minted AbCd EfGh IjKl MnOp QrSt UvWx, curl -s https://")),
+        ("basic auth in URL", MANIFEST_BROWSER_DRIVEN.replace("https://x.ddev.site/wp-json", "https://shakeout:s3cr3tPw@x.ddev.site/wp-json")),
+        ("--user=", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "curl --user=shakeout:s3cr3tPw https://")),
+        ("session cookie", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "curl -b wordpress_logged_in_0123456789abcdef0123456789abcdef=shakeout https://")),
+        ("storage_state", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "storage_state=auth.json · curl -s https://")),
+        ("pwd= POST body", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "curl -d 'log=shakeout&pwd=s3cr3tPw' https://x.ddev.site/wp/wp-login.php, then curl -s https://")),
+        ("bare Bearer", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "Bearer 4f9a2b7c1d8e3f6a5b4c9d0e1f2a3b4c · curl -s https://")),
+        ("bare JWT", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc · curl -s https://")),
+        ("JSON token", MANIFEST_BROWSER_DRIVEN.replace("→ 200, 3 items", '→ 200 {"access_token": "4f9a2b7c1d8e"}')),
     ):
         rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": manifest}, PNG)
         results.append((rc == 1 and "✗ [shakeout-credential]" in out,
@@ -3209,6 +3219,14 @@ def run():
     rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_DRIVEN}, PNG)
     results.append((rc == 0 and "shakeout-credential" not in out,
                     "shakeout (f-negative): the post-login admin URL and a plain curl are not credentials"))
+    for label, manifest in (
+        ("_wpnonce=", MANIFEST_BROWSER_DRIVEN.replace("page=audit", "page=audit&_wpnonce=abc123")),
+        ("prose", MANIFEST_BROWSER_DRIVEN.replace("→ 200, 3 items", "→ 200, the password reset flow renders")),
+        ("six short words", MANIFEST_BROWSER_DRIVEN.replace("→ 200, 3 items", "→ 200, this page does show some rows")),
+    ):
+        rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": manifest}, PNG)
+        results.append((rc == 0 and "shakeout-credential" not in out,
+                        f"shakeout (f-negative {label}): `{label}` is not a credential value — the floor does not fire"))
 
     rc, out = _run_shakeout({"shakeout.md": MANIFEST_WIRE_ONLY_PASS})
     results.append((rc == 0 and "shakeout: 1 rows, 0 browser rows driven" in out,

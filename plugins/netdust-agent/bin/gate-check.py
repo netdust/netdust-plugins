@@ -2403,13 +2403,20 @@ def check_clusters(tasks_text: str, f: Findings) -> None:
 
 BROWSER_EVIDENCE = re.compile(r"Browser:\s*(?P<url>\S+)\s*·\s*(?P<path>\S+)")
 RULING = re.compile(r"Ruling:\s*(?P<reason>.+)")
-# Word shapes the plan names, then the values the recipe actually mints: curl basic auth, an
-# auth header or bare base64, the login page, and `wp login create`'s magic link
+# The words the plan names, then every value the recipe or a session can mint: app
+# passwords (the command, the 6×4 value — case-sensitive so six short words are not one),
+# basic auth in a flag or a URL, the WP session cookie, a password in a POST body or env,
+# bearer/JWT/JSON tokens, the login page, and `wp login create`'s magic link
 # (`/<8 hex>/<6-10 hex>-<6-10 hex>-<6-10 hex>`, per aaemnnosttv/wp-cli-login-command).
 CREDENTIAL = re.compile(
-    r"login=|token=|app[-_ ]?password|storageState"
-    r"|(?:-u|--user)\s+\S+:\S+|\buser(?:name)?:\s*\S+:\S+"
+    r"login=|token=|app(?:lication)?[-_ ]?password|storage[_-]?state"
+    r"|(?-i:(?![a-z ]{29})\b(?:[A-Za-z0-9]{4} ){5}[A-Za-z0-9]{4}\b)"
+    r"|(?:-u|--user)[\s=]*\S+:\S+|\buser(?:name)?:\s*\S+:\S+|https?://[^\s/@|]+:[^\s/@|]+@"
+    r"|wordpress(?:_logged_in|_sec)?_[0-9a-f]{32}"
+    r"|\b(?:pwd|pass(?:word)?|user_pass|E2E_PASS)\s*[=:]\s*\S+"
     r"|Authorization:\s*(?:Basic|Bearer)\s+\S+|\bBasic\s+[A-Za-z0-9+/=]{16,}"
+    r"|\bBearer\s+[A-Za-z0-9._~+/-]{20,}|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"
+    r"|\"?(?:access_)?token\"?\s*:\s*\"?\S+"
     r"|wp-login\.php\?[^ |]*"
     r"|https?://\S+/[0-9a-f]{8}/[0-9a-f]{6,10}-[0-9a-f]{6,10}-[0-9a-f]{6,10}\b",
     re.IGNORECASE)
