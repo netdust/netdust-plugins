@@ -70,5 +70,33 @@
     "skill_path": "skills/testing-workflow/SKILL.md",
     "query": "Cluster 4 has six tasks and each implementer wants to add feature-level Playwright tests for the flows. Should every task carry them?",
     "signature": "no — feature-level tests are the shake-out's committed flows (`commands/shakeout.md` Step 2; `shakeout-qa` commits every flow it drove), not per-task weight; a cluster gets a separate `test-author` only when it carries `Feature-tests: yes — <reason>`, which is `building`'s rule"
+  },
+  {
+    "skill": "planning",
+    "skill_path": "skills/planning/SKILL.md",
+    "query": "Write the T05 task line for the shake-out agent: it must describe the manifest's human-exception form and say which clusters' files segments buy a drift review.",
+    "signature": "the task body never contains the literal `[HUMAN]` token or a literal `(files:` outside the real files segment — names the exception form `Ruling:` and says 'files segments' in words (planning lessons 2026-09-06: HAS_HUMAN and FILES_SEGMENT read prose)",
+    "id": "planning-tokens"
+  },
+  {
+    "skill": "building",
+    "skill_path": "skills/building/SKILL.md",
+    "query": "Cluster A is closing: T01 added a credential-scanning regex to the gate checker. The cluster's provisional tier is STANDARD. Dispatch the review gate.",
+    "signature": "escalates the FIRST panel to FULL because a task edited a credential scan (a floor) — security-sentinel is dispatched in round one alongside invariant-auditor, not after a later escalation (building lessons 2026-09-06)",
+    "id": "sentinel-first"
+  },
+  {
+    "skill": "building",
+    "skill_path": "skills/building/SKILL.md",
+    "query": "T04's task review is running (read-only). T05 edits only agents/shakeout-qa.md, commands/shakeout.md and one test file; T04 touched bin/loop-check.py and bin/gate-check.py. Both suites are plain python/bash with no database. Do I wait?",
+    "signature": "dispatches T05 now — the file sets are disjoint by (files:), the suites are file-local, commits are added by path — and ledgers the overlap as a Ruling; would WAIT if either task ran a wp-phpunit/DDEV suite or touched a shared file (building lessons 2026-09-06)",
+    "id": "disjoint-overlap"
+  },
+  {
+    "skill": "ntdst-drift-reviewer",
+    "skill_path": "../netdust-wp/agents/ntdst-drift-reviewer.md",
+    "query": "Run INV-7's check verbatim: grep -rn '\\ntdst_get($class)' ntdst-baseline.php — it prints 0 hits in this session but the doc says it holds today. Verdict?",
+    "signature": "does not trust the zero — recognises the session grep is a ugrep -G wrapper where a mid-pattern `$` anchors, re-runs with `grep -F` (or states which grep answered), and reports the check as 'holds' only after proving the literal matches a real line (drift-reviewer lessons 2026-09-06)",
+    "id": "per-shell-grep"
   }
 ]

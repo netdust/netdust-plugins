@@ -131,3 +131,37 @@ Never name a partial suite in `suite=` to dodge the hook. **To implement:** the 
 reads a `cluster-open <test path>` line from the plan workspace ledger and tolerates
 exactly that file's failures for role=implementer until a `cluster-close` line follows.
 
+
+
+## Seat the sentinel in the first panel when a cluster touches a floor (2026-09-06)
+
+**Problem (artifact-gate Cluster A):** the credential floor shipped in T01, the STANDARD
+panel (generalist + simplicity) ran first, escalation to FULL came after round one, and
+the security-sentinel's four Importants cost a second round and a ruled third. The
+sentinel is the reviewer that found the load-bearing gaps; it arrived last.
+**Rule:** when any task in a cluster edits a guard, allowlist, credential scan or auth
+recipe, the cluster's FIRST panel is FULL — `security-sentinel` sits in round one, not
+after an escalation. Eval: `evals/artifact-gate-2026-09-06-cases.json` (`sentinel-first`).
+
+## Two implementers on disjoint files in one tree is fine; shared suites are the hazard (2026-09-06)
+
+**Observed (artifact-gate, four times):** an implementer ran beside a read-only review, and
+twice beside another implementer, always on disjoint files, with file-local python/bash
+suites — no phantom failures, commits interleaved cleanly by path. The 2026-08-09 failure
+(14 and 17 phantom failures) was two implementers sharing an integration DATABASE.
+**Rule:** the "never parallel" rule is about a shared suite or database, not about files.
+Overlap is allowed when (a) the file sets are disjoint by the plan's `(files:)`, (b) each
+suite is file-local (no DDEV/wp-phpunit DB), and (c) every commit is `git add` by path.
+Ledger the overlap as a ruling. Eval: `evals/artifact-gate-2026-09-06-cases.json`
+(`disjoint-overlap`).
+
+## Reviewers without Write cannot file their reports — the controller files them (2026-09-06)
+
+**Problem:** `reviewer` and `netdust-wp:ntdst-drift-reviewer` have no Write tool; two of
+them returned full reports in the reply and the controller had to save them under
+`.superpowers/sdd/<feature>/`. A report that lives only in a subagent's return is lost at
+compaction.
+**Rule (controller-side):** when a review dispatch's return carries the report, write it to
+the workspace file the dispatch named before the next step; never leave a verdict only in
+context. The agent body is unchanged (a Write tool on a reviewer is a `/skill-audit`
+proposal, not a lesson).

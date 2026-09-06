@@ -71,3 +71,11 @@ hand on every new environment — no verb carries them (2026-09-05).
 Not the child, not an error — an empty table. On a fresh environment that empty
 listing plus a blank 200 front page is the signature of a missing licensed
 parent theme, while `wp option get template` still names it (2026-09-05).
+
+## `tests/test-marketplace.sh` fails OPEN on unparseable JSON (2026-09-06)
+
+An unescaped quote in a `marketplace.json` description made the file invalid; the sync
+pin printed `0 passed, 0 failed` and exited 0, and `tests/run.sh` said "all suites passed"
+on a broken marketplace. `python3 -m json.tool` caught it; the pin did not. Fix owed: a
+`bad "marketplace.json parses"` line on a non-zero python exit, RED-first against a
+fixture with a stray quote. Tracked in `tasks/todo.md`.

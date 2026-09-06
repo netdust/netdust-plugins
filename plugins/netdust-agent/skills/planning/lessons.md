@@ -86,3 +86,16 @@ file.** "Gitignored and outside `deploy.payload`" means it will never deploy —
 it does NOT mean it is missing locally. The licensed theme and plugin were
 sitting in the project's own working tree at exactly the right versions; one
 `ls` would have saved a round trip. Eval: `evals/bringup-2026-09-05-cases.json`.
+
+
+## Two grammar tokens the checker reads out of prose (2026-09-06)
+
+**Problem (artifact-gate plan):** a task body that mentioned `[HUMAN] accepted:` as a
+manifest form made the checker treat five tasks as yield points (`HAS_HUMAN` matches the
+token anywhere in the task text) — loop-check would have BLOCKED on them. A separate task
+wrote "clusters whose `(files:)` match …" inside its prose and the files-segment parser
+took that empty `(files:)` as the task's segment, reporting no files.
+**Rule:** inside a `- [ ] Tnn` body, never write the literal `[HUMAN]` or `(files:` except
+as the real marker/segment. Name a manifest ruling `Ruling:`; describe a files segment in
+words ("the files segments"). Eval: `evals/artifact-gate-2026-09-06-cases.json`
+(`planning-tokens`).

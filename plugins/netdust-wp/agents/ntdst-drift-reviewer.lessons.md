@@ -214,3 +214,13 @@ answer to "I did not look" is never "I found nothing."
 
 **Updated exception rule:** when a project has just enabled the ntdst-baseline `yootheme` module, check every `relation` field's target post type against `FieldTypeBridge::$relatedPosts`' status gate — a target whose native status is never `publish` (attachments, custom non-publish workflows) is a Critical, not a note.
 
+
+## "Which grep answered" is a per-shell fact, not a per-machine one (2026-09-06, approved by Stefan)
+
+Inside a Claude Code session `grep` is a ugrep `-G` wrapper; in the operator's terminal and
+under `composer gate` it is GNU grep 3.11. A mid-pattern `$` in a BRE is a literal under
+GNU and an ANCHOR under ugrep — the same check printed `PASS` in one shell and `FAIL` in the
+other (ntdst-baseline INV-7). Any invariant check that carries `$`, `+`, `?`, `|` or
+parentheses in a BRE is written `-F` (literal) or `-E` with both greps in mind, and the audit
+report states which grep ran it. Eval: `netdust-agent/evals/artifact-gate-2026-09-06-cases.json`
+(`per-shell-grep`).
