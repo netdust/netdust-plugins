@@ -3198,6 +3198,11 @@ def run():
     for label, manifest in (
         ("curl -u user:pass", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "curl -u shakeout:s3cr3tPw https://")),
         ("user: name:pass", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "user: shakeout:s3cr3tPw · curl -s https://")),
+        ("bare pwd=", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "pwd=s3cr3t, curl -s https://")),
+        ("bare password:", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "password: s3cr3t, curl -s https://")),
+        ("E2E_PASS=", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "E2E_PASS=abc123, curl -s https://")),
+        ("--user_pass=", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "curl --user_pass=x https://")),
+        ("-u no space", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "curl -ushakeout:pw https://")),
         ("Authorization: Bearer", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "curl -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9' https://")),
         ("bare Basic", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "sent Basic c2hha2VvdXQ6czNjcjN0UHc= to https://")),
         ("wp-login.php?", MANIFEST_BROWSER_RULING.replace("Stefan 09-06", "Stefan 09-06 via https://x.ddev.site/wp/wp-login.php?redirect_to=%2Fwp-admin%2F")),
@@ -3224,6 +3229,11 @@ def run():
         ("_wpnonce=", MANIFEST_BROWSER_DRIVEN.replace("page=audit", "page=audit&_wpnonce=abc123")),
         ("prose", MANIFEST_BROWSER_DRIVEN.replace("→ 200, 3 items", "→ 200, the password reset flow renders")),
         ("six short words", MANIFEST_BROWSER_DRIVEN.replace("→ 200, 3 items", "→ 200, this page does show some rows")),
+        ("verdict word pass:", MANIFEST_BROWSER_DRIVEN.replace("→ 200, 3 items", "→ 200; pass: body has 3 rows")),
+        ("--url= flag", MANIFEST_BROWSER_DRIVEN.replace(
+            "curl -s https://x.ddev.site/wp-json/audit/v1/rows → 200, 3 items",
+            "ddev wp --url=https://x.ddev.site option get siteurl → https://x.ddev.site")),
+        ("pop-up: prose", MANIFEST_BROWSER_DRIVEN.replace("→ 200, 3 items", "→ 200, the pop-up: closes on Escape")),
     ):
         rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": manifest}, PNG)
         results.append((rc == 0 and "shakeout-credential" not in out,

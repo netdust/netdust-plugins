@@ -2411,9 +2411,9 @@ RULING = re.compile(r"Ruling:\s*(?P<reason>.+)")
 CREDENTIAL = re.compile(
     r"login=|token=|app(?:lication)?[-_ ]?password|storage[_-]?state"
     r"|(?-i:(?![a-z ]{29})\b(?:[A-Za-z0-9]{4} ){5}[A-Za-z0-9]{4}\b)"
-    r"|(?:-u|--user)[\s=]*\S+:\S+|\buser(?:name)?:\s*\S+:\S+|https?://[^\s/@|]+:[^\s/@|]+@"
+    r"|(?<![\w-])(?:-u|--user)[\s=]*\S+:\S+|\buser(?:name)?:\s*\S+:\S+|https?://[^\s/@|]+:[^\s/@|]+@"
     r"|wordpress(?:_logged_in|_sec)?_[0-9a-f]{32}"
-    r"|\b(?:pwd|pass(?:word)?|user_pass|E2E_PASS)\s*[=:]\s*\S+"
+    r"|\b(?:pwd|passw(?:or)?d|user_pass|[A-Z0-9_]*_PASS(?:WORD)?)\s*[=:]\s*\S+"
     r"|Authorization:\s*(?:Basic|Bearer)\s+\S+|\bBasic\s+[A-Za-z0-9+/=]{16,}"
     r"|\bBearer\s+[A-Za-z0-9._~+/-]{20,}|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"
     r"|\"?(?:access_)?token\"?\s*:\s*\"?\S+"
