@@ -2407,7 +2407,16 @@ def check_clusters(tasks_text: str, f: Findings) -> None:
 
 BROWSER_EVIDENCE = re.compile(r"Browser:\s*(?P<url>\S+)\s*·\s*(?P<path>\S+)")
 RULING = re.compile(r"Ruling:\s*(?P<reason>.+)")
-CREDENTIAL = re.compile(r"login=|token=|app[-_ ]?password|storageState", re.IGNORECASE)
+# Word shapes the plan names, then the values the recipe actually mints: curl basic auth, an
+# auth header or bare base64, the login page, and `wp login create`'s magic link
+# (`/<8 hex>/<6-10 hex>-<6-10 hex>-<6-10 hex>`, per aaemnnosttv/wp-cli-login-command).
+CREDENTIAL = re.compile(
+    r"login=|token=|app[-_ ]?password|storageState"
+    r"|(?:-u|--user)\s+\S+:\S+|\buser(?:name)?:\s*\S+:\S+"
+    r"|Authorization:\s*(?:Basic|Bearer)\s+\S+|\bBasic\s+[A-Za-z0-9+/=]{16,}"
+    r"|wp-login\.php\?[^ |]*"
+    r"|https?://\S+/[0-9a-f]{8}/[0-9a-f]{6,10}-[0-9a-f]{6,10}-[0-9a-f]{6,10}\b",
+    re.IGNORECASE)
 
 
 def _split_cells(line: str) -> list[str] | None:
@@ -2626,7 +2635,7 @@ def _check_manifest_row(row: dict, spec_dir: Path, plan_layer: dict[str, str], f
     n, layer = row["n"], row["layer"].lower()
     if CREDENTIAL.search(row["evidence"]):
         f.add("fail", "shakeout-credential",
-              f"{n}: evidence carries a credential (login=/token=/app password/storageState)")
+              f"{n}: evidence carries a credential (login link, token, app password, basic auth or storageState)")
     if plan_layer.get(n) and layer and layer != plan_layer[n]:
         f.add("fail", "shakeout-manifest",
               f"{n}: manifest says {layer}, plan says {plan_layer[n]} — the plan's layer decides")

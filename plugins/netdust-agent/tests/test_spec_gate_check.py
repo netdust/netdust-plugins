@@ -3197,6 +3197,22 @@ def run():
     results.append((rc == 1 and "✗ [shakeout-credential]" in out and "AF-1" in out,
                     "shakeout (f): `?login=abc123` in evidence FAILs `shakeout-credential`, ruling or not"))
 
+    for label, manifest in (
+        ("curl -u user:pass", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "curl -u shakeout:s3cr3tPw https://")),
+        ("user: name:pass", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "user: shakeout:s3cr3tPw · curl -s https://")),
+        ("Authorization: Bearer", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "curl -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9' https://")),
+        ("bare Basic", MANIFEST_BROWSER_DRIVEN.replace("curl -s https://", "sent Basic c2hha2VvdXQ6czNjcjN0UHc= to https://")),
+        ("wp-login.php?", MANIFEST_BROWSER_RULING.replace("Stefan 09-06", "Stefan 09-06 via https://x.ddev.site/wp/wp-login.php?redirect_to=%2Fwp-admin%2F")),
+        ("magic link", MANIFEST_BROWSER_RULING.replace("Stefan 09-06", "Stefan 09-06 via https://x.ddev.site/3f9a1c2b/7a3c1d9e2f-b41c8d7e-9f0a2b3c4d")),
+    ):
+        rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": manifest}, PNG)
+        results.append((rc == 1 and "✗ [shakeout-credential]" in out,
+                        f"shakeout (f-{label}): a `{label}` value in evidence FAILs `shakeout-credential`"))
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_DRIVEN}, PNG)
+    results.append((rc == 0 and "shakeout-credential" not in out,
+                    "shakeout (f-negative): the post-login admin URL and a plain curl are not credentials"))
+
     rc, out = _run_shakeout({"shakeout.md": MANIFEST_WIRE_ONLY_PASS})
     results.append((rc == 0 and "shakeout: 1 rows, 0 browser rows driven" in out,
                     "shakeout (g): a `wire` row `pass` on curl evidence passes; a missing plan.md is accepted"))
