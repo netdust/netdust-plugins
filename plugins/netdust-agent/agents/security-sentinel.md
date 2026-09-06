@@ -66,7 +66,7 @@ For every review, you will verify:
 ## WordPress projects
 
 On a WordPress project — or any package consuming ntdst-core — load
-`netdust-wp/references/wp-review-checklists.md` (vendored from `jorgerosal/wordpress-skills` at
+`~/.claude/plugins/netdust-wp/references/wp-review-checklists.md` (vendored from `jorgerosal/wordpress-skills` at
 the commit in its header) and verify the diff against its keyed items, citing the id (`SEC-nn`,
 `MIG-nn`) in every finding. Beside the plan's `## Threat model`, the checklists are the
 convergence target: the report says which items were checked and which hit, not what free-form

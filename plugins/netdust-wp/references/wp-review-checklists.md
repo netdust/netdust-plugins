@@ -5,7 +5,8 @@ Files: `claude-skills/wp-security-review/SKILL.md`, `claude-skills/wp-migration-
 License: MIT — Copyright (c) 2026 Jorge Rosal (full text: the source repo's `LICENSE`)
 Vendored: 2026-09-06. Re-vendor by bumping the hash above in a reviewed commit (plan threat model item 4).
 Keys: `SEC-nn` / `MIG-nn` are assigned here (upstream keys sections, not items); cite them in findings.
-Trimmed: items restating `wp-security`'s four pillars (sanitize-by-type and escape-by-context tables) are dropped — that skill owns them.
+Trimmed: upstream's sanitize-by-type and escape-by-context tables are dropped — the WordPress handbook (Data Validation, Securing Output) owns them; `wp-security` links both.
+Deviation: SEC-26 names `wp_json_encode()` / `wp_localize_script()` for PHP values inside `<script>` where upstream says `esc_js()` — `esc_js()` is for inline attribute handlers, not script bodies.
 
 ## wp-security-review
 
@@ -20,13 +21,13 @@ Context: admin-only code lowers one level; WP-CLI / cron need no nonce; REST aut
 - SEC-03 CRITICAL — `exec(` / `shell_exec(` / `system(` / `passthru(` reachable by user input (CWE-78)
 - SEC-04 CRITICAL — `base64_decode( $_` → encoded payload execution
 - SEC-05 CRITICAL — `unserialize( $_` → object injection (CWE-502)
-- SEC-06 WARNING — `$_GET[` / `$_POST[` / `$_REQUEST[` read without `sanitize_*` (CWE-20)
+- SEC-06 WARNING — `$_GET[` / `$_POST[` / `$_REQUEST[` read without `sanitize_*` (CWE-20) (wp-security: pillar 2, Sanitize)
 - SEC-07 CRITICAL — `include` / `require` / `*_once` on a `$_` value → path traversal / inclusion (CWE-22)
 
 ### Form handlers (`admin-post.php`, `admin_post_*`) — all three, or it is a vulnerability
-- SEC-08 CRITICAL — no `wp_verify_nonce()` / `check_admin_referer()` (CWE-352)
-- SEC-09 CRITICAL — no `current_user_can()` (CWE-862); wrong capability for the action (CWE-863)
-- SEC-10 WARNING — input not sanitized (CWE-20)
+- SEC-08 CRITICAL — no `wp_verify_nonce()` / `check_admin_referer()` (CWE-352) (wp-security: pillar 4, Authorize)
+- SEC-09 CRITICAL — no `current_user_can()` (CWE-862); wrong capability for the action (CWE-863) (wp-security: pillar 4; loophole "`is_user_logged_in()` / `is_admin()` is enough")
+- SEC-10 WARNING — input not sanitized (CWE-20) (wp-security: pillar 2, Sanitize)
 
 ### AJAX handlers (`wp_ajax_*`, `wp_ajax_nopriv_*`)
 - SEC-11 CRITICAL — state change without `check_ajax_referer()` (CWE-352)
@@ -37,7 +38,7 @@ Context: admin-only code lowers one level; WP-CLI / cron need no nonce; REST aut
 
 ### REST endpoints (`register_rest_route`)
 - SEC-16 CRITICAL — no `permission_callback` (CWE-862)
-- SEC-17 CRITICAL — `'permission_callback' => '__return_true'` on a write route (public GET: not a finding)
+- SEC-17 CRITICAL — `'permission_callback' => '__return_true'` on a write route (public GET: not a finding) (wp-security: rationalization "REST endpoint, WordPress handles auth")
 - SEC-18 WARNING — permission callback without `current_user_can()` (CWE-863)
 - SEC-19 WARNING — `$request->get_param()` consumed without validation (CWE-20)
 - SEC-20 INFO — cookie-authenticated client: verify it sends `X-WP-Nonce`
@@ -50,8 +51,8 @@ Context: admin-only code lowers one level; WP-CLI / cron need no nonce; REST aut
 - not findings: `{$wpdb->prefix}` in a query; hardcoded admin-only SQL with no user input
 
 ### Templates / output
-- SEC-25 CRITICAL — `echo $` / `print $` without an escaper (CWE-79)
-- SEC-26 CRITICAL — `<input value="<?php echo $` → `esc_attr()`; `<a href="<?php echo $` → `esc_url()`; `<script>` with PHP values → `wp_json_encode()` / `wp_localize_script()` (CWE-79)
+- SEC-25 CRITICAL — `echo $` / `print $` without an escaper (CWE-79) (wp-security: loophole "Escape the whole template at the bottom")
+- SEC-26 CRITICAL — `<input value="<?php echo $` → `esc_attr()`; `<a href="<?php echo $` → `esc_url()`; `<script>` with PHP values → `wp_json_encode()` / `wp_localize_script()` (CWE-79) (wp-security: the same loophole)
 - SEC-27 WARNING — rich HTML output without `wp_kses()` / `wp_kses_post()`
 
 ### File uploads

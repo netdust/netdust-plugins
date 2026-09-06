@@ -12,9 +12,9 @@ The WordPress security model has four pillars. Every data flow touches at least 
 ## The four pillars
 
 1. **Validate** — Is this data the right shape? (length, type, format, allowed values)
-2. **Sanitize** — Strip dangerous content on input **before storage**. Context: storage.
+2. **Sanitize** — Strip dangerous content on input **before storage**. Context: storage. [SEC-06, SEC-10]
 3. **Escape** — Encode for safe rendering on output **at the moment of use**. Context: HTML body / attribute / URL / inline JS / CSS.
-4. **Authorize** — Verify the user is allowed (`current_user_can`) **and** that the request is intentional (`wp_verify_nonce` / `check_admin_referer` / `check_ajax_referer`).
+4. **Authorize** — Verify the user is allowed (`current_user_can`) **and** that the request is intentional (`wp_verify_nonce` / `check_admin_referer` / `check_ajax_referer`). [SEC-08, SEC-09]
 
 Sanitize and escape are not interchangeable. Sanitize answers "safe to store?". Escape answers "safe to render *here*?". A title sanitized into the database still needs `esc_html()` when echoed into HTML body, `esc_attr()` when echoed into an attribute, `esc_url()` when echoed into `href`, `wp_kses_post()` when limited HTML is allowed.
 
@@ -29,9 +29,8 @@ The generic layer is the official `WordPress/agent-skills` set, installed at a p
 - `wp-rest-api` — `### 2) Register routes safely` (`permission_callback` on every route),
   `### 3) Validate/sanitize request args`, `### 5) Authentication and authorization` +
   `references/authentication.md` (cookie auth needs the `wp_rest` nonce as `X-WP-Nonce`).
-- The per-context function map (`esc_*` by context, `sanitize_*` by type, `check_ajax_referer()`
-  per `wp_ajax_*` handler, `$wpdb->esc_like()`): `references/wp-review-checklists.md`, the
-  vendored checklist `security-sentinel` verifies against.
+- The per-context function map (`esc_*` by context, `sanitize_*` by type): the WordPress handbook's
+  Data Validation and Securing Output pages, linked under See also.
 
 ## NTDST projects (ntdst-core 5.x)
 
@@ -87,7 +86,7 @@ All four pillars present. Notice: `wp_unslash()` before `sanitize_text_field()`,
 | "I'll add the nonce later" | "Later" = "the next commit, in two weeks, after a CSRF report". Add it now. |
 | "Frontend-only public form, no nonce needed" | CSRF works on logged-out users too. Public state-changing forms need a nonce or equivalent. |
 | "It's just an int — `(int) $_POST['id']` is fine" | `(int)` strips the trailing junk but accepts negatives. Use `absint()` for IDs. |
-| "REST endpoint, WordPress handles auth" | Only if `permission_callback` is set. `__return_true` is the bug. On `ntdst_rest()` the option is `permission`: a route OPTION named `permission_callback` is one core does not know, and the route is refused outright (`ntdst-framework/references/traps.md`). |
+| "REST endpoint, WordPress handles auth" | Only if `permission_callback` is set. `__return_true` is the bug. On `ntdst_rest()` the option is `permission`: a route OPTION named `permission_callback` is one core does not know, and the route is refused outright (`ntdst-framework/references/traps.md`). [SEC-17] |
 | "Trusted client JS sends this value" | The browser is not trusted. Anyone can curl your endpoint with any payload. |
 | "It's a quick fix, ship it" | Quick fixes are how every WP breach happens. 30 seconds for a nonce is not the bottleneck. |
 | "The user is logged in, so they're trusted" | Authentication ≠ authorization. Logged-in subscribers can still hit admin endpoints. |
@@ -95,13 +94,13 @@ All four pillars present. Notice: `wp_unslash()` before `sanitize_text_field()`,
 
 ## Loophole closures
 
-- **"Escape the whole template at the bottom"** → No. Escape at the point of output, in the right context. `esc_html` for body text, `esc_attr` for attributes, `esc_url` for hrefs — they are not interchangeable.
+- **"Escape the whole template at the bottom"** → No. Escape at the point of output, in the right context. `esc_html` for body text, `esc_attr` for attributes, `esc_url` for hrefs — they are not interchangeable. [SEC-25, SEC-26]
 - **"Sanitize once and forget"** → No. Sanitize on input, escape on output. Always both.
 - **"Run input through `esc_*` before storage"** → No. `esc_*` functions are for output. Storing escaped values means they get double-escaped when re-rendered through a properly-escaping template later.
 - **"Use `WP_REST_Request::get_param()`, it's safe"** → No. It returns raw values. Sanitize per-field.
 - **"`wp_kses_post()` everywhere to keep formatting"** → Careful. It allows `<a href>`, which is XSS-able via `javascript:` URLs. Always `esc_url()` the href separately.
 - **"ACF sanitizes its own fields"** → Partially. ACF sanitizes on save based on field type, but the value coming out of `get_field()` is **not** escaped for any specific output context. Escape on output yourself.
-- **"`is_user_logged_in()` / `is_admin()` is enough for an admin action"** → No. Logged-in is authentication, `is_admin()` is a context flag (an admin screen is loading); authorization is `current_user_can()` with the specific capability.
+- **"`is_user_logged_in()` / `is_admin()` is enough for an admin action"** → No. Logged-in is authentication, `is_admin()` is a context flag (an admin screen is loading); authorization is `current_user_can()` with the specific capability. [SEC-09]
 - **"`esc_url()` on the way into the database"** → No. Storage → `esc_url_raw()`; output → `esc_url()`.
 - **"`add_query_arg()` returns a safe URL"** → No. It does not escape. Pipe it through `esc_url()`.
 - **"`__()` is fine straight into HTML"** → No. Translations are file-writable; `esc_html__()` / `esc_attr__()` when the string lands in HTML.

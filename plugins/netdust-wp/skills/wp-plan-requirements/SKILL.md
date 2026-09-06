@@ -92,7 +92,7 @@ the cluster gate's `ntdst-drift-reviewer` verdict where `panel-hints` names the 
 
 ### Block 4 — the shake-out sections
 
-WP plan sections `bin/gate-check.py` checks by name — cite the check, never restate its rule:
+WP plan sections `netdust-agent`'s `bin/gate-check.py` checks by name — cite the check, never restate its rule:
 
 - `## Acceptance flows` — every row carries a `Layer` cell; any screen is `browser`. `acceptance-flows` fails a flagged screen with no browser row.
 - `## Shake-out access` — the ONE command that logs the shake-out in, citing the recipe in `netdust-wp:wp-testing` (`shakeout-access`).
