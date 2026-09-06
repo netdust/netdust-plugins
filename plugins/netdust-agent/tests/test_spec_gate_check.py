@@ -1882,11 +1882,18 @@ _HERO_TAIL = ("RED until: `tests/HeroTest.php::test_hero_renders`\n\n"
 TASKS_OBSERVABLE_STATUS = _HERO_HEAD + "Observable: the page answers 200\n" + _HERO_TAIL
 TASKS_OBSERVABLE_CONTENT = _HERO_HEAD + 'Observable: the hero renders "Onze energie"\n' + _HERO_TAIL
 TASKS_OBSERVABLE_SELECTOR = _HERO_HEAD + "Observable: the page shows [data-hero] with the season name\n" + _HERO_TAIL
+TASKS_OBSERVABLE_PATH = _HERO_HEAD + "Observable: the page answers 200 and redirects to wp-admin/edit.php\n" + _HERO_TAIL
+TASKS_OBSERVABLE_APOSTROPHES = _HERO_HEAD + "Observable: it's the user's dashboard, shows nothing new\n" + _HERO_TAIL
+TASKS_OBSERVABLE_ID = _HERO_HEAD + "Observable: the page renders `#hero` above the fold\n" + _HERO_TAIL
+TASKS_OBSERVABLE_SINGLE_QUOTED = _HERO_HEAD + "Observable: the form shows 'Bevestigen' on its submit button\n" + _HERO_TAIL
 
 TASKS_PANEL_DRIFT = TASKS_GOOD.replace("(files: lib/url.ts)", "(files: Services/Foo.php)")
 TASKS_PANEL_FEATURE = TASKS_GOOD.replace(
     "### Cluster C2 — (irreversible: drop legacy table) — solo\n",
     "### Cluster C2 — (irreversible: drop legacy table) — solo\nFeature-tests: yes — the export has no acceptance flow\n")
+TASKS_PANEL_FEATURE_BULLETED = TASKS_GOOD.replace(
+    "### Cluster C2 — (irreversible: drop legacy table) — solo\n",
+    "### Cluster C2 — (irreversible: drop legacy table) — solo\n- feature-tests: yes — the export has no acceptance flow\n")
 TASKS_PANEL_FEATURE_IN_TASK = TASKS_GOOD.replace(
     "      Test-author: split\n      Unit test: replays",
     "      Test-author: split\n      Feature-tests: yes — inside a task, not the cluster\n      Unit test: replays")
@@ -3341,6 +3348,22 @@ def run():
     results.append((rc == 0 and "✓ [observable-content]" in out,
                     "observable (f'): a `[data-…]` selector counts as rendered content"))
 
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_OBSERVABLE_PATH})
+    results.append((rc == 1 and "✗ [observable-content]" in out,
+                    "observable (e-path): a file name in a URL (`edit.php`) is not a selector → FAIL"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_OBSERVABLE_APOSTROPHES})
+    results.append((rc == 1 and "✗ [observable-content]" in out,
+                    "observable (e-prose): two apostrophes in prose are not a quoted literal → FAIL"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_OBSERVABLE_ID})
+    results.append((rc == 0 and "✓ [observable-content]" in out,
+                    "observable (f-id): a backticked `#hero` id counts as a selector"))
+
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": PLAN_SCREEN, "tasks.md": TASKS_OBSERVABLE_SINGLE_QUOTED})
+    results.append((rc == 0 and "✓ [observable-content]" in out,
+                    "observable (f-single): a single-quoted 'Bevestigen' counts as a literal"))
+
     rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_OBSERVABLE_STATUS})
     results.append((rc == 0 and "observable-content" not in out,
                     "observable (g): the same cluster on a spec flagging no surface → silent"))
@@ -3352,6 +3375,10 @@ def run():
     rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_PANEL_FEATURE})
     results.append((rc == 0 and "✓ [panel-hints] drift-panel: none · feature-tests: C2" in out,
                     "hints (i): `Feature-tests: yes — …` on a cluster → named under feature-tests"))
+
+    rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_PANEL_FEATURE_BULLETED})
+    results.append((rc == 0 and "feature-tests: C2" in out,
+                    "hints (i-bullet): a bulleted lowercase `- feature-tests: yes` line still names the cluster"))
 
     rc, out = _run({"spec.md": SPEC_CLEAN_NOSEC, "plan.md": PLAN_GATES_FULL, "tasks.md": TASKS_PANEL_FEATURE_IN_TASK})
     results.append((rc == 0 and "feature-tests: none" in out,

@@ -1529,7 +1529,8 @@ BEHAVIOUR_BLOCK_LINES = {
         r"^\s*(?:[-*]\s+)?(?:\*\*)?Observable(?:\*\*)?:\s*(\S.*?)\s*$", re.IGNORECASE),
     "red_until": re.compile(
         r"^\s*(?:[-*]\s+)?(?:\*\*)?RED until(?:\*\*)?:\s*(\S.*?)\s*$", re.IGNORECASE),
-    "feature_tests": re.compile(r"^\s*(?:\*\*)?Feature-tests(?:\*\*)?:\s*(yes\b.*?)\s*$"),
+    "feature_tests": re.compile(
+        r"^\s*(?:[-*]\s+)?(?:\*\*)?Feature-tests(?:\*\*)?:\s*(yes\b.*?)\s*$", re.IGNORECASE),
 }
 _BLOCK_KEYS = ("behaviour", "observable", "red_until")
 BEHAVIOUR_LABEL = {"behaviour": "`Behaviour:`", "observable": "`Observable:`",
@@ -2528,7 +2529,7 @@ def _parity_section(plan_text: str) -> tuple[str, list[str]] | None:
     return None
 
 
-def check_parity(plan_text: str, spec_text: str | None, f: Findings) -> None:
+def check_parity(spec_text: str | None, plan_text: str, f: Findings) -> None:
     """FR-15 — "same as X" on a screen is enumerated from the RUNNING X, never remembered."""
     hit = _parity_phrase(spec_text, plan_text)
     if hit is None or not spec_screens(spec_text):
@@ -2552,8 +2553,8 @@ def check_parity(plan_text: str, spec_text: str | None, f: Findings) -> None:
     f.add("pass", "parity", f"## Parity: {ref} — {items} components read from {url.group(0)}")
 
 
-QUOTED_LITERAL = re.compile(r'"[^"]+"|\'[^\']+\'')
-SELECTOR = re.compile(r"#\w|\.\w|\[data-")
+QUOTED_LITERAL = re.compile(r"""(?:^|[\s`(])(["'])([^"'\n]{1,80})\1(?=$|[\s`).,;:!?])""")
+SELECTOR = re.compile(r"(?:^|[\s`(])(?:#|\.)[A-Za-z_][\w-]*|\[data-")
 
 
 def check_observable_content(tasks_text: str, spec_text: str | None, f: Findings) -> None:
@@ -2691,7 +2692,7 @@ def run_checks(spec_dir: Path) -> Findings:
         check_threat_model(plan_text, spec_text, f)
         check_acceptance_flows(plan_text, spec_text, f)
         check_shakeout_access(plan_text, f)
-        check_parity(plan_text, spec_text, f)  # artifact-gate FR-15
+        check_parity(spec_text, plan_text, f)  # artifact-gate FR-15
         check_stakes(plan_text, spec_text, f)
         check_cluster_stakes(plan_text, f)
         check_loop_budget(plan_text, f)
