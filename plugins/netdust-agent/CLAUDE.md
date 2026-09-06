@@ -14,7 +14,7 @@ One idea, decided 2026-08-10 (the re-thinning):
 |---|---|---|
 | `harnessed-development` | intake | the class dial (A–F, priced by open decisions) + the stakes dial; routes, does no stage work. |
 | `planning` | `superpowers:brainstorming` + `writing-plans` | the plan-time gates: Source: per FR, threat model, invariants, ground-truth, stakes, deliverable-first, task shaping, behaviour clusters — all checked by `bin/gate-check.py`; stops at the seam |
-| `building` | `superpowers:subagent-driven-development` / `executing-plans` + `test-driven-development` | the seam precondition, ground-truth per dispatch, the evidence contract the stop hook parses, feature tests after each cluster, review gates with independent reviewers |
+| `building` | `superpowers:subagent-driven-development` / `executing-plans` + `test-driven-development` | the seam precondition, ground-truth per dispatch, the evidence contract the stop hook parses, feature tests on a cluster opting in with `Feature-tests: yes` (elsewhere the shake-out's committed flows are the feature tests), review gates with independent reviewers |
 | `testing-workflow` | `superpowers:test-driven-development` | the tier decision (A/B, evidence ladder) and the WP runners — Brain Monkey / wp-phpunit via the netdust-wp-manager template, which superpowers doesn't know |
 | `threat-modeling` | `planning` | the trigger list + the `## Threat model` section shape |
 | `architecture-invariants` | `planning` / review | the convergence-point doc shape reviews check bypasses against |
@@ -23,8 +23,9 @@ One idea, decided 2026-08-10 (the re-thinning):
 
 ## Agents (7)
 
-`implementer` (greens tasks, TDD), `test-author` (feature tests after each task group;
-rare pre-task RED on split tasks), `reviewer` (whole-diff generalist),
+`implementer` (greens tasks, TDD), `test-author` (the split RED before the implementer
+on `Test-author: split` tasks; feature tests only on a cluster carrying `Feature-tests:
+yes`), `reviewer` (whole-diff generalist),
 `security-sentinel`, `code-simplicity-reviewer`, `invariant-auditor` (the no-drift
 agent: convergence-point bypasses AND reinvented solutions, against
 ARCHITECTURE-INVARIANTS.md + CODE-MAP.md — restored 2026-08-10 after its transcript

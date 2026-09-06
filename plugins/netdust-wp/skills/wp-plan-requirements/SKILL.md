@@ -94,10 +94,10 @@ the cluster gate's `ntdst-drift-reviewer` verdict where `panel-hints` names the 
 
 WP plan sections `netdust-agent`'s `bin/gate-check.py` checks by name — cite the check, never restate its rule:
 
-- `## Acceptance flows` — every row carries a `Layer` cell; any screen is `browser`. `acceptance-flows` fails a flagged screen with no browser row.
-- `## Shake-out access` — the ONE command that logs the shake-out in, citing the recipe in `netdust-wp:wp-testing` (`shakeout-access`).
-- `## Parity: <reference>` — owed when the spec says same-as / identical-to / mirrors / parity-with an existing surface: ≥3 components read from the RUNNING reference, its URL named (`parity`).
-- A user-facing behaviour cluster's `Observable:` names rendered content, not a status code (`observable-content`).
+- `## Acceptance flows` — a `Layer` cell per row (`acceptance-flows`); the row grammar is `netdust-agent:planning`'s.
+- `## Shake-out access` — the one login command (`shakeout-access`); the recipe is `netdust-wp:wp-testing`'s.
+- `## Parity: <reference>` — owed when the spec says same-as (`parity`); what it lists is `netdust-agent:planning`'s.
+- A user-facing behaviour cluster's rendered-content `Observable:` (`observable-content`); the form is `netdust-agent:planning`'s.
 
 ## The convergence contract
 

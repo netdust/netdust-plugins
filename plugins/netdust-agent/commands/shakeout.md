@@ -53,8 +53,10 @@ dispatch one `implementer` per `fail` row (one TDD cycle each, Class C), re-disp
 Show the human what the artifact looks like — one screenshot per surface, the PNGs the
 manifest's browser rows name, never a per-flow slideshow. Under `HERDR_ENV=1` open them as
 a `shakeout` tab per the screenshot-yield row in `skills/_shared/herdr-moments.md`; outside
-herdr, Read each PNG inline. Skipped when Step 2 was skipped. The human looks before the
-panel spends.
+herdr, Read each PNG inline. Beside the screenshots, list every `✓ [shakeout-ruling]` row
+Step 3 printed, for the human to confirm — `Ruling:` is agent-writable, so a ruling the
+human did not write is reverted and its row re-driven. Skipped when no browser row exists
+(the checker's rule). The human looks before the panel spends.
 
 ## Step 5 — The branch panel, then close by ledger
 
