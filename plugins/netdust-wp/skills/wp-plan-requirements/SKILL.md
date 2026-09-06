@@ -83,12 +83,21 @@ Keep only the rows that apply to what the feature actually builds; delete the re
 
 ### Block 3 — per-task acceptance line
 
-Every module-touching task in the breakdown gets this acceptance criterion, so the drift categories gate **task close**, not only shake-out:
+The gate's `✓ [panel-hints] drift-panel:` line names the clusters that buy a drift review (`netdust-agent:building`). A task in such a cluster closes on the cluster gate's drift verdict — there is no per-task pre-check. Every module-touching task carries:
 
 ```
-Acceptance: drift pre-check clean — `/drift-reviewer <touched path>` returns no findings
-(Part 1 + Part 2), and the per-flow security line above is satisfied in the diff.
+Acceptance: the per-flow security line above is satisfied in the diff; drift closes on
+the cluster gate's `ntdst-drift-reviewer` verdict where `panel-hints` names the cluster.
 ```
+
+### Block 4 — the shake-out sections
+
+WP plan sections `bin/gate-check.py` checks by name — cite the check, never restate its rule:
+
+- `## Acceptance flows` — every row carries a `Layer` cell; any screen is `browser`. `acceptance-flows` fails a flagged screen with no browser row.
+- `## Shake-out access` — the ONE command that logs the shake-out in, citing the recipe in `netdust-wp:wp-testing` (`shakeout-access`).
+- `## Parity: <reference>` — owed when the spec says same-as / identical-to / mirrors / parity-with an existing surface: ≥3 components read from the RUNNING reference, its URL named (`parity`).
+- A user-facing behaviour cluster's `Observable:` names rendered content, not a status code (`observable-content`).
 
 ## The convergence contract
 
