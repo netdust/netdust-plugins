@@ -1788,6 +1788,9 @@ PLAN_SHAKEOUT_WIRE_ONLY = """# Plan: audit endpoint
 | AF-2 | REST list returns the rows | wire | 200 with a JSON array | 401 anonymous |
 """
 
+PLAN_SHAKEOUT_NO_LAYER = PLAN_SHAKEOUT.replace("| Layer ", "").replace("|---|---|---|---|---|", "|---|---|---|---|") \
+    .replace("| browser ", "").replace("| wire ", "")
+
 _MANIFEST_HEAD = """# Shake-out — audit screen
 
 | # | Flow | Layer | Verdict | Evidence |
@@ -1835,6 +1838,14 @@ def test_shakeout_browser_row_without_evidence_fails() -> tuple[bool, str]:
     rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_NO_EVIDENCE})
     return (rc == 1 and "✗ [shakeout-manifest]" in out and "AF-1" in out,
             "shakeout (a): a `browser` row marked pass with no `Browser:` evidence FAILs naming AF-1")
+
+
+def test_shakeout_manifest_layer_cannot_relabel_a_browser_row() -> tuple[bool, str]:
+    relabelled = MANIFEST_BROWSER_NO_EVIDENCE.replace("| browser | pass |", "| wire | pass |")
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": relabelled})
+    return (rc == 1 and "✗ [shakeout-manifest] AF-1: manifest says wire, plan says browser" in out
+            and "✗ [shakeout-manifest] AF-1: browser row without" in out,
+            "shakeout (k): the manifest's `wire` on a plan `browser` row FAILs the relabel and judges the row as browser")
 
 
 # ── T02 fixtures: `Layer` on acceptance rows + `## Shake-out access` (FR-4 / FR-5) ──
@@ -3157,6 +3168,12 @@ def run():
 
     # ── 31. `--shakeout` — the manifest gate (artifact-gate T01, FR-1..FR-3) ──
     results.append(test_shakeout_browser_row_without_evidence_fails())
+    results.append(test_shakeout_manifest_layer_cannot_relabel_a_browser_row())
+
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT_NO_LAYER, "shakeout.md": MANIFEST_BROWSER_NO_EVIDENCE})
+    results.append((rc == 1 and "✗ [shakeout-manifest] AF-1: browser row without" in out
+                    and "plan says" not in out,
+                    "shakeout (k'): a plan without a Layer column leaves the manifest's layer in force — AF-1 is browser"))
 
     rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_DRIVEN}, PNG)
     results.append((rc == 0 and "shakeout: 2 rows, 1 browser rows driven" in out,

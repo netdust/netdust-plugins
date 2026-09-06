@@ -2621,12 +2621,16 @@ def _row_problem(row: dict, spec_dir: Path) -> str | None:
     return None
 
 
-def _check_manifest_row(row: dict, spec_dir: Path, f: Findings) -> bool:
+def _check_manifest_row(row: dict, spec_dir: Path, plan_layer: dict[str, str], f: Findings) -> bool:
     """Report the row; True when it is a browser row driven by a browser."""
-    n = row["n"]
+    n, layer = row["n"], row["layer"].lower()
     if CREDENTIAL.search(row["evidence"]):
         f.add("fail", "shakeout-credential",
               f"{n}: evidence carries a credential (login=/token=/app password/storageState)")
+    if plan_layer.get(n) and layer and layer != plan_layer[n]:
+        f.add("fail", "shakeout-manifest",
+              f"{n}: manifest says {layer}, plan says {plan_layer[n]} — the plan's layer decides")
+    row = {**row, "layer": plan_layer.get(n) or layer}
     problem = _row_problem(row, spec_dir)
     ruling = RULING.search(row["evidence"])
     if ruling:
@@ -2644,7 +2648,8 @@ def run_shakeout_checks(spec_dir: Path) -> Findings:
         body = section_body(plan.read_text(), "Acceptance flows")
         if body is not None:
             plan_rows = _author_flow_rows(body)
-    browser_owed = [r["n"] for r in plan_rows if (r["layer"] or "").lower() == "browser"]
+    plan_layer = {r["n"]: _layer(r) for r in plan_rows if _layer(r)}
+    browser_owed = [n for n, layer in plan_layer.items() if layer == "browser"]
 
     if not manifest.exists():
         if browser_owed:
@@ -2661,7 +2666,7 @@ def run_shakeout_checks(spec_dir: Path) -> Findings:
         if r["n"] not in seen:
             f.add("fail", "shakeout-manifest",
                   f"{r['n']} is in the plan's acceptance flows but has no manifest row")
-    driven = sum(_check_manifest_row(r, spec_dir, f) for r in rows)
+    driven = sum(_check_manifest_row(r, spec_dir, plan_layer, f) for r in rows)
     f.add("pass", "shakeout-manifest", f"shakeout: {len(rows)} rows, {driven} browser rows driven")
     return f
 
