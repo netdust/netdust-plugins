@@ -7,7 +7,6 @@ UPSTREAM="${UPSTREAM:-https://github.com/WordPress/agent-skills.git}"
 PIN="${PIN-d87ee6916e740c7960b6959220c0481a41b320c7}"  # trunk, 2026-09-06
 SKILLS="wp-plugin-development wp-rest-api wp-wpcli-and-ops wp-phpstan"
 CLONE="${XDG_CACHE_HOME:-$HOME/.cache}/netdust/wp-upstream-skills"
-NPX="${NPX:-npx}"
 DRY=false
 
 run() { if $DRY; then echo "+ $*"; else "$@"; fi; }
@@ -21,7 +20,7 @@ install() {
     run git -C "$CLONE" fetch -q --depth 1 origin "$PIN"
     run git -C "$CLONE" checkout -q "$PIN"
   fi
-  run "$NPX" -y skills add "$CLONE" -s $SKILLS -a claude-code -g -y --copy
+  run npx -y skills add "$CLONE" -s $SKILLS -a claude-code -g -y --copy
 }
 
 check() {

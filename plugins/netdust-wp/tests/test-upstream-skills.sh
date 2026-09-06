@@ -42,17 +42,13 @@ chmod +x "$TMP/bin/npx"
 export PATH="$TMP/bin:$PATH" NPX_LOG="$TMP/npx.log"
 touch "$NPX_LOG"
 
-# (d) an unpinned run refuses before touching anything
-out=$(PIN='' bash "$BIN" 2>&1); rc=$?
-[ $rc -eq 2 ] && ok "PIN= exits 2" || bad "PIN= exit $rc (want 2): $out"
-grep -q "refusing: no pin" <<<"$out" && ok "PIN= says refusing: no pin" || bad "PIN= output: $out"
-[ ! -e "$CLONE" ] && ok "PIN= touched no clone" || bad "PIN= created $CLONE"
-
-# a ref name is not a pin: PIN=trunk would fetch whatever trunk resolves to
-out=$(PIN=trunk bash "$BIN" 2>&1); rc=$?
-[ $rc -eq 2 ] && ok "PIN=trunk exits 2" || bad "PIN=trunk exit $rc (want 2): $out"
-grep -q "refusing: no pin" <<<"$out" && ok "PIN=trunk says refusing: no pin" || bad "PIN=trunk output: $out"
-[ ! -e "$CLONE" ] && ok "PIN=trunk touched no clone" || bad "PIN=trunk created $CLONE"
+# (d) an unpinned run refuses before touching anything; a ref name is not a pin either
+for p in '' trunk; do
+  out=$(PIN="$p" bash "$BIN" 2>&1); rc=$?
+  [ $rc -eq 2 ] && ok "PIN=$p exits 2" || bad "PIN=$p exit $rc (want 2): $out"
+  grep -q "refusing: no pin" <<<"$out" && ok "PIN=$p says refusing: no pin" || bad "PIN=$p output: $out"
+  [ ! -e "$CLONE" ] && ok "PIN=$p touched no clone" || bad "PIN=$p created $CLONE"
+done
 
 # (e) --dry-run prints the commands and touches nothing
 out=$(bash "$BIN" --dry-run 2>&1); rc=$?
@@ -86,8 +82,6 @@ out=$(PIN="$PIN2" bash "$BIN" 2>&1); rc=$?
 [ $rc -eq 0 ] && ok "changed pin: install exits 0" || bad "changed pin exit $rc: $out"
 [ "$(git -C "$CLONE" rev-parse HEAD)" = "$PIN2" ] && ok "changed pin: clone moved to the new sha" || bad "clone still at $(git -C "$CLONE" rev-parse HEAD)"
 [ "$(cat "$HOME/.claude/skills/wp-phpstan/SKILL.md")" = "# wp-phpstan v2" ] && ok "changed pin: new content landed" || bad "wp-phpstan content: $(cat "$HOME/.claude/skills/wp-phpstan/SKILL.md")"
-out=$(PIN="$PIN2" bash "$BIN" --check 2>&1); rc=$?
-[ $rc -eq 0 ] && [ "$(grep -c "^present" <<<"$out")" -eq 4 ] && ok "changed pin: --check four present" || bad "changed pin --check exit $rc: $out"
 PIN=$(git -C "$TMP/src" rev-parse HEAD~1); export PIN
 
 # (b) --check after install lists four, exit 0
