@@ -33,7 +33,7 @@ check() {
   return $rc
 }
 
-[ -n "$PIN" ] || { echo "refusing: no pin" >&2; exit 2; }
+[[ "$PIN" =~ ^[0-9a-f]{40}$ ]] || { echo "refusing: no pin" >&2; exit 2; }
 case "${1:-}" in
   '') install ;;
   --dry-run) DRY=true; install ;;

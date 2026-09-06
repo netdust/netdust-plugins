@@ -14,7 +14,7 @@ mkdir -p "$HOME" "$TMP/bin"
 CLONE="$XDG_CACHE_HOME/netdust/wp-upstream-skills"
 SKILLS="wp-plugin-development wp-rest-api wp-wpcli-and-ops wp-phpstan"
 
-git init -q "$TMP/src"
+git init -q -b trunk "$TMP/src"
 for s in $SKILLS; do mkdir -p "$TMP/src/skills/$s"; echo "# $s" > "$TMP/src/skills/$s/SKILL.md"; done
 git -C "$TMP/src" -c user.email=t@test -c user.name=t add -A
 git -C "$TMP/src" -c user.email=t@test -c user.name=t commit -qm fixture
@@ -36,7 +36,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 mkdir -p "$HOME/.claude/skills"
-for n in "${names[@]}"; do cp -r "$src/skills/$n" "$HOME/.claude/skills/$n"; done
+for n in "${names[@]}"; do rm -rf "${HOME:?}/.claude/skills/$n"; cp -r "$src/skills/$n" "$HOME/.claude/skills/$n"; done
 SH
 chmod +x "$TMP/bin/npx"
 export PATH="$TMP/bin:$PATH" NPX_LOG="$TMP/npx.log"
@@ -47,6 +47,12 @@ out=$(PIN='' bash "$BIN" 2>&1); rc=$?
 [ $rc -eq 2 ] && ok "PIN= exits 2" || bad "PIN= exit $rc (want 2): $out"
 grep -q "refusing: no pin" <<<"$out" && ok "PIN= says refusing: no pin" || bad "PIN= output: $out"
 [ ! -e "$CLONE" ] && ok "PIN= touched no clone" || bad "PIN= created $CLONE"
+
+# a ref name is not a pin: PIN=trunk would fetch whatever trunk resolves to
+out=$(PIN=trunk bash "$BIN" 2>&1); rc=$?
+[ $rc -eq 2 ] && ok "PIN=trunk exits 2" || bad "PIN=trunk exit $rc (want 2): $out"
+grep -q "refusing: no pin" <<<"$out" && ok "PIN=trunk says refusing: no pin" || bad "PIN=trunk output: $out"
+[ ! -e "$CLONE" ] && ok "PIN=trunk touched no clone" || bad "PIN=trunk created $CLONE"
 
 # (e) --dry-run prints the commands and touches nothing
 out=$(bash "$BIN" --dry-run 2>&1); rc=$?
@@ -70,6 +76,19 @@ grep -q -- "skills add $CLONE " "$NPX_LOG" && ok "npx adds from the local clone"
 # a re-run reuses the clone and stays at the pin
 out=$(bash "$BIN" 2>&1); rc=$?
 [ $rc -eq 0 ] && [ "$(git -C "$CLONE" rev-parse HEAD)" = "$PIN" ] && ok "re-run exits 0 at PIN" || bad "re-run exit $rc: $out"
+
+# a changed pin re-fetches: the clone moves and the new content lands
+echo "# wp-phpstan v2" > "$TMP/src/skills/wp-phpstan/SKILL.md"
+git -C "$TMP/src" -c user.email=t@test -c user.name=t commit -qam bump
+git -C "$TMP/src" push -q "$TMP/upstream.git" trunk
+PIN2=$(git -C "$TMP/src" rev-parse HEAD)
+out=$(PIN="$PIN2" bash "$BIN" 2>&1); rc=$?
+[ $rc -eq 0 ] && ok "changed pin: install exits 0" || bad "changed pin exit $rc: $out"
+[ "$(git -C "$CLONE" rev-parse HEAD)" = "$PIN2" ] && ok "changed pin: clone moved to the new sha" || bad "clone still at $(git -C "$CLONE" rev-parse HEAD)"
+[ "$(cat "$HOME/.claude/skills/wp-phpstan/SKILL.md")" = "# wp-phpstan v2" ] && ok "changed pin: new content landed" || bad "wp-phpstan content: $(cat "$HOME/.claude/skills/wp-phpstan/SKILL.md")"
+out=$(PIN="$PIN2" bash "$BIN" --check 2>&1); rc=$?
+[ $rc -eq 0 ] && [ "$(grep -c "^present" <<<"$out")" -eq 4 ] && ok "changed pin: --check four present" || bad "changed pin --check exit $rc: $out"
+PIN=$(git -C "$TMP/src" rev-parse HEAD~1); export PIN
 
 # (b) --check after install lists four, exit 0
 out=$(bash "$BIN" --check 2>&1); rc=$?
