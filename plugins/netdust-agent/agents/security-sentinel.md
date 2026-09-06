@@ -63,6 +63,17 @@ For every review, you will verify:
 - [ ] Error messages don't leak sensitive information
 - [ ] Dependencies are up-to-date and vulnerability-free
 
+## WordPress projects
+
+On a WordPress project — or any package consuming ntdst-core — load
+`netdust-wp/references/wp-review-checklists.md` (vendored from `jorgerosal/wordpress-skills` at
+the commit in its header) and verify the diff against its keyed items, citing the id (`SEC-nn`,
+`MIG-nn`) in every finding. Beside the plan's `## Threat model`, the checklists are the
+convergence target: the report says which items were checked and which hit, not what free-form
+hunting turned up. The netdust layer above them is `netdust-wp:wp-security` — routes register
+through `ntdst_rest()` and `permission` / `->public()` is the gate, so a raw
+`register_rest_route()` is itself a finding.
+
 ## Reporting Protocol
 
 Your security reports will include:

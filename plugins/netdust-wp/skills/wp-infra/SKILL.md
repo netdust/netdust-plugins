@@ -25,38 +25,15 @@ project/
         └── uploads/                  ← user content (gitignored)
 ```
 
-For non-Bedrock WP (custom-app), the layout is `app/wp/` + `app/content/` instead of `web/wp/` + `web/app/`. The `wp-cli.yml` reflects this.
-
 ## WP-CLI conventions
 
-Every Netdust WP project has a `wp-cli.yml` at the repo root that fixes the `--path`:
-
-```yaml
-# Bedrock
-path: web/wp
-```
-
-```yaml
-# Custom-app
-path: app/wp
-```
-
-Without this, `ddev wp` fails with "This does not seem to be a WordPress installation."
-
-### Common WP-CLI commands (via DDEV)
-
-```bash
-ddev wp cache flush               # AFTER checking object-cache.php for exclusions
-ddev wp rewrite flush             # after adding routes / rewrite rules
-ddev wp option get siteurl
-ddev wp option update home https://new.url
-ddev wp db export backup.sql
-ddev wp db import backup.sql
-ddev wp plugin list --status=active
-ddev wp user create stefan stefan@netdust.be --role=administrator
-ddev wp search-replace 'http://old' 'https://new' --all-tables --dry-run
-ddev wp cli info                  # which WP-CLI version + WP path
-```
+Generic WP-CLI — the command set, `search-replace`, plugin/theme ops, cron, multisite, scripting
+guardrails — is the upstream `wp-wpcli-and-ops` skill (`WordPress/agent-skills`, installed at a
+pinned commit by `bin/wp-upstream-skills.sh`; `### 2) Choose the right workflow`, `### 3)
+Automation patterns`, `references/safety.md`). The netdust layer: always `ddev wp …` (PHP and DB
+must match the container) and one `wp-cli.yml` at the repo root fixing `--path` per
+`structure.type` (table below) — without it `ddev wp` fails with "This does not seem to be a
+WordPress installation." Both are rows in Anti-patterns; never hardcode `--path` in a script.
 
 ### Cache flush — read this carefully
 
@@ -88,43 +65,19 @@ location ~ ^/app/logs/ { deny all; return 404; }
 - The database log handler is now **opt-in** (default: only on under `WP_DEBUG`). In production, ERROR+ entries still hit the file log and PHP's `error_log()` — they don't disappear. Force on with `add_filter('ntdst_log_database_enabled', '__return_true')` if you have an observability stack reading from `log_entry`.
 - Don't log user-submitted values that may contain PII (emails, names, form content). Log identifiers and structural metadata only.
 
-## Bedrock-aware Makefile targets
+## Makefile targets
 
-Beyond the generic verbs in `netdust-devops:devops`, WP/Bedrock projects add:
-
-| Target | What |
-|---|---|
-| `make deploy env=<name>` | Gate, transport, stamp. Transport is `deploy.method` in site.yml: `rsync` or `git-push` |
-| `make deploy-test env=<name>` | The same path with `--dry-run` — shows what would change, changes nothing |
-| `make ship` | Production: gate first, then DB + payload backup, then a typed confirmation |
-| `make deployed` | Which commit runs on each environment, read from the server-side ledger |
-| `make rollback env=<name>` | Redeploy the previously stamped commit, from a local worktree |
-| `make refresh env=<name>` | Copy production's DB, uploads and third-party plugins DOWN to a non-prod environment |
-| `make pull env=<name>` | Same, down to local DDEV |
-| `make gate` | The project's own suite (`commands.gate` in site.yml) |
-
-`templates/Makefile` + `templates/scripts/` are copied verbatim — the Makefile
-carries no project-specific value and needs no substitution. The retired
-git-bundle variants required a `.git` on the deploy target; production rarely
-had one, so those deploys silently never worked.
+The verbs — `deploy`, `deploy-test`, `ship`, `deployed`, `rollback`, `refresh`, `pull`, `gate` —
+are `netdust-devops:devops`'s table, identical on WordPress. `templates/Makefile` +
+`templates/scripts/` are copied verbatim and carry no project value; the WP data verbs live in
+`netdust-devops` `dist/mk/wp.mk`.
 
 ## Asset pipeline (Vite in a WP theme)
 
-```
-themes/<theme>/
-├── vite.config.js              ← entry, output, HMR
-├── package.json                ← devDependencies (vite, postcss, tailwindcss, etc.)
-├── assets/
-│   ├── css/main.css
-│   ├── js/main.js
-│   └── dist/                   ← built, gitignored
-│       └── .vite/manifest.json
-└── inc/enqueue.php             ← reads manifest, wp_enqueue_script with hashed filenames
-```
-
-See `wp-frontend` for the actual Vite + theme.json + block-theme details. This skill just notes that WP projects live with this pipeline; the dev loop is `ddev start && (cd web/app/themes/<theme> && npm run dev)`.
-
-**Vite over DDEV's HTTPS** — Vite's HMR needs the right `server.origin`:
+`themes/<theme>/vite.config.js` builds `assets/` into `assets/dist/.vite/manifest.json`
+(gitignored), which `inc/enqueue.php` reads for the hashed filenames — `wp-frontend` owns that.
+The DDEV part: the dev loop is `ddev start && (cd web/app/themes/<theme> && npm run dev)`, and
+HMR needs DDEV's origin (5173 is exposed via its router):
 
 ```js
 // vite.config.js
@@ -135,8 +88,6 @@ export default {
   },
 };
 ```
-
-DDEV exposes 5173 via its router.
 
 ## Custom-app variant (non-Bedrock)
 

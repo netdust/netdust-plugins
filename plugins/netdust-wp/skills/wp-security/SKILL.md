@@ -18,56 +18,29 @@ The WordPress security model has four pillars. Every data flow touches at least 
 
 Sanitize and escape are not interchangeable. Sanitize answers "safe to store?". Escape answers "safe to render *here*?". A title sanitized into the database still needs `esc_html()` when echoed into HTML body, `esc_attr()` when echoed into an attribute, `esc_url()` when echoed into `href`, `wp_kses_post()` when limited HTML is allowed.
 
-## Quick reference
+## WordPress fundamentals — upstream
 
-### Sanitize on input (storage-bound)
+The generic layer is the official `WordPress/agent-skills` set, installed at a pinned commit by
+`bin/wp-upstream-skills.sh` into `~/.claude/skills/<name>/`; this skill does not restate it.
 
-| Input type | Function |
-|---|---|
-| Plain text | `sanitize_text_field()` |
-| Textarea | `sanitize_textarea_field()` |
-| Email | `sanitize_email()` |
-| URL (storing) | `esc_url_raw()` |
-| Filename | `sanitize_file_name()` |
-| Slug/key | `sanitize_key()` |
-| Integer ID | `absint()` |
-| Limited HTML | `wp_kses_post()` or `wp_kses()` with allow-list |
-| Array of values | Loop + sanitize per element |
+- `wp-plugin-development` — `### 4) Security baseline (always)` + `references/security.md`
+  (sanitize on input, `wp_unslash()` and explicit keys, escape on output, `$wpdb->prepare()`,
+  nonces are CSRF not authorization); `### 3) Settings and admin UI` (`sanitize_callback`).
+- `wp-rest-api` — `### 2) Register routes safely` (`permission_callback` on every route),
+  `### 3) Validate/sanitize request args`, `### 5) Authentication and authorization` +
+  `references/authentication.md` (cookie auth needs the `wp_rest` nonce as `X-WP-Nonce`).
+- The per-context function map (`esc_*` by context, `sanitize_*` by type, `check_ajax_referer()`
+  per `wp_ajax_*` handler, `$wpdb->esc_like()`): `references/wp-review-checklists.md`, the
+  vendored checklist `security-sentinel` verifies against.
 
-Always `wp_unslash()` first on `$_POST`/`$_GET`/`$_REQUEST`/`$_COOKIE` — WP applies magic-quote-style slashes; without unslashing, apostrophes become `\'` in storage.
-
-### Escape on output (rendering-bound)
-
-| Context | Function |
-|---|---|
-| HTML body text | `esc_html()` / `esc_html_e()` |
-| HTML attribute | `esc_attr()` / `esc_attr_e()` |
-| URL in `href` / `src` | `esc_url()` |
-| Inline JS value | `wp_json_encode()` |
-| Translated string in HTML | `esc_html__()`, `esc_attr__()` |
-| Trusted limited HTML | `wp_kses_post()` |
-| Raw `<textarea>` content | `esc_textarea()` |
-
-### Authorize
-
-- **Capability**: `current_user_can( 'edit_posts' )`. Never use `is_admin()` for permission — it is a context flag, not an authorization check.
-- **Nonce**: every state-changing action. `wp_create_nonce()` → `wp_verify_nonce()` or `check_admin_referer()`. On an `ntdst_rest()` route this is `wp.apiFetch`'s job — see below.
-- **Legacy AJAX (`wp_ajax_*` / `wp_ajax_nopriv_*`)**: `check_ajax_referer()` is **required per handler**.
-- **REST**: `permission_callback` is required on every route; `__return_true` is the canonical bug. WordPress itself checks nothing else for you.
-- **Cookie-authenticated REST callers**: authenticate with the `wp_rest` nonce in the `X-WP-Nonce` header, sent by `wp.apiFetch` (which also refreshes a stale one). `rest_cookie_check_errors()` is WordPress's own CSRF rule. A nonce is a CSRF token, never access control.
-
-### NTDST projects (ntdst-core 5.x)
+## NTDST projects (ntdst-core 5.x)
 
 On a project running ntdst-core 5.x, the four pillars above are unchanged — the door they are applied at is not.
 
-- **Routes register through `ntdst_rest()` only.** The gate is `permission` — a capability string, `->public()` (the one door to anonymous), or a callable. `permission` absent is the internal default (`is_user_logged_in`) — a READ that names nothing is logged-in-only, never open; a WRITE that names nothing does not register at all (structural enforcement, not a review catch). A hand-written `permission_callback => '__return_true'` is the bug above reached by bypassing `ntdst_rest()` with a raw `register_rest_route()`. See `ntdst-framework/SKILL.md`.
-- **The nonce is WordPress's, not core's.** ntdst-core mints no `wp_rest` nonce and runs no origin check of its own, so the `X-WP-Nonce` rule above is what a cookie-authenticated caller satisfies — `wp.apiFetch` on the client, nothing hand-rolled.
+- **Routes register through `ntdst_rest()` only.** The gate is `permission` — a capability string, `->public()` (the one door to anonymous), or a callable. `permission` absent is the internal default (`is_user_logged_in`) — a READ that names nothing is logged-in-only, never open; a WRITE that names nothing does not register at all (structural enforcement, not a review catch). A hand-written `permission_callback => '__return_true'` is the canonical `__return_true` bug reached by bypassing `ntdst_rest()` with a raw `register_rest_route()`. See `ntdst-framework/SKILL.md`.
+- **The nonce is WordPress's, not core's.** ntdst-core mints no `wp_rest` nonce and runs no origin check of its own, so the `X-WP-Nonce` rule (`wp-rest-api`) is what a cookie-authenticated caller satisfies — `wp.apiFetch` on the client, nothing hand-rolled.
 - **Cross-origin (CORS)**: WP core's default reflects any `Origin` **and** sets `Access-Control-Allow-Credentials: true` (the reflection+credentials anti-pattern), so any origin can read authenticated responses. The answer is `cors()` on `ntdst_rest()` — origins are ADDED to WordPress's own `allowed_http_origins`, scoped to REST requests only (`admin-ajax.php` and other cookie-auth surfaces keep WordPress's defaults), and `'*'` is refused outright as an allow-list entry. **Never hand-roll `Access-Control-*` headers or a `rest_pre_serve_request` hook.** Note it is OPT-IN: a route declaring no `cors` is exactly as exposed as any other WP REST route. See `ntdst-framework/SKILL.md`.
 - **`show_in_rest` on a Data-API field**: `'show_in_rest' => true` makes the field readable by anyone on `/wp/v2/<type>` — WordPress's own REST controller, no separate gate. A mis-declaration is a disclosure, not a bug a reviewer catches later.
-
-### Database
-
-Any dynamic value into a query → `$wpdb->prepare()`. No exceptions. See `skills/wp-database` for details.
 
 ## One excellent example
 
@@ -128,19 +101,10 @@ All four pillars present. Notice: `wp_unslash()` before `sanitize_text_field()`,
 - **"Use `WP_REST_Request::get_param()`, it's safe"** → No. It returns raw values. Sanitize per-field.
 - **"`wp_kses_post()` everywhere to keep formatting"** → Careful. It allows `<a href>`, which is XSS-able via `javascript:` URLs. Always `esc_url()` the href separately.
 - **"ACF sanitizes its own fields"** → Partially. ACF sanitizes on save based on field type, but the value coming out of `get_field()` is **not** escaped for any specific output context. Escape on output yourself.
-- **"`is_user_logged_in()` is enough for an admin action"** → No. Use `current_user_can()` with the specific capability for that action.
-
-## Common mistakes
-
-- `esc_url()` vs `esc_url_raw()` swap. **Storage → `esc_url_raw()`. Output → `esc_url()`.**
-- Forgetting `wp_unslash()` before sanitize on `$_POST` / `$_GET` / `$_REQUEST` / `$_COOKIE`.
-- Using `esc_html()` inside an HTML attribute. Use `esc_attr()`.
-- Outputting `get_post_meta()` or `get_option()` raw. Both are user-writable in some flows; treat as untrusted.
-- `add_query_arg()` does **not** escape. Pipe its return through `esc_url()`.
-- ACF: `the_field()` outputs raw, no escaping. Use `echo esc_html( get_field( 'foo' ) )` (or the appropriate escaper for the context).
-- Echoing translated strings without escaping. Use `esc_html__()` / `esc_attr__()`, not bare `__()`, when output goes into HTML.
-- Missing capability check on `admin_post_*` actions — these are reachable by any logged-in user including subscribers.
-- Settings API: forgetting the `sanitize_callback` argument on `register_setting()`.
+- **"`is_user_logged_in()` / `is_admin()` is enough for an admin action"** → No. Logged-in is authentication, `is_admin()` is a context flag (an admin screen is loading); authorization is `current_user_can()` with the specific capability.
+- **"`esc_url()` on the way into the database"** → No. Storage → `esc_url_raw()`; output → `esc_url()`.
+- **"`add_query_arg()` returns a safe URL"** → No. It does not escape. Pipe it through `esc_url()`.
+- **"`__()` is fine straight into HTML"** → No. Translations are file-writable; `esc_html__()` / `esc_attr__()` when the string lands in HTML.
 
 ## When in doubt — three questions
 
@@ -150,6 +114,7 @@ All four pillars present. Notice: `wp_unslash()` before `sanitize_text_field()`,
 
 ## See also
 
+- `wp-plugin-development`, `wp-rest-api` (upstream, cited above); `references/wp-review-checklists.md` (vendored, `SEC-nn` / `MIG-nn`).
 - `skills/wp-database` for `$wpdb->prepare()` patterns.
 - WordPress codex: [Data Validation](https://developer.wordpress.org/apis/security/data-validation/), [Securing Output](https://developer.wordpress.org/apis/security/escaping/), [Nonces](https://developer.wordpress.org/apis/security/nonces/).
 - `red-tests.md` in this skill folder: pressure scenarios for validating that this skill actually changes behavior.
