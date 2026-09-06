@@ -1883,6 +1883,7 @@ def _tasks_behaviour(diff: str = "", lane: str = "Lane: behaviour\n", t2: str = 
 SPEC_NO_SURFACE = "# Spec\n\n## User-facing surfaces\n\n- [x] None of the above\n"
 
 _LAYER_HEAD = "| # | Flow | Layer | Expected | Edges |\n|---|---|---|---|---|\n"
+_NO_LAYER_HEAD = "| # | Flow | Expected | Edges |\n|---|---|---|---|\n"
 AF1_BROWSER = "| AF-1 | issue an invoice | browser | PDF stored, editor sees it listed | empty: no line items → blocked |\n"
 AF1_WIRE = AF1_BROWSER.replace("| browser |", "| wire |")
 AF2_WIRE = "| AF-2 | email the invoice | wire | recipient receives it once | denied: viewer cannot send |\n"
@@ -3205,6 +3206,11 @@ def run():
     results.append((rc == 0 and "shakeout: 2 rows, 1 browser rows driven" in out,
                     "shakeout (b): `Browser: <url> · <png>` with the PNG on disk → exit 0 + summary"))
 
+    rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_DRIVEN.replace(
+        "Browser: https://x.ddev.site/wp/wp-admin/admin.php?page=audit", "Browser: not-reached")}, PNG)
+    results.append((rc == 1 and "✗ [shakeout-manifest]" in out and "AF-1" in out and "http url" in out,
+                    "shakeout (b-url): `Browser: not-reached · <png>` with the PNG on disk → FAIL naming AF-1 and the http url"))
+
     rc, out = _run_shakeout({"plan.md": PLAN_SHAKEOUT, "shakeout.md": MANIFEST_BROWSER_DRIVEN})
     results.append((rc == 1 and any("✗ [shakeout-manifest]" in ln and "shakeout/af-1.png" in ln
                                     for ln in out.splitlines()),
@@ -3381,6 +3387,13 @@ def run():
     results.append((rc == 1 and "✗ [acceptance-flows]" in out and "browser" in out
                     and "✓ [acceptance-flows]" not in out,
                     "layer (a): spec flags a view, every row is `wire` → FAIL naming the missing browser layer, no PASS beside it"))
+
+    legacy = _plan_layers(AF1_BROWSER + AF2_WIRE).replace(_LAYER_HEAD, _NO_LAYER_HEAD) \
+        .replace("| browser |", "|").replace("| wire |", "|")
+    rc, out = _run({"spec.md": SPEC_SCREEN, "plan.md": legacy, "tasks.md": TASKS_GOOD})
+    results.append((rc == 0 and "! [acceptance-flows]" in out and "no Layer column" in out
+                    and "browser row is owed" in out and "✗ [acceptance-flows]" not in out,
+                    "layer (a'): spec flags a view, the table has no Layer column → one WARN naming the column, not FAIL (a legacy plan keeps running)"))
 
     rc, out = _run({"spec.md": SPEC_SCREEN,
                     "plan.md": _plan_layers(AF1_BROWSER + AF2_WIRE, ACCESS_RECIPE),

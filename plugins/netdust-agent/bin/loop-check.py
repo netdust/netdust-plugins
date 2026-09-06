@@ -126,14 +126,28 @@ CHECKED_BOX = re.compile(r"^\s*- \[[xX]\]\s+(.*)$")
 SCREEN_BOX = re.compile(r"\b(view|screen|page|admin|form|wizard|multi-step)\b", re.IGNORECASE)
 
 
+SECTION_HEADING = re.compile(r"^(#{1,2})\s+(.*?)\s*$")
+
+
+def _section_body(text: str, name: str) -> list[str]:
+    """gate-check's section_body rule: the first `## <name>` (a `[GATE]` suffix tolerated),
+    up to the next H1/H2, fences stripped."""
+    body, found = [], False
+    for line in unfenced(text):
+        h = SECTION_HEADING.match(line)
+        if h:
+            if found:
+                break
+            found = h.group(1) == "##" and h.group(2).split("[")[0].strip().lower() == name.lower()
+        elif found:
+            body.append(line)
+    return body
+
+
 def spec_flags_surface(spec_text: str) -> bool:
     """A checked box under `## User-facing surfaces` naming a screen."""
-    in_section = False
-    for line in spec_text.splitlines():
-        if line.startswith("## "):
-            in_section = line[3:].strip().lower().startswith("user-facing surfaces")
-            continue
-        m = CHECKED_BOX.match(line) if in_section else None
+    for line in _section_body(spec_text, "User-facing surfaces"):
+        m = CHECKED_BOX.match(line)
         if m and SCREEN_BOX.search(m.group(1)):
             return True
     return False

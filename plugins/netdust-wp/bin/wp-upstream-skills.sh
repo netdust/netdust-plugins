@@ -5,6 +5,7 @@ set -euo pipefail
 
 UPSTREAM="${UPSTREAM:-https://github.com/WordPress/agent-skills.git}"
 PIN="${PIN-d87ee6916e740c7960b6959220c0481a41b320c7}"  # trunk, 2026-09-06
+SKILLS_CLI_VERSION=1.5.23  # npm view skills version, 2026-09-06
 SKILLS="wp-plugin-development wp-rest-api wp-wpcli-and-ops wp-phpstan"
 CLONE="${XDG_CACHE_HOME:-$HOME/.cache}/netdust/wp-upstream-skills"
 DRY=false
@@ -20,12 +21,13 @@ install() {
     run git -C "$CLONE" fetch -q --depth 1 origin "$PIN"
     run git -C "$CLONE" checkout -q "$PIN"
   fi
-  run npx -y skills add "$CLONE" -s $SKILLS -a claude-code -g -y --copy
+  run npx -y skills@"$SKILLS_CLI_VERSION" add "$CLONE" -s $SKILLS -a claude-code -g -y --copy
 }
 
 check() {
   local rc=0 s
   echo "pin: $PIN"
+  echo "skills-cli: $SKILLS_CLI_VERSION"
   for s in $SKILLS; do
     if [ -f "$HOME/.claude/skills/$s/SKILL.md" ]; then echo "present: $s"; else echo "missing: $s"; rc=1; fi
   done

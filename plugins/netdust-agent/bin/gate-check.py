@@ -320,7 +320,7 @@ def check_security_surfaces(spec_text: str, f: Findings) -> None:
 def spec_user_facing_triggered(spec_text: str) -> list[str]:
     """Any checked box under 'User-facing surfaces' that isn't 'None of the above' — the
     arming switch for the plan's 1g gate, exactly as spec_security_triggered() arms 1a."""
-    body = section_body(spec_text, "User-facing surfaces")
+    body = section_body(strip_fenced(spec_text), "User-facing surfaces")
     if body is None:
         return []
     hits = []
@@ -421,6 +421,7 @@ def check_acceptance_flows(plan_text: str, spec_text: str | None, f: Findings) -
 
     triggered = spec_user_facing_triggered(spec_text) if spec_text else []
     layered = _author_flow_rows(body) if rows else []
+    has_layer_column = any(r["layer"] is not None for r in layered)
     screens = spec_screens(spec_text)
     if triggered and (is_na or not rows):
         f.add("fail", "acceptance-flows",
@@ -428,7 +429,7 @@ def check_acceptance_flows(plan_text: str, spec_text: str | None, f: Findings) -
               f"[{', '.join(triggered[:3])}] but the plan's ## Acceptance flows is "
               f"{'N/A' if is_na else 'empty/placeholder'} — the 1g gate is not satisfied, so "
               "shake-out would re-discover the flows free-form instead of driving them")
-    elif screens and not any(_layer(r) == "browser" for r in layered):
+    elif screens and has_layer_column and not any(_layer(r) == "browser" for r in layered):
         f.add("fail", "acceptance-flows",
               f"spec flags a screen [{', '.join(screens[:3])}] but none of the {rows} row(s) "
               "has Layer `browser` — the shake-out has nothing to drive in a browser")
@@ -442,7 +443,11 @@ def check_acceptance_flows(plan_text: str, spec_text: str | None, f: Findings) -
         f.add("warn", "acceptance-flows",
               "## Acceptance flows is neither N/A nor a filled-in matrix — confirm it is "
               "intentional")
-    for r in layered:
+    if rows and not has_layer_column:
+        f.add("warn", "acceptance-flows",
+              "the table has no Layer column — add one (browser · wire · cli per row)"
+              + ("; a browser row is owed" if screens else ""))
+    for r in layered if has_layer_column else []:
         layer = _layer(r)
         if layer not in LAYERS:
             f.add("warn", "acceptance-flows",
@@ -2407,7 +2412,7 @@ def check_clusters(tasks_text: str, f: Findings) -> None:
 # `specs/<feature>/shakeout.md`: `| # | Flow | Layer | Verdict | Evidence |`. A `browser`
 # row passes on evidence — a URL plus a screenshot on disk — never on the verdict word.
 
-BROWSER_EVIDENCE = re.compile(r"Browser:\s*(?P<url>\S+)\s*·\s*(?P<path>\S+)")
+BROWSER_EVIDENCE = re.compile(r"Browser:\s*(?P<url>https?://\S+)\s*·\s*(?P<path>\S+)")
 RULING = re.compile(r"Ruling:\s*(?P<reason>.+)")
 # The words the plan names, then every value the recipe or a session can mint: app
 # passwords (the command, the 6×4 value — case-sensitive so six short words are not one),
@@ -2646,7 +2651,7 @@ def _row_problem(row: dict, spec_dir: Path) -> str | None:
         return f"browser row verdict `{row['verdict']}` — not driven"
     m = BROWSER_EVIDENCE.search(evidence)
     if not m:
-        return "browser row without `Browser: <url> · <screenshot path>` evidence"
+        return "browser row without `Browser: <http url> · <screenshot path>` evidence"
     return _screenshot_problem(m.group("path"), spec_dir)
 
 

@@ -348,6 +348,30 @@ def run() -> list[tuple[bool, str]]:
         case("T04 (d): spec flags no user-facing surface -> the rule is silent, FINISHED (0)",
              rc == 0 and "FINISHED" in out)
 
+    # spec_flags_surface reads the section the way gate-check's section_body does: the
+    # exact `## User-facing surfaces` heading (a `[GATE]` suffix tolerated), fences stripped.
+    fenced_first = SPEC_NO_SURFACE.replace(
+        "## Security-relevant surfaces",
+        "## Notes\n\n```\n## User-facing surfaces\n\n- [x] A new or changed public page / view / listing\n```\n\n"
+        "## Security-relevant surfaces")
+    for label, spec in (("a fenced `## User-facing surfaces` example", fenced_first),
+                        ("`## User-facing surfaces — v2` beside the real section",
+                         SPEC_NO_SURFACE + "\n## User-facing surfaces — v2\n\n- [x] A new or changed public page / view / listing\n")):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = make_feature(tmp, behaviour(), spec)
+            green_event(d, git_repo(tmp))
+            rc, out = check(d)
+            case(f"T04 (d'): {label} does not flag a screen -> FINISHED (0)",
+                 rc == 0 and "FINISHED" in out)
+            case(f"T04 (d'): gate-check --shakeout agrees on {label} (exit 0)", shakeout(d) == 0)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        d = make_feature(tmp, behaviour(), SPEC_VIEW.replace("## User-facing surfaces", "## User-facing surfaces [GATE]"))
+        green_event(d, git_repo(tmp))
+        rc, out = check(d)
+        case("T04 (d''): a `[GATE]` suffix on the heading still flags the screen -> CONTINUE (1)",
+             rc == 1 and "closed without Artifact-diff" in out)
+
     # ── Cluster B review: loop-check's parser must agree with gate-check's on the two
     # boundary rules — a cluster closes only on an H1/H2 heading, and `Lane:` is read
     # only between the heading and the first task.

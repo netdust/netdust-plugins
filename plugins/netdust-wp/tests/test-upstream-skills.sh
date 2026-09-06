@@ -13,6 +13,8 @@ export HOME="$TMP/home" XDG_CACHE_HOME="$TMP/cache"
 mkdir -p "$HOME" "$TMP/bin"
 CLONE="$XDG_CACHE_HOME/netdust/wp-upstream-skills"
 SKILLS="wp-plugin-development wp-rest-api wp-wpcli-and-ops wp-phpstan"
+CLI_VER=$(sed -n 's/^SKILLS_CLI_VERSION=\([0-9][0-9.]*\).*/\1/p' "$BIN"); export CLI_VER
+[ -n "$CLI_VER" ] && ok "the skills CLI is pinned: SKILLS_CLI_VERSION=$CLI_VER" || bad "no SKILLS_CLI_VERSION=<x.y.z> in $BIN"
 
 git init -q -b trunk "$TMP/src"
 for s in $SKILLS; do mkdir -p "$TMP/src/skills/$s"; echo "# $s" > "$TMP/src/skills/$s/SKILL.md"; done
@@ -26,7 +28,7 @@ cat > "$TMP/bin/npx" <<'SH'
 #!/usr/bin/env bash
 echo "$*" >> "$NPX_LOG"
 [ "$1" = "-y" ] && shift
-[ "$1 $2" = "skills add" ] || { echo "stub npx: unexpected $*" >&2; exit 9; }
+[ "$1 $2" = "skills@$CLI_VER add" ] || { echo "stub npx: unexpected $*" >&2; exit 9; }
 src=$3; shift 3
 names=()
 while [ $# -gt 0 ]; do
@@ -55,7 +57,7 @@ out=$(bash "$BIN" --dry-run 2>&1); rc=$?
 [ $rc -eq 0 ] && ok "--dry-run exits 0" || bad "--dry-run exit $rc: $out"
 grep -q "git.* fetch .*$PIN" <<<"$out" && ok "--dry-run prints the fetch" || bad "--dry-run has no fetch line: $out"
 grep -q "git.* checkout .*$PIN" <<<"$out" && ok "--dry-run prints the checkout" || bad "--dry-run has no checkout line: $out"
-grep -q "skills add .* --copy" <<<"$out" && ok "--dry-run prints the skills add" || bad "--dry-run has no add line: $out"
+grep -q "skills@$CLI_VER add .* --copy" <<<"$out" && ok "--dry-run prints the pinned skills add" || bad "--dry-run has no pinned add line: $out"
 [ ! -e "$CLONE" ] && [ ! -e "$HOME/.claude" ] && ok "--dry-run touched nothing" || bad "--dry-run created files"
 [ ! -s "$NPX_LOG" ] && ok "--dry-run did not call npx" || bad "--dry-run called npx: $(cat "$NPX_LOG")"
 
@@ -67,7 +69,7 @@ for s in $SKILLS; do
   [ -f "$HOME/.claude/skills/$s/SKILL.md" ] && ok "installed $s" || bad "missing $HOME/.claude/skills/$s/SKILL.md"
 done
 grep -q -- "-a claude-code -g -y --copy" "$NPX_LOG" && ok "npx add is global, copied, non-interactive" || bad "npx args: $(cat "$NPX_LOG")"
-grep -q -- "skills add $CLONE " "$NPX_LOG" && ok "npx adds from the local clone" || bad "npx source: $(cat "$NPX_LOG")"
+grep -q -- "skills@$CLI_VER add $CLONE " "$NPX_LOG" && ok "npx adds from the local clone through the pinned CLI" || bad "npx source: $(cat "$NPX_LOG")"
 
 # a re-run reuses the clone and stays at the pin
 out=$(bash "$BIN" 2>&1); rc=$?
@@ -88,6 +90,7 @@ PIN=$(git -C "$TMP/src" rev-parse HEAD~1); export PIN
 out=$(bash "$BIN" --check 2>&1); rc=$?
 [ $rc -eq 0 ] && ok "--check exits 0 when all present" || bad "--check exit $rc: $out"
 grep -q "$PIN" <<<"$out" && ok "--check prints the pin" || bad "--check output lacks pin: $out"
+grep -q "$CLI_VER" <<<"$out" && ok "--check prints the CLI version" || bad "--check output lacks the CLI version: $out"
 [ "$(grep -c "^present" <<<"$out")" -eq 4 ] && ok "--check lists four present" || bad "--check output: $out"
 
 # (c) one dir removed → --check exit 1 naming it
