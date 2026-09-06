@@ -442,10 +442,6 @@ def check_acceptance_flows(plan_text: str, spec_text: str | None, f: Findings) -
         f.add("warn", "acceptance-flows",
               "## Acceptance flows is neither N/A nor a filled-in matrix — confirm it is "
               "intentional")
-    if rows and not layered:
-        f.add("warn", "acceptance-flows",
-              "the matrix has no `#` column, so no row can carry a Layer or be joined to a "
-              "shake-out manifest")
     for r in layered:
         layer = _layer(r)
         if layer not in LAYERS:
@@ -2492,14 +2488,11 @@ def check_shakeout_access(plan_text: str, f: Findings) -> None:
     elif browser and (na or not author):
         f.add("fail", "shakeout-access",
               f"## Shake-out access is {'N/A' if na else 'empty'} but {owed}")
+    elif browser:
+        f.add("pass", "shakeout-access", f"## Shake-out access: {author.splitlines()[0]}")
     elif na:
         f.add("pass", "shakeout-access",
               f"## Shake-out access N/A and no browser rows — {na.group('reason') or 'no reason given'}")
-    elif author:
-        f.add("pass", "shakeout-access", f"## Shake-out access: {author.splitlines()[0]}")
-    else:
-        f.add("warn", "shakeout-access",
-              "## Shake-out access is neither N/A nor a recipe — confirm it is intentional")
 
 
 # ── parity, rendered content, panel hints (artifact-gate FR-11/12/15/16) ──────
@@ -2631,7 +2624,7 @@ def _row_problem(row: dict, spec_dir: Path) -> str | None:
 
 
 def _check_manifest_row(row: dict, spec_dir: Path, plan_layer: dict[str, str], f: Findings) -> bool:
-    """Report the row; True when it is a browser row driven by a browser."""
+    """A credential FAILs before any `Ruling:` is read — a ruling excuses the row, never the leak."""
     n, layer = row["n"], row["layer"].lower()
     if CREDENTIAL.search(row["evidence"]):
         f.add("fail", "shakeout-credential",

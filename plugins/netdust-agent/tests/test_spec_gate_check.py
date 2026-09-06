@@ -1803,18 +1803,15 @@ MANIFEST_BROWSER_NO_EVIDENCE = _MANIFEST_HEAD + (
     "| AF-1 | Audit page lists the rows | browser | pass | looked at it, table renders |\n") + _WIRE_PASS
 MANIFEST_BROWSER_DRIVEN = _MANIFEST_HEAD + (
     f"| AF-1 | Audit page lists the rows | browser | pass | {BROWSER_EVIDENCE} |\n") + _WIRE_PASS
-MANIFEST_BROWSER_UNVERIFIED = _MANIFEST_HEAD + (
-    f"| AF-1 | Audit page lists the rows | browser | unverified-no-browser | {BROWSER_EVIDENCE} |\n") + _WIRE_PASS
-MANIFEST_BROWSER_RULING = _MANIFEST_HEAD + (
-    "| AF-1 | Audit page lists the rows | browser | pass | Ruling: no browser on this box, driven by Stefan 09-06 |\n") + _WIRE_PASS
-MANIFEST_BROWSER_CREDENTIAL = _MANIFEST_HEAD + (
-    "| AF-1 | Audit page lists the rows | browser | pass | Ruling: driven by Stefan 09-06 — https://x.ddev.site/wp/wp-login.php?login=abc123 |\n") + _WIRE_PASS
+MANIFEST_BROWSER_UNVERIFIED = MANIFEST_BROWSER_DRIVEN.replace("| pass |", "| unverified-no-browser |", 1)
+MANIFEST_BROWSER_RULING = MANIFEST_BROWSER_DRIVEN.replace(
+    BROWSER_EVIDENCE, "Ruling: no browser on this box, driven by Stefan 09-06")
+MANIFEST_BROWSER_CREDENTIAL = MANIFEST_BROWSER_RULING.replace(
+    "Stefan 09-06", "Stefan 09-06 — https://x.ddev.site/wp/wp-login.php?login=abc123")
 MANIFEST_WIRE_ONLY_PASS = _MANIFEST_HEAD + _WIRE_PASS
-MANIFEST_WIRE_FAIL = _MANIFEST_HEAD + (
-    f"| AF-1 | Audit page lists the rows | browser | pass | {BROWSER_EVIDENCE} |\n"
-    "| AF-2 | REST list returns the rows | wire | fail | curl → 500 |\n")
-MANIFEST_BROWSER_ONLY = _MANIFEST_HEAD + (
-    f"| AF-1 | Audit page lists the rows | browser | pass | {BROWSER_EVIDENCE} |\n")
+MANIFEST_WIRE_FAIL = MANIFEST_BROWSER_DRIVEN.replace(
+    _WIRE_PASS, "| AF-2 | REST list returns the rows | wire | fail | curl → 500 |\n")
+MANIFEST_BROWSER_ONLY = MANIFEST_BROWSER_DRIVEN.replace(_WIRE_PASS, "")
 MANIFEST_FENCED_SAMPLE = "```\n| AF-9 | sample | browser | pass | none |\n```\n" + MANIFEST_BROWSER_DRIVEN
 
 PNG = {"shakeout/af-1.png": b"\x89PNG"}
