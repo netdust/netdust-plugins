@@ -605,11 +605,15 @@ _deploy-opcache:
 
 _backup-payload:
 	@ENV="$(env)"; \
+	PATHS=$$($(SITE) deploy.payload 2>/dev/null | tr '\n' ' '); \
+	: "git-push carries the payload in git; the previous commit is the rollback"; \
+	if [ -z "$$(echo $$PATHS | tr -d ' ')" ]; then \
+		echo "$(YELLOW)  no deploy.payload (transport: $$($(SITE) deploy.method 2>/dev/null)) — payload lives in git, skipping archive$(RESET)"; exit 0; \
+	fi; \
 	HOST=$$($(SITE) environments.$$ENV.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
 	REMOTE=$$($(SITE) environments.$$ENV.path); \
 	DIR=$$($(SITE) deploy.state_dir); \
 	STAMP=$$(date +%Y%m%d-%H%M%S); \
-	PATHS=$$($(SITE) deploy.payload | tr '\n' ' '); \
 	echo "$(YELLOW)Backing up $$ENV payload directories...$(RESET)"; \
 	ARCHIVE="$$DIR/backups/$$ENV-$$STAMP.tar.gz"; \
 	: "GNU tar exits 1 for warnings (a file changed while being read) and 2"; \

@@ -161,7 +161,7 @@ deploy:
   wp_path: web/wp
   content_dir: app
   payload: [app/plugins/p]
-  exclude: [".git*", "node_modules", "*.log", "/memory/", "/tasks/"]
+  exclude: [".git*", "node_modules", "*.log", "/memory/", "/tasks/", "00-block-outgoing-mail.php"]
 local: {ddev_project: fixture, url: "https://fixture.ddev.site"}
 commands: {gate: "true"}
 YML
@@ -272,6 +272,61 @@ elif printf '%s' "$out" | grep -qE "^flow-test: [0-9]+ ok, 0 failed"; then
 else
     bad "make test runs under the split layout" "$(printf '%s' "$out" | tail -3)"
 fi
+
+echo "── a rung without a server ──"
+# A project declares every rung even before it has a server for each: the
+# devops skill says to declare production with its branch and NO path, and a
+# development rung may be branch-only. The vendored deploy-test.sh demanded
+# url+path on every environment and compared state_dir against an EMPTY path
+# (""/* matches everything), so a correctly shaped site.yml failed 5 checks
+# (todai-client, 2026-09-08).
+R="$WORK/rungs"; mkdir -p "$R/web/app" "$R/scripts"; cd "$R"
+cat > site.yml <<'RYML'
+site: {name: rungs, domain: rungs.invalid, risk: low}
+structure: {type: bedrock, stack: wp, webroot: web, wpcli_path: web/wp}
+environments:
+  development: {branch: development, role: "no server — the integration rung only", confirm: false}
+  staging:     {url: "https://staging.rungs.invalid", path: /srv/staging, branch: staging, role: "live client subdomain", confirm: true}
+  production:  {url: "https://rungs.invalid", branch: main, role: "not provisioned — main is the production branch", confirm: true}
+deploy:
+  method: git-push
+  ssh_host: nobody@rungs.invalid
+  state_dir: /srv/.state
+  wp_path: web/wp
+  content_dir: web/app
+  payload: []
+  post_deploy_hooks: ["composer install --no-dev --no-interaction"]
+local: {ddev_project: rungs, url: "https://rungs.ddev.site"}
+commands: {gate: "true"}
+RYML
+cp "$DIST/scripts/devops-version" scripts/ && chmod +x scripts/devops-version
+NETDUST_DEVOPS_DIST="$DIST" scripts/devops-version --update >/dev/null 2>&1
+printf 'STACK := wp\ninclude Makefile.netdust\n' > Makefile
+touch web/app/.gitkeep
+git init -q . && git add -A && git -c user.email=t@t -c user.name=T commit -qm init
+git branch -q -m main
+git init -q --bare "$WORK/rungs-origin.git" && git remote add origin "$WORK/rungs-origin.git"
+git push -q -u origin main 2>/dev/null && git push -q origin main:staging main:development 2>/dev/null
+
+out=$(timeout 120 scripts/tests/deploy-test.sh 2>&1 | strip)
+if printf '%s' "$out" | grep -qE "^[0-9]+ passed, 0 failed"; then
+    ok "deploy-test accepts a branch-only rung and a pathless production"
+else
+    bad "deploy-test accepts a branch-only rung and a pathless production" "$(printf '%s' "$out" | grep FAIL | head -3 | tr '\n' ' ')"
+fi
+
+# Over git-push there is no payload to archive — it lives in git, and the
+# previous commit is the rollback. _backup-payload tarred nothing, measured
+# 0 bytes and refused the ship; daan's first production ship stopped between
+# the server revert and the pull (2026-09-03). It must say so and exit 0
+# without touching the server.
+out=$(timeout 20 make _backup-payload env=production < /dev/null 2>&1); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "payload lives in git"; then
+    ok "ship skips the payload archive on git-push"
+else
+    bad "ship skips the payload archive on git-push" "exit $rc: $(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+fi
+cd "$P"
 
 echo "── worktrees: parallel agents each get one ──"
 # Every promoting verb does `git checkout <rung>`, and a rung checked out in
