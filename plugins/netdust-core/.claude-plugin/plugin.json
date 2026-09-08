@@ -1,7 +1,7 @@
 {
   "name": "netdust-core",
-  "version": "0.5.0",
-  "description": "0.5.0: devops moved out — the branch flow, make verbs, deploy gate/ledger and site.yml schema now live in netdust-devops; the dev-stack skill and the /deploy command are gone from here. Netdust business + ops + content core: content/marketing skills (brand-voice, marketing, market-research), the design-builder skill, the research skill, server-lifecycle skills (ploi, secure-server), herdr-orchestration, /memory-audit + /pattern-miner, and the ploi MCP. NOT a coding harness — that is netdust-agent. Stack-agnostic.",
+  "version": "0.5.1",
+  "description": "0.5.1: herdr-orchestration re-anchored on herdr 0.9.0 — saved machines, client-only updates, grouped workspace close, stalled prompts. 0.5.0: devops moved out — the branch flow, make verbs, deploy gate/ledger and site.yml schema now live in netdust-devops; the dev-stack skill and the /deploy command are gone from here. Netdust business + ops + content core: content/marketing skills (brand-voice, marketing, market-research), the design-builder skill, the research skill, server-lifecycle skills (ploi, secure-server), herdr-orchestration, /memory-audit + /pattern-miner, and the ploi MCP. NOT a coding harness — that is netdust-agent. Stack-agnostic.",
   "author": {
     "name": "Stefan Vermeulen",
     "email": "stefan@netdust.be",

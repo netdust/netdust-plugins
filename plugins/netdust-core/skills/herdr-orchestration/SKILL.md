@@ -1,6 +1,6 @@
 ---
 name: herdr-orchestration
-description: "Use when running inside the herdr terminal multiplexer (HERDR_ENV=1 in the environment) and work involves other panes or sessions — coordinating with an agent in a neighboring pane, dispatching a framework fix to its own workspace while a feature is mid-flight, arming a notification watcher on a long or unattended run, spawning an independent reviewer, or porting a fix across the fleet. Triggers on keywords herdr, pane, panes, other pane, cross-pane, neighbor session, watcher, doorbell, blocked notification, dispatch, fix workspace, sub worktree, server restart, agent resume, remote box, api snapshot, watch the other session, watch the other pane, keep an eye on the main agent, review the session. Symptoms include a framework bug surfacing while the feature branch is dirty, the operator asking two panes to work together, an unattended run that needs the human only at approval gates, a server restart or update proposed while a dispatch is running, an operator asking a fresh pane to watch or review another session, or a reviewer that must not share the author's context. Complements herdr's built-in skill (run `herdr --skill` — that output is the syntax authority); this skill carries only the netdust decisions on top: which channel, which topology, which protocol."
+description: "Use when running inside the herdr terminal multiplexer (HERDR_ENV=1 in the environment) and work involves other panes or sessions — coordinating with an agent in a neighboring pane, dispatching a framework fix to its own workspace while a feature is mid-flight, arming a notification watcher on a long or unattended run, spawning an independent reviewer, or porting a fix across the fleet. Triggers on keywords herdr, pane, panes, other pane, cross-pane, neighbor session, watcher, doorbell, blocked notification, dispatch, fix workspace, sub worktree, server restart, agent resume, herdr update, new herdr version, remote box, machine, saved machine, api snapshot, agent_prompt_stalled, workspace_group_close_required, trust-repository, watch the other session, watch the other pane, keep an eye on the main agent, review the session. Symptoms include a framework bug surfacing while the feature branch is dirty, the operator asking two panes to work together, an unattended run that needs the human only at approval gates, a server restart or update proposed while a dispatch is running, an operator asking a fresh pane to watch or review another session, or a reviewer that must not share the author's context. Complements herdr's built-in skill (run `herdr --skill` — that output is the syntax authority); this skill carries only the netdust decisions on top: which channel, which topology, which protocol."
 ---
 
 # herdr orchestration — the netdust decisions
@@ -69,14 +69,30 @@ Do not attach from the workstation with `herdr --remote <host>`: the thin client
 nothing here and adds a transport plus a keybinding question. Fleet operations that are
 not agent work stay on plain SSH with `netdust-core:ploi`.
 
+Since 0.9.0 a saved machine — `herdr machine add <host> --label <name> --remote-session
+<name>` — shows that box's agents, notifications and reconnects inside the local window.
+The server still lives on the box, so the detach model above is unchanged; what the
+operator gains is the doorbell without a second terminal. For the agent it changes
+nothing: IDs and agent names are per server, and a control command run from your pane
+never crosses machines — selecting a machine in the sidebar does not retarget it. Remote
+control runs on the box with its explicit `--session`. `machine list` is a profile list,
+not a pane inventory. Add, remove or disable a profile only when the operator asks, and
+never answer the "replace incompatible server" prompt for them — Yes stops that server's
+pane processes.
+
 ## Decision — detach freely, never restart mid-dispatch
 
 Detach keeps every process alive. Stopping the server does not. The workspace, tab,
 pane, cwd and focus all return; the processes are gone.
 
-- Never run `herdr update` or `herdr server stop` while a dispatch is in flight. If an
-  update cannot wait, `herdr update --handoff` is the only live path and it is
-  experimental — settle the dispatch first.
+- Since 0.9.0 the client and the server update separately. `herdr update` replaces the
+  client binary and leaves a compatible server and its agents running; a feature the
+  old server lacks disables that one action, nothing else. So a client update
+  mid-dispatch is fine — do it, then read `herdr status`: `update.restart_needed` and
+  `server_binary_stale` say the SERVER is still the old binary. That restart is what
+  kills processes, and it waits until every dispatch has settled. Never `herdr server
+  stop` with an agent working; `herdr update --handoff` stays the experimental live
+  path, not the routine one; a method the old server lacks is not permission to stop it.
 - A dispatch's durable artifact is the branch, never the pane. After a restart the
   worktree workspace and its commits survive. Re-start the agent, then re-read state
   from git.
@@ -128,6 +144,12 @@ dispatching session on settle/block). The human moments are exactly two: the doo
 when the agent blocks, and the merge verdict on the report. The dispatching pane never
 stops working.
 
+After the merge, verify with git, then `herdr worktree remove --workspace <fix-ws>`.
+The worktree workspace is grouped under the project's, and 0.9.0 refuses
+`workspace close <primary>` with `workspace_group_close_required` while a worktree
+workspace is open. Remove the child first. `--group` closes the whole group, worktrees
+included — never add it to make the error go away.
+
 The watcher polls on a timer. A `herdr-plugin.toml` plugin can react to blocked and done
 as events instead — not built. A plugin runs local commands with your permissions, so
 read one before you install it.
@@ -172,8 +194,21 @@ session noticing — it is the worst available witness. That is why this pane ex
   (`git log master..HEAD`, `git status`), never by scraping the terminal.
 - **`agent wait` from a settled state returns immediately** — a naive wait loop spams.
   The watcher polls state *transitions* instead.
-- **`done` vs `idle`**: focusing a tab marks it seen; CLI reads don't. Neither state
-  means the human read anything.
+- **`done` vs `idle`**: the same readiness. The CLI reads the server's seen state — a
+  focus command marks it seen, reads don't. Since 0.9.0 each TUI client keeps its own
+  Done badge, so the badge in a second attached client is not the CLI's answer. Neither
+  state means the human read anything.
+- **`agent_prompt_stalled` is not "not delivered"**: with `--wait`, a prompt to a
+  non-working agent must show `working` or `blocked` within five seconds or herdr
+  returns stalled; the caller timeout counts submission time too. Neither proves the
+  text was lost — it may have landed with the agent still thinking, or merged with
+  pending typed input (above). `agent get` and `agent read --source visible` first;
+  resend only when the screen shows the prompt never arrived.
+- **`--trust-repository`** on worktree commands is one-request Git trust for a checkout
+  the operator has verified (foreign-owned trees under `/mnt/c`). It is not a retry for
+  a failed worktree command.
+- **Every server has a `w1:p1` and can have a `reviewer`**: a command from your pane
+  resolves names and IDs on YOUR server, whatever machine the sidebar shows.
 - **A state you doubt**: Claude Code and Codex panes are classified by screen detection,
   integration installed or not. A changed prompt shape can leave a pane `unknown`, which
   never proves completion. `herdr agent explain <target> --verbose` names the rule that
