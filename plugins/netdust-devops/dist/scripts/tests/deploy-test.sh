@@ -49,10 +49,20 @@ assert_exit     "bad usage exits 2"   2 scripts/site
 
 echo
 echo "site.yml — every environment is fully described"
+# A rung exists before its server does: production is declared with its branch
+# and no path until it is provisioned, and a development rung may be branch-only.
+# branch and role are always owed; url, path and confirm only once a server is bound.
 for e in $(scripts/site environments); do
-  for k in url path branch role confirm; do
+  for k in branch role; do
     assert_nonempty "$e.$k is set" "$(scripts/site environments.$e.$k)"
   done
+  if scripts/site environments.$e.path >/dev/null 2>&1; then
+    for k in url path confirm; do
+      assert_nonempty "$e.$k is set" "$(scripts/site environments.$e.$k)"
+    done
+  else
+    PASS=$((PASS+1)); printf '  ok   %s has no server yet — a branch-only rung\n' "$e"
+  fi
 done
 HAS_PROD=$(scripts/site environments.production.path >/dev/null 2>&1 && echo yes || echo no)
 if [ "$HAS_PROD" = "yes" ]; then
@@ -101,6 +111,11 @@ echo
 echo "deploy.exclude — must not hide payload content"
 assert_eq "does not exclude *.map (font-encoding tables are not source maps)" \
   "0" "$(scripts/site deploy.exclude | grep -cx '\*\.map')"
+# The mail block is installed into a payload directory synced with --delete and
+# exists only on the server. Unexcluded, every deploy deletes it and a
+# non-production environment silently starts sending real mail (josworld, 2026-09-05).
+assert_eq "excludes the outgoing-mail block so --delete cannot remove it" \
+  "1" "$(scripts/site deploy.exclude | grep -cx '00-block-outgoing-mail\.php')"
 assert_eq "excludes repo metadata" \
   "1" "$(scripts/site deploy.exclude | grep -cx '\.git\*')"
 fi
@@ -110,7 +125,10 @@ echo "state dir — must sit outside every web root"
 STATE=$(scripts/site deploy.state_dir)
 assert_nonempty "state_dir is set" "$STATE"
 for e in $(scripts/site environments); do
-  P=$(scripts/site environments.$e.path)
+  # An empty path would make ""/* match every state_dir — nothing to check yet.
+  if ! P=$(scripts/site environments.$e.path 2>/dev/null); then
+    PASS=$((PASS+1)); printf '  ok   %s has no server yet — state_dir check n/a\n' "$e"; continue
+  fi
   case "$STATE" in
     "$P"/*) FAIL=$((FAIL+1)); printf '  FAIL state_dir is inside %s (web-served)\n' "$e";;
     *)      PASS=$((PASS+1)); printf '  ok   state_dir is outside %s\n' "$e";;

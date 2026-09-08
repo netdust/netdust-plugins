@@ -71,7 +71,7 @@ how the branches became a mess in the first place.
 | "just feature X is ready" | `make promote name=X`, then `make deploy env=staging` | staging |
 | "fix this", "we have a bug", "hotfix X" | `make hotfix name=X` | nothing yet |
 | "that's fixed" (on a hotfix branch) | `make finish` | main + back down |
-| "ship it", "go live" | `make ship` | **production** |
+| "ship it", "go live" | `make ship` (from any branch; it switches to production itself) | **production** |
 | "release" | `make release`, then `make ship` | **production** |
 | "what's on prod", "what's live" | `make deployed` | — |
 | "what isn't live yet" | `git diff deployed/production` | — |
@@ -115,7 +115,7 @@ down so the fix is not reverted by the next release.
 | `make release` | merge review into production |
 | `make deploy env=E` | gate, transport, stamp |
 | `make deploy-test env=E` | the same path, `--dry-run` |
-| `make ship` | production: terminal check, gate, data + payload backup, typed confirm, deploy |
+| `make ship` | production: terminal check, switch to the production branch (clean tree required), gate, data + payload backup, typed confirm, deploy |
 | `make rollback env=E` | redeploy the previously stamped commit |
 | `make deployed` | which commit runs on each environment |
 | `make status` | branch, flow position, what runs where |
