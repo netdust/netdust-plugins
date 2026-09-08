@@ -196,6 +196,27 @@ else
     ok "ship refuses without a terminal, before any server contact"
 fi
 
+# ship always goes from the production branch. Standing on another rung after
+# make finish (it leaves you on the integration branch) made ship refuse by name
+# and sent the human to raw git; ship now switches itself, or refuses when the
+# tree is dirty. _ship-branch is the step, tested on its own because ship's tty
+# check comes first and a test has no tty.
+git checkout -q -b staging origin/staging
+out=$(timeout 20 make _ship-branch 2>&1 | strip)
+if [ "$(git branch --show-current)" = "main" ]; then
+    ok "ship switches to the production branch"
+else
+    bad "ship switches to the production branch" "on $(git branch --show-current): $(printf '%s' "$out" | head -2)"
+fi
+git checkout -q staging && echo dirty >> site.yml
+out=$(timeout 20 make _ship-branch 2>&1 | strip)
+if [ "$(git branch --show-current)" = "staging" ] && printf '%s' "$out" | grep -q "uncommitted"; then
+    ok "ship refuses to switch with a dirty tree"
+else
+    bad "ship refuses to switch with a dirty tree" "on $(git branch --show-current): $(printf '%s' "$out" | head -2)"
+fi
+git checkout -q -- site.yml && git checkout -q main
+
 out=$(timeout 20 make release < /dev/null 2>&1 | strip)
 printf '%s' "$out" | grep -q "needs a terminal" \
     && ok "release refuses without a terminal" \

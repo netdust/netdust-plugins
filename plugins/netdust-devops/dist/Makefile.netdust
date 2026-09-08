@@ -250,10 +250,26 @@ ship: ## Ship to production (gate, backups, typed confirmation, deploy)
 	@: 'before discovering it could never read the confirmation.'
 	@: 'Never use backticks in a : comment here - the shell substitutes them.' 
 	@$(MAKE) --no-print-directory _need-tty verb=ship
+	@$(MAKE) --no-print-directory _ship-branch
 	@$(MAKE) --no-print-directory _deploy-gate env=production
 	@$(MAKE) --no-print-directory _backup-data env=production
 	@$(MAKE) --no-print-directory _backup-payload env=production
 	@$(MAKE) --no-print-directory deploy env=production
+
+# ship always leaves from the production branch. make finish leaves you on the
+# integration rung, and a refusal there sent people to raw git.
+.PHONY: _ship-branch
+_ship-branch:
+	@$(MAKE) --no-print-directory _ensure-clean-git verb=ship
+	@HAVE=$$(git branch --show-current); \
+	if [ "$$HAVE" != "$(BR_PROD)" ]; then \
+		git checkout --quiet "$(BR_PROD)" || { echo "$(RED)✗ Cannot switch to $(BR_PROD) — ship from the checkout that holds it$(RESET)"; exit 1; }; \
+		echo "$(YELLOW)→ switched to $(BR_PROD) (was on $$HAVE)$(RESET)"; \
+	fi; \
+	git fetch --quiet origin "$(BR_PROD)" 2>/dev/null || true; \
+	if git rev-parse -q --verify "origin/$(BR_PROD)" >/dev/null 2>&1; then \
+		git merge --quiet --ff-only "origin/$(BR_PROD)" 2>/dev/null || { echo "$(RED)✗ $(BR_PROD) has diverged from origin/$(BR_PROD) — resolve before shipping$(RESET)"; exit 1; }; \
+	fi
 
 .PHONY: rollback
 rollback: ## Redeploy the previously deployed commit (make rollback env=production)
@@ -750,6 +766,7 @@ _ensure-clean-git:
 				echo "$(YELLOW)                   half-done work gets committed to look tidy.$(RESET)"; \
 				echo "$(YELLOW)                   Then: make finish name=<x> from where the rung lives.$(RESET)"; \
 				echo "$(YELLOW)  See the netdust-devops:parallel-work skill.$(RESET)";; \
+			ship) echo "$(YELLOW)Nothing uncommitted ships: commit it on a feature or hotfix branch, or discard it$(RESET)";; \
 			*) echo "$(YELLOW)Run 'make save' first$(RESET)";; \
 		esac; \
 		exit 1; \
