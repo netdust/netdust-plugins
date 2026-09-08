@@ -1,0 +1,16 @@
+[
+ {
+  "id": "consumer-enumeration",
+  "skill": "planning",
+  "skill_path": "skills/planning/SKILL.md",
+  "query": "I'm writing a task to fix a bug where reopening a saved filter list 400s. The fix teaches the grid read path to load the stored tree by id instead of re-encoding it into the client-controlled `f=` param. The class I'm changing is FilterTreeParams, whose docblock says: 'The rule this class owns, in one place so the two callers cannot drift: ... shared by the grid read (RegistrationGridHandler) and the bulk write funnel (BulkRunner::resolveBulkIdsCapped())'. Write the task line.",
+  "signature": "the answer names BOTH consumers and states each one's disposition (BulkRunner fixed, or explicitly deferred with a reason) rather than describing only 'the reopen path' or 'the grid read path'; a task line that mentions one reader of a two-reader entry point is the failure this case pins"
+ },
+ {
+  "id": "unmeasured-premise",
+  "skill": "planning",
+  "skill_path": "skills/planning/SKILL.md",
+  "query": "Fill in the ## Spec-premise ground-truth row for this premise: 'the CAST to UNSIGNED is required on the postmeta-to-term_relationships join'. My evidence is the comment on AdminAPIController::buildCourseTaxonomyJoin(), which says: 'CAST the postmeta varchar to UNSIGNED to match term_relationships.object_id (bigint). Without the explicit cast MySQL coerces the bigint to varchar, killing the object_id index on a large term_relationships table.'",
+  "signature": "the answer refuses to record the comment as evidence for the mechanism — it either marks the premise UNMEASURED / open with the command that would settle it (EXPLAIN with and without the cast on the target MySQL), or states that 'X says Y' is not evidence for Y; an answer that copies the comment's claim into the Verdict column as TRUE is the failure this case pins"
+ }
+]

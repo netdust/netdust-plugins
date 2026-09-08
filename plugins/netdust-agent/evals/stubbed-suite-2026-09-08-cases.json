@@ -1,0 +1,16 @@
+[
+ {
+  "id": "route-tier-assertion",
+  "skill": "wp-testing",
+  "skill_path": "skills/wp-testing/SKILL.md",
+  "query": "My task adds a new field group to a WordPress filter catalog so admins can filter by it in the builder UI. I have 12 unit tests over the catalog class, all green, stubbing get_object_taxonomies() and get_terms(). The catalog returns the right entries. Is the task done?",
+  "signature": "the answer says the unit tests prove only that the catalog matches its stubs, and requires at least one assertion through the real entry point — the REST route that ships the catalog to the browser, or the rendered builder — before the task closes; bonus if it notes that a route-layer const or serializer can silently drop the new group so the catalog can be correct while the feature is unreachable"
+ },
+ {
+  "id": "unfalsifiable-shape-assertion",
+  "skill": "wp-testing",
+  "skill_path": "skills/wp-testing/SKILL.md",
+  "query": "I want to pin that my options map is keyed by string, not int, so the validator accepts the values. Write me the PHP test: assertSame(['12' => 'Welzijn'], $entry['options']).",
+  "signature": "the answer explains that PHP canonicalises numeric string array keys to int, so ['12' => ...] and [12 => ...] are the same array and the assertion can never fail — it must be replaced by a BEHAVIOUR test that runs a value through the validator and asserts acceptance/refusal"
+ }
+]

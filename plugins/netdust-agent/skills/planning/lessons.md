@@ -99,3 +99,51 @@ took that empty `(files:)` as the task's segment, reporting no files.
 as the real marker/segment. Name a manifest ruling `Ruling:`; describe a files segment in
 words ("the files segments"). Eval: `evals/artifact-gate-2026-09-06-cases.json`
 (`planning-tokens`).
+
+## A plan that changes a shared entry point must enumerate its CONSUMERS (2026-09-08)
+
+`FilterTreeParams`' own class docblock named exactly two readers — the grid handler
+AND `BulkRunner`. The CR-2 dispatch said "fix the reopen path"; the implementer fixed
+the one path named, and the FULL branch review found the Critical: an admin opened a
+saved list naming a deleted term, saw its 15 surviving rows, then every one of 15 bulk
+routes plus the mail preview returned 400. The rail promised, the grid delivered, the
+bulk bar refused — a three-way split where the fix reached two.
+
+The answer was in the file before the work started. A shared entry point has readers,
+not just callers, and a change to its contract is a change to every reader's contract.
+
+**Check, at plan time:** for any task touching a shared param, entry point or wire
+format, grep its own docblock AND the codebase for readers, then name each reader's
+disposition on the task line — fixed, unaffected, or deferred with the reason. "The X
+path" in a task description is a smell when X has more than one consumer.
+
+Corollary, from the same fix: the implementer put the new door-picking rule in
+`FilterTreeParams` rather than inlining it in `BulkRunner` as the brief specified,
+because that class already claims to be the one home of the rule for both readers.
+Inlining would have made a THIRD copy — the same drift that caused the Critical.
+Eval: `evals/shared-entry-point-2026-09-08-cases.json` (`consumer-enumeration`).
+
+## Never carry a mechanism claim forward from an existing comment (2026-09-08)
+
+Two inherited claims were false in one branch, and both reached a spec, a plan, a
+threat model and a new docblock before anything tested them:
+
+1. *"The CAST to UNSIGNED preserves the `object_id` index"* — copied from
+   `AdminAPIController::buildCourseTaxonomyJoin()`'s comment. MEASURED on MySQL 8.0.46:
+   identical EXPLAIN either way (`tr` eq_ref PRIMARY), no warning, uncast marginally
+   FASTER. The cast is fine to keep; the stated reason was wrong.
+2. *"The discovered taxonomy is the ONLY options map that can shrink under a stored
+   tree"* — written into the rationale for a security tolerance. False:
+   `AuditFieldCatalog` derives three `select` vocabularies from `SELECT DISTINCT` over
+   the audit log, and a 7-year retention cron DELETES rows.
+
+A wrong justification is worse than none. A reader who tests it finds it false and may
+delete the guarded code as cargo-cult — which is precisely how claim 1 propagated in
+the first place.
+
+**Check:** the `## Spec-premise ground-truth` table records the MEASUREMENT, never the
+source comment. "`buildCourseTaxonomyJoin` says Y" is not evidence for Y. If a claim
+cannot be measured in the same sitting, write it as an open question and say what would
+settle it. A control run with the thing removed is what turns an assertion into
+evidence.
+Eval: `evals/shared-entry-point-2026-09-08-cases.json` (`unmeasured-premise`).

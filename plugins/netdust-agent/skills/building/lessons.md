@@ -165,3 +165,29 @@ compaction.
 the workspace file the dispatch named before the next step; never leave a verdict only in
 context. The agent body is unchanged (a Write tool on a reviewer is a `/skill-audit`
 proposal, not a lesson).
+
+## On a shared branch, `git add <path>` + `git commit` is not safe (2026-09-08)
+
+A hook (the memory Stop hook, and any other that stages) can fire BETWEEN the two
+commands. Hit twice in one session on `feature/course-taxonomy-filter`:
+
+- one agent's `git add` + `git commit` pair silently lost its staged index and
+  committed nothing of its own;
+- another's commit swept up a concurrent agent's two files and omitted its own —
+  despite having `git add`-ed only its own path.
+
+Staging by explicit path is necessary but NOT sufficient; the window between the two
+commands is the hazard.
+
+**The durable form** (found by an implementer mid-run, now standard in every dispatch
+brief on a shared branch):
+
+    git add -N <path>                      # intent-to-add, so a new file is known
+    git commit --only <path> -m "..."
+
+`--only` pins commit contents to the pathspec regardless of what a hook staged in the
+meantime. Recovery from a bad sweep is `git reset --soft HEAD~1` + `git restore
+--staged`, which touches no file content.
+
+Applies whenever 2+ dispatches share a working tree — i.e. any cluster without a
+`**Placement:** worktree` line.
