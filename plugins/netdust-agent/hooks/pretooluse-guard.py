@@ -48,6 +48,7 @@ Logs to ~/.claude/logs/memory-hook.log (shared with the other hooks).
 """
 
 import json
+import os
 import subprocess
 import re
 import sys
@@ -76,7 +77,7 @@ def log(msg: str) -> None:
 # us catch a destructive command at the start of the line OR after a shell
 # separator (`;`, `&&`, `||`, `|`) or a control keyword, while a leading
 # `echo`/`grep`/`cat`/`#` keeps the literal-in-argument cases out.
-_SEP = r"(?:^|[;&|]\s*|\b(?:then|do|else)\s+)"
+_SEP = r"(?:^|[;&|]\s*|\b(?:then|do|else)\s+)(?:\w+=\S*\s+)*"
 
 DENYLIST: list[tuple[str, re.Pattern]] = [
     # Attack 1 — rm with BOTH recursive and force flags, as an actual command:
@@ -522,6 +523,14 @@ def check_flow_floor(hook_input: dict) -> dict | None:
         return None
 
 
+def ask_tier_waived() -> bool:
+    """NETDUST_GUARD_ASK=off|0|false|no in the HOOK process environment (settings
+    `env`, or the shell that launched Claude) turns the ask tier into a logged
+    passthrough for unattended runs. The deny-tier floors are never waived, and an
+    inline prefix on the Bash command string never reaches this process."""
+    return os.environ.get("NETDUST_GUARD_ASK", "").strip().lower() in ("off", "0", "false", "no")
+
+
 def match_denylist(command: str) -> tuple[str, str] | None:
     """Return (label, matched_text) for the first denylist hit, else None.
     A command that begins with a read-only echo/grep/cat is treated as inert
@@ -576,6 +585,10 @@ def main() -> None:
         return  # benign → passthrough (normal permission flow decides)
 
     label, matched = hit
+    if ask_tier_waived():
+        log(f"passthrough reason=unattended-waiver label={label!r} matched={matched!r}")
+        return
+
     reason = (
         f"netdust-agent guard: this command matches a destructive pattern "
         f"({label}). The harness asks for explicit confirmation before "
