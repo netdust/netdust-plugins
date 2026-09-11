@@ -41,9 +41,11 @@ HOOK = Path(__file__).parent.parent / "hooks" / "pretooluse-guard.py"
 # --- helpers --------------------------------------------------------------
 
 
-def _run(tool_name: str, tool_input: dict, raw_stdin: str | None = None) -> tuple[int, str]:
+def _run(tool_name: str, tool_input: dict, raw_stdin: str | None = None,
+         env: dict | None = None) -> tuple[int, str]:
     """Invoke the hook with a PreToolUse payload, return (exit_code, stdout).
-    If raw_stdin is given, it is sent verbatim (for malformed-input tests)."""
+    If raw_stdin is given, it is sent verbatim (for malformed-input tests).
+    `env` overlays the hook process environment (the unattended flag)."""
     with tempfile.TemporaryDirectory() as tmp:
         if raw_stdin is None:
             payload = json.dumps({
@@ -60,6 +62,7 @@ def _run(tool_name: str, tool_input: dict, raw_stdin: str | None = None) -> tupl
             capture_output=True,
             text=True,
             timeout=10,
+            env={**os.environ, **(env or {})},
         )
         return result.returncode, result.stdout
 
@@ -89,6 +92,13 @@ def _bash_case(desc: str, cmd: str, expected: str) -> tuple[bool, str]:
     # own, bypassing the permission system) and must never crash (nonzero).
     passed = (got == expected) and (rc == 0)
     return passed, f"{desc}: {cmd!r} (expected {expected}, got {got}, rc={rc})"
+
+
+def _unattended_case(desc: str, cmd: str, expected: str, value: str = "off") -> tuple[bool, str]:
+    rc, out = _run("Bash", {"command": cmd}, env={"NETDUST_GUARD_ASK": value})
+    got = _decision(out)
+    passed = (got == expected) and (rc == 0)
+    return passed, f"{desc}: NETDUST_GUARD_ASK={value} {cmd!r} (expected {expected}, got {got}, rc={rc})"
 
 
 def _raw_case(desc: str, raw: str, expected: str) -> tuple[bool, str]:
@@ -230,6 +240,14 @@ def run() -> list[tuple[bool, str]]:
                           "web/app/plugins/mine/vendor-report.php", "passthrough"))
     r.append(_vendor_case("directory merely named vendors",
                           "web/app/vendors/thing.php", "passthrough"))
+
+    # === The unattended flag: NETDUST_GUARD_ASK=off waives the ask tier only ===
+    r.append(_unattended_case("(u1) rm -rf passes through unattended", "rm -rf build/", "passthrough"))
+    r.append(_unattended_case("(u2) wp db reset passes through unattended", "wp db reset --yes", "passthrough"))
+    r.append(_unattended_case("(u3) a truthy value still asks", "rm -rf build/", "ask", value="1"))
+    r.append(_unattended_case("(u4) 0 also waives", "rm -rf build/", "passthrough", value="0"))
+    # An inline prefix on the COMMAND never reaches the hook process.
+    r.append(_bash_case("(u5) inline env prefix does not waive", "NETDUST_GUARD_ASK=off rm -rf build/", "ask"))
 
     # === Attack 1: rm -rf on broad paths → ask ===
     r.append(_bash_case("rm -rf /", "rm -rf /", "ask"))
