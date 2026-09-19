@@ -135,12 +135,13 @@ awk -v a="$$ADD" -v d="$$DROP" '$$1 != a && $$1 != d' "$$T/was" > "$$T/now"; \
 while read -r n s; do \
 	git merge-base --is-ancestor "$$s" "$$PROD" || echo "$$n $$s"; \
 done < "$$T/now" | sort -k1,1 > "$$T/keep"; \
-git worktree add -q --detach "$$T/wt" "$$PROD"; \
+git worktree add -q --detach "$$T/wt" "$$PROD" || { echo "$(RED)✗ could not create the rebuild worktree — nothing changed$(RESET)"; exit 4; }; \
 while read -r n s; do \
 	git -C "$$T/wt" merge -q --no-ff -m "promote: $$n" "$$s" >/dev/null 2>&1 \
 		|| { echo "$(RED)✗ conflict: $$n$(RESET)"; exit 3; }; \
 done < "$$T/keep"; \
 NEW=$$(git -C "$$T/wt" rev-parse HEAD); \
+[ -n "$$NEW" ] || { echo "$(RED)✗ the rebuild produced no commit — nothing changed$(RESET)"; exit 4; }; \
 N=$$(git rev-list --count --no-merges "$$OLD" --not "$$NEW" "$$PROD"$$GONE); \
 [ "$$N" = 0 ] || echo "$(YELLOW)⚠ dropped $$N commit(s) that were only on $(BR_REVIEW) — recover them from $$(git rev-parse --short=7 "$$OLD")$(RESET)"; \
 git push --quiet --force-with-lease=refs/heads/$(BR_REVIEW):$$OLD origin "$$NEW:refs/heads/$(BR_REVIEW)" \

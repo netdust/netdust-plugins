@@ -312,6 +312,40 @@ BEFORE=$(git ls-remote origin)
 YF "$TMP/intr/mk promote name=f"
 assert_eq "a rebuild interrupted mid-merge: non-zero, no worktree left behind, origin byte-identical (FR-5)" "1 1 $BEFORE" \
   "$(nz "$YRC") $(git worktree list | wc -l | tr -d ' ') $(git ls-remote origin)"
+# An empty keep list — the last feature unpromoted, or everything already
+# shipped — merges nothing, so a rebuild worktree that was never created goes
+# unnoticed and an empty NEW turns the push into a DELETE refspec.
+CASE0=$(git ls-remote origin); CSTG=$(exact refs/heads/staging)
+git push -qf origin "$(git rev-parse origin/main):refs/heads/staging"; git fetch -q --prune origin
+step promote name=f
+git fetch -q origin
+assert_eq "setup: f is the only feature on staging, and staging is on origin" "f 1" \
+  "$(onstg) $(git ls-remote origin refs/heads/staging | grep -c .)"
+shim "$TMP/nowt" <<SH
+#!/bin/sh
+case " \$* " in *" worktree add "*) echo 'fatal: could not create work tree dir' >&2; exit 128;; esac
+exec "$(command -v git)" "\$@"
+SH
+BEFORE=$(git ls-remote origin)
+YF "$TMP/nowt/mk unpromote name=f"
+git fetch -q --prune origin
+assert_eq "the rebuild worktree cannot be made and nothing is left to merge: refused, no success line, staging still on origin (FR-5)" "1 1 0 1 $BEFORE" \
+  "$(nz "$YRC") $(has "$YOUT" 'rebuild worktree') $(has "$YOUT" 'is off staging') $(git ls-remote origin refs/heads/staging | grep -c .) $(git ls-remote origin)"
+YF "$TMP/nowt/mk promote name=d"
+assert_eq "…and with features left to merge it still names the worktree, never a conflict (FR-5)" "1 1 0 $BEFORE" \
+  "$(nz "$YRC") $(has "$YOUT" 'rebuild worktree') $(has "$YOUT" 'conflict:') $(git ls-remote origin)"
+shim "$TMP/nohead" <<SH
+#!/bin/sh
+case " \$* " in *" -C "*" rev-parse HEAD "*) exit 128;; esac
+exec "$(command -v git)" "\$@"
+SH
+YF "$TMP/nohead/mk promote name=d"
+assert_eq "…and a rebuild whose worktree HEAD cannot be read pushes no empty ref either (FR-5)" "1 1 0 $BEFORE" \
+  "$(nz "$YRC") $(has "$YOUT" 'no commit') $(has "$YOUT" 'is on staging') $(git ls-remote origin)"
+rm -rf "$TMP/nowt" "$TMP/nohead"
+git push -qf origin "$CSTG:refs/heads/staging"; git fetch -q --prune origin
+assert_eq "…and the case leaves no shim behind and origin as it found it" "0 0 $CASE0" \
+  "$([ -e "$TMP/nowt/mk" ] && echo 1 || echo 0) $([ -e "$TMP/nohead/mk" ] && echo 1 || echo 0) $(git ls-remote origin)"
 for f in $FEATS; do git push -q origin ":refs/heads/feature/$f"; git branch -q -D "feature/$f"; done
 git push -qf origin "$STG0:refs/heads/staging"; git branch -q -f staging "$STG0"
 git fetch -q --prune origin
