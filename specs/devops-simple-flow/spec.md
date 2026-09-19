@@ -46,11 +46,11 @@ evidence ref.
   merge commits between production and the staging tip. A feature that is not being re-promoted is
   merged again at the SAME commit as before (the merge's second parent), so promoting B never
   pulls new, unseen commits of A onto staging. No other state is stored anywhere.
-  Source: invented — approved with this spec (pinning kept from main-flow's FR-6/FR-7 without refs)
+  Source: invented — approved 2026-09-19 (Stefan approved the spec with this choice flagged to him: a promoted feature stays pinned, as in the main-flow spec, without refs)
 - **FR-5:** A rebuild happens in a throwaway worktree and ends in ONE
   `git push --force-with-lease=<staging>:<old tip>`. A merge conflict aborts naming the feature, and
   nothing is pushed. A lost lease exits non-zero and says to run it again.
-  Source: main-flow FR-4 / US-5, kept because it costs one flag
+  Source: the main-flow spec's atomic-rebuild and two-sessions requirements, kept because they cost one flag
 - **FR-6:** `make ship`, feature path: run with the staging branch checked out, clean tree.
   It refuses unless `HEAD` = `origin/<staging>` = the commit `deployed/staging` names on origin, and
   `origin/<production>` is an ancestor of it. It then runs `commands.gate` there; on a green gate
@@ -60,22 +60,22 @@ evidence ref.
   runs inside ship because there is no evidence to store — Stefan, 2026-09-19, "simple simple"
 - **FR-7:** `make ship`, hotfix path: from a `hotfix/*` branch, clean tree, `origin/<production>` an
   ancestor of `HEAD`. Gate, typed `yes`, backups, fast-forward, deploy. No staging condition.
-  Source: main-flow FR-13, unchanged in intent
+  Source: the main-flow spec's hotfix exception, unchanged in intent — Stefan, 2026-09-16: "Hotfix: ship"; a hotfix still requires the gate
 - **FR-8:** After any ship, staging is rebuilt on the new production tip from the features still on
   it; a feature whose pinned commit is now contained in production is dropped from the list.
-  Source: main-flow FR-12, without refs
+  Source: the main-flow spec's post-ship rebuild, without refs — "No merge-down choreography."
 - **FR-9:** Every production guard survives: `_need-tty` first in every writing verb, the clean-tree
   and free-branch checks BEFORE anything is pushed, `_deploy-gate`, both backups, and a typed
   confirmation that `ship` ALWAYS asks for (`environments.production.confirm` governs `deploy` only).
-  Source: Stefan's global rules §9; main-flow rulings R49-1 and the branch review's I2
+  Source: Stefan's global rules §9; his ruling R49-1 on the main-flow branch review ("Always prompt on ship") and that review's ship-ordering finding
 - **FR-10:** On a project declaring `environments.development.branch`, the flow verbs refuse, naming
   the migration and the command shape that restores the previously vendored core
   (`git checkout <commit before the update> -- Makefile.netdust mk scripts .netdust-devops`, with
   `git log --oneline -- .netdust-devops` to find it). Every other verb keeps working.
-  Source: main-flow FR-14, minus the history walk
+  Source: the main-flow spec's unmigrated-project requirement (Stefan's 2026-09-16 ruling on migration), minus the history walk
 - **FR-11:** `bin/new-project` scaffolds `main` and `staging` only; the templates declare no
   development environment.
-  Source: main-flow FR-24, ported as built
+  Source: Stefan, 2026-09-16 — "hebben we wel een branch zoals development nodig?"; ported as built on the main-flow branch
 - **FR-12:** The flow lives in `Makefile.netdust`. No engine script, no `refs/netdust/*`, no
   `release` branch. If the rebuild recipe does not fit one screen, the design is wrong — stop.
   Source: Stefan, 2026-09-19 — "not just a makefile but script with it too"
@@ -87,9 +87,16 @@ evidence ref.
   floor expected to swallow"; Stefan — "simple simple"
 - **FR-14:** `flow-test.sh` exercises every verb and refusal against a bare origin, contacts no
   server, and stays under ~350 lines.
-  Source: main-flow FR-16, with a size budget
+  Source: the vendored flow test's own contract ("exercised for real in a throwaway repo with a bare origin … Never contacts a server"), with a size budget — Stefan, 2026-09-19: "simple simple"
+- **FR-16:** Before it pushes, a rebuild reports — on one line, never a refusal — how many commits on
+  the OLD staging branch are in neither the new staging nor production nor the feature being taken
+  off, and prints the old tip so they stay recoverable. An everyday promote or unpromote prints
+  nothing. (A project migrated from the old flow loses its accumulated staging history on the first
+  rebuild; this is the line that says so.)
+  Source: Stefan, 2026-09-19 — ruling R49-3 on the main-flow branch review: "Report it"
+
 - **FR-15:** The devops skill, `building`, `herdr-moments` and `RULES.md` describe this flow.
-  Source: main-flow FR-17/FR-23
+  Source: Stefan, 2026-09-16 — "Ja, alles in deze spec": every text moves to the vocabulary that exists
 
 ## Acceptance criteria
 
@@ -114,6 +121,8 @@ evidence ref.
 - **SC-4:** 0 files under `dist/scripts/` added by this spec; 0 refs under `refs/netdust/`.
 - **SC-5:** `Makefile.netdust` grows by ≤ 100 lines over `main`; the guard by ≤ 20.
 - **SC-6:** `flow-test.sh` ≤ 350 lines and ≤ 2 minutes.
+- **SC-8:** 1 report line when a rebuild drops a commit nothing explains; 0 on an everyday promote and 0
+  on an unpromote.
 - **SC-7:** 0 lines in the four plugins teach the integration rung, the old `finish`, or the
   release verb.
 
