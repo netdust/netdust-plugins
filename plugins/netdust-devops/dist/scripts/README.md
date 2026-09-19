@@ -13,7 +13,7 @@ any file edited in place.
 | `remote/refresh-db.sh` | runs ON the server for a server-to-server database refresh. |
 | `remote/00-block-outgoing-mail.php` | mu-plugin that blocks mail on non-production. Self-disables on the production host. |
 | `tests/deploy-test.sh` | proves the deploy tooling's refusals. Contacts no server. |
-| `tests/flow-test.sh` | proves feature/hotfix/finish and every refusal in a throwaway repo. |
+| `tests/flow-test.sh` | proves feature, hotfix, `make promote name=<x>` and every refusal in a throwaway repo. |
 
 A fix belongs upstream in the plugin, not here. Editing a file in this
 directory means the next `make devops-update` silently reverts it.
