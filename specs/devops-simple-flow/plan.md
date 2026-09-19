@@ -30,7 +30,7 @@ bash harnesses (`flow-test.sh`, `tests/run.sh`) and the agent's Python guard tes
   whose subject is `promote: <name>`; the pinned commit is the merge's SECOND parent.
 - A rebuild ends in ONE `git push --force-with-lease=<staging>:<old tip> origin <new>:refs/heads/<staging>`.
 - Budgets (spec SC-4…SC-6): `Makefile.netdust` ≤ +100 lines over `main` (799); guard ≤ +20 over 616;
-  `flow-test.sh` ≤ 350 lines and ≤ 2 minutes; 0 new files under `dist/scripts/`; 0 `refs/netdust/*`.
+  `flow-test.sh` ≤ 500 lines and ≤ 2 minutes; 0 new files under `dist/scripts/`; 0 `refs/netdust/*`.
 - `_need-tty` is the FIRST thing every writing verb does. `ship` ALWAYS asks for the typed `yes`.
 - Tests contact no server: the server leaves (`_deploy-transport`, `_deploy-ledger`,
   `_deploy-opcache`, `_backup-data`, `_backup-payload`) are overridden in the test project's own

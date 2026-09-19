@@ -85,7 +85,7 @@ Lane: contract — the guard's words and the texts every session reads before it
   Proven by: existing test — `plugins/netdust-devops/tests/test-marketplace.sh` (version sync) and `python3 -m json.tool` on the case file.
   Unit test: no unit test: Tier B, version strings and eval fixtures; `test-marketplace.sh` already fails on a mismatch.
 
-**Integration gate (Cluster C):** (1) `bash plugins/netdust-devops/tests/run.sh` → `all suites passed`; (2) `env -u NETDUST_GUARD_ASK bash plugins/netdust-agent/tests/run.sh` → only `test_integration_contract` fails; (3) the SC-7 grep of T07 → only the `gate-check.py` line; (4) THE BUDGETS, measured against `main`: `git diff --numstat main -- plugins/netdust-devops/dist/Makefile.netdust` net ≤ +100; the guard net ≤ +20; `wc -l` of `FLOWTEST` ≤ 350 and its wall time ≤ 120 s; `git ls-files plugins/netdust-devops/dist/scripts` unchanged in count; `grep -rc 'refs/netdust' plugins/netdust-devops/dist` = 0. A budget that is over is a finding for Stefan, not a number to edit.
+**Integration gate (Cluster C):** (1) `bash plugins/netdust-devops/tests/run.sh` → `all suites passed`; (2) `env -u NETDUST_GUARD_ASK bash plugins/netdust-agent/tests/run.sh` → only `test_integration_contract` fails; (3) the SC-7 grep of T07 → only the `gate-check.py` line; (4) THE BUDGETS, measured against `main`: `git diff --numstat main -- plugins/netdust-devops/dist/Makefile.netdust` net ≤ +100; the guard net ≤ +20; `wc -l` of `FLOWTEST` ≤ 500 and its wall time ≤ 120 s; `git ls-files plugins/netdust-devops/dist/scripts` unchanged in count; `grep -rc 'refs/netdust' plugins/netdust-devops/dist` = 0. A budget that is over is a finding for Stefan, not a number to edit.
 
 ── REVIEW GATE ── (tier: LIGHT — words, versions and the budget check.)
 

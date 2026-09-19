@@ -86,7 +86,7 @@ evidence ref.
   Source: the final simplicity review, 2026-09-19 — "how many more spellings is a text-matching
   floor expected to swallow"; Stefan — "simple simple"
 - **FR-14:** `flow-test.sh` exercises every verb and refusal against a bare origin, contacts no
-  server, and stays under ~350 lines.
+  server, and stays under ~500 lines and 2 minutes.
   Source: the vendored flow test's own contract ("exercised for real in a throwaway repo with a bare origin … Never contacts a server"), with a size budget — Stefan, 2026-09-19: "simple simple"
 - **FR-16:** Before it pushes, a rebuild reports — on one line, never a refusal — how many commits on
   the OLD staging branch are in neither the new staging nor production nor the feature being taken
@@ -120,7 +120,8 @@ evidence ref.
   confirmation, a dirty tree (5 refusals, each `ls-remote` byte-identical).
 - **SC-4:** 0 files under `dist/scripts/` added by this spec; 0 refs under `refs/netdust/`.
 - **SC-5:** `Makefile.netdust` grows by ≤ 100 lines over `main`; the guard by ≤ 20.
-- **SC-6:** `flow-test.sh` ≤ 350 lines and ≤ 2 minutes.
+- **SC-6:** `flow-test.sh` ≤ 500 lines and ≤ 2 minutes. (Raised from 350 by Stefan, 2026-09-19, after T02: the
+  estimate predated the first test; the 2-minute ceiling is the one that guards against the old suite.)
 - **SC-8:** 1 report line when a rebuild drops a commit nothing explains; 0 on an everyday promote and 0
   on an unpromote.
 - **SC-7:** 0 lines in the four plugins teach the integration rung, the old `finish`, or the
