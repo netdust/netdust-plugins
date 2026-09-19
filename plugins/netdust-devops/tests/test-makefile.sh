@@ -330,12 +330,12 @@ fi
 cd "$P"
 
 echo "── worktrees: parallel agents each get one ──"
-# Every promoting verb does `git checkout <rung>`, and a rung checked out in
-# another worktree cannot be checked out here. Without a guard, the verb died
+# promote used to `git checkout <rung>`, so a rung held by another worktree died
 # mid-verb on a raw git error —
 #   fatal: 'staging' is already used by worktree at ...
-# — the exact shape _ensure-flow exists to prevent, and the normal case for any
-# orchestrator that gives each parallel agent its own worktree.
+# The rebuild does its merging in a throwaway worktree of its own and pushes,
+# so the rung is never checked out here: the normal case for an orchestrator
+# that gives each parallel agent a worktree simply works.
 WT="$WORK/wt"; mkdir -p "$WT"; cd "$WT"
 git init -q --bare origin.git && git clone -q origin.git base 2>/dev/null && cd base
 mkdir -p scripts web
@@ -360,21 +360,22 @@ git checkout -q -b staging origin/staging
 git worktree add -q ../agent -b feature/par origin/main
 cd ../agent && echo work > web/f.txt
 git add -A && git -c user.email=t@t -c user.name=T commit -qm "parallel work" >/dev/null
+git push -q origin feature/par 2>/dev/null
 
-wtout=$(timeout 60 make promote name=par < /dev/null 2>&1 | strip)
+WTN=$(git worktree list | wc -l | tr -d ' ')
+wtout=$(timeout 60 script -qec "make promote name=par" /dev/null <<< yes 2>&1 | strip)
+git fetch -q origin
+subj=$(git log --merges --first-parent --format='%s' origin/main..origin/staging | paste -sd' ')
 if printf '%s' "$wtout" | grep -q 'already used by worktree'; then
-    bad "promote refuses by name in a linked worktree" "it died on the raw git error"
-elif printf '%s' "$wtout" | grep -q 'checked out in another worktree'; then
-    ok "promote refuses by name in a linked worktree"
+    bad "promote runs from a linked worktree while the rung is checked out elsewhere" "it died on the raw git error"
+elif [ "$subj" = "promote: par" ]; then
+    ok "promote runs from a linked worktree while the rung is checked out elsewhere"
 else
-    bad "promote refuses by name in a linked worktree" "$(printf '%s' "$wtout" | tail -2)"
+    bad "promote runs from a linked worktree while the rung is checked out elsewhere" "$(printf '%s' "$wtout" | tail -2)"
 fi
-# The hint line, not the headline: the headline echoes the verb it was given, so
-# grepping the whole output would pass on a hint naming a verb that is gone.
-hint=$(printf '%s' "$wtout" | sed -n 's/.*cd .* && make //p')
-[ "$hint" = "promote name=par" ] \
-    && ok "the refusal sends you to a verb that exists" \
-    || bad "the refusal sends you to a verb that exists" "cd … && make ${hint:-<no hint line>}"
+[ "$(git worktree list | wc -l | tr -d ' ')" = "$WTN" ] \
+    && ok "…and it took its own throwaway worktree with it" \
+    || bad "…and it took its own throwaway worktree with it" "$(git worktree list | tail -2)"
 cd "$P"
 
 echo

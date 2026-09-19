@@ -56,7 +56,8 @@ help: ## Show this help
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "feature name=X"  "start work — branches from origin/$(BR_PROD)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "hotfix name=X"   "fix production — branches from origin/$(BR_PROD)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "save"            "commit the current branch"
-	@printf "  $(GREEN)%-22s$(RESET) %s\n" "promote name=X"  "put ONE feature on $(BR_REVIEW)"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "promote name=X"  "put a feature on $(BR_REVIEW)"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "unpromote name=X" "take a feature off $(BR_REVIEW)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "gate"            "this project's own suite (commands.gate)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "ship"            "production: gate, backups, typed confirm"
 	@echo ""
@@ -119,31 +120,75 @@ hotfix: ## Start a hotfix (make hotfix name=vat-rounding) — branches from the 
 	@echo "$(GREEN)✅ On hotfix/$(name), branched from origin/$(BR_PROD)$(RESET)"
 	@echo "$(YELLOW)   Fix, commit, make gate, then: make ship$(RESET)"
 
+# Staging is disposable: production plus the features promoted onto it, each
+# re-merged at the commit it was promoted at — a list read back from staging's
+# own `promote: <name>` merges. Driven by shell variables ADD and DROP.
+define _rebuild-staging
+PROD="origin/$(BR_PROD)"; OLD=$$(git rev-parse "origin/$(BR_REVIEW)"); \
+T=$$(mktemp -d); clean() { git worktree remove --force "$$T/wt" >/dev/null 2>&1; rm -rf "$$T"; }; \
+trap clean EXIT; trap 'clean; exit 130' INT TERM; \
+git log --merges --first-parent --format='%s %P' "$$PROD..$$OLD" \
+	| awk 'NF == 4 && $$1 == "promote:" {print $$2, $$4}' > "$$T/was"; \
+GONE=$$(awk -v a="$$ADD" -v d="$$DROP" '$$1 == a || $$1 == d {printf " %s", $$2}' "$$T/was"); \
+awk -v a="$$ADD" -v d="$$DROP" '$$1 != a && $$1 != d' "$$T/was" > "$$T/now"; \
+[ -z "$$ADD" ] || echo "$$ADD $$(git rev-parse "origin/feature/$$ADD")" >> "$$T/now"; \
+while read -r n s; do \
+	git merge-base --is-ancestor "$$s" "$$PROD" || echo "$$n $$s"; \
+done < "$$T/now" | sort -k1,1 > "$$T/keep"; \
+git worktree add -q --detach "$$T/wt" "$$PROD"; \
+while read -r n s; do \
+	git -C "$$T/wt" merge -q --no-ff -m "promote: $$n" "$$s" >/dev/null 2>&1 \
+		|| { echo "$(RED)✗ conflict: $$n$(RESET)"; exit 3; }; \
+done < "$$T/keep"; \
+NEW=$$(git -C "$$T/wt" rev-parse HEAD); \
+N=$$(git rev-list --count --no-merges "$$OLD" --not "$$NEW" "$$PROD"$$GONE); \
+[ "$$N" = 0 ] || echo "$(YELLOW)⚠ dropped $$N commit(s) that were only on $(BR_REVIEW) — recover them from $$(git rev-parse --short=7 "$$OLD")$(RESET)"; \
+git push --quiet --force-with-lease=refs/heads/$(BR_REVIEW):$$OLD origin "$$NEW:refs/heads/$(BR_REVIEW)" \
+	|| { echo "$(RED)✗ origin changed — run it again$(RESET)"; exit 5; }
+endef
+
 .PHONY: promote
-promote: ## Put ONE feature on the review branch, leaving every other feature behind
+promote: ## Put a feature on the staging branch (make promote name=my-feature)
 	@if [ -z "$(name)" ]; then echo "$(RED)Usage: make promote name=my-feature$(RESET)"; exit 1; fi
+	@if ! echo "$(name)" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._-]*$$'; then \
+		echo "$(RED)✗ Invalid name: use letters, digits, dot, dash, underscore$(RESET)"; exit 1; fi
+	@if [ "$(BR_REVIEW)" = "$(BR_PROD)" ]; then \
+		echo "$(RED)✗ No staging environment in site.yml — promote needs one$(RESET)"; exit 1; fi
+	@$(MAKE) --no-print-directory _need-tty verb=promote
 	@$(MAKE) --no-print-directory _ensure-flow
-	@git fetch --quiet origin 2>/dev/null || true
-	@BR="feature/$(name)"; \
-	if ! git rev-parse --verify --quiet "$$BR" >/dev/null && \
-	   ! git rev-parse --verify --quiet "origin/$$BR" >/dev/null; then \
-		echo "$(RED)✗ No such branch: $$BR$(RESET)"; \
-		echo "$(YELLOW)Features in flight:$(RESET)"; \
-		git branch -a --list '*feature/*' | sed 's/^/  /'; \
-		exit 1; \
-	fi
-	@$(MAKE) --no-print-directory _ensure-clean-git verb=promote
-	@$(MAKE) --no-print-directory _worktree-guard rung=$(BR_REVIEW) verb="promote name=$(name)"
-	@BR="feature/$(name)"; \
-	git rev-parse --verify --quiet "$$BR" >/dev/null || git branch "$$BR" "origin/$$BR"; \
-	$(MAKE) --no-print-directory _need-tty verb=promote; \
-	echo "$(YELLOW)$$BR → $(BR_REVIEW)$(RESET)"; \
-	git --no-pager log --oneline $(BR_REVIEW).."$$BR" | head -20; \
+	@if ! git rev-parse --verify --quiet "origin/feature/$(name)" >/dev/null; then \
+		echo "$(RED)✗ No such branch on origin: feature/$(name)$(RESET)"; \
+		echo "$(YELLOW)  push it first: git push -u origin feature/$(name)$(RESET)"; \
+		git branch -r --list 'origin/feature/*' | sed 's/^/  /'; exit 1; fi
+	@echo "$(YELLOW)On $(BR_REVIEW) now:$(RESET)"; \
+	git log --merges --first-parent --format='  %s' origin/$(BR_PROD)..origin/$(BR_REVIEW) | grep 'promote: ' \
+		|| echo "  (nothing — $(BR_REVIEW) is origin/$(BR_PROD))"; \
+	echo "$(YELLOW)feature/$(name) since origin/$(BR_PROD):$(RESET)"; \
+	git --no-pager log --oneline origin/$(BR_PROD)..origin/feature/$(name) | head -20 | sed 's/^/  /'; \
 	read -p "Continue? Type 'yes': " reply; \
-	if [ "$$reply" != "yes" ]; then echo "$(RED)✗ Cancelled$(RESET)"; exit 1; fi; \
-	git checkout $(BR_REVIEW) && git pull --quiet --ff-only && \
-	git merge --no-ff "$$BR" -m "Promote $$BR to $(BR_REVIEW)" && git push && \
-	echo "$(GREEN)✅ $$BR is on $(BR_REVIEW). Deploy: make deploy env=staging$(RESET)"
+	[ "$$reply" = "yes" ] || { echo "$(RED)✗ Cancelled$(RESET)"; exit 1; }; \
+	ADD="$(name)"; DROP=""; $(_rebuild-staging); \
+	echo "$(GREEN)✅ feature/$(name) is on $(BR_REVIEW). Next: make deploy env=staging$(RESET)"
+
+.PHONY: unpromote
+unpromote: ## Take a feature off the staging branch (make unpromote name=my-feature)
+	@if [ -z "$(name)" ]; then echo "$(RED)Usage: make unpromote name=my-feature$(RESET)"; exit 1; fi
+	@if ! echo "$(name)" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._-]*$$'; then \
+		echo "$(RED)✗ Invalid name: use letters, digits, dot, dash, underscore$(RESET)"; exit 1; fi
+	@if [ "$(BR_REVIEW)" = "$(BR_PROD)" ]; then \
+		echo "$(RED)✗ No staging environment in site.yml — unpromote needs one$(RESET)"; exit 1; fi
+	@$(MAKE) --no-print-directory _need-tty verb=unpromote
+	@$(MAKE) --no-print-directory _ensure-flow
+	@if ! git log --merges --first-parent --format='%s' origin/$(BR_PROD)..origin/$(BR_REVIEW) \
+		| grep -qx "promote: $(name)"; then \
+		echo "$(RED)✗ feature/$(name) is not on $(BR_REVIEW)$(RESET)"; \
+		git log --merges --first-parent --format='  %s' origin/$(BR_PROD)..origin/$(BR_REVIEW) | grep 'promote: '; \
+		exit 1; fi
+	@echo "$(YELLOW)Taking feature/$(name) off $(BR_REVIEW); every other feature is re-merged where it was$(RESET)"; \
+	read -p "Continue? Type 'yes': " reply; \
+	[ "$$reply" = "yes" ] || { echo "$(RED)✗ Cancelled$(RESET)"; exit 1; }; \
+	ADD=""; DROP="$(name)"; $(_rebuild-staging); \
+	echo "$(GREEN)✅ feature/$(name) is off $(BR_REVIEW). Next: make deploy env=staging$(RESET)"
 
 # ── DEPLOY ───────────────────────────────────────────────────────────────────
 

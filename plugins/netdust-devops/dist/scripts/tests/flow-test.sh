@@ -98,7 +98,7 @@ echo; echo "flow — the vocabulary is the verbs of FR-2"
 flowverbs() { M help | strip | awk '/^FLOW/ {f=1; next} f && /^$/ {exit} f {print $1}' | paste -sd' '; }
 pathverbs() { M help | strip | sed -n 's/^Path: //p' | sed 's/ → /\n/g' | awk '{print $1}' | paste -sd' '; }
 assert_eq "help's flow block lists the verbs that exist, in flow order, and nothing else" \
-  "feature hotfix save promote gate ship" "$(flowverbs)"
+  "feature hotfix save promote unpromote gate ship" "$(flowverbs)"
 assert_eq "…and the path it closes with names only verbs that exist" \
   "feature promote deploy ship" "$(pathverbs)"
 assert_refuses "the verb that merged one rung into the next is gone" "No rule to make target" M finish
@@ -171,7 +171,7 @@ assert_eq "flow state names the next verb" "1" "$(M _flow-state | grep -c 'make 
 # The next verb a feature or a hotfix is sent to must be one the flow still has.
 nextverb() { M _flow-state | strip | sed -n 's/^  next: *//p' \
   | awk '{for (i=1;i<=NF;i++) if ($i == "make") {v=$(i+1); gsub(/[^a-z-]/,"",v); print v; exit}}'; }
-isverb()  { case " feature hotfix save promote gate ship " in *" $1 "*) echo 1;; *) echo 0;; esac; }
+isverb()  { case " feature hotfix save promote unpromote gate ship " in *" $1 "*) echo 1;; *) echo 0;; esac; }
 git checkout -q -b feature/state origin/main
 assert_eq "a feature is sent to promote, a verb that exists" "promote 1" "$(nextverb) $(isverb "$(nextverb)")"
 git checkout -q -b hotfix/state origin/main
@@ -179,10 +179,154 @@ assert_eq "a hotfix is sent to gate, a verb that exists" "gate 1" "$(nextverb) $
 assert_eq "…and to ship after it" "1" "$(M _flow-state | grep -c 'make ship')"
 git checkout -q main && git branch -q -D feature/state hotfix/state
 
+echo; echo "flow — promote"
+# Staging stores nothing: what is on it is read back from its own `promote:`
+# merges. Every claim here compares a TREE against a hand-merged reference,
+# never the verb's own success line.
+YF()       { YOUT=$(Y "$@"); YRC=$?; }
+step()     { YF "make --no-print-directory $*"; if [ "$YRC" -eq 0 ]; then ok "setup: make $*"; else fail "setup: make $*" "$YOUT"; fi; }
+exact()    { git ls-remote origin "$1" | awk -v r="$1" '$2 == r {print $1}'; }
+treeof()   { git rev-parse "$1^{tree}"; }
+handtree() { local b=$1; shift; git checkout -q -B hand "$b"; for m; do git merge -q --no-ff -m h "$m" >/dev/null; done
+             treeof hand; git checkout -q main; git branch -q -D hand; }
+onstg()    { git log --merges --first-parent --reverse --format='%s' origin/main..origin/staging | sed 's/^promote: //' | paste -sd' '; }
+pinof()    { git log --merges --first-parent --format='%s %P' origin/main..origin/staging | awk -v n="$1" '$2 == n {print $4}'; }
+nz()       { [ "$1" -ne 0 ] && echo 1 || echo 0; }
+quiet()    { printf '%s\n' "$1" | strip | grep -ci 'dropped'; }
+hasre()    { printf '%s\n' "$1" | grep -qE -- "$2" && echo 1 || echo 0; }
+shim()     { mkdir -p "$1"; cat > "$1/git"; printf '#!/bin/sh\nPATH="%s:$PATH" exec make --no-print-directory "$@"\n' "$1" > "$1/mk"; chmod +x "$1/git" "$1/mk"; }
+FEATS="a b c d r f t3 x"
+ORIGIN0=$(git ls-remote origin); STG0=$(exact refs/heads/staging)
+git push -qf origin "$(git rev-parse origin/main):refs/heads/staging"
+for f in a b c d r f; do git checkout -q -b "feature/$f" origin/main; echo "$f" > "$f.txt"; git add "$f.txt"; git commit -q -m "$f"; done
+git checkout -q -b feature/t3 origin/main
+for n in 1 2 3; do echo "$n" > "t$n.txt" && git add "t$n.txt" && git commit -q -m "t$n"; done
+git checkout -q -b feature/x origin/main && echo conflict > a.txt && git add a.txt && git commit -q -m x
+git checkout -q main; for f in $FEATS; do git push -q origin "feature/$f"; done; git fetch -q --prune origin
+assert_eq "setup: staging starts at production, and all 8 features are on origin" "$(git rev-parse origin/main) 8" \
+  "$(exact refs/heads/staging) $(for f in $FEATS; do exact "refs/heads/feature/$f"; done | grep -c .)"
+step promote name=a; step promote name=b; step promote name=c
+git fetch -q origin
+assert_eq "three promotes: staging is the tree of a hand-merged main+a+b+c (SC-2)" \
+  "$(handtree origin/main origin/feature/a origin/feature/b origin/feature/c) a b c" \
+  "$(treeof origin/staging) $(onstg)"
+step unpromote name=c
+git fetch -q origin
+assert_eq "unpromote c: staging is main+a+b, and carries no commit of c" \
+  "$(handtree origin/main origin/feature/a origin/feature/b) a b 0" \
+  "$(treeof origin/staging) $(onstg) $(git merge-base --is-ancestor origin/feature/c origin/staging && echo 1 || echo 0)"
+PA=$(git rev-parse origin/feature/a)
+git checkout -q feature/a && echo more >> a.txt && git commit -qam "a again" && git push -q origin feature/a
+git checkout -q main && git fetch -q origin; PA2=$(git rev-parse origin/feature/a)
+assert_eq "setup: feature/a moved on origin" "1" "$([ "$PA" != "$PA2" ] && echo 1)"
+step promote name=c
+git fetch -q origin
+assert_eq "a promoted feature stays at the commit it was promoted at (AF-2)" \
+  "$PA $(handtree origin/main "$PA" origin/feature/b origin/feature/c)" "$(pinof a) $(treeof origin/staging)"
+step promote name=a
+git fetch -q origin
+assert_eq "…and promoting it again moves it to the new tip, quietly (AF-2, SC-8)" \
+  "$PA2 $(handtree origin/main "$PA2" origin/feature/b origin/feature/c) 0" \
+  "$(pinof a) $(treeof origin/staging) $(quiet "$YOUT")"
+
+# FR-16: a rebuild says what it drops, and says nothing when it drops nothing.
+git checkout -q -b legacy origin/staging && echo legacy > legacy.txt && git add legacy.txt
+git commit -q -m "a commit that only ever lived on staging"
+OLDSTG=$(git rev-parse HEAD); OLDSHORT=$(printf %.7s "$OLDSTG")
+git push -qf origin legacy:refs/heads/staging && git checkout -q main && git branch -q -D legacy && git fetch -q --prune origin
+assert_eq "setup: origin/staging carries one commit no promote: merge explains" "$OLDSTG 0" \
+  "$(exact refs/heads/staging) $(git merge-base --is-ancestor "$OLDSTG" origin/main && echo 1 || echo 0)"
+step promote name=t3
+DROPLINE=$(printf '%s\n' "$YOUT" | strip | grep -i dropped)
+assert_eq "…the rebuild reports ONE dropped commit and the old staging sha — a report, not a refusal (SC-8)" "1 1 1" \
+  "$(has "$DROPLINE" 'dropped') $(hasre "$DROPLINE" '(^|[^[:alnum:]])1([^[:alnum:]]|$)') $(has "$DROPLINE" "$OLDSHORT")"
+assert_eq "…and that sha still names the commit that was dropped" "0 legacy.txt" \
+  "$(git cat-file -e "$OLDSTG^{commit}" 2>/dev/null; echo $?) $(git diff-tree --no-commit-id --name-only -r "$OLDSTG" | paste -sd' ')"
+step promote name=f
+assert_eq "an everyday promote drops nothing, and stays quiet (SC-8)" "0" "$(quiet "$YOUT")"
+step unpromote name=f
+assert_eq "…and so does an unpromote" "0" "$(quiet "$YOUT")"
+step unpromote name=t3
+assert_eq "…and an unpromote of a 3-commit feature" "0" "$(quiet "$YOUT")"
+git checkout -q -b legacy2 origin/staging && echo l2 > l2.txt && git add l2.txt && git commit -q -m l2
+git push -qf origin legacy2:refs/heads/staging && git checkout -q main && git branch -q -D legacy2 && git fetch -q --prune origin
+step unpromote name=c
+DROPLINE=$(printf '%s\n' "$YOUT" | strip | grep -i dropped)
+assert_eq "an unpromote beside an unexplained commit reports that one, never the feature it removed (SC-8)" "1 1" \
+  "$(has "$DROPLINE" 'dropped') $(hasre "$DROPLINE" '(^|[^[:alnum:]])1([^[:alnum:]]|$)')"
+
+echo; echo "flow — rebuild refuses cleanly"
+# A refusal counts only if origin did not move: every case pins its reason AND
+# `git ls-remote origin` byte-identical around it.
+git fetch -q --prune origin; BEFORE=$(git ls-remote origin)
+YF "make --no-print-directory promote name=x"
+assert_eq "a feature conflicting with a: refused naming it, nothing pushed, no worktree left (SC-3)" "1 1 1 $BEFORE" \
+  "$(nz "$YRC") $(has "$YOUT" 'conflict: x') $(git worktree list | wc -l | tr -d ' ') $(git ls-remote origin)"
+assert_refuses "promote without a terminal is refused before anything else (C1)" "needs a terminal" \
+  bash -c 'make --no-print-directory promote name=a < /dev/null'
+assert_refuses "…and unpromote too" "needs a terminal" \
+  bash -c 'make --no-print-directory unpromote name=a < /dev/null'
+assert_refuses "promote of a feature that is not on origin, by name" "No such branch on origin: feature/nope" \
+  Y "make --no-print-directory promote name=nope"
+assert_refuses "…and a name that reads as a revision range, by name too" "No such branch on origin: feature/a..b" \
+  Y "make --no-print-directory promote name=a..b"
+assert_refuses "…and a name outside the charset, before anything is read" "Invalid name" \
+  Y "make --no-print-directory promote name=a\\;b"
+assert_refuses "unpromote of a feature that is not on staging, by name" "is not on staging" \
+  Y "make --no-print-directory unpromote name=f"
+cp site.yml "$TMP/site.keep" && sed -i '/^  staging:/d' site.yml
+assert_refuses "a project with no staging environment: promote refuses by name" "No staging environment" \
+  Y "make --no-print-directory promote name=a"
+assert_refuses "…and so does unpromote" "No staging environment" \
+  Y "make --no-print-directory unpromote name=a"
+cp "$TMP/site.keep" site.yml
+assert_eq "…and origin is byte-identical after all the refusals, with site.yml back" "$BEFORE " \
+  "$(git ls-remote origin) $(git status --porcelain)"
+# Another session rebuilt staging between this one's fetch and its push. The
+# PATH shim makes that race deterministic — it lands the other rebuild on origin
+# the first time this one pushes.
+git checkout -q --detach origin/staging && git merge -q --no-ff -m "promote: r" origin/feature/r
+RACED=$(git rev-parse HEAD); git checkout -q main
+shim "$TMP/race" <<SH
+#!/bin/sh
+REAL="$(command -v git)"
+if [ "\$1" = push ] && [ ! -e "$TMP/race/done" ]; then
+  : > "$TMP/race/done"; "\$REAL" push -qf "$TMP/origin.git" "$RACED:refs/heads/staging"
+fi
+exec "\$REAL" "\$@"
+SH
+YF "$TMP/race/mk promote name=d"
+git fetch -q origin
+assert_eq "a lease lost to another session: refused, told to run it again, staging is what that session left (AF-3)" "1 1 $RACED" \
+  "$(nz "$YRC") $(has "$YOUT" 'run it again') $(exact refs/heads/staging)"
+step promote name=d
+git fetch -q origin
+assert_eq "…and the re-run carries both sessions' features" "a b d r" "$(onstg)"
+# A Ctrl-C mid-rebuild: the trap takes the throwaway worktree with it.
+shim "$TMP/intr" <<SH
+#!/bin/sh
+case " \$* " in *" merge "*) kill -INT "\$PPID"; exit 130;; esac
+exec "$(command -v git)" "\$@"
+SH
+BEFORE=$(git ls-remote origin)
+YF "$TMP/intr/mk promote name=f"
+assert_eq "a rebuild interrupted mid-merge: non-zero, no worktree left behind, origin byte-identical (FR-5)" "1 1 $BEFORE" \
+  "$(nz "$YRC") $(git worktree list | wc -l | tr -d ' ') $(git ls-remote origin)"
+for f in $FEATS; do git push -q origin ":refs/heads/feature/$f"; git branch -q -D "feature/$f"; done
+git push -qf origin "$STG0:refs/heads/staging"; git branch -q -f staging "$STG0"
+git fetch -q --prune origin
+assert_eq "…and the two rebuild sections leave origin byte-identical" "$ORIGIN0" "$(git ls-remote origin)"
+
 echo; echo "flow — without origin every verb refuses by name"
 git remote remove origin
-for v in "feature name=two" "hotfix name=two" "promote name=one"; do
+for v in "feature name=two" "hotfix name=two"; do
   assert_refuses "no origin: make $v" "no 'origin' remote" M $v
+done
+for v in "promote name=one" "unpromote name=one"; do
+  assert_refuses "no origin, no terminal: make $v refuses for the terminal first" "needs a terminal" \
+    bash -c "make --no-print-directory $v < /dev/null"
+  assert_refuses "no origin, with a terminal: make $v stops on the missing remote" "no 'origin' remote" \
+    Y "make --no-print-directory $v"
 done
 assert_refuses "no origin, no terminal: make ship refuses for the terminal first" "needs a terminal" \
   bash -c "make --no-print-directory ship < /dev/null"
