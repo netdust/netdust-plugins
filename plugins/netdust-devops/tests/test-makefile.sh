@@ -5,6 +5,7 @@
 
 set -uo pipefail
 DIST="$(cd "$(dirname "${BASH_SOURCE[0]}")/../dist" && pwd)"
+ROOT="$(dirname "$DIST")"
 PASS=0; FAIL=0
 ok()   { printf '  ✅ %s\n' "$1"; PASS=$((PASS+1)); }
 bad()  { printf '  ❌ %s\n'  "$1"; printf '     %s\n' "${2:-}"; FAIL=$((FAIL+1)); }
@@ -42,6 +43,16 @@ else
     ok "core defines no stack hooks"
 fi
 
+# The middle rung is gone: no variable for it, and no verb that merges one rung
+# into the next (FR-1, FR-2). The scaffolder and the templates are swept too —
+# a template that teaches it ships the removed rung into every new project. The
+# forbidden strings are assembled here rather than spelled, so this file stays
+# clean under the sweep it asserts.
+rung=$(grep -rlE "BR_""INTEG|make ""release\b" "$DIST" "$ROOT/bin" "$ROOT/templates" 2>/dev/null \
+         | sed "s|$ROOT/||" | tr '\n' ' ')
+[ -z "$rung" ] && ok "the core, the scaffolder and the templates name no removed rung or verb" \
+               || bad "the core, the scaffolder and the templates name no removed rung or verb" "$rung"
+
 # Every (stack, template) row in the registry must scaffold cleanly, with no
 # token left unrendered. A token added to a template with no matching value
 # ships a literal "{{THEME_FLAVOUR}}" into a real project's site.yml, where the
@@ -50,10 +61,10 @@ fi
 # Asserted by SCAFFOLDING, not by grepping the script: the renderer loops over
 # key names, so the literal "{{TOKEN}}" never appears in bin/new-project and a
 # grep-based check silently passes forever.
-SCAFF="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/bin/new-project"
-REG="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/templates/stacks.tsv"
+SCAFF="$ROOT/bin/new-project"
+REG="$ROOT/templates/stacks.tsv"
 TOKWORK=$(mktemp -d)
-rowfail=""
+rowfail=""; brfail=""; flowfail=""
 while IFS=$'\t' read -r st tp rest; do
     case "$st" in ''|\#*) continue;; esac
     out="$TOKWORK/$st-$tp"
@@ -70,10 +81,21 @@ while IFS=$'\t' read -r st tp rest; do
               "$out" --exclude-dir=.git --exclude-dir=mk --exclude=Makefile.netdust \
               --exclude=work-audit.sh 2>/dev/null | sed "s|$out/||" | tr '\n' ' ' || true)
     [ -n "$named" ] && rowfail="$rowfail $st/$tp(names-caller: $named)"
+    # A fresh project has the two rungs and nothing else, so nothing it does
+    # next can be refused as unmigrated (FR-11, SC-7).
+    br=$(git -C "$out" branch --format='%(refname:short)' 2>/dev/null | sort | paste -sd' ')
+    [ "$br" = "main staging" ] || brfail="$brfail $st/$tp(branches: ${br:-none})"
+    fout=$(cd "$out" && timeout 20 make --no-print-directory feature name=x < /dev/null 2>&1 | strip)
+    case "$fout" in *"environments.development"*) flowfail="$flowfail $st/$tp(refused-as-unmigrated)";; esac
+    case "$fout" in *"no 'origin' remote"*) ;; *) flowfail="$flowfail $st/$tp(never-reached-the-flow-floor)";; esac
 done < "$REG"
 rm -rf "$TOKWORK"
 [ -z "$rowfail" ] && ok "every registry row scaffolds with no unrendered token" \
                   || bad "every registry row scaffolds with no unrendered token" "$rowfail"
+[ -z "$brfail" ] && ok "…and creates main and staging only" \
+                 || bad "…and creates main and staging only" "$brfail"
+[ -z "$flowfail" ] && ok "…and its first make feature is not refused as unmigrated" \
+                   || bad "…and its first make feature is not refused as unmigrated" "$flowfail"
 
 # The registry is the only place a project shape is declared.
 regcols=$(grep -vc '^#' "$REG" 2>/dev/null || echo 0)
@@ -92,7 +114,6 @@ regcols=$(grep -vc '^#' "$REG" 2>/dev/null || echo 0)
 # herdr. Those are the environment the verbs run in, not things that call them,
 # and refusing to name them would make the skills useless. The test targets
 # callers only.
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 callers=$(grep -rlniE 'netdust-wp-manager|wp-manager|new-site\.sh|the fleet manager' "$ROOT" \
             --exclude-dir=.git --exclude="$(basename "${BASH_SOURCE[0]}")" 2>/dev/null || true)
 [ -z "$callers" ] && ok "the plugin names no caller" \
@@ -196,31 +217,32 @@ else
     ok "ship refuses without a terminal, before any server contact"
 fi
 
-# ship always goes from the production branch. Standing on another rung after
-# make finish (it leaves you on the integration branch) made ship refuse by name
-# and sent the human to raw git; ship now switches itself, or refuses when the
-# tree is dirty. _ship-branch is the step, tested on its own because ship's tty
+# ship leaves from the staging branch or a hotfix branch, and never checks you
+# out anywhere first — the old _ship-branch switched you onto production before
+# the gate ran. _ship-path is the step, tested on its own because ship's tty
 # check comes first and a test has no tty.
 git checkout -q -b staging origin/staging
-out=$(timeout 20 make _ship-branch 2>&1 | strip)
-if [ "$(git branch --show-current)" = "main" ]; then
-    ok "ship switches to the production branch"
+out=$(timeout 20 make _ship-path 2>&1 | strip)
+if [ "$(git branch --show-current)" = "staging" ] && printf '%s' "$out" | grep -q "deployed/staging"; then
+    ok "ship wants a deployed staging, and moves nobody"
 else
-    bad "ship switches to the production branch" "on $(git branch --show-current): $(printf '%s' "$out" | head -2)"
+    bad "ship wants a deployed staging, and moves nobody" "on $(git branch --show-current): $(printf '%s' "$out" | head -2)"
+fi
+git checkout -q main
+out=$(timeout 20 make _ship-path 2>&1 | strip)
+if [ "$(git branch --show-current)" = "main" ] && printf '%s' "$out" | grep -q "hotfix"; then
+    ok "ship refuses from a branch that is neither route, naming both"
+else
+    bad "ship refuses from a branch that is neither route, naming both" "on $(git branch --show-current): $(printf '%s' "$out" | head -2)"
 fi
 git checkout -q staging && echo dirty >> site.yml
-out=$(timeout 20 make _ship-branch 2>&1 | strip)
-if [ "$(git branch --show-current)" = "staging" ] && printf '%s' "$out" | grep -q "uncommitted"; then
-    ok "ship refuses to switch with a dirty tree"
+out=$(timeout 20 make _ensure-clean-git verb=ship 2>&1 | strip)
+if printf '%s' "$out" | grep -q "uncommitted" && printf '%s' "$out" | grep -q "Nothing uncommitted ships"; then
+    ok "ship refuses a dirty tree"
 else
-    bad "ship refuses to switch with a dirty tree" "on $(git branch --show-current): $(printf '%s' "$out" | head -2)"
+    bad "ship refuses a dirty tree" "$(printf '%s' "$out" | head -2)"
 fi
 git checkout -q -- site.yml && git checkout -q main
-
-out=$(timeout 20 make release < /dev/null 2>&1 | strip)
-printf '%s' "$out" | grep -q "needs a terminal" \
-    && ok "release refuses without a terminal" \
-    || bad "release refuses without a terminal" "$(printf '%s' "$out" | head -2)"
 
 # promote checks the feature exists before the tty guard (a local check, no
 # server contact) — so the fixture needs a real feature branch to reach it.
@@ -285,7 +307,7 @@ cat > site.yml <<'RYML'
 site: {name: rungs, domain: rungs.invalid, risk: low}
 structure: {type: bedrock, stack: wp, webroot: web, wpcli_path: web/wp}
 environments:
-  development: {branch: development, role: "no server — the integration rung only", confirm: false}
+  development: {branch: development, role: "no server — this project never migrated off it", confirm: false}
   staging:     {url: "https://staging.rungs.invalid", path: /srv/staging, branch: staging, role: "live client subdomain", confirm: true}
   production:  {url: "https://rungs.invalid", branch: main, role: "not provisioned — main is the production branch", confirm: true}
 deploy:
@@ -326,15 +348,45 @@ if [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "payload lives in git"; then
 else
     bad "ship skips the payload archive on git-push" "exit $rc: $(printf '%s' "$out" | head -2 | tr '\n' ' ')"
 fi
+
+# This fixture never migrated off `development`, which two live client projects
+# have not either (FR-10). No verb here merges into a third rung, so each one
+# that would refuses — naming the migration and the way back to the core that
+# still had it — before it creates a branch or touches origin. The terminal
+# guard fires first on promote, unpromote and ship, so all five run under a pty.
+REMOTES=$(git ls-remote origin); BRANCHES=$(git branch --list 'feature/*' 'hotfix/*')
+unmig=""
+for v in "feature name=x" "hotfix name=x" "promote name=x" "unpromote name=x" "ship"; do
+    out=$(timeout 30 script -qec "make --no-print-directory $v" /dev/null <<< yes 2>&1); rc=$?
+    out=$(printf '%s' "$out" | strip | tr -d '\r')
+    [ $rc -ne 0 ] || unmig="$unmig ${v%% *}(exit-0)"
+    printf '%s' "$out" | grep -q "drop environments.development from site.yml" \
+        || unmig="$unmig ${v%% *}(no-migrate-line)"
+    printf '%s' "$out" | grep -q "git checkout <commit before the update> -- Makefile.netdust mk scripts .netdust-devops" \
+        || unmig="$unmig ${v%% *}(no-way-back)"
+done
+[ -z "$unmig" ] && ok "every merging verb refuses on an unmigrated project, naming the migration and the way back" \
+               || bad "every merging verb refuses on an unmigrated project, naming the migration and the way back" "$unmig"
+[ "$(git branch --list 'feature/*' 'hotfix/*')" = "$BRANCHES" ] && [ "$(git ls-remote origin)" = "$REMOTES" ] \
+    && ok "…and it branched nothing and left origin exactly as it was" \
+    || bad "…and it branched nothing and left origin exactly as it was" "$(git branch --list 'feature/*' 'hotfix/*')"
+
+# Everything that does not merge keeps working: the refusal is a flow floor,
+# not a lockout of the project.
+if timeout 60 make status < /dev/null >/dev/null 2>&1 && timeout 20 make gate < /dev/null >/dev/null 2>&1; then
+    ok "…while status and gate still run there"
+else
+    bad "…while status and gate still run there" "status or gate exited non-zero"
+fi
 cd "$P"
 
 echo "── worktrees: parallel agents each get one ──"
-# Every promoting verb does `git checkout <rung>`, and a rung checked out in
-# another worktree cannot be checked out here. Without a guard, `make finish`
-# in a linked worktree died mid-verb on a raw git error —
-#   fatal: 'development' is already used by worktree at ...
-# — the exact shape _ensure-flow exists to prevent, and the normal case for any
-# orchestrator that gives each parallel agent its own worktree.
+# promote used to `git checkout <rung>`, so a rung held by another worktree died
+# mid-verb on a raw git error —
+#   fatal: 'staging' is already used by worktree at ...
+# The rebuild does its merging in a throwaway worktree of its own and pushes,
+# so the rung is never checked out here: the normal case for an orchestrator
+# that gives each parallel agent a worktree simply works.
 WT="$WORK/wt"; mkdir -p "$WT"; cd "$WT"
 git init -q --bare origin.git && git clone -q origin.git base 2>/dev/null && cd base
 mkdir -p scripts web
@@ -343,7 +395,6 @@ cat > site.yml <<'WTYML'
 site: {name: wt, domain: wt.invalid, risk: low}
 structure: {stack: generic, type: custom-site, webroot: web}
 environments:
-  development: {url: "https://dev.wt.invalid", path: /srv/d, branch: development, role: sandbox, confirm: false}
   staging:     {url: "https://stg.wt.invalid", path: /srv/s, branch: staging, role: review, confirm: false}
   production:  {url: "https://wt.invalid", path: /srv/p, branch: main, role: live, confirm: true}
 deploy: {method: rsync, ssh_host: nobody@wt.invalid, state_dir: /srv/.s, payload: [], exclude: [".git*"]}
@@ -355,40 +406,27 @@ printf 'STACK := generic\ninclude Makefile.netdust\n' > Makefile
 touch web/.gitkeep
 git add -A && git -c user.email=t@t -c user.name=T commit -qm init >/dev/null && git branch -M main
 git push -q -u origin main 2>/dev/null
-git push -q origin main:staging 2>/dev/null && git push -q origin main:development 2>/dev/null
-git checkout -q -b development origin/development
-git worktree add -q ../agent -b feature/par origin/development
+git push -q origin main:staging 2>/dev/null
+git checkout -q -b staging origin/staging
+git worktree add -q ../agent -b feature/par origin/main
 cd ../agent && echo work > web/f.txt
 git add -A && git -c user.email=t@t -c user.name=T commit -qm "parallel work" >/dev/null
+git push -q origin feature/par 2>/dev/null
 
-wtout=$(timeout 60 make finish < /dev/null 2>&1 | strip)
+WTN=$(git worktree list | wc -l | tr -d ' ')
+wtout=$(timeout 60 script -qec "make promote name=par" /dev/null <<< yes 2>&1 | strip)
+git fetch -q origin
+subj=$(git log --merges --first-parent --format='%s' origin/main..origin/staging | paste -sd' ')
 if printf '%s' "$wtout" | grep -q 'already used by worktree'; then
-    bad "finish refuses by name in a linked worktree" "it died on the raw git error"
-elif printf '%s' "$wtout" | grep -q 'checked out in another worktree'; then
-    ok "finish refuses by name in a linked worktree"
+    bad "promote runs from a linked worktree while the rung is checked out elsewhere" "it died on the raw git error"
+elif [ "$subj" = "promote: par" ]; then
+    ok "promote runs from a linked worktree while the rung is checked out elsewhere"
 else
-    bad "finish refuses by name in a linked worktree" "$(printf '%s' "$wtout" | tail -2)"
+    bad "promote runs from a linked worktree while the rung is checked out elsewhere" "$(printf '%s' "$wtout" | tail -2)"
 fi
-printf '%s' "$wtout" | grep -q 'make finish name=par' \
-    && ok "the refusal names the command that actually works" \
-    || bad "the refusal names the command that actually works" "$(printf '%s' "$wtout" | grep -i 'cd ' | head -1)"
-
-cd "$WT/base"
-finout=$(timeout 60 make finish name=par < /dev/null 2>&1 | strip)
-printf '%s' "$finout" | grep -q 'Merged to development' \
-    && ok "finish name=<x> merges a branch held by another worktree" \
-    || bad "finish name=<x> merges a branch held by another worktree" "$(printf '%s' "$finout" | tail -2)"
-git log --oneline development 2>/dev/null | grep -q 'Merge feature/par' \
-    && ok "the parallel work actually landed on the rung" \
-    || bad "the parallel work actually landed" "no merge commit on development"
-printf '%s' "$finout" | grep -q 'kept — it is checked out in a worktree' \
-    && ok "a branch still held by a worktree is kept, not silently left half-deleted" \
-    || bad "a held branch is reported" "$(printf '%s' "$finout" | tail -1)"
-
-missout=$(timeout 60 make finish name=nosuch < /dev/null 2>&1 | strip)
-printf '%s' "$missout" | grep -q 'No feature/nosuch or hotfix/nosuch' \
-    && ok "finish name=<unknown> refuses and lists what is in flight" \
-    || bad "finish name=<unknown> refuses" "$(printf '%s' "$missout" | tail -2)"
+[ "$(git worktree list | wc -l | tr -d ' ')" = "$WTN" ] \
+    && ok "…and it took its own throwaway worktree with it" \
+    || bad "…and it took its own throwaway worktree with it" "$(git worktree list | tail -2)"
 cd "$P"
 
 echo
@@ -459,6 +497,361 @@ printf '%s' "$out" | grep -q "current" \
 grep -q "^STACK := wp" Makefile \
     && ok "devops-update leaves the project Makefile alone" \
     || bad "devops-update leaves the project Makefile alone" "project Makefile was overwritten"
+
+echo
+echo "── command-line allowlist ──"
+# Every variable settable on a make command line reaches a shell inside a
+# double-quoted string, where $( ) substitutes and a " ends the quote — so
+# `make rollback env='a"; touch PWNED; echo "'` used to run the payload. Each
+# case pins the refusal's reason AND the absence of its marker: a non-zero exit
+# on its own would be vacuous.
+cd "$P"; git checkout -q -- . 2>/dev/null; rm -f dirt.txt
+CLI="$WORK/cli"; mkdir -p "$CLI/bin"
+# Real ssh reads no stdin under -n, and the core gives -n to every read
+# (`deployed`, rollback's ledger tail) while the ledger WRITES pipe data into a
+# plain `ssh -q`. A shim that swallows stdin either way hangs the whole suite
+# whenever the runner's own stdin is an open stream that never sends EOF.
+cat > "$CLI/bin/ssh" <<SH
+#!/bin/sh
+echo "\$*" >> "$CLI/ssh.log"
+case " \$* " in *" -qn "*|*" -n "*) exec < /dev/null;; esac
+case "\$*" in *"tail -2"*) tail -2 "$CLI/ledger" 2>/dev/null | head -1;; *) cat >/dev/null;; esac
+SH
+cat > "$CLI/bin/rsync" <<SH
+#!/bin/sh
+printf '[%s]' "\$@" >> "$CLI/rsync.log"; echo >> "$CLI/rsync.log"
+SH
+chmod +x "$CLI/bin/ssh" "$CLI/bin/rsync"
+CLIPATH="$CLI/bin:$PATH"
+M() { env PATH="$CLIPATH" make --no-print-directory "$@" < /dev/null 2>&1; }
+pwned() { (cd "$CLI" && ls pwn-* 2>/dev/null | paste -sd' '); }
+# Three payload forms per sink: make's own expansion, command substitution in
+# the shell the recipe builds, and a break out of the surrounding "…".
+inject() {
+    local dir="$1" tgt="$2" var="$3" f; shift 3
+    for f in "\$(shell touch $CLI/pwn-$tgt-$var-make)" "\$(touch $CLI/pwn-$tgt-$var-sub)" \
+             "a\"; touch $CLI/pwn-$tgt-$var-quote; echo \""; do
+        env PATH="$CLIPATH" make -C "$dir" --no-print-directory "$tgt" "$@" "$var=$f" \
+            < /dev/null > /dev/null 2>&1
+    done
+}
+
+git checkout -q staging
+inject "$P" rollback        env
+inject "$P" deploy          env
+inject "$P" _need-tty       verb
+inject "$P" _worktree-guard rung
+inject "$P" deploy          dryrun env=staging
+echo dirt > dirt.txt; inject "$P" _ensure-clean-git verb; rm -f dirt.txt
+[ -z "$(pwned)" ] && ok "env=, verb=, rung= and dryrun= run nothing in the targets that interpolate them" \
+                  || bad "env=, verb=, rung= and dryrun= run nothing in the targets that interpolate them" "$(pwned)"
+
+out=$(M _need-tty 'verb=a"; echo "' | strip)
+printf '%s' "$out" | grep -q "Refused verb=" \
+    && ok "…and the refusal names the variable it refused" \
+    || bad "…and the refusal names the variable it refused" "$(printf '%s' "$out" | head -2)"
+
+# name= is checked by the verbs themselves: its empty case needs the Usage line.
+for v in feature hotfix promote unpromote; do
+    for f in "a\"; touch $CLI/pwn-name-$v; echo \"" "\$(shell touch $CLI/pwn-nameshell-$v)"; do
+        M "$v" "name=$f" > /dev/null 2>&1
+    done
+done
+[ -z "$(pwned)" ] && ok "a quote-break or \$(shell) payload in name= reaches no shell" \
+                  || bad "a quote-break or \$(shell) payload in name= reaches no shell" "$(pwned)"
+
+# The stack layers are not edited: one make variable is global to the
+# invocation, so the core's parse-time refusal covers a sink it cannot see.
+WPU="$WORK/wpu"; cp -r "$P" "$WPU"
+printf 'STACK := wp\ninclude Makefile.netdust\n_check-ddev _pull-db _pull-plugins _pull-uploads:\n\t@:\n' > "$WPU/Makefile"
+inject "$WPU" pull uploads
+[ -z "$(pwned)" ] && ok "uploads= runs nothing in the wp layer's pull, which the core never sees" \
+                  || bad "uploads= runs nothing in the wp layer's pull, which the core never sees" "$(pwned)"
+
+# A variable the flow does not take is not an operator input at all. SITE= is
+# the command in $(shell $(SITE) …), so it would run at PARSE time.
+for v in "SITE=touch $CLI/pwn-site; scripts/site" "WEBROOT=a\"; touch $CLI/pwn-webroot; echo \"" "_name-ok=ok"; do
+    M status "$v" > /dev/null 2>&1
+    M promote "$v" "name=a\"; touch $CLI/pwn-nameloose; echo \"" > /dev/null 2>&1
+done
+[ -z "$(pwned)" ] && ok "SITE=, WEBROOT= and _name-ok= are refused, so none of them reaches a shell" \
+                  || bad "SITE=, WEBROOT= and _name-ok= are refused, so none of them reaches a shell" "$(pwned)"
+
+out=$(M status SITE=x); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "SITE is not an operator input"; then
+    ok "make status SITE=… is refused at parse, naming SITE"
+else
+    bad "make status SITE=… is refused at parse, naming SITE" "exit $rc: $(printf '%s' "$out" | head -2)"
+fi
+
+out=$(M help NAME=x); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "NAME is not an operator input"; then
+    ok "make help NAME=x is refused, naming NAME"
+else
+    bad "make help NAME=x is refused, naming NAME" "exit $rc: $(printf '%s' "$out" | head -2)"
+fi
+
+# A project whose own target takes NAME opens the door itself, ABOVE the
+# include — _CLI_VARS is :=, so a declaration below it is read too late.
+cp Makefile "$CLI/Makefile.keep"
+printf 'STACK := wp\n_CLI_EXTRA := NAME\ninclude Makefile.netdust\n' > Makefile
+out=$(M help NAME=x); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "FLOW"; then
+    ok "…and _CLI_EXTRA := NAME lets the project's own input through"
+else
+    bad "…and _CLI_EXTRA := NAME lets the project's own input through" "exit $rc: $(printf '%s' "$out" | head -2)"
+fi
+awk '/_CLI_EXTRA/{d=NR} /^include Makefile.netdust/{i=NR} END{exit !(d && i && d < i)}' Makefile \
+    && ok "…declared above the include, where the core still reads it" \
+    || bad "…declared above the include, where the core still reads it" "$(cat Makefile)"
+cp "$CLI/Makefile.keep" Makefile
+
+# -e is the same hole from the other side: it lets the environment overwrite
+# every value this file reads from site.yml.
+out=$(env PATH="$CLIPATH" BLUE="a\"; touch $CLI/pwn-dashe; echo \"" \
+        make -e --no-print-directory help < /dev/null 2>&1); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "make -e is refused" && [ -z "$(pwned)" ]; then
+    ok "make -e is refused: the environment may not overwrite what site.yml declares"
+else
+    bad "make -e is refused: the environment may not overwrite what site.yml declares" "exit $rc: $(printf '%s' "$out" | head -2) $(pwned)"
+fi
+
+# make's own flags are the same hole again: -i runs past every failed check, and
+# under -n, -t and -q a recipe line holding $(MAKE) still executes.
+flagbad=""
+for f in -i -n -t -q --ignore-errors --dry-run --just-print --recon --touch --question --environment-overrides; do
+    out=$(M "$f" help); rc=$?
+    { [ $rc -ne 0 ] && printf '%s' "$out" | strip | grep -q "is refused"; } || flagbad="$flagbad $f(exit-$rc)"
+done
+[ -z "$flagbad" ] && ok "-i, -n, -t, -q and every long spelling of them are refused at parse" \
+                  || bad "-i, -n, -t, -q and every long spelling of them are refused at parse" "$flagbad"
+M -i promote "name=x\";touch $CLI/pwn-dashi;echo \"" > /dev/null 2>&1
+[ -z "$(pwned)" ] && ok "…so -i cannot carry a name= payload past _check-name" \
+                  || bad "…so -i cannot carry a name= payload past _check-name" "$(pwned)"
+flagbad=""
+for f in -s -k -j2; do
+    out=$(M "$f" help); rc=$?
+    { [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "FLOW"; } || flagbad="$flagbad $f(exit-$rc)"
+done
+[ -z "$flagbad" ] && ok "…while -s, -k and -j2 still run" || bad "…while -s, -k and -j2 still run" "$flagbad"
+
+# STACK is the same hole once more: help echoes it inside a double-quoted shell
+# string, and `?=` takes an exported one whenever the project Makefile declares
+# none — which the scaffold always does, so only a hand-written Makefile is bare.
+NOSTK="$WORK/nostack"; cp -r "$P" "$NOSTK"
+printf 'include Makefile.netdust\n' > "$NOSTK/Makefile"
+out=$(env PATH="$CLIPATH" STACK="a\"; touch $CLI/pwn-stack; echo \"" \
+        make -C "$NOSTK" --no-print-directory help < /dev/null 2>&1); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && [ -z "$(pwned)" ] && printf '%s' "$out" | grep -q "stack: wp"; then
+    ok "an exported STACK reaches no shell, and site.yml still names the stack"
+else
+    bad "an exported STACK reaches no shell, and site.yml still names the stack" "exit $rc: $(pwned) $(printf '%s' "$out" | head -1)"
+fi
+printf 'STACK := generic\ninclude Makefile.netdust\n' > "$NOSTK/Makefile"
+out=$(env PATH="$CLIPATH" STACK=wp make -C "$NOSTK" --no-print-directory help < /dev/null 2>&1 | strip)
+printf '%s' "$out" | grep -q "stack: generic" \
+    && ok "…and the project Makefile's own STACK := still wins over the environment" \
+    || bad "…and the project Makefile's own STACK := still wins over the environment" "$(printf '%s' "$out" | head -1)"
+
+# Inherited from a polluted shell it is dropped with a warning instead, so a
+# read-only verb still runs.
+out=$(env PATH="$CLIPATH" "env=a\"; touch $CLI/pwn-envpoll; echo \"" "verb=\$(touch $CLI/pwn-verbpoll)" \
+        bash -c 'make --no-print-directory help >/dev/null </dev/null \
+              && make --no-print-directory status >/dev/null </dev/null \
+              && make --no-print-directory gate >/dev/null </dev/null' < /dev/null 2>&1); rc=$?
+if [ $rc -eq 0 ] && [ -z "$(pwned)" ]; then
+    ok "a hostile env= and verb= in the ENVIRONMENT leave help, status and gate runnable, and neither runs"
+else
+    bad "a hostile env= and verb= in the ENVIRONMENT leave help, status and gate runnable" "exit $rc: $(pwned) $(printf '%s' "$out" | strip | head -2)"
+fi
+
+out=$(M _need-tty verb="promote name=x" | strip)
+printf '%s' "$out" | grep -q "make promote name=x needs a terminal" \
+    && ok "verb= still carries a space and an '=' through to _need-tty" \
+    || bad "verb= still carries a space and an '=' through to _need-tty" "$(printf '%s' "$out" | head -2)"
+
+# The cases below read deployed/staging, and an unfixed core deploys for real
+# out of the injections above — so the tag starts from nothing either way.
+git push -q --delete origin refs/tags/deployed/staging > /dev/null 2>&1
+git tag -d deployed/staging > /dev/null 2>&1
+
+# dryrun= is a boolean: the core writes rsync's own flag, so no make variable
+# ever carries another program's argument.
+rsyncrun() { : > "$CLI/rsync.log"
+    RSOUT=$(env PATH="$CLIPATH" make --no-print-directory _deploy-rsync env=staging "$@" < /dev/null 2>&1); RSRC=$?; }
+rsyncarg() { grep -cF -- "[$1]" "$CLI/rsync.log"; }
+rsynclines() { wc -l < "$CLI/rsync.log" | tr -d ' '; }
+rsyncrun
+if [ $RSRC -eq 0 ] && [ "$(rsynclines)" = 1 ] && [ "$(rsyncarg --dry-run)" = 0 ]; then
+    ok "_deploy-rsync without dryrun= runs rsync once, without --dry-run"
+else
+    bad "_deploy-rsync without dryrun= runs rsync once, without --dry-run" "exit $RSRC: $(cat "$CLI/rsync.log")"
+fi
+rsyncrun dryrun=1
+if [ $RSRC -eq 0 ] && [ "$(rsyncarg --dry-run)" = 1 ] && [ "$(rsyncarg 1)" = 0 ]; then
+    ok "dryrun=1 hands rsync --dry-run, never the value itself"
+else
+    bad "dryrun=1 hands rsync --dry-run, never the value itself" "exit $RSRC: $(cat "$CLI/rsync.log")"
+fi
+rsyncrun dryrun=--dry-run
+if [ $RSRC -ne 0 ] && printf '%s' "$RSOUT" | strip | grep -q "Refused dryrun=" && [ ! -s "$CLI/rsync.log" ]; then
+    ok "dryrun=--dry-run is refused at parse, naming dryrun=, and rsync never runs"
+else
+    bad "dryrun=--dry-run is refused at parse, naming dryrun=, and rsync never runs" "exit $RSRC: $(printf '%s' "$RSOUT" | strip | head -2)"
+fi
+[ "$(grep -c 'dryrun=--dry-run' "$DIST/Makefile.netdust")" = 0 ] \
+    && ok "no make variable in the core carries rsync's flag" \
+    || bad "no make variable in the core carries rsync's flag" "$(grep -n 'dryrun=--dry-run' "$DIST/Makefile.netdust" | head -2)"
+
+: > "$CLI/rsync.log"
+out=$(M deploy-test env=staging); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && [ "$(rsyncarg --dry-run)" = 1 ] && [ -z "$(git ls-remote origin 'refs/tags/deployed/*')" ]; then
+    ok "make deploy-test env=staging reaches the transport with --dry-run, and writes no ledger"
+else
+    bad "make deploy-test env=staging reaches the transport with --dry-run, and writes no ledger" "exit $rc: $(printf '%s' "$out" | tail -2)"
+fi
+
+echo
+echo "── the deploy tag fails closed ──"
+# ship reads deployed/staging from origin to prove a tree was deployed, so a
+# tag that does not reach origin is a failed deploy, not a warning.
+HOOK="$WORK/origin.git/hooks/pre-receive"
+NOTAG='#!/bin/sh
+while read -r o n r; do case "$r" in refs/tags/deployed/*) exit 1;; esac; done'
+printf '%s\n' "$NOTAG" > "$HOOK"; chmod +x "$HOOK"
+out=$(M deploy env=staging); rc=$?; rm -f "$HOOK"; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "deploy tag not pushed — the ledger on origin is stale"; then
+    ok "origin refusing the deploy tag fails the deploy, naming the stale ledger"
+else
+    bad "origin refusing the deploy tag fails the deploy, naming the stale ledger" "exit $rc: $(printf '%s' "$out" | tail -2)"
+fi
+out=$(M deploy env=staging); rc=$?
+if [ $rc -eq 0 ] && [ "$(git ls-remote origin refs/tags/deployed/staging | cut -f1)" = "$(git rev-parse HEAD)" ]; then
+    ok "…and with origin taking it, deploy stamps deployed/staging at HEAD"
+else
+    bad "…and with origin taking it, deploy stamps deployed/staging at HEAD" "exit $rc: $(printf '%s' "$out" | strip | tail -2)"
+fi
+
+# A rollback that leaves the tag on the rolled-back-FROM commit lets ship pass
+# against a tree the environment no longer runs.
+echo rb > rb.txt && git add rb.txt && git -c user.email=t@t -c user.name=T commit -qm rb
+git push -q origin staging 2>/dev/null
+PREV=$(git rev-parse HEAD~1)
+printf '%s %s staging T\n%s %s staging T\n' 2026-01-01T00:00:00 "$PREV" 2026-01-02T00:00:00 "$(git rev-parse HEAD)" > "$CLI/ledger"
+M deploy env=staging > /dev/null 2>&1
+WTN=$(git worktree list | wc -l | tr -d ' ')
+printf '%s\n' "$NOTAG" > "$HOOK"; chmod +x "$HOOK"
+out=$(env PATH="$CLIPATH" script -qec "make --no-print-directory rollback env=staging" /dev/null <<< yes 2>&1); rc=$?
+rm -f "$HOOK"; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "deploy tag not pushed" \
+   && [ "$(git worktree list | wc -l | tr -d ' ')" = "$WTN" ]; then
+    ok "a rollback whose tag origin refuses fails, and leaves no worktree behind"
+else
+    bad "a rollback whose tag origin refuses fails, and leaves no worktree behind" "exit $rc: $(printf '%s' "$out" | tail -2)"
+fi
+out=$(env PATH="$CLIPATH" script -qec "make --no-print-directory rollback env=staging" /dev/null <<< yes 2>&1); rc=$?
+if [ $rc -eq 0 ] && [ "$(git ls-remote origin refs/tags/deployed/staging | cut -f1)" = "$PREV" ]; then
+    ok "make rollback env=staging moves deployed/staging on origin to the commit it rolled back to"
+else
+    bad "make rollback env=staging moves deployed/staging on origin to the commit it rolled back to" \
+        "exit $rc: tag=$(git ls-remote origin refs/tags/deployed/staging | cut -f1) want=$PREV"
+fi
+
+# A rollback whose worktree cannot be made has rsynced nothing: it may not write
+# the ledger, and may not stamp the checkout's own HEAD as what the server runs.
+mkdir -p "$CLI/nogit"; GIT=$(command -v git)
+printf '#!/bin/sh\ncase "$*" in *"worktree add"*) exit 1;; esac\nexec %s "$@"\n' "$GIT" > "$CLI/nogit/git"
+chmod +x "$CLI/nogit/git"; : > "$CLI/ssh.log"
+TAG=$(git ls-remote origin refs/tags/deployed/staging)
+out=$(env PATH="$CLI/nogit:$CLIPATH" script -qec "make --no-print-directory rollback env=staging" /dev/null <<< yes 2>&1); rc=$?
+if [ $rc -ne 0 ] && ! grep -q 'cat >' "$CLI/ssh.log" && [ "$(git ls-remote origin refs/tags/deployed/staging)" = "$TAG" ]; then
+    ok "a rollback that cannot make its worktree fails, writes no ledger and leaves the tag"
+else
+    bad "a rollback that cannot make its worktree fails, writes no ledger and leaves the tag" \
+        "exit $rc: ledger writes=$(grep -c 'cat >' "$CLI/ssh.log") tag=$(git ls-remote origin refs/tags/deployed/staging | cut -f1)"
+fi
+
+echo
+echo "── the rebuild: unpromote tells the truth, and local staging follows ──"
+SY="$WORK/sync"; mkdir -p "$SY"; cd "$SY" || exit 1
+git init -q --bare origin.git && git clone -q origin.git base 2>/dev/null
+cd "$SY/base" || exit 1
+git -C "$WT/base" archive main | tar -x
+git add -A && git -c user.email=t@t -c user.name=T commit -qm init >/dev/null && git branch -M main
+git push -q -u origin main 2>/dev/null; git push -q origin main:staging 2>/dev/null
+git checkout -q -b staging origin/staging
+feat() { git checkout -q -b "feature/$1" "$2" && echo "$1" > "web/$1.txt" && git add -A \
+    && git -c user.email=t@t -c user.name=T commit -qm "$1" >/dev/null && git push -q origin "feature/$1" 2>/dev/null
+    git checkout -q staging; }
+feat a origin/main; feat b origin/main; feat b2 feature/a
+PTY() { env PATH="$CLIPATH" timeout 60 script -qec "make --no-print-directory $1" /dev/null <<< yes 2>&1; }
+
+# feature/b2 was branched from feature/a, so a's commits ride in on b2's pin.
+PTY "promote name=a" > /dev/null; PTY "promote name=b2" > /dev/null
+REMOTES=$(git ls-remote origin)
+out=$(PTY "unpromote name=a"); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "feature/a is still on staging through another promoted feature" \
+   && [ "$(git ls-remote origin)" = "$REMOTES" ]; then
+    ok "unpromote refuses a feature another promoted feature still carries, and pushes nothing"
+else
+    bad "unpromote refuses a feature another promoted feature still carries, and pushes nothing" "exit $rc: $(printf '%s' "$out" | tail -2)"
+fi
+
+# The rebuild force-pushes commits made in a throwaway worktree. No raw git runs
+# between these verbs: the advertised path has to work as advertised.
+M deploy env=staging > /dev/null; PTY "promote name=b" > /dev/null
+out=$(M deploy env=staging); rc=$?
+if [ $rc -eq 0 ] && [ "$(git ls-remote origin refs/tags/deployed/staging | cut -f1)" = "$(git ls-remote origin refs/heads/staging | cut -f1)" ]; then
+    ok "promote, deploy, promote, deploy: the second deploy ships what origin/staging is"
+else
+    bad "promote, deploy, promote, deploy: the second deploy ships what origin/staging is" "exit $rc: $(printf '%s' "$out" | strip | tail -2)"
+fi
+git checkout -q feature/b; PTY "unpromote name=b" > /dev/null
+[ "$(git rev-parse staging)" = "$(git ls-remote origin refs/heads/staging | cut -f1)" ] \
+    && ok "…and from a feature branch, local staging ends on origin/staging" \
+    || bad "…and from a feature branch, local staging ends on origin/staging" "local $(git rev-parse --short staging)"
+# A dirty staging checkout that the reset would clobber: the push already landed.
+git checkout -q staging; echo mine > web/b.txt
+out=$(PTY "promote name=b"); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "git reset --keep origin/staging" && [ "$(cat web/b.txt)" = mine ]; then
+    ok "…and a checkout it cannot move is told how, without failing a rebuild that landed"
+else
+    bad "…and a checkout it cannot move is told how, without failing a rebuild that landed" "exit $rc: $(printf '%s' "$out" | tail -2)"
+fi
+rm -f web/b.txt; git reset -q --keep origin/staging
+
+# Two ways a promote adds nothing: no commits over production, or a tip that a
+# promoted feature sorting before it already carries ("Already up to date").
+git push -q origin origin/main:refs/heads/feature/empty feature/a:refs/heads/feature/z 2>/dev/null
+REMOTES=$(git ls-remote origin)
+for n in empty z; do
+    out=$(PTY "promote name=$n"); rc=$?; out=$(printf '%s' "$out" | strip)
+    if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "feature/$n added nothing to staging" \
+       && ! printf '%s' "$out" | grep -q "✅" && [ "$(git ls-remote origin)" = "$REMOTES" ]; then
+        ok "promote name=$n adds nothing: it says so, fails, and pushes nothing"
+    else
+        bad "promote name=$n adds nothing: it says so, fails, and pushes nothing" "exit $rc: $(printf '%s' "$out" | tail -2)"
+    fi
+done
+
+# Driven as a target: ship runs _ship-path before the gate and the confirmation.
+git checkout -q -b hotfix/h origin/main
+for s in "fix one" "fix two"; do git -c user.email=t@t -c user.name=T commit -q --allow-empty -m "$s"; done
+out=$(M _ship-path); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "fix one" && printf '%s' "$out" | grep -q "fix two"; then
+    ok "a hotfix ship path lists the commits it carries over production"
+else
+    bad "a hotfix ship path lists the commits it carries over production" "exit $rc: $(printf '%s' "$out" | tail -2)"
+fi
+
+git checkout -q staging; : > "$CLI/ssh.log"
+out=$(M rollback env=staging); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "needs a terminal" && [ ! -s "$CLI/ssh.log" ]; then
+    ok "rollback without a terminal refuses before any ssh"
+else
+    bad "rollback without a terminal refuses before any ssh" "exit $rc: ssh calls=$(wc -l < "$CLI/ssh.log" | tr -d ' ')"
+fi
+cd "$P" || exit 1
 
 echo
 printf '%s passed, %s failed\n' "$PASS" "$FAIL"

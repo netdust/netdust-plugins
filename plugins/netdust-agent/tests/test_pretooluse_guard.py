@@ -29,8 +29,10 @@ trustworthy if every (command -> decision) pair is pinned, including the
 false-positive cases that would otherwise tempt someone to loosen the regex.
 """
 
+import importlib.util
 import json
 import os
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -151,21 +153,32 @@ def _upstream_case(desc: str, relpath: str, expected: str, *,
 # --- scenarios ------------------------------------------------------------
 
 
-def _flow_repo(tmp: Path, branch: str, *, site_yml: bool = True, reader: bool = True) -> None:
-    """A throwaway flow project: site.yml (three rungs), optionally a scripts/site
-    reader, a git repo checked out on `branch`."""
+def _flow_repo(tmp: Path, branch: str, *, site_yml: bool = True, reader: bool = True,
+               inline_yaml: bool = False, reader_prod: str = "main") -> None:
+    """A throwaway flow project: site.yml binding `staging` and `production` and nothing
+    else, optionally a scripts/site reader mirroring it, a git repo checked out on
+    `branch`. The YAML is block style — the flow style the fixture used before never
+    matched the hook's own `branch:` regex, so every rung came from the reader.
+
+    `inline_yaml` writes the same two environments in that flow style, which is the knob
+    that pushes `_flow_rungs` off its regex path onto the reader — or onto the fleet
+    defaults when there is no reader. `reader_prod` lets the reader name a production
+    branch site.yml does not, so a verdict on that name says which source answered."""
     if site_yml:
         (tmp / "site.yml").write_text(
             "site: {name: t}\nenvironments:\n"
-            "  development: {branch: development}\n  staging: {branch: staging}\n"
-            "  production: {branch: main, confirm: true}\n")
+            "  staging: {branch: staging}\n  production: {branch: main, confirm: true}\n"
+            if inline_yaml else
+            "site: {name: t}\nenvironments:\n"
+            "  staging:\n    branch: staging\n"
+            "  production:\n    branch: main\n    confirm: true\n")
     if reader:
         (tmp / "scripts").mkdir(exist_ok=True)
         (tmp / "scripts" / "site").write_text(
             "#!/usr/bin/env python3\nimport sys\n"
-            "k=sys.argv[1]\nb={'environments.development.branch':'development',"
-            "'environments.staging.branch':'staging','environments.production.branch':'main'}\n"
-            "print('development\\nstaging\\nproduction') if k=='environments' else print(b[k])\n")
+            "k=sys.argv[1]\nb={'environments.staging.branch':'staging',"
+            "'environments.production.branch':'" + reader_prod + "'}\n"
+            "print('staging\\nproduction') if k=='environments' else print(b[k])\n")
     env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
            "GIT_COMMITTER_EMAIL": "t@t", "HOME": str(tmp), "PATH": os.environ.get("PATH", "")}
     subprocess.run(["git", "init", "-q", "-b", branch], cwd=tmp, env=env, check=True)
@@ -217,6 +230,53 @@ def _vendor_case(desc: str, rel: str, expected: str, tool: str = "Edit",
     if ok and expected == "ask" and as_checkout:
         ok = "prefer-source" in out
     return ok, f"vendor {desc}: {tool} {rel} -> {expected} (got {got})"
+
+
+def _load_guard():
+    """The hook as a module. Its hint table is DATA, so it is read whole instead of
+    provoked one denial at a time; the filename's hyphen is why this needs importlib."""
+    spec = importlib.util.spec_from_file_location("pretooluse_guard", HOOK)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+# A hint naming a verb the flow no longer has teaches the removed vocabulary at the
+# exact moment a refused session is looking for a way forward. The forbidden phrases
+# are assembled from fragments on purpose: SC-7 greps this tree, and a literal here
+# would be a hit of its own.
+_HINT_STALE = ("make " + "finish", "make " + "release", "make " + "candidate",
+               "unfin" + "ish", "integra" + "tion", "back down")
+# FR-2's seven verbs, plus the four outside the flow a hint may legitimately name.
+_HINT_VOCABULARY = {"feature", "hotfix", "save", "promote", "unpromote", "gate", "ship",
+                    "deploy", "rollback", "status", "doctor"}
+
+
+def _hint_cases() -> list[tuple[bool, str]]:
+    mod = _load_guard()
+    texts = dict(mod.FLOW_VERB_FOR)
+    texts["the denial sentence"] = mod._flow_deny("x", "make promote name=<x>", "d")[
+        "hookSpecificOutput"]["permissionDecisionReason"]
+    out: list[tuple[bool, str]] = []
+    for key, value in sorted(texts.items()):
+        stale = [s for s in _HINT_STALE if s in value]
+        out.append((not stale,
+                    f"flow hint {key!r} teaches no removed vocabulary (found {stale}, in {value!r})"))
+        unknown = sorted(set(re.findall(r"\bmake\s+([a-z][a-z-]*)", value)) - _HINT_VOCABULARY)
+        out.append((not unknown,
+                    f"flow hint {key!r} names only verbs FR-2 has (unknown {unknown}, in {value!r})"))
+    for key in ("merge", "rebase", "branch -f", "update-ref", "fetch", "branch -D", "push"):
+        value = texts.get(key, "")
+        out.append(("make promote name=" in value,
+                    f"flow hint {key!r} points at the rebuild verb (got {value!r})"))
+    out.append(("make deploy env=" in texts.get("push", ""),
+                f"flow hint 'push' also points at deploy (got {texts.get('push', '')!r})"))
+    for key in ("cherry-pick", "am", "revert"):
+        value = texts.get(key, "")
+        missing = [v for v in ("make hotfix name=", "make ship") if v not in value]
+        out.append((not missing,
+                    f"flow hint {key!r} points at the hotfix path (missing {missing}, got {value!r})"))
+    return out
 
 
 def run() -> list[tuple[bool, str]]:
@@ -346,53 +406,64 @@ def run() -> list[tuple[bool, str]]:
     r.append(_upstream_case("review doc inside specs/ dir → floor does not apply",
                             "specs/f/review-A.md", "passthrough"))
 
-    # -- the flow floor (harness-inversion FR-24, T13): deny x 10, allow x 4, fail-open x 2
+    # -- the flow floor (harness-inversion FR-24, T13); the rungs are staging and main
     r += [
-        _flow_case("(a) commit on the integration rung", "development", "git commit -m 'x'", "deny"),
-        _flow_case("(b) hand merge into the review rung", "staging", "git merge feature/x", "deny"),
+        _flow_case("(a) commit on the staging rung", "staging", "git commit -m 'x'", "deny"),
+        _flow_case("(b) hand merge into the staging rung", "staging", "git merge feature/x", "deny"),
         _flow_case("(b2) switch-then-merge from a feature branch", "feature/x",
-                   "git checkout development && git merge feature/x", "deny"),
-        _flow_case("(c) push of a rung by name", "feature/x", "git push origin development", "deny"),
+                   "git checkout staging && git merge feature/x", "deny"),
+        _flow_case("(c) push of a rung by name", "feature/x", "git push origin staging", "deny"),
         _flow_case("(c2) bare push while on a rung", "main", "git push", "deny"),
-        _flow_case("(d) checkout -b off a rung", "development", "git checkout -b feature/y", "deny"),
+        _flow_case("(d) checkout -b off a rung", "staging", "git checkout -b feature/y", "deny"),
         _flow_case("(d2) switch -c off a rung", "staging", "git switch -c feature/y", "deny"),
         _flow_case("(e) piped yes into make ship", "main", "echo yes | make ship", "deny"),
-        _flow_case("(e2) here-string into make release", "staging", "make release <<< yes", "deny"),
+        _flow_case("(e2) here-string into make promote", "staging", "make promote <<< yes", "deny"),
         _flow_case("(e3) branch -D of a rung", "feature/x", "git branch -D staging", "deny"),
         _flow_case("(f) commit on a feature branch", "feature/x", "git commit -m 'x'", "passthrough"),
         _flow_case("(f2) push of a feature branch", "feature/x", "git push -u origin feature/x", "passthrough"),
-        _flow_case("(f3) make finish itself is never inspected", "feature/x", "make finish", "passthrough"),
+        _flow_case("(f3) make promote itself is never inspected", "feature/x",
+                   "make promote name=x", "passthrough"),
         _flow_case("(f4) a read on a rung", "main", "git log --oneline -5", "passthrough"),
-        _flow_case("(g) no site.yml -> today's behaviour", "development", "git commit -m 'x'",
+        _flow_case("(g) no site.yml -> today's behaviour", "staging", "git commit -m 'x'",
                    "passthrough", site_yml=False, reader=False),
         _flow_case("(h) scripts/site missing -> rungs read from site.yml", "staging",
                    "git commit -m 'x'", "deny", reader=False),
         # security review 2026-09-02 — I1: prefixes and git global options
-        _flow_case("(a2) git -C . commit on a rung", "development", "git -C . commit -m x", "deny"),
-        _flow_case("(a3) git -c k=v commit", "development", "git -c user.name=x commit -m x", "deny"),
+        _flow_case("(a2) git -C . commit on a rung", "staging", "git -C . commit -m x", "deny"),
+        _flow_case("(a3) git -c k=v commit", "staging", "git -c user.name=x commit -m x", "deny"),
         _flow_case("(a4) command git commit", "staging", "command git commit -m x", "deny"),
         _flow_case("(a5) (git commit) in a subshell", "main", "(git commit -m x)", "deny"),
         _flow_case("(a6) env-prefixed commit", "main", "GIT_AUTHOR_NAME=x git commit -m x", "deny"),
-        _flow_case("(a7) escaped \\git commit", "development", "\\git commit -m x", "deny"),
+        _flow_case("(a7) escaped \\git commit", "staging", "\\git commit -m x", "deny"),
         # I2: more rung writes
-        _flow_case("(a8) git am on a rung", "development", "git am fix.patch", "deny"),
+        _flow_case("(a8) git am on a rung", "staging", "git am fix.patch", "deny"),
         _flow_case("(a9) git revert on a rung", "main", "git revert HEAD", "deny"),
         _flow_case("(a10) git reset --hard on a rung", "staging", "git reset --hard HEAD~1", "deny"),
         _flow_case("(a11) git reset <path> (unstage) is allowed", "staging", "git reset README", "passthrough"),
-        _flow_case("(a12) git branch -f moves a rung", "feature/x", "git branch -f development HEAD", "deny"),
-        _flow_case("(a13) fetch refspec into a rung", "feature/x", "git fetch origin feature/y:development", "deny"),
-        _flow_case("(a14) stash pop on a rung", "development", "git stash pop", "deny"),
+        _flow_case("(a12) git branch -f moves a rung", "feature/x", "git branch -f staging HEAD", "deny"),
+        _flow_case("(a13) fetch refspec into a rung", "feature/x", "git fetch origin feature/y:staging", "deny"),
+        _flow_case("(a14) stash pop on a rung", "staging", "git stash pop", "deny"),
         # C1: stdin forgery beyond echo|yes
         _flow_case("(e4) make ship < file", "main", "make ship < answers.txt", "deny"),
         _flow_case("(e5) cat file | make ship", "main", "cat a | make ship", "deny"),
         _flow_case("(e6) sh -c 'yes | make ship'", "main", "sh -c 'yes | make ship'", "deny"),
         _flow_case("(e7) expect wrapping make ship", "main", "expect -c 'spawn make ship; send yes'", "deny"),
-        _flow_case("(e8) make -C . release <<< yes", "staging", "make -C . release <<< yes", "deny"),
+        _flow_case("(e8) make -C . promote <<< yes", "staging", "make -C . promote name=x <<< yes", "deny"),
+        # FR-2's vocabulary: the confirming verbs are the seven that move a rung, and a
+        # forged stdin into a verb the flow no longer has confirms nothing.
+        _flow_case("(e9) piped yes into make unpromote", "feature/x",
+                   "echo yes | make unpromote name=x", "deny"),
+        _flow_case("(e10) here-string into make promote off a rung", "feature/x",
+                   "make promote name=x <<< yes", "deny"),
+        _flow_case("(e11) forged stdin into the removed merge verb", "feature/x",
+                   "echo yes | make " + "finish", "passthrough"),
+        _flow_case("(e12) forged stdin into the removed release verb", "feature/x",
+                   "echo yes | make " + "release", "passthrough"),
         # I4: false positives that would teach routing around
         _flow_case("(f5) push of feature/main is not a rung push", "feature/main", "git push -u origin feature/main", "passthrough"),
         _flow_case("(f6) push HEAD:feature/main", "feature/main", "git push origin HEAD:feature/main", "passthrough"),
         _flow_case("(f7) sync a rung then commit on a feature", "feature/x",
-                   "git checkout development && git pull && git checkout feature/x && git commit -m x", "passthrough"),
+                   "git checkout staging && git pull && git checkout feature/x && git commit -m x", "passthrough"),
         _flow_case("(f8) yes | make deploy-test is not a confirming verb", "main", "yes | make deploy-test env=staging", "passthrough"),
         _flow_case("(f9) make deploy env=staging 2>&1 | tee log (pipe OUT of make)", "staging", "make deploy env=staging 2>&1 | tee deploy.log", "passthrough"),
     ]
@@ -402,6 +473,36 @@ def run() -> list[tuple[bool, str]]:
     rr = subprocess.run(["python3", str(HOOK)], input=payload, capture_output=True, text=True, timeout=20)
     r.append((rr.returncode == 0 and _decision(rr.stdout) == "passthrough",
                     "flow (i): an unreadable cwd fails OPEN"))
+
+    # `_flow_rungs` answers from three sources and every case above drives only the
+    # first. Each block below pins WHICH source answered before asserting a rung on it:
+    # `development` is a rung only in the fleet defaults, and `liveprod` only in what
+    # the reader prints.
+    r += [
+        # (1) the dependency-free `branch:` regex reads the block-style site.yml, and
+        # the reader is never asked — the name only it knows is not a rung.
+        _flow_case("(p1a) site.yml answered: development is not a rung", "development",
+                   "git commit -m 'x'", "passthrough", reader_prod="liveprod"),
+        _flow_case("(p1b) site.yml answered: the reader's name is not a rung", "feature/x",
+                   "git push origin liveprod", "passthrough", reader_prod="liveprod"),
+        _flow_case("(p1c) push of the production rung site.yml names", "feature/x",
+                   "git push origin main", "deny", reader_prod="liveprod"),
+        # (2) flow-style site.yml the regex cannot read, so scripts/site answers. (p2a)
+        # is evidence only together with (p3a): the same YAML with no reader falls
+        # through to the defaults, which is what proves the regex found nothing here.
+        _flow_case("(p2a) the reader answered: development is not a rung", "development",
+                   "git commit -m 'x'", "passthrough", inline_yaml=True, reader_prod="liveprod"),
+        _flow_case("(p2b) push of the production rung the reader printed", "feature/x",
+                   "git push origin liveprod", "deny", inline_yaml=True, reader_prod="liveprod"),
+        # (3) neither source answers → the fleet defaults.
+        _flow_case("(p3a) the defaults answered: development IS a default rung",
+                   "development", "git commit -m 'x'", "deny", inline_yaml=True, reader=False),
+        _flow_case("(p3b) push of the production rung on the defaults path", "feature/x",
+                   "git push origin main", "deny", inline_yaml=True, reader=False),
+    ]
+
+    # the hints the denials carry, read straight off the table
+    r += _hint_cases()
 
     return r
 

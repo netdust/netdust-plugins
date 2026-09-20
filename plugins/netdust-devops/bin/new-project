@@ -20,9 +20,9 @@
 #             never a forked template.
 #
 # What it creates: site.yml, Makefile, the vendored devops core, memory/,
-# tasks/, CLAUDE.md, .gitignore — and the three rung branches. Everything is
-# rendered from templates/; nothing is authored inline, so a change reaches
-# every future project by editing one file.
+# tasks/, CLAUDE.md, .gitignore — and the production and staging branches.
+# Everything is rendered from templates/; nothing is authored inline, so a
+# change reaches every future project by editing one file.
 #
 # What it does NOT do: install the application. No composer, no wp core
 # install, no ddev start, and it never clones a skeleton repo. That belongs to
@@ -214,7 +214,6 @@ elif [[ ! -d .git ]]; then
     git -c commit.gpgsign=false commit -qm "Scaffold $NAME ($STACK/$TEMPLATE) — netdust-devops project layer"
     git branch -M main
     git branch staging main
-    git branch development main
 fi
 
 if [[ $ADOPT -eq 1 ]]; then
@@ -240,7 +239,7 @@ cat <<DONE
 
 ✅ $NAME scaffolded in $(pwd)
    stack: $STACK   ·   template: $TEMPLATE   ·   webroot: $WEBROOT
-   branches: development → staging → main
+   branches: main (production)   ·   staging (review)
 DONE
 [[ "$SOURCE_REPO" != "-" ]] && cat <<SKEL
    The application itself is NOT installed. Its skeleton lives at:
@@ -252,7 +251,7 @@ cat <<NEXT
 
 Next:
   1. fill in the TODOs in site.yml (paths, ssh hosts, state_dir, payload)
-  2. git remote add origin <url> && git push -u origin main staging development
+  2. git remote add origin <url> && git push -u origin main staging
   3. make doctor        — tools, SSH reachability, payload, devops version
   4. make               — the verb list
 NEXT

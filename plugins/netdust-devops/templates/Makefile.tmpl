@@ -8,6 +8,9 @@
 
 STACK := {{STACK}}
 
+# The core refuses any command-line variable it does not know. A target below
+# that takes its own input declares it here, before the include, or the core
+# never sees the declaration: `_CLI_EXTRA := NAME`.
 include Makefile.netdust
 
 # ── Project-specific targets below ───────────────────────────────────────────

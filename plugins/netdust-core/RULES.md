@@ -13,7 +13,7 @@ These hold regardless of: time pressure, sunk cost, "admin-only" framing, client
 
 ## Git + deploy
 
-5. **Never commit directly to `main`.** Work through `staging` branch via the Makefile verbs (`make feature`, `make finish`, `make ship`). Hotfix flow only for prod emergencies — backport to staging.
+5. **Never commit directly to `main` or `staging`.** Work through the Makefile verbs (`make feature`, `make promote`, `make ship`). A hotfix branches from production too — nothing is backported afterwards, because `make ship` rebuilds staging over it.
 6. **Never deploy to production without explicit "production" confirmation.** `/deploy` enforces this. Manual deploys must follow the same discipline.
 7. **Always read `site.yml` first.** It tells you the deploy method, SSH alias, remote paths, risk level. Confirm site + environment before any destructive operation.
 

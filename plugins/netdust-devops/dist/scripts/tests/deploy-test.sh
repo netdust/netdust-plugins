@@ -160,14 +160,15 @@ assert_eq "the mail block is parameterised, not hardcoded" \
   "1" "$(grep -q '__PRODUCTION_HOST__' scripts/remote/00-block-outgoing-mail.php && echo 1 || echo 0)"
 
 echo
-echo "promote — one feature, not the whole integration branch"
-assert_refuses "refuses promote without a name"  "Usage: make promote name=" make -s promote
-# The flow floor runs first: without an origin, promote refuses for that reason.
-if git remote get-url origin >/dev/null 2>&1; then
-  assert_refuses "refuses an unknown feature branch" "No such branch"        make -s promote name=definitely-not-a-real-feature
-else
-  assert_refuses "refuses an unknown feature branch" "no 'origin' remote"   make -s promote name=definitely-not-a-real-feature
-fi
+echo "promote — one feature onto the staging branch"
+assert_refuses "refuses promote without a name"   "Usage: make promote name="   make -s promote
+assert_refuses "refuses unpromote without a name" "Usage: make unpromote name=" make -s unpromote
+# The terminal floor runs before anything is read, so this holds with or without
+# an origin. WHICH names are refused is flow-test.sh's subject, not this one's.
+assert_refuses "refuses a promote it could never read a typed 'yes' for" "needs a terminal" \
+  bash -c 'make -s promote name=definitely-not-a-real-feature < /dev/null'
+assert_refuses "…and an unpromote too" "needs a terminal" \
+  bash -c 'make -s unpromote name=definitely-not-a-real-feature < /dev/null'
 
 echo
 echo "transport — one workflow, pluggable file movement"

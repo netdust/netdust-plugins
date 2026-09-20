@@ -15,5 +15,5 @@ done
 if [ -n "$TARGET" ]; then
   echo "Branch: $BRANCH  →  deploys to $TARGET"
 else
-  echo "Branch: $BRANCH  →  deploys nowhere directly (promote with: make finish)"
+  echo "Branch: $BRANCH  →  deploys nowhere directly (promote with: make promote name=<x>)"
 fi

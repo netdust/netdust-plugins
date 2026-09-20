@@ -1,5 +1,5 @@
 ---
-description: Deploy the current project through its Makefile — gate, transport, stamp. Reads site.yml; never reaches production without an explicit ask in this turn.
+description: Deploy the current project through its Makefile — gate, transport, ledger line and deployed/<env> tag. Reads site.yml; never reaches production without an explicit ask in this turn.
 allowed_tools: ["Bash", "Read", "AskUserQuestion"]
 ---
 

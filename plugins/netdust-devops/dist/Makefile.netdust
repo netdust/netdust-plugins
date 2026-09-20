@@ -15,20 +15,68 @@
 #           └── mk/$(STACK).mk     — local loop + data ops per stack
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Every variable settable on the command line reaches a shell somewhere — here
+# or in a stack layer — inside a double-quoted string, where $( ) is command
+# substitution and " ends the quote. So each is pinned against make's own
+# expansion and refused HERE, at parse time, against the narrowest charset its
+# real values need. A make variable is global to the invocation, so this block
+# covers the mk/*.mk sinks too. Anything else is not an operator input at all;
+# a project that adds one declares it before the include: `_CLI_EXTRA := NAME`.
+_CLI_GUARDED := env verb dryrun rung uploads
+_CLI_VARS  := name $(_CLI_GUARDED) $(if $(filter file override,$(origin _CLI_EXTRA)),$(_CLI_EXTRA))
+_CLI_TYPED := $(foreach v,$(_CLI_VARS),$(if $(findstring command line,$(origin $v)),$v))
+_CLI_LOOSE := $(filter-out $(_CLI_VARS),$(foreach a,$(MAKEOVERRIDES),$(if $(findstring =,$a),$(firstword $(subst =, ,$a)))))
+_ESC := $(shell printf '\033')
+_RED := $(_ESC)[31m
+_OFF := $(_ESC)[0m
+$(if $(_CLI_LOOSE),$(error $(_RED)✗ $(_CLI_LOOSE) is not an operator input — the flow takes: $(strip $(_CLI_VARS))$(_OFF)))
+# make's own flags are the same hole from the other side: -e lets the environment
+# overwrite what site.yml declares, -i runs past a failed check, and under -n, -t
+# and -q a $(MAKE) line still runs. Short flags are MAKEFLAGS' bare first word.
+$(foreach f,e i n t q,$(if $(findstring $f,$(filter-out -%,$(firstword $(MAKEFLAGS)))),$(error $(_RED)✗ make -$f is refused — it would override, skip or only print the checks this file makes$(_OFF))))
+$(foreach v,$(_CLI_VARS),$(eval override $v := $$(value $v)))
+
+_LETTERS := a b c d e f g h i j k l m n o p q r s t u v w x y z A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+_WORD := $(_LETTERS) 0 1 2 3 4 5 6 7 8 9
+_strip-chars = $(if $2,$(call _strip-chars,$(subst $(firstword $2),,$1),$(wordlist 2,$(words $2),$2)),$1)
+# $1 holds only $2's characters, plus whitespace — which is what verb= needs.
+_chars-ok = $(if $(strip $(call _strip-chars,$1,$2)),,ok)
+_word-ok = $(and $(filter 1,$(words $1)),$(call _chars-ok,$1,$2),$(strip $(foreach c,$3,$(if $(patsubst $c%,,$1),,ok))))
+
+_name-ok = $(call _word-ok,$(name),$(_WORD) . _ -,$(_LETTERS))
+_env-ok = $(call _word-ok,$(env),$(_WORD) _ -,$(_LETTERS))
+_uploads-ok = $(call _word-ok,$(uploads),$(_WORD) _ -,$(_LETTERS))
+# rung= carries a branch name: it may start with a digit and may be nested.
+_rung-ok = $(call _word-ok,$(rung),$(_WORD) . _ - /,$(_WORD))
+# verb= carries a space and an '=' — verb="promote name=$(name)".
+_verb-ok = $(call _chars-ok,$(verb),$(_WORD) = . _ -)
+_dryrun-ok = $(call _word-ok,$(dryrun),$(_WORD),$(_WORD))
+_why-env := a letter, then letters, digits, dash, underscore
+_why-uploads := $(_why-env)
+_why-rung := a branch name — letters, digits, dot, dash, underscore, slash
+_why-verb := letters, digits, spaces, '=', dot, dash, underscore
+_why-dryrun := a switch — dryrun=1, or nothing
+# Typed on the command line it is refused; inherited from the environment it is
+# dropped, so a polluted shell cannot halt help, status or gate.
+_cli-check = $(if $($1),$(if $(_$1-ok),,$(if $(filter $1,$(_CLI_TYPED)),$(error $(_RED)✗ Refused $1= — $(_why-$1)$(_OFF)),$(eval override undefine $1)$(warning $(_RED)✗ ignoring $1= from the environment — $(_why-$1)$(_OFF)))))
+$(foreach v,$(_CLI_GUARDED),$(call _cli-check,$v))
+
+# Checked in make, so no name= text reaches a shell until it is known to be safe.
+_check-name = $(if $(name),$(if $(_name-ok),:,echo "$(RED)✗ Invalid name: a letter, then letters, digits, dot, dash, underscore$(RESET)"; exit 1),echo "$(RED)Usage: make $1 name=$2$(RESET)"; exit 1)
+
 SITE := scripts/site
 
 PROJECT_NAME := $(shell $(SITE) site.name)
 WEBROOT      := $(shell $(SITE) structure.webroot)
 
 # Branch names are derived from the environments — never written twice.
-# A project without a development environment integrates on its review branch;
-# one without production yet promotes as far as it has rungs.
+# There are two: production, and the staging branch the release is built on.
 BR_PROD   := $(shell $(SITE) environments.production.branch 2>/dev/null || $(SITE) environments.staging.branch 2>/dev/null)
 BR_REVIEW := $(shell $(SITE) environments.staging.branch 2>/dev/null || $(SITE) environments.production.branch 2>/dev/null)
-BR_INTEG  := $(shell $(SITE) environments.development.branch 2>/dev/null || $(SITE) environments.staging.branch 2>/dev/null || $(SITE) environments.production.branch 2>/dev/null)
 HAS_PROD  := $(shell $(SITE) environments.production.path >/dev/null 2>&1 && echo yes || echo no)
 
-STACK ?= $(shell $(SITE) structure.stack 2>/dev/null || echo generic)
+# `?=` would take an exported STACK; which stack this is belongs to the project file.
+STACK := $(if $(filter file override,$(origin STACK)),$(STACK),$(shell $(SITE) structure.stack 2>/dev/null || echo generic))
 
 RED := \033[31m
 GREEN := \033[32m
@@ -54,19 +102,19 @@ help: ## Show this help
 	@echo ""
 	@$(MAKE) --no-print-directory _flow-state
 	@echo ""
-	@echo "$(YELLOW)FLOW$(RESET)         one branch per environment; the verbs are the only door to a rung"
-	@printf "  $(GREEN)%-22s$(RESET) %s\n" "feature name=X"  "start work — branches from $(BR_INTEG)"
+	@echo "$(YELLOW)FLOW$(RESET)         production accumulates; staging rebuilt; verbs are the only door"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "feature name=X"  "start work — branches from origin/$(BR_PROD)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "hotfix name=X"   "fix production — branches from origin/$(BR_PROD)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "save"            "commit the current branch"
-	@printf "  $(GREEN)%-22s$(RESET) %s\n" "finish"          "merge one step up the promotion path"
-	@printf "  $(GREEN)%-22s$(RESET) %s\n" "promote name=X"  "send ONE feature to $(BR_REVIEW)"
-	@printf "  $(GREEN)%-22s$(RESET) %s\n" "release"         "merge $(BR_REVIEW) into $(BR_PROD)"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "promote name=X"  "put a feature on $(BR_REVIEW)"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "unpromote name=X" "take a feature off $(BR_REVIEW)"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "gate"            "this project's own suite (commands.gate) — optional, ship runs it itself"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "ship"            "production: gate, backups, typed confirm"
 	@echo ""
-	@echo "$(YELLOW)DEPLOY$(RESET)       gate → transport → stamp; nothing uncommitted or unpushed ships"
+	@echo "$(YELLOW)DEPLOY$(RESET)       gate → transport → ledger, tag; nothing dirty or unpushed ships"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "deploy-test env=E" "dry run — read the deletions"
-	@printf "  $(GREEN)%-22s$(RESET) %s\n" "deploy env=E"      "gate, transport, stamp"
-	@printf "  $(GREEN)%-22s$(RESET) %s\n" "ship"              "production: gate, backups, typed confirm"
-	@printf "  $(GREEN)%-22s$(RESET) %s\n" "rollback env=E"    "redeploy the previously stamped commit"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "deploy env=E"      "gate, transport, ledger, tag"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "rollback env=E"    "redeploy the previously deployed commit"
 	@echo ""
 	@echo "$(YELLOW)INSPECT$(RESET)      read-only — safe to run anywhere, any time"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "status"   "branch, flow position, what runs where"
@@ -75,10 +123,9 @@ help: ## Show this help
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "doctor"   "tools, SSH reachability, payload"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "audit"    "work that exists only on this machine"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "test"     "flow + deploy tooling tests (no server contact)"
-	@printf "  $(GREEN)%-22s$(RESET) %s\n" "gate"     "this project's own suite (commands.gate)"
 	@echo ""
 	@$(MAKE) --no-print-directory _help-stack
-	@echo "$(BLUE)Path:$(RESET) feature name=X → finish → deploy env=development → promote name=X → deploy env=staging → release → ship"
+	@echo "$(BLUE)Path:$(RESET) feature → promote → deploy env=staging → ship"
 
 # ── FLOW ─────────────────────────────────────────────────────────────────────
 
@@ -101,129 +148,97 @@ save: ## Commit the current branch (auto-stages all changes)
 	fi
 
 .PHONY: feature
-feature: ## Start a feature (make feature name=my-feature) — branches from the integration branch
-	@if [ -z "$(name)" ]; then echo "$(RED)Usage: make feature name=my-feature$(RESET)"; exit 1; fi
-	@if ! echo "$(name)" | grep -qE '^[a-zA-Z][a-zA-Z0-9._-]*$$'; then \
-		echo "$(RED)✗ Invalid name: use letters, digits, dot, dash, underscore$(RESET)"; exit 1; fi
+feature: ## Start a feature (make feature name=my-feature) — branches from the production branch
+	@$(call _check-name,feature,my-feature)
 	@$(MAKE) --no-print-directory _ensure-flow
 	@$(MAKE) --no-print-directory _ensure-clean-git verb=feature
-	@git fetch --quiet origin $(BR_INTEG)
-	@git checkout -b "feature/$(name)" origin/$(BR_INTEG)
-	@echo "$(GREEN)✅ On feature/$(name), branched from origin/$(BR_INTEG)$(RESET)"
+	@git fetch --quiet origin $(BR_PROD)
+	@git checkout -b "feature/$(name)" origin/$(BR_PROD)
+	@echo "$(GREEN)✅ On feature/$(name), branched from origin/$(BR_PROD)$(RESET)"
 
 .PHONY: hotfix
 hotfix: ## Start a hotfix (make hotfix name=vat-rounding) — branches from the production branch
-	@if [ -z "$(name)" ]; then echo "$(RED)Usage: make hotfix name=my-fix$(RESET)"; exit 1; fi
-	@if ! echo "$(name)" | grep -qE '^[a-zA-Z][a-zA-Z0-9._-]*$$'; then \
-		echo "$(RED)✗ Invalid name: use letters, digits, dot, dash, underscore$(RESET)"; exit 1; fi
+	@$(call _check-name,hotfix,my-fix)
 	@$(MAKE) --no-print-directory _ensure-flow
 	@$(MAKE) --no-print-directory _ensure-clean-git verb=hotfix
 	@git fetch --quiet origin $(BR_PROD)
 	@git checkout -b "hotfix/$(name)" origin/$(BR_PROD)
 	@echo "$(GREEN)✅ On hotfix/$(name), branched from origin/$(BR_PROD)$(RESET)"
-	@echo "$(YELLOW)   Fix, commit, then: make finish$(RESET)"
+	@echo "$(YELLOW)   Fix, commit, then: make ship$(RESET)"
 
-.PHONY: finish
-finish: ## Merge a branch one step up the promotion path (make finish [name=my-feature])
-	@$(MAKE) --no-print-directory _ensure-flow
-	@$(MAKE) --no-print-directory _ensure-clean-git verb=finish
-	@: 'name= finishes a branch you are NOT standing on. A parallel agent works'
-	@: 'in its own worktree, so the rung it must merge into is checked out'
-	@: 'elsewhere and it cannot finish its own work; the worktree holding the'
-	@: 'rung can, but it is not on the feature branch. name= is that seam.'
-	@BRANCH=$$(git branch --show-current); \
-	if [ -n "$(name)" ]; then \
-		if git rev-parse --verify --quiet "feature/$(name)" >/dev/null; then BRANCH="feature/$(name)"; \
-		elif git rev-parse --verify --quiet "hotfix/$(name)" >/dev/null; then BRANCH="hotfix/$(name)"; \
-		else \
-			echo "$(RED)✗ No feature/$(name) or hotfix/$(name) in this repository$(RESET)"; \
-			echo "$(YELLOW)Branches in flight:$(RESET)"; \
-			git branch --list 'feature/*' 'hotfix/*' | sed 's/^/  /'; \
-			exit 1; \
-		fi; \
-		HOLDER=$$(git worktree list --porcelain 2>/dev/null \
-			| awk -v b="refs/heads/$$BRANCH" '/^worktree /{w=substr($$0,10)} /^branch /{if ($$2==b) {print w; exit}}'); \
-		if [ -n "$$HOLDER" ] && [ -n "$$(git -C "$$HOLDER" status --porcelain)" ]; then \
-			echo "$(RED)✗ $$BRANCH has uncommitted changes in $$HOLDER$(RESET)"; \
-			echo "$(YELLOW)  Commit them there first: cd $$HOLDER && make save$(RESET)"; \
-			exit 1; \
-		fi; \
-		echo "$(BLUE)finishing $$BRANCH (checked out in $${HOLDER:-no worktree})$(RESET)"; \
-	fi; \
-	case "$$BRANCH" in \
-		hotfix/*) for r in $(BR_PROD) $(BR_REVIEW) $(BR_INTEG); do \
-			$(MAKE) --no-print-directory _worktree-guard rung=$$r verb=finish || exit 1; done;; \
-		*) $(MAKE) --no-print-directory _worktree-guard rung=$(BR_INTEG) verb=finish || exit 1;; \
-	esac; \
-	case "$$BRANCH" in \
-		feature/*) \
-			echo "$(YELLOW)$$BRANCH → $(BR_INTEG)$(RESET)"; \
-			git checkout $(BR_INTEG) && git pull --quiet --ff-only && \
-			git merge --no-ff "$$BRANCH" -m "Merge $$BRANCH" && \
-			git push && \
-			{ git branch -d "$$BRANCH" 2>/dev/null || \
-			  echo "$(YELLOW)  $$BRANCH kept — it is checked out in a worktree. Remove it with: git worktree remove <path>$(RESET)"; } && \
-			echo "$(GREEN)✅ Merged to $(BR_INTEG). Deploy: make deploy env=development$(RESET)";; \
-		hotfix/*) \
-			echo "$(YELLOW)$$BRANCH → $(BR_PROD), then back down into $(BR_REVIEW) and $(BR_INTEG)$(RESET)"; \
-			git checkout $(BR_PROD) && git pull --quiet --ff-only && \
-			git merge --no-ff "$$BRANCH" -m "Merge $$BRANCH" && git push && \
-			git checkout $(BR_REVIEW) && git pull --quiet --ff-only && \
-			git merge --no-ff $(BR_PROD) -m "Merge $(BR_PROD) (hotfix $$BRANCH)" && git push && \
-			git checkout $(BR_INTEG) && git pull --quiet --ff-only && \
-			git merge --no-ff $(BR_PROD) -m "Merge $(BR_PROD) (hotfix $$BRANCH)" && git push && \
-			git checkout $(BR_PROD) && git branch -d "$$BRANCH" && \
-			echo "$(GREEN)✅ On $(BR_PROD), merged down into $(BR_REVIEW) and $(BR_INTEG). Ship: make ship$(RESET)";; \
-		*) \
-			echo "$(RED)✗ finish works on feature/* and hotfix/* — you are on $$BRANCH$(RESET)"; \
-			exit 1;; \
-	esac
+# Staging is disposable: production plus the features promoted onto it, each
+# re-merged at the commit it was promoted at — a list read back from staging's
+# own `promote: <name>` merges. Driven by shell variables ADD and DROP.
+define _rebuild-staging
+PROD="origin/$(BR_PROD)"; OLD=$$(git rev-parse "origin/$(BR_REVIEW)"); \
+T=$$(mktemp -d); clean() { git worktree remove --force "$$T/wt" >/dev/null 2>&1; rm -rf "$$T"; }; \
+trap clean EXIT; trap 'clean; exit 130' HUP INT TERM; \
+git log --merges --first-parent --format='%s %P' "$$PROD..$$OLD" \
+	| awk 'NF == 4 && $$1 == "promote:" {print $$2, $$4}' > "$$T/was"; \
+GONE=$$(awk -v a="$$ADD" -v d="$$DROP" '$$1 == a || $$1 == d {printf " %s", $$2}' "$$T/was"); \
+awk -v a="$$ADD" -v d="$$DROP" '$$1 != a && $$1 != d' "$$T/was" > "$$T/now"; \
+[ -z "$$ADD" ] || echo "$$ADD $$(git rev-parse "origin/feature/$$ADD")" >> "$$T/now"; \
+while read -r n s; do \
+	git merge-base --is-ancestor "$$s" "$$PROD" || echo "$$n $$s"; \
+done < "$$T/now" | sort -k1,1 > "$$T/keep"; \
+git worktree add -q --detach "$$T/wt" "$$PROD" || { echo "$(RED)✗ could not create the rebuild worktree — nothing changed$(RESET)"; exit 4; }; \
+while read -r n s; do \
+	git -C "$$T/wt" merge -q --no-ff -m "promote: $$n" "$$s" >/dev/null 2>&1 \
+		|| { echo "$(RED)✗ conflict: $$n$(RESET)"; exit 3; }; \
+done < "$$T/keep"; \
+NEW=$$(git -C "$$T/wt" rev-parse HEAD); \
+[ -n "$$NEW" ] || { echo "$(RED)✗ the rebuild produced no commit — nothing changed$(RESET)"; exit 4; }; \
+[ -z "$$ADD" ] || git log --merges --first-parent --format=%s "$$PROD..$$NEW" | grep -qxF "promote: $$ADD" || { \
+	echo "$(RED)✗ feature/$$ADD added nothing to $(BR_REVIEW) — it has no commits of its own, or another promoted feature already contains it$(RESET)"; exit 7; }; \
+for s in $${DROP:+$$GONE}; do ! git merge-base --is-ancestor "$$s" "$$NEW" || { \
+	echo "$(RED)✗ feature/$$DROP is still on $(BR_REVIEW) through another promoted feature — unpromote that one too$(RESET)"; exit 6; }; done; \
+N=$$(git rev-list --count --no-merges "$$OLD" --not "$$NEW" "$$PROD"$$GONE); \
+[ "$$N" = 0 ] || echo "$(YELLOW)⚠ dropped $$N commit(s) that were only on $(BR_REVIEW) — recover them from $$(git rev-parse --short=7 "$$OLD")$(RESET)"; \
+git push --quiet --force-with-lease=refs/heads/$(BR_REVIEW):$$OLD origin "$$NEW:refs/heads/$(BR_REVIEW)" \
+	|| { echo "$(RED)✗ origin changed — run it again$(RESET)"; exit 5; }; \
+if [ "$$(git branch --show-current)" = "$(BR_REVIEW)" ]; then \
+	git reset -q --keep "$$NEW" 2>/dev/null || echo "$(YELLOW)⚠ this checkout could not follow — run: git reset --keep origin/$(BR_REVIEW)$(RESET)"; \
+else git branch -q -f "$(BR_REVIEW)" "$$NEW" 2>/dev/null || true; fi
+endef
 
 .PHONY: promote
-promote: ## Send ONE feature to the review branch, leaving the rest of the integration branch behind
-	@if [ -z "$(name)" ]; then echo "$(RED)Usage: make promote name=my-feature$(RESET)"; exit 1; fi
+promote: ## Put a feature on the staging branch (make promote name=my-feature)
+	@$(call _check-name,promote,my-feature)
+	@if [ "$(BR_REVIEW)" = "$(BR_PROD)" ]; then \
+		echo "$(RED)✗ No staging environment in site.yml — promote needs one$(RESET)"; exit 1; fi
+	@$(MAKE) --no-print-directory _need-tty verb=promote
 	@$(MAKE) --no-print-directory _ensure-flow
-	@git fetch --quiet origin 2>/dev/null || true
-	@BR="feature/$(name)"; \
-	if ! git rev-parse --verify --quiet "$$BR" >/dev/null && \
-	   ! git rev-parse --verify --quiet "origin/$$BR" >/dev/null; then \
-		echo "$(RED)✗ No such branch: $$BR$(RESET)"; \
-		echo "$(YELLOW)Features in flight:$(RESET)"; \
-		git branch -a --list '*feature/*' | sed 's/^/  /'; \
-		exit 1; \
-	fi
-	@$(MAKE) --no-print-directory _ensure-clean-git verb=promote
-	@$(MAKE) --no-print-directory _worktree-guard rung=$(BR_REVIEW) verb="promote name=$(name)"
-	@BR="feature/$(name)"; \
-	git rev-parse --verify --quiet "$$BR" >/dev/null || git branch "$$BR" "origin/$$BR"; \
-	$(MAKE) --no-print-directory _need-tty verb=promote; \
-	echo "$(YELLOW)$$BR → $(BR_REVIEW) ($(BR_INTEG) is not merged)$(RESET)"; \
-	git --no-pager log --oneline $(BR_REVIEW).."$$BR" | head -20; \
+	@if ! git rev-parse --verify --quiet "origin/feature/$(name)" >/dev/null; then \
+		echo "$(RED)✗ No such branch on origin: feature/$(name)$(RESET)"; \
+		echo "$(YELLOW)  push it first: git push -u origin feature/$(name)$(RESET)"; \
+		git branch -r --list 'origin/feature/*' | sed 's/^/  /'; exit 1; fi
+	@echo "$(YELLOW)On $(BR_REVIEW) now:$(RESET)"; \
+	git log --merges --first-parent --format='  %s' origin/$(BR_PROD)..origin/$(BR_REVIEW) | grep 'promote: ' \
+		|| echo "  (nothing — $(BR_REVIEW) is origin/$(BR_PROD))"; \
+	echo "$(YELLOW)feature/$(name) since origin/$(BR_PROD):$(RESET)"; \
+	git --no-pager log --oneline origin/$(BR_PROD)..origin/feature/$(name) | head -20 | sed 's/^/  /'; \
 	read -p "Continue? Type 'yes': " reply; \
-	if [ "$$reply" != "yes" ]; then echo "$(RED)✗ Cancelled$(RESET)"; exit 1; fi; \
-	git checkout $(BR_REVIEW) && git pull --quiet --ff-only && \
-	git merge --no-ff "$$BR" -m "Promote $$BR to $(BR_REVIEW)" && git push && \
-	echo "$(GREEN)✅ $$BR is on $(BR_REVIEW). Deploy: make deploy env=staging$(RESET)"; \
-	echo "$(YELLOW)   $(BR_INTEG) keeps its other features — they are untouched.$(RESET)"
+	[ "$$reply" = "yes" ] || { echo "$(RED)✗ Cancelled$(RESET)"; exit 1; }; \
+	ADD="$(name)"; DROP=""; $(_rebuild-staging); \
+	echo "$(GREEN)✅ feature/$(name) is on $(BR_REVIEW). Next: make deploy env=staging$(RESET)"
 
-.PHONY: release
-release: ## Merge the review branch into the production branch (then: make ship)
-	@if [ "$(HAS_PROD)" != "yes" ]; then \
-		echo "$(RED)✗ No production environment in site.yml yet$(RESET)"; exit 1; fi
+.PHONY: unpromote
+unpromote: ## Take a feature off the staging branch (make unpromote name=my-feature)
+	@$(call _check-name,unpromote,my-feature)
+	@if [ "$(BR_REVIEW)" = "$(BR_PROD)" ]; then \
+		echo "$(RED)✗ No staging environment in site.yml — unpromote needs one$(RESET)"; exit 1; fi
+	@$(MAKE) --no-print-directory _need-tty verb=unpromote
 	@$(MAKE) --no-print-directory _ensure-flow
-	@$(MAKE) --no-print-directory _need-tty verb=release
-	@$(MAKE) --no-print-directory _ensure-clean-git verb=release
-	@$(MAKE) --no-print-directory _worktree-guard rung=$(BR_REVIEW) verb=release
-	@$(MAKE) --no-print-directory _worktree-guard rung=$(BR_PROD) verb=release
-	@git fetch --quiet origin
-	@git checkout $(BR_REVIEW) && git pull --quiet --ff-only
-	@git checkout $(BR_PROD) && git pull --quiet --ff-only
-	@echo "$(YELLOW)About to merge $(BR_REVIEW) → $(BR_PROD):$(RESET)"
-	@git --no-pager log --oneline $(BR_PROD)..$(BR_REVIEW) | head -30
-	@read -p "Continue? Type 'yes': " reply; \
-	if [ "$$reply" != "yes" ]; then echo "$(RED)✗ Cancelled$(RESET)"; exit 1; fi
-	@git merge --no-ff $(BR_REVIEW) -m "Release: merge $(BR_REVIEW)" && git push
-	@echo "$(GREEN)✅ $(BR_PROD) updated. Ship with: make ship$(RESET)"
+	@if ! git log --merges --first-parent --format='%s' origin/$(BR_PROD)..origin/$(BR_REVIEW) \
+		| grep -qxF "promote: $(name)"; then \
+		echo "$(RED)✗ feature/$(name) is not on $(BR_REVIEW)$(RESET)"; \
+		git log --merges --first-parent --format='  %s' origin/$(BR_PROD)..origin/$(BR_REVIEW) | grep 'promote: '; \
+		exit 1; fi
+	@echo "$(YELLOW)Taking feature/$(name) off $(BR_REVIEW); every other feature is re-merged where it was$(RESET)"; \
+	read -p "Continue? Type 'yes': " reply; \
+	[ "$$reply" = "yes" ] || { echo "$(RED)✗ Cancelled$(RESET)"; exit 1; }; \
+	ADD=""; DROP="$(name)"; $(_rebuild-staging); \
+	echo "$(GREEN)✅ feature/$(name) is off $(BR_REVIEW). Next: make deploy env=staging$(RESET)"
 
 # ── DEPLOY ───────────────────────────────────────────────────────────────────
 
@@ -232,62 +247,111 @@ deploy: ## Deploy the payload to an environment (make deploy env=staging)
 	@$(MAKE) --no-print-directory _deploy-gate env=$(env)
 	@$(MAKE) --no-print-directory _deploy-confirm env=$(env)
 	@$(MAKE) --no-print-directory _deploy-transport env=$(env) dryrun="$(dryrun)"
-	@if [ -z "$(dryrun)" ]; then $(MAKE) --no-print-directory _deploy-stamp env=$(env); fi
-	@if [ -z "$(dryrun)" ]; then $(MAKE) --no-print-directory _deploy-opcache env=$(env); fi
+	@[ -n "$(dryrun)" ] || { $(MAKE) --no-print-directory _deploy-ledger env=$(env) \
+		&& $(MAKE) --no-print-directory _deploy-tag env=$(env) && $(MAKE) --no-print-directory _deploy-opcache env=$(env); }
 	@echo "$(GREEN)🌐 $$($(SITE) environments.$(env).url)$(RESET)"
 
 .PHONY: deploy-test
 deploy-test: ## Show what a deploy would change, without changing it
-	@$(MAKE) --no-print-directory deploy env=$(env) dryrun=--dry-run
+	@$(MAKE) --no-print-directory deploy env=$(env) dryrun=1
 
+# Threat 8: anything that fails after the push leaves the branch ahead of the
+# site, and there is one recovery — said once, wherever that can happen.
+define _ship-ahead
+echo "$(RED)✗ $(BR_PROD) on origin is ahead of the live site — the push landed, the deploy did not$(RESET)"; \
+echo "$(YELLOW)  recover from a checkout of $(BR_PROD): make deploy env=production$(RESET)"
+endef
+
+# The terminal check comes FIRST: deferring it to the confirmation once let a
+# piped ship take a production database dump before it could read the answer.
 .PHONY: ship
-ship: ## Ship to production (gate, backups, typed confirmation, deploy)
+ship: ## Ship to production: the staging commit that was deployed, or a gated hotfix
+	@$(MAKE) --no-print-directory _need-tty verb=ship
+# Before HAS_PROD: an unmigrated project is told to migrate, not to go and add
+# the production environment its site.yml may also still be missing.
+	@$(MAKE) --no-print-directory _flow-ready
 	@if [ "$(HAS_PROD)" != "yes" ]; then \
 		echo "$(RED)✗ No production environment in site.yml yet$(RESET)"; \
 		echo "$(YELLOW)  Add environments.production once the site is live.$(RESET)"; exit 1; fi
-	@: 'The terminal check comes FIRST. Deferring it to _deploy-confirm meant'
-	@: 'a piped ship took a production database dump and a payload tarball'
-	@: 'before discovering it could never read the confirmation.'
-	@: 'Never use backticks in a : comment here - the shell substitutes them.' 
-	@$(MAKE) --no-print-directory _need-tty verb=ship
-	@$(MAKE) --no-print-directory _ship-branch
-	@$(MAKE) --no-print-directory _deploy-gate env=production
-	@$(MAKE) --no-print-directory _backup-data env=production
-	@$(MAKE) --no-print-directory _backup-payload env=production
-	@$(MAKE) --no-print-directory deploy env=production
-
-# ship always leaves from the production branch. make finish leaves you on the
-# integration rung, and a refusal there sent people to raw git.
-.PHONY: _ship-branch
-_ship-branch:
+	@if [ -n "$(dryrun)" ]; then \
+		echo "$(RED)✗ ship takes no dryrun= — it backs up and deploys production for real$(RESET)"; \
+		echo "$(YELLOW)  Preview the deploy itself: make deploy-test env=production$(RESET)"; exit 1; fi
 	@$(MAKE) --no-print-directory _ensure-clean-git verb=ship
-	@HAVE=$$(git branch --show-current); \
-	if [ "$$HAVE" != "$(BR_PROD)" ]; then \
-		git checkout --quiet "$(BR_PROD)" || { echo "$(RED)✗ Cannot switch to $(BR_PROD) — ship from the checkout that holds it$(RESET)"; exit 1; }; \
-		echo "$(YELLOW)→ switched to $(BR_PROD) (was on $$HAVE)$(RESET)"; \
-	fi; \
-	git fetch --quiet origin "$(BR_PROD)" 2>/dev/null || true; \
-	if git rev-parse -q --verify "origin/$(BR_PROD)" >/dev/null 2>&1; then \
-		git merge --quiet --ff-only "origin/$(BR_PROD)" 2>/dev/null || { echo "$(RED)✗ $(BR_PROD) has diverged from origin/$(BR_PROD) — resolve before shipping$(RESET)"; exit 1; }; \
+	@$(MAKE) --no-print-directory _worktree-guard rung=$(BR_PROD) verb=ship
+	@$(MAKE) --no-print-directory _ensure-flow
+	@$(MAKE) --no-print-directory _ship-path
+# The commit the gate ran on is the commit that ships: commands.gate is the
+# project's own shell, and a suite that commits or checks out would otherwise
+# slip a tree past every check above. From the push on, the branch has moved
+# and only a deploy catches the site up.
+	@SHA=$$(git rev-parse HEAD); \
+	$(MAKE) --no-print-directory gate || { \
+		echo "$(RED)✗ the gate is red — nothing ships$(RESET)"; exit 1; }; \
+	{ [ "$$(git rev-parse HEAD)" = "$$SHA" ] && [ -z "$$(git status --porcelain)" ]; } || { \
+		echo "$(RED)✗ the checkout changed while the gate ran — only what the gate saw ships$(RESET)"; exit 1; }; \
+	$(MAKE) --no-print-directory _ask-confirm env=production verb=ship || exit 1; \
+	$(MAKE) --no-print-directory _backup-data env=production || exit 1; \
+	$(MAKE) --no-print-directory _backup-payload env=production || exit 1; \
+	git push --quiet origin "$$SHA:refs/heads/$(BR_PROD)" || { \
+		echo "$(RED)✗ origin/$(BR_PROD) moved while this ship was running — nothing was deployed$(RESET)"; \
+		echo "$(YELLOW)  git fetch origin, then ship again$(RESET)"; exit 1; }; \
+	git checkout --quiet "$(BR_PROD)" && git merge --quiet --ff-only "$$SHA" || { $(_ship-ahead); exit 1; }
+	@for t in _deploy-gate _deploy-transport _deploy-ledger _deploy-tag _deploy-opcache; do \
+		$(MAKE) --no-print-directory $$t env=production || { $(_ship-ahead); exit 1; }; \
+	done
+	@echo "$(GREEN)✅ shipped $(BR_PROD) @ $$(git rev-parse --short HEAD) — $$($(SITE) environments.production.url)$(RESET)"
+	@[ "$(BR_REVIEW)" != "$(BR_PROD)" ] || exit 0; \
+	if ( ADD=""; DROP=""; $(_rebuild-staging) ); then \
+		echo "$(GREEN)✅ $(BR_REVIEW) rebuilt on the new $(BR_PROD)$(RESET)"; \
+	else \
+		echo "$(YELLOW)⚠ production shipped; $(BR_REVIEW) was not rebuilt — run make promote name=<x> or make unpromote name=<x> again to rebuild it$(RESET)"; \
 	fi
+
+# ship leaves from exactly two places: the staging branch — the release that was
+# deployed and looked at — or a hotfix branch, production fixed in place.
+.PHONY: _ship-path
+_ship-path:
+	@BR=$$(git branch --show-current); SHA=$$(git rev-parse HEAD); \
+	case "$$BR" in hotfix/*) \
+		git merge-base --is-ancestor "origin/$(BR_PROD)" "$$SHA" || { \
+			echo "$(RED)✗ origin/$(BR_PROD) has moved on — update the hotfix from production first$(RESET)"; \
+			echo "$(YELLOW)  git merge origin/$(BR_PROD)$(RESET)"; exit 1; }; \
+		echo "$(YELLOW)$$BR carries, over origin/$(BR_PROD):$(RESET)"; \
+		git --no-pager log --oneline "origin/$(BR_PROD)..$$SHA" | sed 's/^/  /'; exit 0;; \
+	esac; \
+	if [ "$(BR_REVIEW)" = "$(BR_PROD)" ]; then \
+		echo "$(RED)✗ no staging environment — ship leaves from a hotfix/* branch, you are on '$$BR'$(RESET)"; \
+		echo "$(YELLOW)  make hotfix name=<x>$(RESET)"; exit 1; fi; \
+	if [ "$$BR" != "$(BR_REVIEW)" ]; then \
+		echo "$(RED)✗ ship leaves from '$(BR_REVIEW)' or a hotfix/* branch — you are on '$$BR'$(RESET)"; \
+		echo "$(YELLOW)  make promote name=<x>, deploy it, then ship — or: make hotfix name=<x>$(RESET)"; exit 1; fi; \
+	[ "$$SHA" = "$$(git rev-parse "origin/$(BR_REVIEW)")" ] || { \
+		echo "$(RED)✗ HEAD is not origin/$(BR_REVIEW) — production takes the commit staging ran$(RESET)"; exit 1; }; \
+	TAG=$$(git ls-remote origin "refs/tags/deployed/staging" \
+		| awk '$$2 == "refs/tags/deployed/staging" {print $$1}'); \
+	[ "$$TAG" = "$$SHA" ] || { \
+		echo "$(RED)✗ $(BR_REVIEW) was rebuilt since its last deploy — deployed/staging does not name this commit$(RESET)"; \
+		echo "$(YELLOW)  make deploy env=staging, look at it, then ship$(RESET)"; exit 1; }; \
+	git merge-base --is-ancestor "origin/$(BR_PROD)" "$$SHA" || { \
+		echo "$(RED)✗ $(BR_REVIEW) does not contain origin/$(BR_PROD) — make promote or unpromote rebuilds it$(RESET)"; exit 1; }
 
 .PHONY: rollback
 rollback: ## Redeploy the previously deployed commit (make rollback env=production)
 	@ENV="$(env)"; \
 	if [ -z "$$ENV" ]; then echo "$(RED)✗ Usage: make rollback env=<name>$(RESET)"; exit 1; fi; \
+	$(MAKE) --no-print-directory _need-tty verb="rollback env=$$ENV" || exit 1; \
 	HOST=$$($(SITE) environments.$$ENV.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
 	DIR=$$($(SITE) deploy.state_dir); \
 	PREV=$$(ssh -qn "$$HOST" "tail -2 $$DIR/$$ENV.log 2>/dev/null | head -1" | awk '{print $$2}'); \
 	if [ -z "$$PREV" ]; then \
 		echo "$(RED)✗ No previous deploy recorded for $$ENV$(RESET)"; exit 1; fi; \
-	$(MAKE) --no-print-directory _need-tty verb="rollback env=$$ENV"; \
 	echo "$(YELLOW)Rolling $$ENV back to $$PREV$(RESET)"; \
 	git --no-pager log --oneline -1 "$$PREV" || { \
 		echo "$(RED)✗ Commit $$PREV is not in this repository$(RESET)"; exit 1; }; \
 	read -p "Type 'yes' to roll back: " reply; \
 	if [ "$$reply" != "yes" ]; then echo "$(RED)✗ Cancelled$(RESET)"; exit 1; fi; \
 	WT=$$(mktemp -d); \
-	git worktree add --detach --quiet "$$WT" "$$PREV"; \
+	git worktree add --detach --quiet "$$WT" "$$PREV" || { rm -rf "$$WT"; echo "$(RED)✗ could not check out $$PREV — nothing was rolled back$(RESET)"; exit 1; }; \
 	REMOTE=$$($(SITE) environments.$$ENV.path); \
 	EXCL=""; \
 	set -f; for e in $$($(SITE) deploy.exclude); do EXCL="$$EXCL --exclude=$$e"; done; set +f; \
@@ -296,12 +360,15 @@ rollback: ## Redeploy the previously deployed commit (make rollback env=producti
 		echo "$(BLUE)  → $$p$(RESET)"; \
 		rsync -az --delete -e "ssh -q" $$EXCL "$$WT/$(WEBROOT)/$$p/" "$$HOST:$$REMOTE/$$p/" || exit 1; \
 	done; \
-	git worktree remove --force "$$WT"; \
 	WHEN=$$(date -Iseconds); WHO=$$(git config user.name); \
 	printf '%s %s %s %s\n' "$$WHEN" "$$PREV" "rollback" "$$WHO" \
 		| ssh -q "$$HOST" "cat >> $$DIR/$$ENV.log"; \
 	printf '{"sha":"%s","branch":"rollback","at":"%s","by":"%s"}\n' "$$PREV" "$$WHEN" "$$WHO" \
 		| ssh -q "$$HOST" "cat > $$DIR/$$ENV.json"; \
+	: "_deploy-tag stamps HEAD, and the worktree's HEAD is PREV"; \
+	GIT_DIR=$$(git -C "$$WT" rev-parse --absolute-git-dir) $(MAKE) --no-print-directory _deploy-tag env=$$ENV; RC=$$?; \
+	git worktree remove --force "$$WT"; \
+	[ "$$RC" -eq 0 ] || exit 1; \
 	$(MAKE) --no-print-directory _deploy-opcache env=$$ENV; \
 	echo "$(GREEN)✅ $$ENV rolled back to $$PREV$(RESET)"
 
@@ -440,18 +507,10 @@ health: ## Ledger, server drift, deploy guards, branch topology, patched files
 	fi
 	@echo ""
 	@echo "$(BLUE)Branch topology$(RESET)"
-	@if [ "$(HAS_PROD)" = "yes" ]; then \
-		for b in $(BR_REVIEW) $(BR_INTEG); do \
-			[ "$$b" = "$(BR_PROD)" ] && continue; \
-			N=$$(git rev-list --count "origin/$(BR_PROD)" "^origin/$$b" 2>/dev/null || echo "?"); \
-			if [ "$$N" = "0" ]; then printf "  $(GREEN)✅ %s contains %s$(RESET)\n" "$$b" "$(BR_PROD)"; \
-			else printf "  $(RED)❌ %s is missing %s commits from %s — production work can be reverted$(RESET)\n" "$$b" "$$N" "$(BR_PROD)"; fi; \
-		done; \
-	fi
-	@if [ "$(BR_REVIEW)" != "$(BR_INTEG)" ]; then \
-		N=$$(git rev-list --count "origin/$(BR_REVIEW)" "^origin/$(BR_INTEG)" 2>/dev/null || echo "?"); \
-		if [ "$$N" = "0" ]; then printf "  $(GREEN)✅ %s contains %s$(RESET)\n" "$(BR_INTEG)" "$(BR_REVIEW)"; \
-		else printf "  $(YELLOW)⚠  %s is %s commits behind %s — merge it down after a promote$(RESET)\n" "$(BR_INTEG)" "$$N" "$(BR_REVIEW)"; fi; \
+	@if [ "$(HAS_PROD)" = "yes" ] && [ "$(BR_REVIEW)" != "$(BR_PROD)" ]; then \
+		N=$$(git rev-list --count "origin/$(BR_PROD)" "^origin/$(BR_REVIEW)" 2>/dev/null || echo "?"); \
+		if [ "$$N" = "0" ]; then printf "  $(GREEN)✅ %s contains %s$(RESET)\n" "$(BR_REVIEW)" "$(BR_PROD)"; \
+		else printf "  $(RED)❌ %s is missing %s commits from %s — production work can be reverted$(RESET)\n" "$(BR_REVIEW)" "$$N" "$(BR_PROD)"; fi; \
 	fi
 	@for b in $$(git branch --format='%(refname:short)' | grep -vE '^(master|main)$$'); do \
 		git rev-parse --verify --quiet "origin/$$b" >/dev/null || printf "  $(YELLOW)⚠  %s exists only locally — push it or lose it$(RESET)\n" "$$b"; \
@@ -498,7 +557,7 @@ _deploy-rsync:
 			echo "$(RED)✗ Payload path missing locally: $(WEBROOT)/$$p$(RESET)"; exit 1; \
 		fi; \
 		echo "$(BLUE)  → $$p$(RESET)"; \
-		rsync -az --delete -e "ssh -q" $(dryrun) --itemize-changes $$EXCL \
+		rsync -az --delete -e "ssh -q" $(if $(dryrun),--dry-run,) --itemize-changes $$EXCL \
 			"$(WEBROOT)/$$p/" "$$HOST:$$REMOTE/$$p/" || exit 1; \
 	done
 
@@ -531,7 +590,7 @@ _deploy-gitpush:
 _deploy-gate:
 	@ENV="$(env)"; \
 	if [ -z "$$ENV" ]; then \
-		echo "$(RED)✗ Usage: make deploy env=<development|staging|production>$(RESET)"; \
+		echo "$(RED)✗ Usage: make deploy env=<staging|production>$(RESET)"; \
 		exit 1; \
 	fi; \
 	WANT=$$($(SITE) environments.$$ENV.branch 2>/dev/null); \
@@ -562,10 +621,15 @@ _deploy-gate:
 	fi; \
 	echo "$(GREEN)✓ gate passed: $$ENV ← $$WANT @ $$(git rev-parse --short HEAD)$(RESET)"
 
+# WHETHER to ask for make deploy. ship always asks, so it calls _ask-confirm.
 _deploy-confirm:
 	@ENV="$(env)"; \
 	if [ "$$($(SITE) environments.$$ENV.confirm)" != "true" ]; then exit 0; fi; \
-	$(MAKE) --no-print-directory _need-tty verb="deploy env=$$ENV"; \
+	$(MAKE) --no-print-directory _ask-confirm env=$$ENV verb="deploy env=$$ENV"
+
+_ask-confirm:
+	@ENV="$(env)"; \
+	$(MAKE) --no-print-directory _need-tty verb="$(verb)"; \
 	echo "$(RED)╔════════════════════════════════════════╗$(RESET)"; \
 	echo "$(RED)║   DEPLOY TO $$ENV$(RESET)"; \
 	echo "$(RED)║   $$($(SITE) environments.$$ENV.role)$(RESET)"; \
@@ -574,7 +638,7 @@ _deploy-confirm:
 	read -p "Type 'yes' to deploy: " reply; \
 	if [ "$$reply" != "yes" ]; then echo "$(RED)✗ Cancelled$(RESET)"; exit 1; fi
 
-_deploy-stamp:
+_deploy-ledger:
 	@ENV="$(env)"; \
 	HOST=$$($(SITE) environments.$$ENV.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
 	DIR=$$($(SITE) deploy.state_dir); \
@@ -585,10 +649,16 @@ _deploy-stamp:
 	printf '{"sha":"%s","branch":"%s","at":"%s","by":"%s"}\n' "$$SHA" "$$BRANCH" "$$WHEN" "$$WHO" \
 		| ssh -q "$$HOST" "mkdir -p $$DIR && cat > $$DIR/$$ENV.json"; \
 	printf '%s %s %s %s\n' "$$WHEN" "$$SHA" "$$BRANCH" "$$WHO" \
-		| ssh -q "$$HOST" "cat >> $$DIR/$$ENV.log"; \
-	git tag -f "deployed/$$ENV" >/dev/null; \
-	git push -f --quiet origin "deployed/$$ENV" 2>/dev/null || \
-		echo "$(YELLOW)  (tag not pushed — no network?)$(RESET)"; \
+		| ssh -q "$$HOST" "cat >> $$DIR/$$ENV.log"
+
+# ship reads deployed/staging from origin to prove a tree was deployed, so a tag
+# that does not reach origin is a failed deploy, not a warning.
+_deploy-tag:
+	@ENV="$(env)"; \
+	git tag -f "deployed/$$ENV" >/dev/null || { \
+		echo "$(RED)✗ deploy tag not written — pushing the old one would date the ledger back$(RESET)"; exit 1; }; \
+	git push -f --quiet origin "deployed/$$ENV" || { \
+		echo "$(RED)✗ deploy tag not pushed — the ledger on origin is stale$(RESET)"; exit 1; }; \
 	echo "$(GREEN)✓ stamped $$ENV @ $$(git rev-parse --short HEAD)$(RESET)"
 
 _deploy-opcache:
@@ -616,9 +686,7 @@ _backup-payload:
 	STAMP=$$(date +%Y%m%d-%H%M%S); \
 	echo "$(YELLOW)Backing up $$ENV payload directories...$(RESET)"; \
 	ARCHIVE="$$DIR/backups/$$ENV-$$STAMP.tar.gz"; \
-	: "GNU tar exits 1 for warnings (a file changed while being read) and 2"; \
-	: "for real errors. Treating any non-zero as failure aborts a ship over a"; \
-	: "warning, so check the archive itself instead."; \
+	: "GNU tar exits 1 for a warning (a file changed while being read), 2 for an error: check the archive instead"; \
 	ssh -qn "$$HOST" "mkdir -p $$DIR/backups && cd $$REMOTE && tar czf $$ARCHIVE $$PATHS 2>/dev/null; rc=\$$?; [ \$$rc -le 1 ] || exit \$$rc"; \
 	SIZE=$$(ssh -qn "$$HOST" "stat -c %s $$ARCHIVE 2>/dev/null || echo 0"); \
 	if [ "$$SIZE" -lt 1024 ]; then \
@@ -627,19 +695,8 @@ _backup-payload:
 	echo "$(GREEN)✓ payload backed up: $$ARCHIVE ($$(( SIZE / 1024 )) KB)$(RESET)"
 
 
-# A rung checked out in ANOTHER worktree cannot be checked out here, and every
-# promoting verb does `git checkout <rung>`. Without this, `make finish` inside
-# a linked worktree died on a raw git error mid-verb —
-#   fatal: 'development' is already used by worktree at ...
-# — which is exactly the shape `_ensure-flow` exists to prevent: a half-run
-# verb dying on a git error is what taught agents to fall back to raw git.
-#
-# Parallel agents each get their own worktree, so this is the normal case there,
-# not an edge one. Refusing is also the right answer on the merits: N agents
-# merging into one shared rung concurrently is a race. The merge serialises
-# through whichever worktree holds the rung.
-#
-# Usage: $(MAKE) _worktree-guard rung=<branch> verb=<name>
+# ship checks the production branch out, and a branch held by ANOTHER worktree
+# cannot be checked out here — refused by name rather than on a raw git error.
 _worktree-guard:
 	@RUNG="$(rung)"; [ -n "$$RUNG" ] || exit 0; \
 	HOLDER=$$(git worktree list --porcelain 2>/dev/null \
@@ -652,15 +709,8 @@ _worktree-guard:
 	echo "$(YELLOW)  held by: $$HOLDER$(RESET)"; \
 	echo "$(YELLOW)  here:    $$HERE$(RESET)"; \
 	echo ""; \
-	BR=$$(git branch --show-current); \
-	case "$$BR" in \
-		feature/*|hotfix/*) \
-			echo "$(YELLOW)  Finish it from there, naming this branch:$(RESET)"; \
-			echo "$(YELLOW)    cd $$HOLDER && make finish name=$${BR#*/}$(RESET)";; \
-		*) \
-			echo "$(YELLOW)  Run the verb where the rung lives:$(RESET)"; \
-			echo "$(YELLOW)    cd $$HOLDER && make $(verb)$(RESET)";; \
-	esac; \
+	echo "$(YELLOW)  Run the verb where the rung lives:$(RESET)"; \
+	echo "$(YELLOW)    cd $$HOLDER && make $(verb)$(RESET)"; \
 	echo "$(YELLOW)  Your commits are already visible from there — a worktree shares$(RESET)"; \
 	echo "$(YELLOW)  the repository, so nothing needs pushing first.$(RESET)"; \
 	exit 1
@@ -675,13 +725,14 @@ _flow-state:
 	ROLE=$$($(MAKE) --no-print-directory _branch-role); \
 	printf "  branch:  %s  (%s)\n" "$$BRANCH" "$$ROLE"; \
 	case "$$ROLE" in \
-		feature) printf "  next:    commit, then make finish  → $(BR_INTEG)\n";; \
-		hotfix)  printf "  next:    commit, then make finish  → $(BR_PROD), then back down\n";; \
+		feature) printf "  next:    commit, then make promote name=<x>\n";; \
+		hotfix)  printf "  next:    commit, optionally make gate, then make ship — ship runs the gate itself\n";; \
+		rung:staging) printf "  next:    make deploy env=staging, then make ship  (new work: make feature name=<x>)\n";; \
 		rung:*)  printf "  next:    make feature name=<x>  (a rung is deploy-only)\n";; \
-		none)    printf "  next:    git checkout $(BR_INTEG), then make feature name=<x>\n";; \
+		none)    printf "  next:    git checkout $(BR_PROD), then make feature name=<x>\n";; \
 		*)       printf "  next:    make feature name=<x>  (this branch is outside the flow)\n";; \
 	esac
-	@for b in $(BR_INTEG) $(BR_REVIEW) $(BR_PROD); do \
+	@for b in $(BR_PROD) $(BR_REVIEW); do \
 		if git rev-parse --verify --quiet "origin/$$b" >/dev/null 2>&1; then printf "  rung:    %-14s on origin\n" "$$b"; \
 		else printf "  rung:    %-14s $(YELLOW)not on origin$(RESET)\n" "$$b"; fi; \
 	done
@@ -710,7 +761,7 @@ _ensure-safe-branch:
 			exit 1;; \
 		none) \
 			echo "$(RED)✗ no branch checked out$(RESET)"; \
-			echo "$(YELLOW)  git checkout $(BR_INTEG)   then: make feature name=<x>$(RESET)"; \
+			echo "$(YELLOW)  git checkout $(BR_PROD)   then: make feature name=<x>$(RESET)"; \
 			exit 1;; \
 	esac
 
@@ -729,27 +780,48 @@ _need-tty:
 		exit 1; \
 	fi
 
-# The flow needs a remote and its rungs on it. Refuse by name — a half-run verb
-# dying on a git error is exactly what taught agents to fall back to raw git.
+# Two rungs, and every verb below merges between them. A project that still
+# declares a development environment expects a third, so the verbs it would run
+# are refused rather than silently doing something else with its branches.
+_flow-ready:
+	@[ -z "$$($(SITE) environments.development.branch 2>/dev/null)" ] || { \
+		echo "$(RED)✗ site.yml declares a development environment — this core has no verb that merges into one$(RESET)"; \
+		echo "$(YELLOW)  migrate: drop environments.development from site.yml$(RESET)"; \
+		echo "$(YELLOW)  or go back: git log --oneline -- .netdust-devops$(RESET)"; \
+		echo "$(YELLOW)              git checkout <commit before the update> -- Makefile.netdust mk scripts .netdust-devops$(RESET)"; \
+		exit 1; }
+
+# The flow needs a remote and its two branches on it. Refuse by name — a
+# half-run verb dying on a git error is exactly what taught agents to fall back
+# to raw git.
+#
+# Staging is rebuilt on origin, so a stale local copy is re-pointed — unless it is
+# checked out and carries commits of its own. Production's are never discarded.
 _ensure-flow:
+	@$(MAKE) --no-print-directory _flow-ready
 	@if ! git remote get-url origin >/dev/null 2>&1; then \
 		echo "$(RED)✗ no 'origin' remote — the branch flow needs one$(RESET)"; \
 		echo "$(YELLOW)  git remote add origin <url>$(RESET)"; \
-		echo "$(YELLOW)  git push -u origin $(BR_INTEG)      (and $(BR_REVIEW) / $(BR_PROD) once they exist)$(RESET)"; \
+		echo "$(YELLOW)  git push -u origin $(BR_PROD)      (and $(BR_REVIEW) once it exists)$(RESET)"; \
 		exit 1; \
 	fi; \
 	git fetch --quiet --prune origin 2>/dev/null || { echo "$(RED)✗ origin is unreachable — check the URL or your network before running the flow$(RESET)"; exit 1; }; \
-	for b in $(BR_INTEG) $(BR_REVIEW) $(BR_PROD); do \
+	HERE=$$(git branch --show-current); \
+	for b in $(BR_PROD) $(BR_REVIEW); do \
 		git rev-parse --verify --quiet "origin/$$b" >/dev/null || { \
-			echo "$(RED)✗ origin has no '$$b' branch — the flow promotes through it$(RESET)"; \
+			echo "$(RED)✗ origin has no '$$b' branch — the flow builds on it$(RESET)"; \
 			echo "$(YELLOW)  git checkout -b $$b <base> && git push -u origin $$b$(RESET)"; exit 1; }; \
-		if git rev-parse --verify --quiet "$$b" >/dev/null; then \
+		git rev-parse --verify --quiet "$$b" >/dev/null || continue; \
+		[ "$$(git rev-parse "$$b")" = "$$(git rev-parse "origin/$$b")" ] && continue; \
+		if [ "$$b" = "$(BR_PROD)" ] || [ "$$b" = "$$HERE" ]; then \
 			N=$$(git rev-list --count "origin/$$b..$$b" 2>/dev/null || echo 0); \
-			if [ "$$N" != "0" ]; then \
-				echo "$(RED)✗ local '$$b' carries $$N commit(s) that are not on origin — a rung is written only by the flow, and finish would push them$(RESET)"; \
-				echo "$(YELLOW)  from another branch: git branch -f $$b origin/$$b   (rescue the commits onto a feature branch first if they matter)$(RESET)"; exit 1; \
-			fi; \
+			[ "$$N" = "0" ] && continue; \
+			echo "$(RED)✗ local '$$b' carries $$N commit(s) that are not on origin — a rung is written only by the flow$(RESET)"; \
+			echo "$(YELLOW)  from another branch: git branch -f $$b origin/$$b   (rescue the commits onto a feature branch first if they matter)$(RESET)"; exit 1; \
 		fi; \
+		git branch -q -f "$$b" "origin/$$b" 2>/dev/null || { \
+			echo "$(RED)✗ '$$b' is stale here and cannot be re-pointed — it is checked out elsewhere$(RESET)"; \
+			echo "$(YELLOW)  run the verb where it lives, or move that worktree off the rung$(RESET)"; exit 1; }; \
 	done
 
 # A clean tree is required by every verb that moves between branches. The
@@ -768,7 +840,7 @@ _ensure-clean-git:
 				echo "$(YELLOW)                   Right when the work is at a stopping point.$(RESET)"; \
 				echo "$(YELLOW)  2. Hotfix in a SEPARATE CHECKOUT — nothing here moves, and no$(RESET)"; \
 				echo "$(YELLOW)                   half-done work gets committed to look tidy.$(RESET)"; \
-				echo "$(YELLOW)                   Then: make finish name=<x> from where the rung lives.$(RESET)"; \
+				echo "$(YELLOW)                   Then: make gate and make ship from there.$(RESET)"; \
 				echo "$(YELLOW)  See the netdust-devops:parallel-work skill.$(RESET)";; \
 			ship) echo "$(YELLOW)Nothing uncommitted ships: commit it on a feature or hotfix branch, or discard it$(RESET)";; \
 			*) echo "$(YELLOW)Run 'make save' first$(RESET)";; \
@@ -780,7 +852,7 @@ _ensure-clean-git:
 # routes through this first.
 _refuse-production:
 	@ENV="$(env)"; \
-	if [ -z "$$ENV" ]; then echo "$(RED)✗ Usage: env=<staging|development>$(RESET)"; exit 1; fi; \
+	if [ -z "$$ENV" ]; then echo "$(RED)✗ Usage: env=staging$(RESET)"; exit 1; fi; \
 	if [ "$$ENV" = "production" ]; then \
 		echo "$(RED)✗ Refused: data moves backward only, never into production$(RESET)"; exit 1; \
 	fi; \
@@ -794,6 +866,6 @@ _check-requirements:
 	done
 
 .PHONY: _deploy-transport _deploy-rsync _deploy-gitpush _deploy-gate _deploy-confirm \
-        _deploy-stamp _deploy-opcache _backup-payload _flow-state \
-        _branch-role _ensure-safe-branch _warn-rung-branch _need-tty _ensure-flow \
+        _ask-confirm _deploy-ledger _deploy-tag _deploy-opcache _backup-payload _flow-state \
+        _branch-role _ensure-safe-branch _warn-rung-branch _need-tty _flow-ready _ensure-flow \
         _ensure-clean-git _refuse-production _check-requirements _worktree-guard

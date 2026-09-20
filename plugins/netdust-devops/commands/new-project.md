@@ -1,5 +1,5 @@
 ---
-description: Scaffold a new Netdust project — site.yml, Makefile, vendored devops core, memory/, tasks/, CLAUDE.md, and the three rung branches.
+description: Scaffold a new Netdust project — site.yml, Makefile, vendored devops core, memory/, tasks/, CLAUDE.md, and the production and staging branches.
 allowed_tools: ["Bash", "Read", "Write", "AskUserQuestion"]
 ---
 
@@ -27,7 +27,7 @@ shell profile.
 
 It renders `site.yml` and `Makefile` from the plugin templates, vendors the
 devops core, creates `memory/`, `tasks/`, `CLAUDE.md` and `.gitignore`, and
-creates the `development` / `staging` / `main` branches.
+creates the production and staging branches.
 
 **Do not hand-write any of these files.** One renderer, one set of templates —
 a hand-written `site.yml` is how the schema forked last time.
@@ -51,7 +51,7 @@ promotion ladder stays intact.
 
 ```bash
 git remote add origin <url>
-git push -u origin main staging development
+git push -u origin main staging
 make doctor
 ```
 

@@ -1,6 +1,6 @@
 ---
 name: devops
-description: Use for EVERY branch, environment or deploy action in a Netdust project — the make verbs, the promotion path, the deploy gate and ledger, site.yml, .env and DDEV. Load it BEFORE the first `make` call or the first git command on a project carrying site.yml; name it rather than waiting for it to trigger. Triggers on file edits to Makefile, site.yml, .env*, mk/*.mk, .ddev/config.yaml. Activates on make dev, make save, make feature, make hotfix, make finish, make promote, make release, make deploy, make deploy-test, make ship, make deployed, make health, make doctor, make rollback, make refresh, make pull, make audit, make devops-update, ddev start, ddev wp, ddev describe, site.yml, environments, deploy gate, deploy ledger, staging branch, rung branch, git-flow, hotfix, .env.example. Fires on how the work is actually spoken, not just target names — "we work on X", "fix this", "we have a bug", "hotfix", "put it on dev", "test this", "ready for review", "colleagues can look", "push to staging", "promote", "deploy", "ship it", "go live", "release", "roll it back", "what's on prod", "what's live", "what isn't live yet", "sync from live", "staging is stale", "pull the database", "set up a new project". Symptoms include starting work, choosing a branch, deciding what to commit, deploying anywhere, rolling back, refreshing a non-production environment, or scaffolding a project. Stack-agnostic — WordPress, Statamic, Node and static projects use the same verbs. For WP-CLI, Bedrock layout and Vite see netdust-wp:wp-infra. For server provisioning see netdust-core:ploi and secure-server.
+description: Use for EVERY branch, environment or deploy action in a Netdust project — the make verbs, the promotion path, the deploy gate and ledger, site.yml, .env and DDEV. Load it BEFORE the first `make` call or the first git command on a project carrying site.yml; name it rather than waiting for it to trigger. Triggers on file edits to Makefile, site.yml, .env*, mk/*.mk, .ddev/config.yaml. Activates on make dev, make save, make feature, make hotfix, make promote, make unpromote, make gate, make deploy, make deploy-test, make ship, make deployed, make health, make doctor, make rollback, make refresh, make pull, make audit, make devops-update, ddev start, ddev wp, ddev describe, site.yml, environments, deploy gate, deploy ledger, staging branch, rung branch, git-flow, hotfix, .env.example. Fires on how the work is actually spoken, not just target names — "we work on X", "fix this", "we have a bug", "hotfix", "put it on staging", "test this", "colleagues can look", "take it off staging", "promote", "ship it", "go live", "release", "roll it back", "what's on prod", "what's live", "what isn't live yet", "sync from live", "staging is stale", "pull the database", "set up a new project". Symptoms include starting work, choosing a branch, deciding what to commit, deploying anywhere, rolling back, refreshing a non-production environment, or scaffolding a project. Stack-agnostic — WordPress, Statamic, Node and static projects use the same verbs. For WP-CLI, Bedrock layout and Vite see netdust-wp:wp-infra. For server provisioning see netdust-core:ploi and secure-server.
 ---
 
 # Netdust devops
@@ -16,48 +16,47 @@ type or a Makefile you edit — it is read from `site.yml`, always.
 ## Two layers, and which one you are in
 
 Everything here happens **inside one project repo**: branch, build, deploy,
-ship, roll back, pull, refresh. The verbs read that project's `site.yml` and
-act on that project's environments.
-
-A fleet or overview tool that reports across many projects is a *reader*. It
-can run the read-only verbs (`deployed`, `status`, `health`, `doctor`) and it
-can show you what needs doing — but the doing happens here, in the project,
-where the gate and the ledger record it. If you are about to deploy, ship,
-pull or refresh from somewhere that is not this project, `cd` here first.
+ship, roll back, pull, refresh, reading that project's `site.yml` and acting
+on its environments. A fleet or overview tool that reports across many
+projects is a *reader* — it can run the read-only verbs (`deployed`, `status`,
+`health`, `doctor`) but the doing happens here, where the gate and the ledger
+record it. If you are about to deploy, ship, pull or refresh from somewhere
+that is not this project, `cd` here first.
 
 ---
 
 ## The branch model
 
-Three rungs. One branch per environment, named for it. This is the only
-topology; there is no second version of it anywhere.
+Two rungs, one of them disposable. `main` is production, the only branch that
+accumulates. `staging` is production plus whatever is promoted — rebuilt from
+scratch on every `promote` / `unpromote` / `ship`, never merged into.
+**Staging IS the release**: there is no separate branch a "ready" feature
+graduates to.
 
 ```
-main            PRODUCTION   — never worked in directly
-  └── staging   REVIEW       — client-visible; a deploy here is outward-facing
-        └── development      INTEGRATION — daily work lands here
-              ├── feature/<name>   from development, merged back to development
-              └── hotfix/<name>    from main, merged to main AND back down
+main                PRODUCTION   — the only branch that accumulates
+  ├── feature/<name>  from origin/main; promoted onto staging, or not
+  └── hotfix/<name>   from origin/main; ships straight to production
+
+staging  REVIEW = main + every PROMOTED feature   ← rebuilt on promote/unpromote/ship
 ```
 
 The exact names come from `site.yml` — `environments.<env>.branch`. Read them
 with `scripts/site environments.staging.branch`, never assume. `make status`
-prints the whole topology and the next verb before you type anything.
+prints the topology and the next verb before you type anything.
 
-**A project with fewer servers still keeps the rungs.** Declare
+**A project with fewer servers still keeps both branches.** Declare
 `environments.production` with its `branch: main` and leave `path:` out;
-`make ship` refuses by name while the ladder stays true. Collapsing two rungs
-onto one branch is how `staging` ends up meaning `main`.
+`make ship` refuses by name while the ladder stays true. Collapsing staging
+onto `main` is how `staging` ends up meaning production.
 
-**A rung is deploy-only.** You never commit on `development`, `staging` or
-`main`. The verbs are the only door, and two machines hold it: the Makefile
-refuses by name, and netdust-agent's PreToolUse guard denies raw
-`git commit` / `merge` / `rebase` / `push` / `checkout -b` on a rung, naming
-the verb that does it instead.
+**A rung is deploy-only.** You never commit on `staging` or `main`. The verbs
+are the only door: the Makefile refuses by name, and netdust-agent's
+PreToolUse guard denies raw `git commit` / `merge` / `rebase` / `push` /
+`checkout -b` on a rung, naming the verb that does it instead.
 
-**A verb that fails is a finding to file, not permission to use raw git.**
-If `make finish` breaks, fix the Makefile or report it. Reaching around it is
-how the branches became a mess in the first place.
+**A verb that fails is a finding to file, not permission to use raw git** —
+if `make promote` breaks, fix the Makefile or report it.
 
 ---
 
@@ -66,87 +65,102 @@ how the branches became a mess in the first place.
 | Said | Run | Lands on |
 |---|---|---|
 | "we work on X" | `make feature name=X` | nothing yet |
-| "put it on dev", "test this" | `make finish`, then `make deploy env=development` | development |
-| "ready for review", "colleagues can look" | `make finish`, then `make deploy env=staging` | staging |
-| "just feature X is ready" | `make promote name=X`, then `make deploy env=staging` | staging |
-| "fix this", "we have a bug", "hotfix X" | `make hotfix name=X` | nothing yet |
-| "that's fixed" (on a hotfix branch) | `make finish` | main + back down |
-| "ship it", "go live" | `make ship` (from any branch; it switches to production itself) | **production** |
-| "release" | `make release`, then `make ship` | **production** |
+| "put it on staging", "colleagues can look" | `make promote name=X`, then `make deploy env=staging` | staging |
+| "take it off staging" | `make unpromote name=X`, then `make deploy env=staging` | staging |
+| "fix this", "we have a bug" | `make hotfix name=X`, then `make ship` | **production** |
+| "ship it", "go live" | take what is not shipping off staging, `make deploy env=staging`, look — then `make ship` from the staging checkout | **production** |
 | "what's on prod", "what's live" | `make deployed` | — |
 | "what isn't live yet" | `git diff deployed/production` | — |
 | "roll it back" | `make rollback env=<name>` | — |
-| "sync from live", "staging is stale" | `make refresh env=<name>` | staging or development |
+| "sync from live", "staging is stale" | `make refresh env=<name>` | staging |
 | "pull the database" | `make pull env=production` | local |
 | "is anything unpushed?" | `make audit` | — |
 
 **Always run `make deploy-test env=<name>` first** and read the output,
 especially the deletions.
 
-### Production
+### Typed confirmations, and why an agent hands the verb over
 
 **Never run `make ship` unless the user asked for it in that turn.** Not
 because it follows from an earlier plan, not because the work looks finished.
-The typed confirmation is the user's. It cannot be piped: `make ship` checks
-for a terminal before it does anything at all, so `echo yes | make ship` and
-`make ship < answers` both refuse without touching a server.
+`save`, `promote`, `unpromote` and `ship` check for a terminal before doing
+anything at all, so `echo yes | make ship` and `make ship < answers` refuse
+without touching a server; `rollback` and a `confirm: true` deploy only read
+first, then refuse. That check is a speed bump against automation, not a control — a
+session that wanted one could hand itself a pty, so **for an agent the rule is
+*don't*, not *can't*.** An agent gets the state ready and hands the verb over.
 
 ### The rule that matters most
 
-**A bug fix branches from the production branch**, never from the integration
-or review branch — branching elsewhere ships every unfinished change sitting
-there. `make hotfix` does this correctly. `make finish` then merges it back
-down so the fix is not reverted by the next release.
+**A bug fix branches from the production branch**, never from staging —
+branching there ships every unfinished feature sitting on it. `make hotfix`
+reaches production without a staging round; staging is rebuilt over the fix
+afterwards, so it is never reverted by the next promote.
 
 ---
 
 ## The verbs
 
+`make` prints the full list, with your flow position at the top. The ones
+that carry a decision:
+
 | Verb | What it does |
 |---|---|
-| `make` | the verb list, with your flow position at the top |
-| `make setup` | first clone: `.env`, containers, dependencies |
-| `make dev` | start the local loop |
-| `make save` | commit the current branch |
-| `make feature name=X` | branch `feature/X` from the integration branch |
+| `make feature name=X` | branch `feature/X` from **origin/production** |
 | `make hotfix name=X` | branch `hotfix/X` from **origin/production** |
-| `make finish` | merge one step up. On a `hotfix/*`: to production and back down |
-| `make promote name=X` | send ONE feature to review, leaving the others behind |
-| `make release` | merge review into production |
-| `make deploy env=E` | gate, transport, stamp |
-| `make deploy-test env=E` | the same path, `--dry-run` |
-| `make ship` | production: terminal check, switch to the production branch (clean tree required), gate, data + payload backup, typed confirm, deploy |
-| `make rollback env=E` | redeploy the previously stamped commit |
-| `make deployed` | which commit runs on each environment |
-| `make status` | branch, flow position, what runs where |
-| `make health` | ledger vs branch head, per-env drift, deploy guards, topology, patched files |
-| `make doctor` | tools, SSH reachability, payload, devops version |
-| `make audit` | work that exists only on this machine |
-| `make test` | the deploy tooling's own tests — contacts no server |
-| `make gate` | this project's suite (`commands.gate`) |
-| `make pull env=E` | copy an environment's data down to local |
-| `make refresh env=E` | copy production's data down to a non-production environment |
-| `make devops-update` | re-vendor the shared core from the plugin |
+| `make promote name=X` | rebuild staging as production + every promoted feature, X pinned at its current tip |
+| `make unpromote name=X` | the same rebuild, without X |
+| `make ship` | from the staging checkout, or a `hotfix/*` branch: the checks below, the gate, typed confirm, both backups, deploy, then rebuild staging on the new production |
+| `make rollback env=E` | redeploy the previously deployed commit — no server-side git required |
 
-`pull`, `refresh` and `block-mail` exist only on stacks that have data ops.
+`pull`, `refresh` and `block-mail` exist only on stacks that have data ops;
 `make` lists what this project actually has.
 
 **Run `make health` after ANY third-party plugin update** — it is the check a
 deploy cannot do.
+
+**What `ship` checks** — three equalities, read from **origin**, since a local
+ref proves nothing: HEAD is `origin/staging`, so no local-only commit ships (a `hotfix/*`
+branch skips to the last check, and ship pushes it); `deployed/staging`
+on origin names this commit (staging was deployed and looked at since its
+last rebuild, never before); `origin/production` is an ancestor of HEAD
+(staging still contains it). Then `ship` runs `commands.gate` itself — a red
+gate ships nothing — and re-checks HEAD and the tree right after, so a gate
+that commits or checks out cannot slip a different tree past the checks above.
+
+**What the command line may carry.** The core takes
+`name env verb dryrun rung uploads` and refuses anything else **by name, at
+parse time**; `make -e` is refused too — every command-line variable reaches
+a shell somewhere inside a double-quoted string. A project target with its
+own input declares it before the include, or that target starts refusing its
+own input:
+
+```make
+_CLI_EXTRA := NAME
+include Makefile.netdust
+```
+
+**When the flow refuses to start.** A `site.yml` still declaring
+`environments.development.branch` is the old three-rung topology. `feature`,
+`hotfix`, `promote`, `unpromote` and `ship` refuse by name; everything else
+keeps working. Migrate by dropping `environments.development`, or go back:
+
+```bash
+git log --oneline -- .netdust-devops
+git checkout <commit before the update> -- Makefile.netdust mk scripts .netdust-devops
+```
 
 ---
 
 ## Three guarantees, whatever the transport
 
 1. **The gate.** A deploy refuses unless the tree is clean, the branch matches
-   `environments.<env>.branch`, and `HEAD` is already on `origin`. Nothing
-   uncommitted or unpushed reaches a server.
+   `environments.<env>.branch`, and `HEAD` is already on `origin`.
 2. **The ledger.** Each deploy stamps `<state_dir>/<env>.json` on the server
-   (outside every web root — environment directories are web-served) and moves
-   a `deployed/<env>` tag. `make deployed` answers "what is live";
-   `git diff deployed/production` answers "what is not live yet".
-3. **Rollback.** Reads the previous stamp, checks that commit out in a
-   throwaway worktree and redeploys from it — no server-side git required.
+   and moves a `deployed/<env>` tag — `make deployed` / `git diff
+   deployed/production` read it back.
+3. **Rollback.** Checks out the previous stamp in a throwaway worktree and
+   redeploys from it — no server-side git required.
 
 Only `deploy.method` differs: `rsync` moves a closed payload; `git-push`
 pushes, pulls on the server, and runs `deploy.post_deploy_hooks`.
@@ -165,13 +179,10 @@ A deploy moves the payload — a closed list of **tracked directories**. On an
 empty webroot that carries almost nothing that matters: WP core, `vendor/`,
 `.env`, `wp-config.php`, `index.php`, `.htaccess`, third-party plugins, uploads
 and the database are gitignored, outside the payload, or both. Shipping the
-payload alone yields a dead site *and* stamps the ledger as deployed, which
-tells every later session the environment is live.
-
-Enumerate what you need BEFORE touching the server — DB host/name/credentials,
-GitHub access for any private composer package, licensed assets, DNS, TLS — and
-ask for all of it in one pass. Discovering them one at a time turns a bring-up
-into a dozen round trips.
+payload alone yields a dead site *and* stamps the ledger as deployed. Enumerate
+what you need BEFORE touching the server — DB credentials, GitHub access for
+any private composer package, licensed assets, DNS, TLS — in one pass, or a
+bring-up turns into a dozen round trips.
 
 The order that works:
 
@@ -181,19 +192,13 @@ The order that works:
       →  wp rewrite flush --hard  →  payload deploy  →  licensed assets  →  uploads
 ```
 
-- **The mail block goes in before the database**, not after — the import brings
-  the source environment's mail settings with it.
-- **`composer install --prefer-source` when any package is a private repo.**
-  Composer's dist path fetches a GitHub API zipball over HTTPS, which an SSH
-  deploy key cannot authenticate (404). `--prefer-source` clones over SSH.
-- **`wp rewrite flush --hard` is mandatory** — search-replace empties
-  `rewrite_rules` and every permalink 404s until it runs.
-- **Licensed assets are gitignored, not missing.** A licensed theme or plugin
-  usually sits in the project's own working tree at the right version — look in
-  `content/themes/` and `content/plugins/` before asking the human for a zip. No
-  verb carries them, so they are re-applied by hand on every new environment.
-- **Diff every route against local before calling it broken.** A 404 on a fresh
-  environment usually predates the migration.
+- **Mail block before the database** — the import brings its source mail settings with it.
+- **`composer install --prefer-source` for private repos** — the dist zipball needs an
+  API token an SSH deploy key cannot give it.
+- **`wp rewrite flush --hard` is mandatory** — search-replace empties `rewrite_rules`.
+- **Licensed assets are gitignored, not missing** — look in `content/themes/` and
+  `content/plugins/` before asking for a zip; no verb carries them.
+- **Diff every route against local before calling it broken** — a 404 often predates the migration.
 
 ---
 
@@ -266,14 +271,11 @@ exists.
 ```
 
 Plugin `bin/` is not on `PATH` — call it by path, or alias it. `/new-project`
-does this for you.
+does this for you. Creates `site.yml`, `Makefile`, the vendored core,
+`memory/`, `tasks/`, `CLAUDE.md`, and the `main` and `staging` branches — not
+the application itself, which is the stack's own installer's job.
 
-Creates `site.yml`, `Makefile`, the vendored core, `memory/`, `tasks/`,
-`CLAUDE.md`, and the three rung branches. It does **not** install the
-application — that is the stack's own installer, which calls this for the
-project layer so there is one renderer and one set of templates.
-
-Then: fill in the `TODO`s in `site.yml`, add `origin`, push the three rungs,
+Then: fill in the `TODO`s in `site.yml`, add `origin`, push `main staging`,
 and run `make doctor`.
 
 ### A project that predates this plugin
@@ -326,15 +328,13 @@ in `site.yml`.
 | Smell | Fix |
 |---|---|
 | Raw `git commit` / `merge` / `push` on a rung branch | the make verb it names. The guard denies these. |
-| Reaching for raw git because a verb failed | file the failure; fix the verb |
-| A hotfix branched from `development` or `staging` | `make hotfix` — it branches from origin/production |
+| A feature or hotfix branched from `staging` | `make feature` / `make hotfix` — both branch from origin/production |
 | Editing `Makefile.netdust` or `mk/*.mk` in a project | fix it upstream in the plugin, then `make devops-update` |
 | Deploying, pulling or refreshing from outside the project | `cd` to the project; the verbs act on the repo they stand in |
 | `.env` committed | rotate every secret, then untrack. `.env.example` only |
 | Multiple `.env*` variants (`.env.dev`, `.env.prod`) | one `.env.example` + per-environment injection |
 | `composer install` / `npm install` outside the container | `ddev composer …` / `ddev exec …` so the version matches the runtime |
 | Manual file upload to a server | `make deploy env=<name>` — it gates and stamps |
-| Branch named `develop` | the rung is `development`, and the name comes from `site.yml` |
 | A session ends with commits unpushed | `make audit` |
 | `ddev wp` on a non-WP project | WP-CLI is WP-only |
 
