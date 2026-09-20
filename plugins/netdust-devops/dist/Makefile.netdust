@@ -102,7 +102,7 @@ help: ## Show this help
 	@echo ""
 	@$(MAKE) --no-print-directory _flow-state
 	@echo ""
-	@echo "$(YELLOW)FLOW$(RESET)         one branch per environment; the verbs are the only door to a rung"
+	@echo "$(YELLOW)FLOW$(RESET)         production accumulates; staging rebuilt; verbs are the only door"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "feature name=X"  "start work — branches from origin/$(BR_PROD)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "hotfix name=X"   "fix production — branches from origin/$(BR_PROD)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "save"            "commit the current branch"
@@ -111,7 +111,7 @@ help: ## Show this help
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "gate"            "this project's own suite (commands.gate)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "ship"            "production: gate, backups, typed confirm"
 	@echo ""
-	@echo "$(YELLOW)DEPLOY$(RESET)       gate → transport → stamp; nothing uncommitted or unpushed ships"
+	@echo "$(YELLOW)DEPLOY$(RESET)       gate → transport → ledger, tag; nothing dirty or unpushed ships"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "deploy-test env=E" "dry run — read the deletions"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "deploy env=E"      "gate, transport, stamp"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "rollback env=E"    "redeploy the previously stamped commit"

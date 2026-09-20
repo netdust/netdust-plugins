@@ -10,7 +10,7 @@ Scaffold a Netdust **WordPress** project in the current working directory.
 ## 1. The project layer is not yours to write
 
 Run the devops scaffolder. It owns `site.yml`, `Makefile`, the vendored devops
-core, `memory/`, `tasks/`, `.gitignore` and the three rung branches:
+core, `memory/`, `tasks/`, `.gitignore` and the production and staging branches:
 
 ```bash
 ~/.claude/plugins/netdust-devops/bin/new-project <name> --stack=wp --domain=<domain>

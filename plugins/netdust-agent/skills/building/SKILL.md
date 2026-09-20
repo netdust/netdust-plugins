@@ -24,21 +24,21 @@ owed — the two paths are spelled out below; nothing in this skill applies to b
 unless it says so.
 
 **On a project carrying `site.yml`, every branch decision is `netdust-devops:devops`'s**
-— `make feature` / `make hotfix` to start, `make finish` to close, a worktree based on
-the integration branch read from `site.yml` (never a hard-coded `master`); the
-superpowers finish skill's merge/PR options are not offered there. Models per dispatch
-come from `skills/_shared/model-ladder.md`; herdr moments (isolation, the status tab, the
+— `make feature` / `make hotfix` to start, a worktree based on the production branch
+read from `site.yml` (never a hard-coded `master`); the superpowers finish skill's
+merge/PR options are not offered there. Models per dispatch come from
+`skills/_shared/model-ladder.md`; herdr moments (isolation, the status tab, the
 branch-review pane) from `skills/_shared/herdr-moments.md` — both cited, never restated.
 
 **Enter and leave through the flow (FR-25).** On a `site.yml` project, Stage 2 does not
 dispatch until the current branch is `feature/*` or `hotfix/*` — run `make feature
 name=<x>` (`make hotfix` for Class D) first, or hand back; a rung branch is deploy-only
 and `hooks/pretooluse-guard.py` denies a raw `git commit` / merge / push there, naming
-the verb. Stage 3 closes with `make finish`; `make health` runs before any `make
-release`; `make ship` and a production `/deploy` happen only on the operator's explicit
-ask in that turn (the devops rule). The flow itself is tested — `make test` runs
-`scripts/tests/flow-test.sh` — so "the Makefile is broken" is a finding to file, never a
-reason to route around it.
+the verb. Stage 3 closes by pushing the branch and handing the operator
+`make promote name=<x>` — an agent never runs it; `make ship` and a production `/deploy`
+happen only on the operator's explicit ask in that turn (the devops rule). The flow
+itself is tested — `make test` runs `scripts/tests/flow-test.sh` — so "the Makefile is
+broken" is a finding to file, never a reason to route around it.
 
 **The handoff is `tasks.md`, and it is never run flat.** Any flat executor over the task
 list bypasses the per-task gates and the review-cluster stops — execute task by task
@@ -236,8 +236,9 @@ A behaviour-lane cluster carries no marker and buys no panel: its review is the 
    branch under `standard` or `low` stakes is LIGHT — one `reviewer`, ladder: sonnet; a
    branch carrying contract-lane clusters takes the branch's tier with the branch panel
    in `commands/shakeout.md` (Step 5). Under herdr the branch reviewer runs in its own
-   pane with the report in a tab (herdr-moments). Then finish: `make finish` on a `site.yml` project (devops), else
-   `superpowers:finishing-a-development-branch`.
+   pane with the report in a tab (herdr-moments). Then close: on a `site.yml` project
+   (devops), push the branch and hand the operator `make promote name=<x>` — never run
+   it yourself; else `superpowers:finishing-a-development-branch`.
 3. Report the whole-branch verify-budget line with the summary. Then invoke `compounding`
    — the learning loop: what the spec taught lands in CODE-MAP / skill lessons / evals as
    approved proposals.

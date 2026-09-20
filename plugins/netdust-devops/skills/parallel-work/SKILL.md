@@ -82,32 +82,20 @@ silently overwrite each other, and neither will report it.
 
 ## How the make verbs behave across checkouts
 
-A rung branch can only be checked out in one place at a time, and the promoting
-verbs check one out. So:
-
 - `make feature` / `make hotfix` / `make save` / `make deploy` / `make gate`
   work anywhere. They act on the branch you are standing on.
-- `make finish` / `make promote` / `make release` need a rung. If that rung is
-  checked out in another worktree they **refuse by name** and print the command
-  that works — they do not half-run and die on a git error.
-- `make finish name=<x>` merges a branch you are **not** standing on. That is
-  how the checkout holding the rung finishes work done in another one. It
-  refuses if that branch has uncommitted changes wherever it lives.
+- `make promote` / `make unpromote` **rebuild staging — they need no
+  checkout.** The rebuild happens in a throwaway worktree of its own and
+  pushes straight to origin, so two agents can promote different features
+  from two different checkouts without either holding `staging`.
+- `make ship` **runs from the staging checkout** (or a `hotfix/*` branch) and
+  needs the production branch free — not checked out in another worktree. If
+  it is, `ship` **refuses by name** and prints the command that works; it does
+  not half-run and die on a git error.
 
-So the shape of finishing parallel work is: do the work in its own checkout,
-then finish it from wherever the rung lives.
-
-### Cleaning up
-
-`make finish` cannot delete a branch that is still checked out somewhere. It
-says so rather than leaving you guessing:
-
-```
-feature/x kept — it is checked out in a worktree. Remove it with: git worktree remove <path>
-```
-
-Remove the worktree, then the branch goes. A stray worktree is a branch you
-cannot delete later and a directory that drifts out of date.
+So the shape of parallel work is: promote and unpromote from anywhere; ship
+from wherever `staging` — or the hotfix — actually lives, once production is
+free.
 
 ---
 
