@@ -153,13 +153,22 @@ def _upstream_case(desc: str, relpath: str, expected: str, *,
 # --- scenarios ------------------------------------------------------------
 
 
-def _flow_repo(tmp: Path, branch: str, *, site_yml: bool = True, reader: bool = True) -> None:
+def _flow_repo(tmp: Path, branch: str, *, site_yml: bool = True, reader: bool = True,
+               inline_yaml: bool = False, reader_prod: str = "main") -> None:
     """A throwaway flow project: site.yml binding `staging` and `production` and nothing
     else, optionally a scripts/site reader mirroring it, a git repo checked out on
     `branch`. The YAML is block style — the flow style the fixture used before never
-    matched the hook's own `branch:` regex, so every rung came from the reader."""
+    matched the hook's own `branch:` regex, so every rung came from the reader.
+
+    `inline_yaml` writes the same two environments in that flow style, which is the knob
+    that pushes `_flow_rungs` off its regex path onto the reader — or onto the fleet
+    defaults when there is no reader. `reader_prod` lets the reader name a production
+    branch site.yml does not, so a verdict on that name says which source answered."""
     if site_yml:
         (tmp / "site.yml").write_text(
+            "site: {name: t}\nenvironments:\n"
+            "  staging: {branch: staging}\n  production: {branch: main, confirm: true}\n"
+            if inline_yaml else
             "site: {name: t}\nenvironments:\n"
             "  staging:\n    branch: staging\n"
             "  production:\n    branch: main\n    confirm: true\n")
@@ -168,7 +177,7 @@ def _flow_repo(tmp: Path, branch: str, *, site_yml: bool = True, reader: bool = 
         (tmp / "scripts" / "site").write_text(
             "#!/usr/bin/env python3\nimport sys\n"
             "k=sys.argv[1]\nb={'environments.staging.branch':'staging',"
-            "'environments.production.branch':'main'}\n"
+            "'environments.production.branch':'" + reader_prod + "'}\n"
             "print('staging\\nproduction') if k=='environments' else print(b[k])\n")
     env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
            "GIT_COMMITTER_EMAIL": "t@t", "HOME": str(tmp), "PATH": os.environ.get("PATH", "")}
@@ -464,6 +473,33 @@ def run() -> list[tuple[bool, str]]:
     rr = subprocess.run(["python3", str(HOOK)], input=payload, capture_output=True, text=True, timeout=20)
     r.append((rr.returncode == 0 and _decision(rr.stdout) == "passthrough",
                     "flow (i): an unreadable cwd fails OPEN"))
+
+    # `_flow_rungs` answers from three sources and every case above drives only the
+    # first. Each block below pins WHICH source answered before asserting a rung on it:
+    # `development` is a rung only in the fleet defaults, and `liveprod` only in what
+    # the reader prints.
+    r += [
+        # (1) the dependency-free `branch:` regex reads the block-style site.yml, and
+        # the reader is never asked — the name only it knows is not a rung.
+        _flow_case("(p1a) site.yml answered: development is not a rung", "development",
+                   "git commit -m 'x'", "passthrough", reader_prod="liveprod"),
+        _flow_case("(p1b) site.yml answered: the reader's name is not a rung", "feature/x",
+                   "git push origin liveprod", "passthrough", reader_prod="liveprod"),
+        _flow_case("(p1c) push of the production rung site.yml names", "feature/x",
+                   "git push origin main", "deny", reader_prod="liveprod"),
+        # (2) flow-style site.yml the regex cannot read, so scripts/site answers. (p2a)
+        # is evidence only together with (p3a): the same YAML with no reader falls
+        # through to the defaults, which is what proves the regex found nothing here.
+        _flow_case("(p2a) the reader answered: development is not a rung", "development",
+                   "git commit -m 'x'", "passthrough", inline_yaml=True, reader_prod="liveprod"),
+        _flow_case("(p2b) push of the production rung the reader printed", "feature/x",
+                   "git push origin liveprod", "deny", inline_yaml=True, reader_prod="liveprod"),
+        # (3) neither source answers → the fleet defaults.
+        _flow_case("(p3a) the defaults answered: development IS a default rung",
+                   "development", "git commit -m 'x'", "deny", inline_yaml=True, reader=False),
+        _flow_case("(p3b) push of the production rung on the defaults path", "feature/x",
+                   "git push origin main", "deny", inline_yaml=True, reader=False),
+    ]
 
     # the hints the denials carry, read straight off the table
     r += _hint_cases()
