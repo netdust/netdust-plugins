@@ -463,8 +463,13 @@ echo "── command-line allowlist ──"
 # on its own would be vacuous.
 cd "$P"; git checkout -q -- . 2>/dev/null; rm -f dirt.txt
 CLI="$WORK/cli"; mkdir -p "$CLI/bin"
+# Real ssh reads no stdin under -n, and the core gives -n to every read
+# (`deployed`, rollback's ledger tail) while the ledger WRITES pipe data into a
+# plain `ssh -q`. A shim that swallows stdin either way hangs the whole suite
+# whenever the runner's own stdin is an open stream that never sends EOF.
 cat > "$CLI/bin/ssh" <<SH
 #!/bin/sh
+case " \$* " in *" -qn "*|*" -n "*) exec < /dev/null;; esac
 case "\$*" in *"tail -2"*) tail -2 "$CLI/ledger" 2>/dev/null | head -1;; *) cat >/dev/null;; esac
 SH
 cat > "$CLI/bin/rsync" <<SH
@@ -587,7 +592,9 @@ printf '%s' "$out" | grep -q "stack: generic" \
 # Inherited from a polluted shell it is dropped with a warning instead, so a
 # read-only verb still runs.
 out=$(env PATH="$CLIPATH" "env=a\"; touch $CLI/pwn-envpoll; echo \"" "verb=\$(touch $CLI/pwn-verbpoll)" \
-        bash -c 'make --no-print-directory help >/dev/null && make --no-print-directory status >/dev/null && make --no-print-directory gate >/dev/null' 2>&1); rc=$?
+        bash -c 'make --no-print-directory help >/dev/null </dev/null \
+              && make --no-print-directory status >/dev/null </dev/null \
+              && make --no-print-directory gate >/dev/null </dev/null' < /dev/null 2>&1); rc=$?
 if [ $rc -eq 0 ] && [ -z "$(pwned)" ]; then
     ok "a hostile env= and verb= in the ENVIRONMENT leave help, status and gate runnable, and neither runs"
 else
