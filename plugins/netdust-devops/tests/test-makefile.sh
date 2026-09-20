@@ -566,6 +566,24 @@ else
     bad "make -e is refused: the environment may not overwrite what site.yml declares" "exit $rc: $(printf '%s' "$out" | head -2) $(pwned)"
 fi
 
+# STACK is the same hole once more: help echoes it inside a double-quoted shell
+# string, and `?=` takes an exported one whenever the project Makefile declares
+# none — which the scaffold always does, so only a hand-written Makefile is bare.
+NOSTK="$WORK/nostack"; cp -r "$P" "$NOSTK"
+printf 'include Makefile.netdust\n' > "$NOSTK/Makefile"
+out=$(env PATH="$CLIPATH" STACK="a\"; touch $CLI/pwn-stack; echo \"" \
+        make -C "$NOSTK" --no-print-directory help < /dev/null 2>&1); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && [ -z "$(pwned)" ] && printf '%s' "$out" | grep -q "stack: wp"; then
+    ok "an exported STACK reaches no shell, and site.yml still names the stack"
+else
+    bad "an exported STACK reaches no shell, and site.yml still names the stack" "exit $rc: $(pwned) $(printf '%s' "$out" | head -1)"
+fi
+printf 'STACK := generic\ninclude Makefile.netdust\n' > "$NOSTK/Makefile"
+out=$(env PATH="$CLIPATH" STACK=wp make -C "$NOSTK" --no-print-directory help < /dev/null 2>&1 | strip)
+printf '%s' "$out" | grep -q "stack: generic" \
+    && ok "…and the project Makefile's own STACK := still wins over the environment" \
+    || bad "…and the project Makefile's own STACK := still wins over the environment" "$(printf '%s' "$out" | head -1)"
+
 # Inherited from a polluted shell it is dropped with a warning instead, so a
 # read-only verb still runs.
 out=$(env PATH="$CLIPATH" "env=a\"; touch $CLI/pwn-envpoll; echo \"" "verb=\$(touch $CLI/pwn-verbpoll)" \

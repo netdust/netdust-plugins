@@ -75,7 +75,8 @@ BR_PROD   := $(shell $(SITE) environments.production.branch 2>/dev/null || $(SIT
 BR_REVIEW := $(shell $(SITE) environments.staging.branch 2>/dev/null || $(SITE) environments.production.branch 2>/dev/null)
 HAS_PROD  := $(shell $(SITE) environments.production.path >/dev/null 2>&1 && echo yes || echo no)
 
-STACK ?= $(shell $(SITE) structure.stack 2>/dev/null || echo generic)
+# `?=` would take an exported STACK; which stack this is belongs to the project file.
+STACK := $(if $(filter file override,$(origin STACK)),$(STACK),$(shell $(SITE) structure.stack 2>/dev/null || echo generic))
 
 RED := \033[31m
 GREEN := \033[32m
