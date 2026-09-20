@@ -44,22 +44,17 @@ hosting:
   ssh_staging: {{SSH_STAGING}}
   ssh_production: {{SSH_PRODUCTION}}
 
-# The promotion targets, and the only place a branch is bound to a server.
-# Promotion is linear: development → staging → production. One branch per
-# environment, named for it. A `staging:` entry whose branch is `main` means
-# every push to production's branch lands on the client's URL — the Makefile
-# derives BR_INTEG / BR_REVIEW / BR_PROD from exactly these three entries.
+# The deploy rungs, and the only place a branch is bound to a server. One
+# branch per environment, named for it — the Makefile derives BR_REVIEW and
+# BR_PROD from exactly these two entries. A `staging:` entry whose branch is
+# `main` collapses them: every push to production's branch then lands on the
+# client's URL.
 #
 # Fewer servers than rungs is fine: declare production with its branch and
-# leave path out, and `make ship` refuses by name while the ladder stays true.
-# Collapsing two rungs onto one branch is how staging ends up meaning main.
+# leave path out, and `make ship` refuses by name while the rungs stay true.
+# A development environment is not a rung: declaring one makes every flow verb
+# refuse until it is dropped.
 environments:
-  # development:                      # optional — a sandbox you may break
-  #   url: https://dev.{{DOMAIN}}
-  #   path: TODO                      # absolute path on the server
-  #   branch: development
-  #   role: "sandbox — may break"
-  #   confirm: false
   staging:
     url: https://staging.{{DOMAIN}}
     path: TODO                        # absolute path on the server

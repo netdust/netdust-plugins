@@ -261,6 +261,9 @@ endef
 .PHONY: ship
 ship: ## Ship to production: the staging commit that was deployed, or a gated hotfix
 	@$(MAKE) --no-print-directory _need-tty verb=ship
+# Before HAS_PROD: an unmigrated project is told to migrate, not to go and add
+# the production environment its site.yml may also still be missing.
+	@$(MAKE) --no-print-directory _flow-ready
 	@if [ "$(HAS_PROD)" != "yes" ]; then \
 		echo "$(RED)✗ No production environment in site.yml yet$(RESET)"; \
 		echo "$(YELLOW)  Add environments.production once the site is live.$(RESET)"; exit 1; fi
@@ -782,6 +785,17 @@ _need-tty:
 		exit 1; \
 	fi
 
+# Two rungs, and every verb below merges between them. A project that still
+# declares a development environment expects a third, so the verbs it would run
+# are refused rather than silently doing something else with its branches.
+_flow-ready:
+	@[ -z "$$($(SITE) environments.development.branch 2>/dev/null)" ] || { \
+		echo "$(RED)✗ site.yml declares a development environment — this core has no verb that merges into one$(RESET)"; \
+		echo "$(YELLOW)  migrate: drop environments.development from site.yml$(RESET)"; \
+		echo "$(YELLOW)  or go back: git log --oneline -- .netdust-devops$(RESET)"; \
+		echo "$(YELLOW)              git checkout <commit before the update> -- Makefile.netdust mk scripts .netdust-devops$(RESET)"; \
+		exit 1; }
+
 # The flow needs a remote and its two branches on it. Refuse by name — a
 # half-run verb dying on a git error is exactly what taught agents to fall back
 # to raw git.
@@ -790,6 +804,7 @@ _need-tty:
 # re-pointed here rather than refused. Commits on the production branch are
 # somebody's work, and are never discarded to unblock a verb.
 _ensure-flow:
+	@$(MAKE) --no-print-directory _flow-ready
 	@if ! git remote get-url origin >/dev/null 2>&1; then \
 		echo "$(RED)✗ no 'origin' remote — the branch flow needs one$(RESET)"; \
 		echo "$(YELLOW)  git remote add origin <url>$(RESET)"; \
@@ -858,5 +873,5 @@ _check-requirements:
 
 .PHONY: _deploy-transport _deploy-rsync _deploy-gitpush _deploy-gate _deploy-confirm \
         _ask-confirm _deploy-ledger _deploy-tag _deploy-opcache _backup-payload _flow-state \
-        _branch-role _ensure-safe-branch _warn-rung-branch _need-tty _ensure-flow \
+        _branch-role _ensure-safe-branch _warn-rung-branch _need-tty _flow-ready _ensure-flow \
         _ensure-clean-git _refuse-production _check-requirements _worktree-guard

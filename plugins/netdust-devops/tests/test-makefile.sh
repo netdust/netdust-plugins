@@ -5,6 +5,7 @@
 
 set -uo pipefail
 DIST="$(cd "$(dirname "${BASH_SOURCE[0]}")/../dist" && pwd)"
+ROOT="$(dirname "$DIST")"
 PASS=0; FAIL=0
 ok()   { printf '  ✅ %s\n' "$1"; PASS=$((PASS+1)); }
 bad()  { printf '  ❌ %s\n'  "$1"; printf '     %s\n' "${2:-}"; FAIL=$((FAIL+1)); }
@@ -43,11 +44,14 @@ else
 fi
 
 # The middle rung is gone: no variable for it, and no verb that merges one rung
-# into the next (FR-1, FR-2). The forbidden strings are assembled here rather
-# than spelled, so this file stays clean under the sweep it asserts.
-rung=$(grep -rlE "BR_""INTEG|make ""release\b" "$DIST" 2>/dev/null | sed "s|$DIST/||" | tr '\n' ' ')
-[ -z "$rung" ] && ok "the vendored core names no removed rung or verb" \
-               || bad "the vendored core names no removed rung or verb" "$rung"
+# into the next (FR-1, FR-2). The scaffolder and the templates are swept too —
+# a template that teaches it ships the removed rung into every new project. The
+# forbidden strings are assembled here rather than spelled, so this file stays
+# clean under the sweep it asserts.
+rung=$(grep -rlE "BR_""INTEG|make ""release\b" "$DIST" "$ROOT/bin" "$ROOT/templates" 2>/dev/null \
+         | sed "s|$ROOT/||" | tr '\n' ' ')
+[ -z "$rung" ] && ok "the core, the scaffolder and the templates name no removed rung or verb" \
+               || bad "the core, the scaffolder and the templates name no removed rung or verb" "$rung"
 
 # Every (stack, template) row in the registry must scaffold cleanly, with no
 # token left unrendered. A token added to a template with no matching value
@@ -57,10 +61,10 @@ rung=$(grep -rlE "BR_""INTEG|make ""release\b" "$DIST" 2>/dev/null | sed "s|$DIS
 # Asserted by SCAFFOLDING, not by grepping the script: the renderer loops over
 # key names, so the literal "{{TOKEN}}" never appears in bin/new-project and a
 # grep-based check silently passes forever.
-SCAFF="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/bin/new-project"
-REG="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/templates/stacks.tsv"
+SCAFF="$ROOT/bin/new-project"
+REG="$ROOT/templates/stacks.tsv"
 TOKWORK=$(mktemp -d)
-rowfail=""
+rowfail=""; brfail=""; flowfail=""
 while IFS=$'\t' read -r st tp rest; do
     case "$st" in ''|\#*) continue;; esac
     out="$TOKWORK/$st-$tp"
@@ -77,10 +81,21 @@ while IFS=$'\t' read -r st tp rest; do
               "$out" --exclude-dir=.git --exclude-dir=mk --exclude=Makefile.netdust \
               --exclude=work-audit.sh 2>/dev/null | sed "s|$out/||" | tr '\n' ' ' || true)
     [ -n "$named" ] && rowfail="$rowfail $st/$tp(names-caller: $named)"
+    # A fresh project has the two rungs and nothing else, so nothing it does
+    # next can be refused as unmigrated (FR-11, SC-7).
+    br=$(git -C "$out" branch --format='%(refname:short)' 2>/dev/null | sort | paste -sd' ')
+    [ "$br" = "main staging" ] || brfail="$brfail $st/$tp(branches: ${br:-none})"
+    fout=$(cd "$out" && timeout 20 make --no-print-directory feature name=x < /dev/null 2>&1 | strip)
+    case "$fout" in *"environments.development"*) flowfail="$flowfail $st/$tp(refused-as-unmigrated)";; esac
+    case "$fout" in *"no 'origin' remote"*) ;; *) flowfail="$flowfail $st/$tp(never-reached-the-flow-floor)";; esac
 done < "$REG"
 rm -rf "$TOKWORK"
 [ -z "$rowfail" ] && ok "every registry row scaffolds with no unrendered token" \
                   || bad "every registry row scaffolds with no unrendered token" "$rowfail"
+[ -z "$brfail" ] && ok "…and creates main and staging only" \
+                 || bad "…and creates main and staging only" "$brfail"
+[ -z "$flowfail" ] && ok "…and its first make feature is not refused as unmigrated" \
+                   || bad "…and its first make feature is not refused as unmigrated" "$flowfail"
 
 # The registry is the only place a project shape is declared.
 regcols=$(grep -vc '^#' "$REG" 2>/dev/null || echo 0)
@@ -99,7 +114,6 @@ regcols=$(grep -vc '^#' "$REG" 2>/dev/null || echo 0)
 # herdr. Those are the environment the verbs run in, not things that call them,
 # and refusing to name them would make the skills useless. The test targets
 # callers only.
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 callers=$(grep -rlniE 'netdust-wp-manager|wp-manager|new-site\.sh|the fleet manager' "$ROOT" \
             --exclude-dir=.git --exclude="$(basename "${BASH_SOURCE[0]}")" 2>/dev/null || true)
 [ -z "$callers" ] && ok "the plugin names no caller" \
@@ -333,6 +347,36 @@ if [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "payload lives in git"; then
     ok "ship skips the payload archive on git-push"
 else
     bad "ship skips the payload archive on git-push" "exit $rc: $(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+fi
+
+# This fixture never migrated off `development`, which two live client projects
+# have not either (FR-10). No verb here merges into a third rung, so each one
+# that would refuses — naming the migration and the way back to the core that
+# still had it — before it creates a branch or touches origin. The terminal
+# guard fires first on promote, unpromote and ship, so all five run under a pty.
+REMOTES=$(git ls-remote origin); BRANCHES=$(git branch --list 'feature/*' 'hotfix/*')
+unmig=""
+for v in "feature name=x" "hotfix name=x" "promote name=x" "unpromote name=x" "ship"; do
+    out=$(timeout 30 script -qec "make --no-print-directory $v" /dev/null <<< yes 2>&1); rc=$?
+    out=$(printf '%s' "$out" | strip | tr -d '\r')
+    [ $rc -ne 0 ] || unmig="$unmig ${v%% *}(exit-0)"
+    printf '%s' "$out" | grep -q "drop environments.development from site.yml" \
+        || unmig="$unmig ${v%% *}(no-migrate-line)"
+    printf '%s' "$out" | grep -q "git checkout <commit before the update> -- Makefile.netdust mk scripts .netdust-devops" \
+        || unmig="$unmig ${v%% *}(no-way-back)"
+done
+[ -z "$unmig" ] && ok "every merging verb refuses on an unmigrated project, naming the migration and the way back" \
+               || bad "every merging verb refuses on an unmigrated project, naming the migration and the way back" "$unmig"
+[ "$(git branch --list 'feature/*' 'hotfix/*')" = "$BRANCHES" ] && [ "$(git ls-remote origin)" = "$REMOTES" ] \
+    && ok "…and it branched nothing and left origin exactly as it was" \
+    || bad "…and it branched nothing and left origin exactly as it was" "$(git branch --list 'feature/*' 'hotfix/*')"
+
+# Everything that does not merge keeps working: the refusal is a flow floor,
+# not a lockout of the project.
+if timeout 60 make status < /dev/null >/dev/null 2>&1 && timeout 20 make gate < /dev/null >/dev/null 2>&1; then
+    ok "…while status and gate still run there"
+else
+    bad "…while status and gate still run there" "status or gate exited non-zero"
 fi
 cd "$P"
 
