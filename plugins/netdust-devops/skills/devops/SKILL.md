@@ -83,10 +83,10 @@ especially the deletions.
 
 **Never run `make ship` unless the user asked for it in that turn.** Not
 because it follows from an earlier plan, not because the work looks finished.
-`save`, `promote`, `unpromote`, `ship`, `rollback` (and a `confirm: true`
-deploy) all check for a terminal before doing anything at all, so
-`echo yes | make ship` and `make ship < answers` both refuse without touching
-a server. That check is a speed bump against automation, not a control — a
+`save`, `promote`, `unpromote` and `ship` check for a terminal before doing
+anything at all, so `echo yes | make ship` and `make ship < answers` refuse
+without touching a server; `rollback` and a `confirm: true` deploy only read
+first, then refuse. That check is a speed bump against automation, not a control — a
 session that wanted one could hand itself a pty, so **for an agent the rule is
 *don't*, not *can't*.** An agent gets the state ready and hands the verb over.
 
@@ -120,8 +120,8 @@ that carry a decision:
 deploy cannot do.
 
 **What `ship` checks** — three equalities, read from **origin**, since a local
-ref proves nothing: HEAD is `origin/staging` (or, on a `hotfix/*` branch,
-production is its ancestor — no local-only commit ships); `deployed/staging`
+ref proves nothing: HEAD is `origin/staging`, so no local-only commit ships (a `hotfix/*`
+branch skips to the last check, and ship pushes it); `deployed/staging`
 on origin names this commit (staging was deployed and looked at since its
 last rebuild, never before); `origin/production` is an ancestor of HEAD
 (staging still contains it). Then `ship` runs `commands.gate` itself — a red
