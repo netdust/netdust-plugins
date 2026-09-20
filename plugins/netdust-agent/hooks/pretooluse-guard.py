@@ -318,7 +318,7 @@ def check_upstream_floor(hook_input: dict) -> dict | None:
 # (git missing, unreadable cwd, a subprocess timeout) fails OPEN like the rest of the hook.
 
 FLOW_DEFAULT_RUNGS = ("main", "master", "staging", "development")
-FLOW_CONFIRMING_VERBS = r"(?:ship|release|promote|deploy)"
+FLOW_CONFIRMING_VERBS = r"(?:ship|unpromote|promote|deploy)"
 # A make invocation that reaches a confirming verb (the verb must END there —
 # `deploy-test` is not `deploy`).
 FLOW_MAKE_CONFIRM = re.compile(
@@ -354,28 +354,28 @@ FLOW_SWITCH_TO = re.compile(
 
 FLOW_VERB_FOR = {
     "commit": "make feature name=<x> first (a rung is deploy-only), then commit there",
-    "merge": "make finish (feature → integration, hotfix → production and back down) or make promote name=<x>",
-    "rebase": "make finish — the rungs are merged --no-ff, never rebased",
-    "cherry-pick": "make hotfix name=<x>, then make finish",
-    "am": "make hotfix name=<x>, then make finish",
-    "revert": "make hotfix name=<x> carrying the revert, then make finish",
+    "merge": "make promote name=<x> — staging is rebuilt from production, never merged into by hand",
+    "rebase": "make promote name=<x> — staging is rebuilt, never rebased",
+    "cherry-pick": "make hotfix name=<x>, then make ship",
+    "am": "make hotfix name=<x>, then make ship",
+    "revert": "make hotfix name=<x> carrying the revert, then make ship",
     "reset": "make rollback env=<name> — a rung's history is the deploy ledger",
     "checkout -b": "make feature name=<x> / make hotfix name=<x> — they pick the right base from site.yml",
     "switch -c": "make feature name=<x> / make hotfix name=<x> — they pick the right base from site.yml",
-    "branch -f": "make finish — a rung pointer moves only by a --no-ff merge through the flow",
-    "update-ref": "make finish — a rung pointer moves only by a --no-ff merge through the flow",
+    "branch -f": "make promote name=<x> — staging's pointer moves only by a rebuild, production's only by make ship",
+    "update-ref": "make promote name=<x> — staging's pointer moves only by a rebuild, production's only by make ship",
     "symbolic-ref": "make feature name=<x> — never re-point HEAD at a rung by hand",
     "stash pop": "make feature name=<x>, then pop the stash there",
     "stash apply": "make feature name=<x>, then apply the stash there",
-    "push": "make finish (it pushes the rung it merged into) or make deploy env=<name>",
-    "fetch": "make finish — a rung is updated by merging through the flow, never by a fetch refspec",
-    "branch -D": "make finish / make promote name=<x> — a rung is never deleted; the flow promotes through it",
+    "push": "make promote name=<x> (it pushes staging) or make deploy env=<name>",
+    "fetch": "make promote name=<x> — staging is rebuilt by the flow, never by a fetch refspec",
+    "branch -D": "make promote name=<x> / make unpromote name=<x> — a rung is never deleted; staging is rebuilt",
 }
 
 
 def _rung_named(args: str, rungs: set[str]) -> str | None:
-    """A rung named as a WHOLE ref token in push/fetch args: `development`,
-    `HEAD:development`, `+development`, `refs/heads/development`, `:development`
+    """A rung named as a WHOLE ref token in push/fetch args: `staging`,
+    `HEAD:staging`, `+staging`, `refs/heads/staging`, `:staging`
     (delete) — never `feature/main-nav` or `hotfix/staging-fix`."""
     for b in rungs:
         if re.search(rf"(?:^|[\s:+])(?:refs/heads/)?{re.escape(b)}(?=\s|$)", args):
@@ -450,8 +450,8 @@ def _flow_deny(what: str, verb: str, detail: str) -> dict:
         "permissionDecisionReason": (
             f"netdust-agent flow floor: {what} bypasses the branch flow this project's "
             f"Makefile owns ({detail}). Use the verb instead: {verb}. The Makefile is the "
-            f"only door to a rung branch; nothing reaches production that did not walk "
-            f"feature → integration → review → production through it."),
+            f"only door to a rung branch: features and hotfixes branch from production; "
+            f"staging is rebuilt by make promote, and production moves only by make ship."),
     }}
 
 
