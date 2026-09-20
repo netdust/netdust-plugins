@@ -455,5 +455,219 @@ grep -q "^STACK := wp" Makefile \
     || bad "devops-update leaves the project Makefile alone" "project Makefile was overwritten"
 
 echo
+echo "── command-line allowlist ──"
+# Every variable settable on a make command line reaches a shell inside a
+# double-quoted string, where $( ) substitutes and a " ends the quote — so
+# `make rollback env='a"; touch PWNED; echo "'` used to run the payload. Each
+# case pins the refusal's reason AND the absence of its marker: a non-zero exit
+# on its own would be vacuous.
+cd "$P"; git checkout -q -- . 2>/dev/null; rm -f dirt.txt
+CLI="$WORK/cli"; mkdir -p "$CLI/bin"
+cat > "$CLI/bin/ssh" <<SH
+#!/bin/sh
+case "\$*" in *"tail -2"*) tail -2 "$CLI/ledger" 2>/dev/null | head -1;; *) cat >/dev/null;; esac
+SH
+cat > "$CLI/bin/rsync" <<SH
+#!/bin/sh
+printf '[%s]' "\$@" >> "$CLI/rsync.log"; echo >> "$CLI/rsync.log"
+SH
+chmod +x "$CLI/bin/ssh" "$CLI/bin/rsync"
+CLIPATH="$CLI/bin:$PATH"
+M() { env PATH="$CLIPATH" make --no-print-directory "$@" < /dev/null 2>&1; }
+pwned() { (cd "$CLI" && ls pwn-* 2>/dev/null | paste -sd' '); }
+# Three payload forms per sink: make's own expansion, command substitution in
+# the shell the recipe builds, and a break out of the surrounding "…".
+inject() {
+    local dir="$1" tgt="$2" var="$3" f; shift 3
+    for f in "\$(shell touch $CLI/pwn-$tgt-$var-make)" "\$(touch $CLI/pwn-$tgt-$var-sub)" \
+             "a\"; touch $CLI/pwn-$tgt-$var-quote; echo \""; do
+        env PATH="$CLIPATH" make -C "$dir" --no-print-directory "$tgt" "$@" "$var=$f" \
+            < /dev/null > /dev/null 2>&1
+    done
+}
+
+git checkout -q staging
+inject "$P" rollback        env
+inject "$P" deploy          env
+inject "$P" _need-tty       verb
+inject "$P" _worktree-guard rung
+inject "$P" deploy          dryrun env=staging
+echo dirt > dirt.txt; inject "$P" _ensure-clean-git verb; rm -f dirt.txt
+[ -z "$(pwned)" ] && ok "env=, verb=, rung= and dryrun= run nothing in the targets that interpolate them" \
+                  || bad "env=, verb=, rung= and dryrun= run nothing in the targets that interpolate them" "$(pwned)"
+
+out=$(M _need-tty 'verb=a"; echo "' | strip)
+printf '%s' "$out" | grep -q "Refused verb=" \
+    && ok "…and the refusal names the variable it refused" \
+    || bad "…and the refusal names the variable it refused" "$(printf '%s' "$out" | head -2)"
+
+# name= is checked by the verbs themselves: its empty case needs the Usage line.
+for v in feature hotfix promote unpromote; do
+    for f in "a\"; touch $CLI/pwn-name-$v; echo \"" "\$(shell touch $CLI/pwn-nameshell-$v)"; do
+        M "$v" "name=$f" > /dev/null 2>&1
+    done
+done
+[ -z "$(pwned)" ] && ok "a quote-break or \$(shell) payload in name= reaches no shell" \
+                  || bad "a quote-break or \$(shell) payload in name= reaches no shell" "$(pwned)"
+
+# The stack layers are not edited: one make variable is global to the
+# invocation, so the core's parse-time refusal covers a sink it cannot see.
+WPU="$WORK/wpu"; cp -r "$P" "$WPU"
+printf 'STACK := wp\ninclude Makefile.netdust\n_check-ddev _pull-db _pull-plugins _pull-uploads:\n\t@:\n' > "$WPU/Makefile"
+inject "$WPU" pull uploads
+[ -z "$(pwned)" ] && ok "uploads= runs nothing in the wp layer's pull, which the core never sees" \
+                  || bad "uploads= runs nothing in the wp layer's pull, which the core never sees" "$(pwned)"
+
+# A variable the flow does not take is not an operator input at all. SITE= is
+# the command in $(shell $(SITE) …), so it would run at PARSE time.
+for v in "SITE=touch $CLI/pwn-site; scripts/site" "WEBROOT=a\"; touch $CLI/pwn-webroot; echo \"" "_name-ok=ok"; do
+    M status "$v" > /dev/null 2>&1
+    M promote "$v" "name=a\"; touch $CLI/pwn-nameloose; echo \"" > /dev/null 2>&1
+done
+[ -z "$(pwned)" ] && ok "SITE=, WEBROOT= and _name-ok= are refused, so none of them reaches a shell" \
+                  || bad "SITE=, WEBROOT= and _name-ok= are refused, so none of them reaches a shell" "$(pwned)"
+
+out=$(M status SITE=x); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "SITE is not an operator input"; then
+    ok "make status SITE=… is refused at parse, naming SITE"
+else
+    bad "make status SITE=… is refused at parse, naming SITE" "exit $rc: $(printf '%s' "$out" | head -2)"
+fi
+
+out=$(M help NAME=x); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "NAME is not an operator input"; then
+    ok "make help NAME=x is refused, naming NAME"
+else
+    bad "make help NAME=x is refused, naming NAME" "exit $rc: $(printf '%s' "$out" | head -2)"
+fi
+
+# A project whose own target takes NAME opens the door itself, ABOVE the
+# include — _CLI_VARS is :=, so a declaration below it is read too late.
+cp Makefile "$CLI/Makefile.keep"
+printf 'STACK := wp\n_CLI_EXTRA := NAME\ninclude Makefile.netdust\n' > Makefile
+out=$(M help NAME=x); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "FLOW"; then
+    ok "…and _CLI_EXTRA := NAME lets the project's own input through"
+else
+    bad "…and _CLI_EXTRA := NAME lets the project's own input through" "exit $rc: $(printf '%s' "$out" | head -2)"
+fi
+awk '/_CLI_EXTRA/{d=NR} /^include Makefile.netdust/{i=NR} END{exit !(d && i && d < i)}' Makefile \
+    && ok "…declared above the include, where the core still reads it" \
+    || bad "…declared above the include, where the core still reads it" "$(cat Makefile)"
+cp "$CLI/Makefile.keep" Makefile
+
+# -e is the same hole from the other side: it lets the environment overwrite
+# every value this file reads from site.yml.
+out=$(env PATH="$CLIPATH" BLUE="a\"; touch $CLI/pwn-dashe; echo \"" \
+        make -e --no-print-directory help < /dev/null 2>&1); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "make -e is refused" && [ -z "$(pwned)" ]; then
+    ok "make -e is refused: the environment may not overwrite what site.yml declares"
+else
+    bad "make -e is refused: the environment may not overwrite what site.yml declares" "exit $rc: $(printf '%s' "$out" | head -2) $(pwned)"
+fi
+
+# Inherited from a polluted shell it is dropped with a warning instead, so a
+# read-only verb still runs.
+out=$(env PATH="$CLIPATH" "env=a\"; touch $CLI/pwn-envpoll; echo \"" "verb=\$(touch $CLI/pwn-verbpoll)" \
+        bash -c 'make --no-print-directory help >/dev/null && make --no-print-directory status >/dev/null && make --no-print-directory gate >/dev/null' 2>&1); rc=$?
+if [ $rc -eq 0 ] && [ -z "$(pwned)" ]; then
+    ok "a hostile env= and verb= in the ENVIRONMENT leave help, status and gate runnable, and neither runs"
+else
+    bad "a hostile env= and verb= in the ENVIRONMENT leave help, status and gate runnable" "exit $rc: $(pwned) $(printf '%s' "$out" | strip | head -2)"
+fi
+
+out=$(M _need-tty verb="promote name=x" | strip)
+printf '%s' "$out" | grep -q "make promote name=x needs a terminal" \
+    && ok "verb= still carries a space and an '=' through to _need-tty" \
+    || bad "verb= still carries a space and an '=' through to _need-tty" "$(printf '%s' "$out" | head -2)"
+
+# The cases below read deployed/staging, and an unfixed core deploys for real
+# out of the injections above — so the tag starts from nothing either way.
+git push -q --delete origin refs/tags/deployed/staging > /dev/null 2>&1
+git tag -d deployed/staging > /dev/null 2>&1
+
+# dryrun= is a boolean: the core writes rsync's own flag, so no make variable
+# ever carries another program's argument.
+rsyncrun() { : > "$CLI/rsync.log"
+    RSOUT=$(env PATH="$CLIPATH" make --no-print-directory _deploy-rsync env=staging "$@" < /dev/null 2>&1); RSRC=$?; }
+rsyncarg() { grep -cF -- "[$1]" "$CLI/rsync.log"; }
+rsynclines() { wc -l < "$CLI/rsync.log" | tr -d ' '; }
+rsyncrun
+if [ $RSRC -eq 0 ] && [ "$(rsynclines)" = 1 ] && [ "$(rsyncarg --dry-run)" = 0 ]; then
+    ok "_deploy-rsync without dryrun= runs rsync once, without --dry-run"
+else
+    bad "_deploy-rsync without dryrun= runs rsync once, without --dry-run" "exit $RSRC: $(cat "$CLI/rsync.log")"
+fi
+rsyncrun dryrun=1
+if [ $RSRC -eq 0 ] && [ "$(rsyncarg --dry-run)" = 1 ] && [ "$(rsyncarg 1)" = 0 ]; then
+    ok "dryrun=1 hands rsync --dry-run, never the value itself"
+else
+    bad "dryrun=1 hands rsync --dry-run, never the value itself" "exit $RSRC: $(cat "$CLI/rsync.log")"
+fi
+rsyncrun dryrun=--dry-run
+if [ $RSRC -ne 0 ] && printf '%s' "$RSOUT" | strip | grep -q "Refused dryrun=" && [ ! -s "$CLI/rsync.log" ]; then
+    ok "dryrun=--dry-run is refused at parse, naming dryrun=, and rsync never runs"
+else
+    bad "dryrun=--dry-run is refused at parse, naming dryrun=, and rsync never runs" "exit $RSRC: $(printf '%s' "$RSOUT" | strip | head -2)"
+fi
+[ "$(grep -c 'dryrun=--dry-run' "$DIST/Makefile.netdust")" = 0 ] \
+    && ok "no make variable in the core carries rsync's flag" \
+    || bad "no make variable in the core carries rsync's flag" "$(grep -n 'dryrun=--dry-run' "$DIST/Makefile.netdust" | head -2)"
+
+: > "$CLI/rsync.log"
+out=$(M deploy-test env=staging); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && [ "$(rsyncarg --dry-run)" = 1 ] && [ -z "$(git ls-remote origin 'refs/tags/deployed/*')" ]; then
+    ok "make deploy-test env=staging reaches the transport with --dry-run, and writes no ledger"
+else
+    bad "make deploy-test env=staging reaches the transport with --dry-run, and writes no ledger" "exit $rc: $(printf '%s' "$out" | tail -2)"
+fi
+
+echo
+echo "── the deploy tag fails closed ──"
+# ship reads deployed/staging from origin to prove a tree was deployed, so a
+# tag that does not reach origin is a failed deploy, not a warning.
+HOOK="$WORK/origin.git/hooks/pre-receive"
+NOTAG='#!/bin/sh
+while read -r o n r; do case "$r" in refs/tags/deployed/*) exit 1;; esac; done'
+printf '%s\n' "$NOTAG" > "$HOOK"; chmod +x "$HOOK"
+out=$(M deploy env=staging); rc=$?; rm -f "$HOOK"; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "deploy tag not pushed — the ledger on origin is stale"; then
+    ok "origin refusing the deploy tag fails the deploy, naming the stale ledger"
+else
+    bad "origin refusing the deploy tag fails the deploy, naming the stale ledger" "exit $rc: $(printf '%s' "$out" | tail -2)"
+fi
+out=$(M deploy env=staging); rc=$?
+if [ $rc -eq 0 ] && [ "$(git ls-remote origin refs/tags/deployed/staging | cut -f1)" = "$(git rev-parse HEAD)" ]; then
+    ok "…and with origin taking it, deploy stamps deployed/staging at HEAD"
+else
+    bad "…and with origin taking it, deploy stamps deployed/staging at HEAD" "exit $rc: $(printf '%s' "$out" | strip | tail -2)"
+fi
+
+# A rollback that leaves the tag on the rolled-back-FROM commit lets ship pass
+# against a tree the environment no longer runs.
+echo rb > rb.txt && git add rb.txt && git -c user.email=t@t -c user.name=T commit -qm rb
+git push -q origin staging 2>/dev/null
+PREV=$(git rev-parse HEAD~1)
+printf '%s %s staging T\n%s %s staging T\n' 2026-01-01T00:00:00 "$PREV" 2026-01-02T00:00:00 "$(git rev-parse HEAD)" > "$CLI/ledger"
+M deploy env=staging > /dev/null 2>&1
+WTN=$(git worktree list | wc -l | tr -d ' ')
+printf '%s\n' "$NOTAG" > "$HOOK"; chmod +x "$HOOK"
+out=$(env PATH="$CLIPATH" script -qec "make --no-print-directory rollback env=staging" /dev/null <<< yes 2>&1); rc=$?
+rm -f "$HOOK"; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "deploy tag not pushed" \
+   && [ "$(git worktree list | wc -l | tr -d ' ')" = "$WTN" ]; then
+    ok "a rollback whose tag origin refuses fails, and leaves no worktree behind"
+else
+    bad "a rollback whose tag origin refuses fails, and leaves no worktree behind" "exit $rc: $(printf '%s' "$out" | tail -2)"
+fi
+out=$(env PATH="$CLIPATH" script -qec "make --no-print-directory rollback env=staging" /dev/null <<< yes 2>&1); rc=$?
+if [ $rc -eq 0 ] && [ "$(git ls-remote origin refs/tags/deployed/staging | cut -f1)" = "$PREV" ]; then
+    ok "make rollback env=staging moves deployed/staging on origin to the commit it rolled back to"
+else
+    bad "make rollback env=staging moves deployed/staging on origin to the commit it rolled back to" \
+        "exit $rc: tag=$(git ls-remote origin refs/tags/deployed/staging | cut -f1) want=$PREV"
+fi
+
+echo
 printf '%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

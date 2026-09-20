@@ -5,6 +5,8 @@ argument-hint: <ServiceName>
 
 Create a new service class named `$1Service`.
 
+`make service` / `controller` / `listener` are this project's own targets, not the vendored core's, and the core refuses any command-line variable it was not told about — so the project `Makefile` declares `_CLI_EXTRA := NAME` above `include Makefile.netdust`.
+
 Steps:
 1. Run `make service NAME=$1` (this generates `app/Services/$1Service.php`).
 2. Open the generated file and:

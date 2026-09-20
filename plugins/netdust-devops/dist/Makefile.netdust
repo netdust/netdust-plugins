@@ -15,6 +15,55 @@
 #           └── mk/$(STACK).mk     — local loop + data ops per stack
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Every variable settable on the command line reaches a shell somewhere — here
+# or in a stack layer — inside a double-quoted string, where $( ) is command
+# substitution and " ends the quote. So each is pinned against make's own
+# expansion and refused HERE, at parse time, against the narrowest charset its
+# real values need. A make variable is global to the invocation, so this block
+# covers the mk/*.mk sinks too. Anything else is not an operator input at all;
+# a project that adds one declares it before the include: `_CLI_EXTRA := NAME`.
+_CLI_GUARDED := env verb dryrun rung uploads
+_CLI_VARS  := name $(_CLI_GUARDED) $(if $(filter file override,$(origin _CLI_EXTRA)),$(_CLI_EXTRA))
+_CLI_TYPED := $(foreach v,$(_CLI_VARS),$(if $(findstring command line,$(origin $v)),$v))
+_CLI_LOOSE := $(filter-out $(_CLI_VARS),$(foreach a,$(MAKEOVERRIDES),$(if $(findstring =,$a),$(firstword $(subst =, ,$a)))))
+_ESC := $(shell printf '\033')
+_RED := $(_ESC)[31m
+_OFF := $(_ESC)[0m
+$(if $(_CLI_LOOSE),$(error $(_RED)✗ $(_CLI_LOOSE) is not an operator input — the flow takes: $(strip $(_CLI_VARS))$(_OFF)))
+# -e is the same hole from the other side: it lets the environment overwrite
+# every value this file reads from site.yml. Short flags reach MAKEFLAGS as a
+# bare first word, so --no-print-directory is not mistaken for one.
+$(if $(findstring e,$(filter-out -%,$(firstword $(MAKEFLAGS)))),$(error $(_RED)✗ make -e is refused — the environment may not overwrite what site.yml declares$(_OFF)))
+$(foreach v,$(_CLI_VARS),$(eval override $v := $$(value $v)))
+
+_LETTERS := a b c d e f g h i j k l m n o p q r s t u v w x y z A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+_WORD := $(_LETTERS) 0 1 2 3 4 5 6 7 8 9
+_strip-chars = $(if $2,$(call _strip-chars,$(subst $(firstword $2),,$1),$(wordlist 2,$(words $2),$2)),$1)
+# $1 holds only $2's characters, plus whitespace — which is what verb= needs.
+_chars-ok = $(if $(strip $(call _strip-chars,$1,$2)),,ok)
+_word-ok = $(and $(filter 1,$(words $1)),$(call _chars-ok,$1,$2),$(strip $(foreach c,$3,$(if $(patsubst $c%,,$1),,ok))))
+
+_name-ok = $(call _word-ok,$(name),$(_WORD) . _ -,$(_LETTERS))
+_env-ok = $(call _word-ok,$(env),$(_WORD) _ -,$(_LETTERS))
+_uploads-ok = $(call _word-ok,$(uploads),$(_WORD) _ -,$(_LETTERS))
+# rung= carries a branch name: it may start with a digit and may be nested.
+_rung-ok = $(call _word-ok,$(rung),$(_WORD) . _ - /,$(_WORD))
+# verb= carries a space and an '=' — verb="promote name=$(name)".
+_verb-ok = $(call _chars-ok,$(verb),$(_WORD) = . _ -)
+_dryrun-ok = $(call _word-ok,$(dryrun),$(_WORD),$(_WORD))
+_why-env := a letter, then letters, digits, dash, underscore
+_why-uploads := $(_why-env)
+_why-rung := a branch name — letters, digits, dot, dash, underscore, slash
+_why-verb := letters, digits, spaces, '=', dot, dash, underscore
+_why-dryrun := a switch — dryrun=1, or nothing
+# Typed on the command line it is refused; inherited from the environment it is
+# dropped, so a polluted shell cannot halt help, status or gate.
+_cli-check = $(if $($1),$(if $(_$1-ok),,$(if $(filter $1,$(_CLI_TYPED)),$(error $(_RED)✗ Refused $1= — $(_why-$1)$(_OFF)),$(eval override undefine $1)$(warning $(_RED)✗ ignoring $1= from the environment — $(_why-$1)$(_OFF)))))
+$(foreach v,$(_CLI_GUARDED),$(call _cli-check,$v))
+
+# Checked in make, so no name= text reaches a shell until it is known to be safe.
+_check-name = $(if $(name),$(if $(_name-ok),:,echo "$(RED)✗ Invalid name: a letter, then letters, digits, dot, dash, underscore$(RESET)"; exit 1),echo "$(RED)Usage: make $1 name=$2$(RESET)"; exit 1)
+
 SITE := scripts/site
 
 PROJECT_NAME := $(shell $(SITE) site.name)
@@ -99,9 +148,7 @@ save: ## Commit the current branch (auto-stages all changes)
 
 .PHONY: feature
 feature: ## Start a feature (make feature name=my-feature) — branches from the production branch
-	@if [ -z "$(name)" ]; then echo "$(RED)Usage: make feature name=my-feature$(RESET)"; exit 1; fi
-	@if ! echo "$(name)" | grep -qE '^[a-zA-Z][a-zA-Z0-9._-]*$$'; then \
-		echo "$(RED)✗ Invalid name: use letters, digits, dot, dash, underscore$(RESET)"; exit 1; fi
+	@$(call _check-name,feature,my-feature)
 	@$(MAKE) --no-print-directory _ensure-flow
 	@$(MAKE) --no-print-directory _ensure-clean-git verb=feature
 	@git fetch --quiet origin $(BR_PROD)
@@ -110,9 +157,7 @@ feature: ## Start a feature (make feature name=my-feature) — branches from the
 
 .PHONY: hotfix
 hotfix: ## Start a hotfix (make hotfix name=vat-rounding) — branches from the production branch
-	@if [ -z "$(name)" ]; then echo "$(RED)Usage: make hotfix name=my-fix$(RESET)"; exit 1; fi
-	@if ! echo "$(name)" | grep -qE '^[a-zA-Z][a-zA-Z0-9._-]*$$'; then \
-		echo "$(RED)✗ Invalid name: use letters, digits, dot, dash, underscore$(RESET)"; exit 1; fi
+	@$(call _check-name,hotfix,my-fix)
 	@$(MAKE) --no-print-directory _ensure-flow
 	@$(MAKE) --no-print-directory _ensure-clean-git verb=hotfix
 	@git fetch --quiet origin $(BR_PROD)
@@ -150,9 +195,7 @@ endef
 
 .PHONY: promote
 promote: ## Put a feature on the staging branch (make promote name=my-feature)
-	@if [ -z "$(name)" ]; then echo "$(RED)Usage: make promote name=my-feature$(RESET)"; exit 1; fi
-	@if ! echo "$(name)" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._-]*$$'; then \
-		echo "$(RED)✗ Invalid name: use letters, digits, dot, dash, underscore$(RESET)"; exit 1; fi
+	@$(call _check-name,promote,my-feature)
 	@if [ "$(BR_REVIEW)" = "$(BR_PROD)" ]; then \
 		echo "$(RED)✗ No staging environment in site.yml — promote needs one$(RESET)"; exit 1; fi
 	@$(MAKE) --no-print-directory _need-tty verb=promote
@@ -173,9 +216,7 @@ promote: ## Put a feature on the staging branch (make promote name=my-feature)
 
 .PHONY: unpromote
 unpromote: ## Take a feature off the staging branch (make unpromote name=my-feature)
-	@if [ -z "$(name)" ]; then echo "$(RED)Usage: make unpromote name=my-feature$(RESET)"; exit 1; fi
-	@if ! echo "$(name)" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._-]*$$'; then \
-		echo "$(RED)✗ Invalid name: use letters, digits, dot, dash, underscore$(RESET)"; exit 1; fi
+	@$(call _check-name,unpromote,my-feature)
 	@if [ "$(BR_REVIEW)" = "$(BR_PROD)" ]; then \
 		echo "$(RED)✗ No staging environment in site.yml — unpromote needs one$(RESET)"; exit 1; fi
 	@$(MAKE) --no-print-directory _need-tty verb=unpromote
@@ -205,7 +246,7 @@ deploy: ## Deploy the payload to an environment (make deploy env=staging)
 
 .PHONY: deploy-test
 deploy-test: ## Show what a deploy would change, without changing it
-	@$(MAKE) --no-print-directory deploy env=$(env) dryrun=--dry-run
+	@$(MAKE) --no-print-directory deploy env=$(env) dryrun=1
 
 # Threat 8: anything that fails after the push leaves the branch ahead of the
 # site, and there is one recovery — said once, wherever that can happen.
@@ -308,12 +349,15 @@ rollback: ## Redeploy the previously deployed commit (make rollback env=producti
 		echo "$(BLUE)  → $$p$(RESET)"; \
 		rsync -az --delete -e "ssh -q" $$EXCL "$$WT/$(WEBROOT)/$$p/" "$$HOST:$$REMOTE/$$p/" || exit 1; \
 	done; \
-	git worktree remove --force "$$WT"; \
 	WHEN=$$(date -Iseconds); WHO=$$(git config user.name); \
 	printf '%s %s %s %s\n' "$$WHEN" "$$PREV" "rollback" "$$WHO" \
 		| ssh -q "$$HOST" "cat >> $$DIR/$$ENV.log"; \
 	printf '{"sha":"%s","branch":"rollback","at":"%s","by":"%s"}\n' "$$PREV" "$$WHEN" "$$WHO" \
 		| ssh -q "$$HOST" "cat > $$DIR/$$ENV.json"; \
+	: "_deploy-tag stamps HEAD, and the worktree's HEAD is PREV"; \
+	GIT_DIR=$$(git -C "$$WT" rev-parse --absolute-git-dir) $(MAKE) --no-print-directory _deploy-tag env=$$ENV; RC=$$?; \
+	git worktree remove --force "$$WT"; \
+	[ "$$RC" -eq 0 ] || exit 1; \
 	$(MAKE) --no-print-directory _deploy-opcache env=$$ENV; \
 	echo "$(GREEN)✅ $$ENV rolled back to $$PREV$(RESET)"
 
@@ -502,7 +546,7 @@ _deploy-rsync:
 			echo "$(RED)✗ Payload path missing locally: $(WEBROOT)/$$p$(RESET)"; exit 1; \
 		fi; \
 		echo "$(BLUE)  → $$p$(RESET)"; \
-		rsync -az --delete -e "ssh -q" $(dryrun) --itemize-changes $$EXCL \
+		rsync -az --delete -e "ssh -q" $(if $(dryrun),--dry-run,) --itemize-changes $$EXCL \
 			"$(WEBROOT)/$$p/" "$$HOST:$$REMOTE/$$p/" || exit 1; \
 	done
 
