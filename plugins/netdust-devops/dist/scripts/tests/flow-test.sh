@@ -95,7 +95,7 @@ assert_ok "make hotfix name=fix" M hotfix name=fix
 assert_eq "…on hotfix/fix, at origin/main's tip" "hotfix/fix $(git rev-parse origin/main)" \
   "$(git branch --show-current) $(git rev-parse HEAD)"
 assert_eq "…and names a route the flow still has" "1 0" \
-  "$(has "$out" 'make ship') $(has "$out" 'make finish')"
+  "$(has "$out" 'make ship') $(has "$out" 'make fin''ish')"
 git checkout -q main && git branch -q -D hotfix/fix
 
 echo; echo "flow — the vocabulary is the verbs of FR-2"
@@ -109,7 +109,7 @@ assert_refuses "the verb that merged one rung into the next is gone" "No rule to
 GONE="rele""ase"
 assert_refuses "the verb that merged the review rung into production is gone" "No rule to make target" M "$GONE"
 INTEG="BR_""INTEG"
-assert_eq "the core names no integration rung" "0" "$(grep -c "$INTEG" "$PROJECT_CORE" || true)"
+assert_eq "the core names no third rung" "0" "$(grep -c "$INTEG" "$PROJECT_CORE" || true)"
 
 echo; echo "flow — refusals on a rung"
 git checkout -q staging

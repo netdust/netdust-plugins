@@ -1,0 +1,23 @@
+[
+ {
+  "id": "promote-is-not-a-merge",
+  "skill": "devops",
+  "skill_path": "skills/devops/SKILL.md",
+  "query": "I want to put feature X on staging so colleagues can look at it. What do I run?",
+  "signature": "answers `make promote name=X` then `make deploy env=staging` — never a raw `git merge` of feature/X into staging, since promote REBUILDS the branch from production plus every promoted feature rather than merging into what is there; and the agent hands promote's typed confirmation over rather than running it itself (save/promote/unpromote/ship all check for a terminal — the rule for an agent is don't, not can't)"
+ },
+ {
+  "id": "ship-b-not-a",
+  "skill": "devops",
+  "skill_path": "skills/devops/SKILL.md",
+  "query": "A and B are both on staging. I want to ship B to production but keep A out for now — what's the sequence?",
+  "signature": "answers, in order: `make unpromote name=A` (rebuilds staging as production+B only, A pinned but off), `make deploy env=staging`, look at the result, then `make ship` from the staging checkout — and afterward `make promote name=A` again so A returns to staging on the new production tip; never suggests shipping while A is still on staging, and never skips the look-before-ship step"
+ },
+ {
+  "id": "hotfix-cannot-skip-the-gate",
+  "skill": "devops",
+  "skill_path": "skills/devops/SKILL.md",
+  "query": "This is a hotfix and I'm confident in the fix — can we ship it without waiting for the test suite?",
+  "signature": "refuses — `make ship` on a hotfix branch runs `commands.gate` itself before the typed confirmation and re-checks HEAD right after, so a red gate ships nothing and there is no flag or flow path that skips it; does not offer `--skip-tests`, a raw deploy, or a direct push to production as a workaround"
+ }
+]
