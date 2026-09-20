@@ -513,6 +513,7 @@ CLI="$WORK/cli"; mkdir -p "$CLI/bin"
 # whenever the runner's own stdin is an open stream that never sends EOF.
 cat > "$CLI/bin/ssh" <<SH
 #!/bin/sh
+echo "\$*" >> "$CLI/ssh.log"
 case " \$* " in *" -qn "*|*" -n "*) exec < /dev/null;; esac
 case "\$*" in *"tail -2"*) tail -2 "$CLI/ledger" 2>/dev/null | head -1;; *) cat >/dev/null;; esac
 SH
@@ -614,6 +615,25 @@ if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "make -e is refused" && [ -z "$
 else
     bad "make -e is refused: the environment may not overwrite what site.yml declares" "exit $rc: $(printf '%s' "$out" | head -2) $(pwned)"
 fi
+
+# make's own flags are the same hole again: -i runs past every failed check, and
+# under -n, -t and -q a recipe line holding $(MAKE) still executes.
+flagbad=""
+for f in -i -n -t -q --ignore-errors --dry-run --just-print --recon --touch --question --environment-overrides; do
+    out=$(M "$f" help); rc=$?
+    { [ $rc -ne 0 ] && printf '%s' "$out" | strip | grep -q "is refused"; } || flagbad="$flagbad $f(exit-$rc)"
+done
+[ -z "$flagbad" ] && ok "-i, -n, -t, -q and every long spelling of them are refused at parse" \
+                  || bad "-i, -n, -t, -q and every long spelling of them are refused at parse" "$flagbad"
+M -i promote "name=x\";touch $CLI/pwn-dashi;echo \"" > /dev/null 2>&1
+[ -z "$(pwned)" ] && ok "…so -i cannot carry a name= payload past _check-name" \
+                  || bad "…so -i cannot carry a name= payload past _check-name" "$(pwned)"
+flagbad=""
+for f in -s -k -j2; do
+    out=$(M "$f" help); rc=$?
+    { [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "FLOW"; } || flagbad="$flagbad $f(exit-$rc)"
+done
+[ -z "$flagbad" ] && ok "…while -s, -k and -j2 still run" || bad "…while -s, -k and -j2 still run" "$flagbad"
 
 # STACK is the same hole once more: help echoes it inside a double-quoted shell
 # string, and `?=` takes an exported one whenever the project Makefile declares
@@ -736,6 +756,69 @@ else
     bad "make rollback env=staging moves deployed/staging on origin to the commit it rolled back to" \
         "exit $rc: tag=$(git ls-remote origin refs/tags/deployed/staging | cut -f1) want=$PREV"
 fi
+
+# A rollback whose worktree cannot be made has rsynced nothing: it may not write
+# the ledger, and may not stamp the checkout's own HEAD as what the server runs.
+mkdir -p "$CLI/nogit"; GIT=$(command -v git)
+printf '#!/bin/sh\ncase "$*" in *"worktree add"*) exit 1;; esac\nexec %s "$@"\n' "$GIT" > "$CLI/nogit/git"
+chmod +x "$CLI/nogit/git"; : > "$CLI/ssh.log"
+TAG=$(git ls-remote origin refs/tags/deployed/staging)
+out=$(env PATH="$CLI/nogit:$CLIPATH" script -qec "make --no-print-directory rollback env=staging" /dev/null <<< yes 2>&1); rc=$?
+if [ $rc -ne 0 ] && ! grep -q 'cat >' "$CLI/ssh.log" && [ "$(git ls-remote origin refs/tags/deployed/staging)" = "$TAG" ]; then
+    ok "a rollback that cannot make its worktree fails, writes no ledger and leaves the tag"
+else
+    bad "a rollback that cannot make its worktree fails, writes no ledger and leaves the tag" \
+        "exit $rc: ledger writes=$(grep -c 'cat >' "$CLI/ssh.log") tag=$(git ls-remote origin refs/tags/deployed/staging | cut -f1)"
+fi
+
+echo
+echo "── the rebuild: unpromote tells the truth, and local staging follows ──"
+SY="$WORK/sync"; mkdir -p "$SY"; cd "$SY" || exit 1
+git init -q --bare origin.git && git clone -q origin.git base 2>/dev/null
+cd "$SY/base" || exit 1
+git -C "$WT/base" archive main | tar -x
+git add -A && git -c user.email=t@t -c user.name=T commit -qm init >/dev/null && git branch -M main
+git push -q -u origin main 2>/dev/null; git push -q origin main:staging 2>/dev/null
+git checkout -q -b staging origin/staging
+feat() { git checkout -q -b "feature/$1" "$2" && echo "$1" > "web/$1.txt" && git add -A \
+    && git -c user.email=t@t -c user.name=T commit -qm "$1" >/dev/null && git push -q origin "feature/$1" 2>/dev/null
+    git checkout -q staging; }
+feat a origin/main; feat b origin/main; feat b2 feature/a
+PTY() { env PATH="$CLIPATH" timeout 60 script -qec "make --no-print-directory $1" /dev/null <<< yes 2>&1; }
+
+# feature/b2 was branched from feature/a, so a's commits ride in on b2's pin.
+PTY "promote name=a" > /dev/null; PTY "promote name=b2" > /dev/null
+REMOTES=$(git ls-remote origin)
+out=$(PTY "unpromote name=a"); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "feature/a is still on staging through another promoted feature" \
+   && [ "$(git ls-remote origin)" = "$REMOTES" ]; then
+    ok "unpromote refuses a feature another promoted feature still carries, and pushes nothing"
+else
+    bad "unpromote refuses a feature another promoted feature still carries, and pushes nothing" "exit $rc: $(printf '%s' "$out" | tail -2)"
+fi
+
+# The rebuild force-pushes commits made in a throwaway worktree. No raw git runs
+# between these verbs: the advertised path has to work as advertised.
+M deploy env=staging > /dev/null; PTY "promote name=b" > /dev/null
+out=$(M deploy env=staging); rc=$?
+if [ $rc -eq 0 ] && [ "$(git ls-remote origin refs/tags/deployed/staging | cut -f1)" = "$(git ls-remote origin refs/heads/staging | cut -f1)" ]; then
+    ok "promote, deploy, promote, deploy: the second deploy ships what origin/staging is"
+else
+    bad "promote, deploy, promote, deploy: the second deploy ships what origin/staging is" "exit $rc: $(printf '%s' "$out" | strip | tail -2)"
+fi
+git checkout -q feature/b; PTY "unpromote name=b" > /dev/null
+[ "$(git rev-parse staging)" = "$(git ls-remote origin refs/heads/staging | cut -f1)" ] \
+    && ok "…and from a feature branch, local staging ends on origin/staging" \
+    || bad "…and from a feature branch, local staging ends on origin/staging" "local $(git rev-parse --short staging)"
+# A dirty staging checkout that the reset would clobber: the push already landed.
+git checkout -q staging; echo mine > web/b.txt
+out=$(PTY "promote name=b"); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "git reset --keep origin/staging" && [ "$(cat web/b.txt)" = mine ]; then
+    ok "…and a checkout it cannot move is told how, without failing a rebuild that landed"
+else
+    bad "…and a checkout it cannot move is told how, without failing a rebuild that landed" "exit $rc: $(printf '%s' "$out" | tail -2)"
+fi
+rm -f web/b.txt; cd "$P" || exit 1
 
 echo
 printf '%s passed, %s failed\n' "$PASS" "$FAIL"

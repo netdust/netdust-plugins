@@ -30,10 +30,10 @@ _ESC := $(shell printf '\033')
 _RED := $(_ESC)[31m
 _OFF := $(_ESC)[0m
 $(if $(_CLI_LOOSE),$(error $(_RED)✗ $(_CLI_LOOSE) is not an operator input — the flow takes: $(strip $(_CLI_VARS))$(_OFF)))
-# -e is the same hole from the other side: it lets the environment overwrite
-# every value this file reads from site.yml. Short flags reach MAKEFLAGS as a
-# bare first word, so --no-print-directory is not mistaken for one.
-$(if $(findstring e,$(filter-out -%,$(firstword $(MAKEFLAGS)))),$(error $(_RED)✗ make -e is refused — the environment may not overwrite what site.yml declares$(_OFF)))
+# make's own flags are the same hole from the other side: -e lets the environment
+# overwrite what site.yml declares, -i runs past a failed check, and under -n, -t
+# and -q a $(MAKE) line still runs. Short flags are MAKEFLAGS' bare first word.
+$(foreach f,e i n t q,$(if $(findstring $f,$(filter-out -%,$(firstword $(MAKEFLAGS)))),$(error $(_RED)✗ make -$f is refused — it would override, skip or only print the checks this file makes$(_OFF))))
 $(foreach v,$(_CLI_VARS),$(eval override $v := $$(value $v)))
 
 _LETTERS := a b c d e f g h i j k l m n o p q r s t u v w x y z A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
@@ -113,8 +113,8 @@ help: ## Show this help
 	@echo ""
 	@echo "$(YELLOW)DEPLOY$(RESET)       gate → transport → ledger, tag; nothing dirty or unpushed ships"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "deploy-test env=E" "dry run — read the deletions"
-	@printf "  $(GREEN)%-22s$(RESET) %s\n" "deploy env=E"      "gate, transport, stamp"
-	@printf "  $(GREEN)%-22s$(RESET) %s\n" "rollback env=E"    "redeploy the previously stamped commit"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "deploy env=E"      "gate, transport, ledger, tag"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "rollback env=E"    "redeploy the previously deployed commit"
 	@echo ""
 	@echo "$(YELLOW)INSPECT$(RESET)      read-only — safe to run anywhere, any time"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "status"   "branch, flow position, what runs where"
@@ -188,10 +188,15 @@ while read -r n s; do \
 done < "$$T/keep"; \
 NEW=$$(git -C "$$T/wt" rev-parse HEAD); \
 [ -n "$$NEW" ] || { echo "$(RED)✗ the rebuild produced no commit — nothing changed$(RESET)"; exit 4; }; \
+for s in $${DROP:+$$GONE}; do ! git merge-base --is-ancestor "$$s" "$$NEW" || { \
+	echo "$(RED)✗ feature/$$DROP is still on $(BR_REVIEW) through another promoted feature — unpromote that one too$(RESET)"; exit 6; }; done; \
 N=$$(git rev-list --count --no-merges "$$OLD" --not "$$NEW" "$$PROD"$$GONE); \
 [ "$$N" = 0 ] || echo "$(YELLOW)⚠ dropped $$N commit(s) that were only on $(BR_REVIEW) — recover them from $$(git rev-parse --short=7 "$$OLD")$(RESET)"; \
 git push --quiet --force-with-lease=refs/heads/$(BR_REVIEW):$$OLD origin "$$NEW:refs/heads/$(BR_REVIEW)" \
-	|| { echo "$(RED)✗ origin changed — run it again$(RESET)"; exit 5; }
+	|| { echo "$(RED)✗ origin changed — run it again$(RESET)"; exit 5; }; \
+if [ "$$(git branch --show-current)" = "$(BR_REVIEW)" ]; then \
+	git reset -q --keep "$$NEW" 2>/dev/null || echo "$(YELLOW)⚠ this checkout could not follow — run: git reset --keep origin/$(BR_REVIEW)$(RESET)"; \
+else git branch -q -f "$(BR_REVIEW)" "$$NEW" 2>/dev/null || true; fi
 endef
 
 .PHONY: promote
@@ -223,7 +228,7 @@ unpromote: ## Take a feature off the staging branch (make unpromote name=my-feat
 	@$(MAKE) --no-print-directory _need-tty verb=unpromote
 	@$(MAKE) --no-print-directory _ensure-flow
 	@if ! git log --merges --first-parent --format='%s' origin/$(BR_PROD)..origin/$(BR_REVIEW) \
-		| grep -qx "promote: $(name)"; then \
+		| grep -qxF "promote: $(name)"; then \
 		echo "$(RED)✗ feature/$(name) is not on $(BR_REVIEW)$(RESET)"; \
 		git log --merges --first-parent --format='  %s' origin/$(BR_PROD)..origin/$(BR_REVIEW) | grep 'promote: '; \
 		exit 1; fi
@@ -344,7 +349,7 @@ rollback: ## Redeploy the previously deployed commit (make rollback env=producti
 	read -p "Type 'yes' to roll back: " reply; \
 	if [ "$$reply" != "yes" ]; then echo "$(RED)✗ Cancelled$(RESET)"; exit 1; fi; \
 	WT=$$(mktemp -d); \
-	git worktree add --detach --quiet "$$WT" "$$PREV"; \
+	git worktree add --detach --quiet "$$WT" "$$PREV" || { rm -rf "$$WT"; echo "$(RED)✗ could not check out $$PREV — nothing was rolled back$(RESET)"; exit 1; }; \
 	REMOTE=$$($(SITE) environments.$$ENV.path); \
 	EXCL=""; \
 	set -f; for e in $$($(SITE) deploy.exclude); do EXCL="$$EXCL --exclude=$$e"; done; set +f; \
@@ -583,7 +588,7 @@ _deploy-gitpush:
 _deploy-gate:
 	@ENV="$(env)"; \
 	if [ -z "$$ENV" ]; then \
-		echo "$(RED)✗ Usage: make deploy env=<development|staging|production>$(RESET)"; \
+		echo "$(RED)✗ Usage: make deploy env=<staging|production>$(RESET)"; \
 		exit 1; \
 	fi; \
 	WANT=$$($(SITE) environments.$$ENV.branch 2>/dev/null); \
@@ -690,19 +695,8 @@ _backup-payload:
 	echo "$(GREEN)✓ payload backed up: $$ARCHIVE ($$(( SIZE / 1024 )) KB)$(RESET)"
 
 
-# A rung checked out in ANOTHER worktree cannot be checked out here, and every
-# promoting verb does `git checkout <rung>`. Without this, the verb died on a
-# raw git error mid-verb —
-#   fatal: 'staging' is already used by worktree at ...
-# — which is exactly the shape `_ensure-flow` exists to prevent: a half-run
-# verb dying on a git error is what taught agents to fall back to raw git.
-#
-# Parallel agents each get their own worktree, so this is the normal case there,
-# not an edge one. Refusing is also the right answer on the merits: N agents
-# merging into one shared rung concurrently is a race. The merge serialises
-# through whichever worktree holds the rung.
-#
-# Usage: $(MAKE) _worktree-guard rung=<branch> verb=<name>
+# ship checks the production branch out, and a branch held by ANOTHER worktree
+# cannot be checked out here — refused by name rather than on a raw git error.
 _worktree-guard:
 	@RUNG="$(rung)"; [ -n "$$RUNG" ] || exit 0; \
 	HOLDER=$$(git worktree list --porcelain 2>/dev/null \
@@ -858,7 +852,7 @@ _ensure-clean-git:
 # routes through this first.
 _refuse-production:
 	@ENV="$(env)"; \
-	if [ -z "$$ENV" ]; then echo "$(RED)✗ Usage: env=<staging|development>$(RESET)"; exit 1; fi; \
+	if [ -z "$$ENV" ]; then echo "$(RED)✗ Usage: env=staging$(RESET)"; exit 1; fi; \
 	if [ "$$ENV" = "production" ]; then \
 		echo "$(RED)✗ Refused: data moves backward only, never into production$(RESET)"; exit 1; \
 	fi; \
