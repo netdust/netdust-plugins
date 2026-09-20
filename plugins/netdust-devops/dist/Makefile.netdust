@@ -207,6 +207,13 @@ deploy: ## Deploy the payload to an environment (make deploy env=staging)
 deploy-test: ## Show what a deploy would change, without changing it
 	@$(MAKE) --no-print-directory deploy env=$(env) dryrun=--dry-run
 
+# Threat 8: anything that fails after the push leaves the branch ahead of the
+# site, and there is one recovery — said once, wherever that can happen.
+define _ship-ahead
+echo "$(RED)✗ $(BR_PROD) on origin is ahead of the live site — the push landed, the deploy did not$(RESET)"; \
+echo "$(YELLOW)  recover from a checkout of $(BR_PROD): make deploy env=production$(RESET)"
+endef
+
 # The terminal check comes FIRST: deferring it to the confirmation once let a
 # piped ship take a production database dump before it could read the answer.
 .PHONY: ship
@@ -222,26 +229,32 @@ ship: ## Ship to production: the staging commit that was deployed, or a gated ho
 	@$(MAKE) --no-print-directory _worktree-guard rung=$(BR_PROD) verb=ship
 	@$(MAKE) --no-print-directory _ensure-flow
 	@$(MAKE) --no-print-directory _ship-path
-	@$(MAKE) --no-print-directory gate || { \
-		echo "$(RED)✗ the gate is red — nothing ships$(RESET)"; exit 1; }
-	@$(MAKE) --no-print-directory _ask-confirm env=production verb=ship
-	@$(MAKE) --no-print-directory _backup-data env=production
-	@$(MAKE) --no-print-directory _backup-payload env=production
-# From this push on the branch has moved: only a deploy catches the site up.
+# The commit the gate ran on is the commit that ships: commands.gate is the
+# project's own shell, and a suite that commits or checks out would otherwise
+# slip a tree past every check above. From the push on, the branch has moved
+# and only a deploy catches the site up.
 	@SHA=$$(git rev-parse HEAD); \
-	git push --quiet origin "HEAD:refs/heads/$(BR_PROD)" || { \
+	$(MAKE) --no-print-directory gate || { \
+		echo "$(RED)✗ the gate is red — nothing ships$(RESET)"; exit 1; }; \
+	{ [ "$$(git rev-parse HEAD)" = "$$SHA" ] && [ -z "$$(git status --porcelain)" ]; } || { \
+		echo "$(RED)✗ the checkout changed while the gate ran — only what the gate saw ships$(RESET)"; exit 1; }; \
+	$(MAKE) --no-print-directory _ask-confirm env=production verb=ship || exit 1; \
+	$(MAKE) --no-print-directory _backup-data env=production || exit 1; \
+	$(MAKE) --no-print-directory _backup-payload env=production || exit 1; \
+	git push --quiet origin "$$SHA:refs/heads/$(BR_PROD)" || { \
 		echo "$(RED)✗ origin/$(BR_PROD) moved while this ship was running — nothing was deployed$(RESET)"; \
 		echo "$(YELLOW)  git fetch origin, then ship again$(RESET)"; exit 1; }; \
-	git checkout --quiet "$(BR_PROD)" && git merge --quiet --ff-only "$$SHA" || { \
-		echo "$(RED)✗ $(BR_PROD) is pushed, but this checkout could not follow it$(RESET)"; exit 1; }
+	git checkout --quiet "$(BR_PROD)" && git merge --quiet --ff-only "$$SHA" || { $(_ship-ahead); exit 1; }
 	@for t in _deploy-gate _deploy-transport _deploy-ledger _deploy-tag _deploy-opcache; do \
-		$(MAKE) --no-print-directory $$t env=production || { \
-			echo "$(RED)✗ $(BR_PROD) on origin is ahead of the live site — the push landed, the deploy did not$(RESET)"; \
-			echo "$(YELLOW)  recover from this checkout: make deploy env=production$(RESET)"; exit 1; }; \
+		$(MAKE) --no-print-directory $$t env=production || { $(_ship-ahead); exit 1; }; \
 	done
 	@echo "$(GREEN)✅ shipped $(BR_PROD) @ $$(git rev-parse --short HEAD) — $$($(SITE) environments.production.url)$(RESET)"
-	@if [ "$(BR_REVIEW)" != "$(BR_PROD)" ]; then ADD=""; DROP=""; $(_rebuild-staging); \
-		echo "$(GREEN)✅ $(BR_REVIEW) rebuilt on the new $(BR_PROD)$(RESET)"; fi
+	@[ "$(BR_REVIEW)" != "$(BR_PROD)" ] || exit 0; \
+	if ( ADD=""; DROP=""; $(_rebuild-staging) ); then \
+		echo "$(GREEN)✅ $(BR_REVIEW) rebuilt on the new $(BR_PROD)$(RESET)"; \
+	else \
+		echo "$(YELLOW)⚠ production shipped; $(BR_REVIEW) was not rebuilt — run make promote name=<x> or make unpromote name=<x> again to rebuild it$(RESET)"; \
+	fi
 
 # ship leaves from exactly two places: the staging branch — the release that was
 # deployed and looked at — or a hotfix branch, production fixed in place.

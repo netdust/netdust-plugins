@@ -398,6 +398,11 @@ shiprefused "(b) staging rebuilt since its last deploy: refused naming the tag" 
 deploytag origin/staging; gatescript 1
 shiprefused "(c) a red gate: refused, 0 backups" "gate is red"
 assert_eq "…(c) and the gate really ran" "1" "$(has "$YOUT" 'suite ran')"
+# commands.gate is the project's own shell: a suite that commits (auto-fix lint, codegen) must not slip that commit into production.
+printf '#!/bin/sh\necho "suite ran"\n: > gated.txt; git add gated.txt; git commit -qm "the gate committed"\n' > "$TMP/gate.sh"
+shiprefused "(n) a gate that commits: refused, and the gate's commit never ships" "changed while the gate ran"
+git reset -q --hard "$STGC"; gatescript 0
+assert_eq "…(n) and the gate's commit is off staging again" "$STGC " "$(git rev-parse HEAD) $(git status --porcelain)"
 gatescript 0; BEFORE=$(git ls-remote origin); : > "$LEAVES"; NOUT=$(N "make --no-print-directory ship"); NRC=$?; git checkout -q staging
 assert_eq "(f) a typed no: Cancelled, nothing moved, 0 leaves" "1 1 $BEFORE|" "$(nz "$NRC") $(has "$NOUT" 'Cancelled') $(git ls-remote origin)|$(leaves)"
 : > "$LEAVES"; YF "make --no-print-directory ship"; git fetch -q --prune origin
