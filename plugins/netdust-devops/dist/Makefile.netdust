@@ -108,7 +108,7 @@ help: ## Show this help
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "save"            "commit the current branch"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "promote name=X"  "put a feature on $(BR_REVIEW)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "unpromote name=X" "take a feature off $(BR_REVIEW)"
-	@printf "  $(GREEN)%-22s$(RESET) %s\n" "gate"            "this project's own suite (commands.gate)"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "gate"            "this project's own suite (commands.gate) — optional, ship runs it itself"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "ship"            "production: gate, backups, typed confirm"
 	@echo ""
 	@echo "$(YELLOW)DEPLOY$(RESET)       gate → transport → ledger, tag; nothing dirty or unpushed ships"
@@ -172,7 +172,7 @@ hotfix: ## Start a hotfix (make hotfix name=vat-rounding) — branches from the 
 define _rebuild-staging
 PROD="origin/$(BR_PROD)"; OLD=$$(git rev-parse "origin/$(BR_REVIEW)"); \
 T=$$(mktemp -d); clean() { git worktree remove --force "$$T/wt" >/dev/null 2>&1; rm -rf "$$T"; }; \
-trap clean EXIT; trap 'clean; exit 130' INT TERM; \
+trap clean EXIT; trap 'clean; exit 130' HUP INT TERM; \
 git log --merges --first-parent --format='%s %P' "$$PROD..$$OLD" \
 	| awk 'NF == 4 && $$1 == "promote:" {print $$2, $$4}' > "$$T/was"; \
 GONE=$$(awk -v a="$$ADD" -v d="$$DROP" '$$1 == a || $$1 == d {printf " %s", $$2}' "$$T/was"); \
@@ -188,6 +188,8 @@ while read -r n s; do \
 done < "$$T/keep"; \
 NEW=$$(git -C "$$T/wt" rev-parse HEAD); \
 [ -n "$$NEW" ] || { echo "$(RED)✗ the rebuild produced no commit — nothing changed$(RESET)"; exit 4; }; \
+[ -z "$$ADD" ] || git log --merges --first-parent --format=%s "$$PROD..$$NEW" | grep -qxF "promote: $$ADD" || { \
+	echo "$(RED)✗ feature/$$ADD added nothing to $(BR_REVIEW) — it has no commits of its own, or another promoted feature already contains it$(RESET)"; exit 7; }; \
 for s in $${DROP:+$$GONE}; do ! git merge-base --is-ancestor "$$s" "$$NEW" || { \
 	echo "$(RED)✗ feature/$$DROP is still on $(BR_REVIEW) through another promoted feature — unpromote that one too$(RESET)"; exit 6; }; done; \
 N=$$(git rev-list --count --no-merges "$$OLD" --not "$$NEW" "$$PROD"$$GONE); \
@@ -245,9 +247,8 @@ deploy: ## Deploy the payload to an environment (make deploy env=staging)
 	@$(MAKE) --no-print-directory _deploy-gate env=$(env)
 	@$(MAKE) --no-print-directory _deploy-confirm env=$(env)
 	@$(MAKE) --no-print-directory _deploy-transport env=$(env) dryrun="$(dryrun)"
-	@if [ -z "$(dryrun)" ]; then $(MAKE) --no-print-directory _deploy-ledger env=$(env); fi
-	@if [ -z "$(dryrun)" ]; then $(MAKE) --no-print-directory _deploy-tag env=$(env); fi
-	@if [ -z "$(dryrun)" ]; then $(MAKE) --no-print-directory _deploy-opcache env=$(env); fi
+	@[ -n "$(dryrun)" ] || { $(MAKE) --no-print-directory _deploy-ledger env=$(env) \
+		&& $(MAKE) --no-print-directory _deploy-tag env=$(env) && $(MAKE) --no-print-directory _deploy-opcache env=$(env); }
 	@echo "$(GREEN)🌐 $$($(SITE) environments.$(env).url)$(RESET)"
 
 .PHONY: deploy-test
@@ -315,7 +316,8 @@ _ship-path:
 		git merge-base --is-ancestor "origin/$(BR_PROD)" "$$SHA" || { \
 			echo "$(RED)✗ origin/$(BR_PROD) has moved on — update the hotfix from production first$(RESET)"; \
 			echo "$(YELLOW)  git merge origin/$(BR_PROD)$(RESET)"; exit 1; }; \
-		exit 0;; \
+		echo "$(YELLOW)$$BR carries, over origin/$(BR_PROD):$(RESET)"; \
+		git --no-pager log --oneline "origin/$(BR_PROD)..$$SHA" | sed 's/^/  /'; exit 0;; \
 	esac; \
 	if [ "$(BR_REVIEW)" = "$(BR_PROD)" ]; then \
 		echo "$(RED)✗ no staging environment — ship leaves from a hotfix/* branch, you are on '$$BR'$(RESET)"; \
@@ -337,12 +339,12 @@ _ship-path:
 rollback: ## Redeploy the previously deployed commit (make rollback env=production)
 	@ENV="$(env)"; \
 	if [ -z "$$ENV" ]; then echo "$(RED)✗ Usage: make rollback env=<name>$(RESET)"; exit 1; fi; \
+	$(MAKE) --no-print-directory _need-tty verb="rollback env=$$ENV" || exit 1; \
 	HOST=$$($(SITE) environments.$$ENV.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
 	DIR=$$($(SITE) deploy.state_dir); \
 	PREV=$$(ssh -qn "$$HOST" "tail -2 $$DIR/$$ENV.log 2>/dev/null | head -1" | awk '{print $$2}'); \
 	if [ -z "$$PREV" ]; then \
 		echo "$(RED)✗ No previous deploy recorded for $$ENV$(RESET)"; exit 1; fi; \
-	$(MAKE) --no-print-directory _need-tty verb="rollback env=$$ENV"; \
 	echo "$(YELLOW)Rolling $$ENV back to $$PREV$(RESET)"; \
 	git --no-pager log --oneline -1 "$$PREV" || { \
 		echo "$(RED)✗ Commit $$PREV is not in this repository$(RESET)"; exit 1; }; \
@@ -684,9 +686,7 @@ _backup-payload:
 	STAMP=$$(date +%Y%m%d-%H%M%S); \
 	echo "$(YELLOW)Backing up $$ENV payload directories...$(RESET)"; \
 	ARCHIVE="$$DIR/backups/$$ENV-$$STAMP.tar.gz"; \
-	: "GNU tar exits 1 for warnings (a file changed while being read) and 2"; \
-	: "for real errors. Treating any non-zero as failure aborts a ship over a"; \
-	: "warning, so check the archive itself instead."; \
+	: "GNU tar exits 1 for a warning (a file changed while being read), 2 for an error: check the archive instead"; \
 	ssh -qn "$$HOST" "mkdir -p $$DIR/backups && cd $$REMOTE && tar czf $$ARCHIVE $$PATHS 2>/dev/null; rc=\$$?; [ \$$rc -le 1 ] || exit \$$rc"; \
 	SIZE=$$(ssh -qn "$$HOST" "stat -c %s $$ARCHIVE 2>/dev/null || echo 0"); \
 	if [ "$$SIZE" -lt 1024 ]; then \
@@ -726,7 +726,8 @@ _flow-state:
 	printf "  branch:  %s  (%s)\n" "$$BRANCH" "$$ROLE"; \
 	case "$$ROLE" in \
 		feature) printf "  next:    commit, then make promote name=<x>\n";; \
-		hotfix)  printf "  next:    commit, make gate, then make ship\n";; \
+		hotfix)  printf "  next:    commit, optionally make gate, then make ship — ship runs the gate itself\n";; \
+		rung:staging) printf "  next:    make deploy env=staging, then make ship  (new work: make feature name=<x>)\n";; \
 		rung:*)  printf "  next:    make feature name=<x>  (a rung is deploy-only)\n";; \
 		none)    printf "  next:    git checkout $(BR_PROD), then make feature name=<x>\n";; \
 		*)       printf "  next:    make feature name=<x>  (this branch is outside the flow)\n";; \
@@ -794,9 +795,8 @@ _flow-ready:
 # half-run verb dying on a git error is exactly what taught agents to fall back
 # to raw git.
 #
-# Staging is rebuilt on origin by whoever ran the verb, so a stale local copy is
-# re-pointed here rather than refused. Commits on the production branch are
-# somebody's work, and are never discarded to unblock a verb.
+# Staging is rebuilt on origin, so a stale local copy is re-pointed — unless it is
+# checked out and carries commits of its own. Production's are never discarded.
 _ensure-flow:
 	@$(MAKE) --no-print-directory _flow-ready
 	@if ! git remote get-url origin >/dev/null 2>&1; then \

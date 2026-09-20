@@ -818,7 +818,40 @@ if [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "git reset --keep origin/stagin
 else
     bad "…and a checkout it cannot move is told how, without failing a rebuild that landed" "exit $rc: $(printf '%s' "$out" | tail -2)"
 fi
-rm -f web/b.txt; cd "$P" || exit 1
+rm -f web/b.txt; git reset -q --keep origin/staging
+
+# Two ways a promote adds nothing: no commits over production, or a tip that a
+# promoted feature sorting before it already carries ("Already up to date").
+git push -q origin origin/main:refs/heads/feature/empty feature/a:refs/heads/feature/z 2>/dev/null
+REMOTES=$(git ls-remote origin)
+for n in empty z; do
+    out=$(PTY "promote name=$n"); rc=$?; out=$(printf '%s' "$out" | strip)
+    if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "feature/$n added nothing to staging" \
+       && ! printf '%s' "$out" | grep -q "✅" && [ "$(git ls-remote origin)" = "$REMOTES" ]; then
+        ok "promote name=$n adds nothing: it says so, fails, and pushes nothing"
+    else
+        bad "promote name=$n adds nothing: it says so, fails, and pushes nothing" "exit $rc: $(printf '%s' "$out" | tail -2)"
+    fi
+done
+
+# Driven as a target: ship runs _ship-path before the gate and the confirmation.
+git checkout -q -b hotfix/h origin/main
+for s in "fix one" "fix two"; do git -c user.email=t@t -c user.name=T commit -q --allow-empty -m "$s"; done
+out=$(M _ship-path); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "fix one" && printf '%s' "$out" | grep -q "fix two"; then
+    ok "a hotfix ship path lists the commits it carries over production"
+else
+    bad "a hotfix ship path lists the commits it carries over production" "exit $rc: $(printf '%s' "$out" | tail -2)"
+fi
+
+git checkout -q staging; : > "$CLI/ssh.log"
+out=$(M rollback env=staging); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "needs a terminal" && [ ! -s "$CLI/ssh.log" ]; then
+    ok "rollback without a terminal refuses before any ssh"
+else
+    bad "rollback without a terminal refuses before any ssh" "exit $rc: ssh calls=$(wc -l < "$CLI/ssh.log" | tr -d ' ')"
+fi
+cd "$P" || exit 1
 
 echo
 printf '%s passed, %s failed\n' "$PASS" "$FAIL"

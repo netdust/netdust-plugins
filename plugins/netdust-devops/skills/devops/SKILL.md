@@ -111,7 +111,7 @@ that carry a decision:
 | `make promote name=X` | rebuild staging as production + every promoted feature, X pinned at its current tip |
 | `make unpromote name=X` | the same rebuild, without X |
 | `make ship` | from the staging checkout, or a `hotfix/*` branch: the checks below, the gate, typed confirm, both backups, deploy, then rebuild staging on the new production |
-| `make rollback env=E` | redeploy the previously stamped commit — no server-side git required |
+| `make rollback env=E` | redeploy the previously deployed commit — no server-side git required |
 
 `pull`, `refresh` and `block-mail` exist only on stacks that have data ops;
 `make` lists what this project actually has.

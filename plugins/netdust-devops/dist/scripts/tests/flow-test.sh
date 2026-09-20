@@ -46,7 +46,7 @@ LEAVES="$TMP/leaves.log"; : > "$LEAVES"
 cat > "$W/Makefile" <<MK
 STACK := generic
 include Makefile.netdust
-_deploy-transport _deploy-ledger _deploy-opcache _backup-data _backup-payload _deploy-stamp:
+_deploy-transport _deploy-ledger _deploy-opcache _backup-data _backup-payload:
 	@echo '\$@ \$(env)' >> $LEAVES; [ "\$\$FAILLEAF" != "\$@" ] || exit 1
 MK
 cat > "$W/site.yml" <<'YAML'
