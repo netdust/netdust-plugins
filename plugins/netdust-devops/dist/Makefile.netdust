@@ -118,7 +118,7 @@ hotfix: ## Start a hotfix (make hotfix name=vat-rounding) — branches from the 
 	@git fetch --quiet origin $(BR_PROD)
 	@git checkout -b "hotfix/$(name)" origin/$(BR_PROD)
 	@echo "$(GREEN)✅ On hotfix/$(name), branched from origin/$(BR_PROD)$(RESET)"
-	@echo "$(YELLOW)   Fix, commit, make gate, then: make ship$(RESET)"
+	@echo "$(YELLOW)   Fix, commit, then: make ship$(RESET)"
 
 # Staging is disposable: production plus the features promoted onto it, each
 # re-merged at the commit it was promoted at — a list read back from staging's
@@ -198,7 +198,8 @@ deploy: ## Deploy the payload to an environment (make deploy env=staging)
 	@$(MAKE) --no-print-directory _deploy-gate env=$(env)
 	@$(MAKE) --no-print-directory _deploy-confirm env=$(env)
 	@$(MAKE) --no-print-directory _deploy-transport env=$(env) dryrun="$(dryrun)"
-	@if [ -z "$(dryrun)" ]; then $(MAKE) --no-print-directory _deploy-stamp env=$(env); fi
+	@if [ -z "$(dryrun)" ]; then $(MAKE) --no-print-directory _deploy-ledger env=$(env); fi
+	@if [ -z "$(dryrun)" ]; then $(MAKE) --no-print-directory _deploy-tag env=$(env); fi
 	@if [ -z "$(dryrun)" ]; then $(MAKE) --no-print-directory _deploy-opcache env=$(env); fi
 	@echo "$(GREEN)🌐 $$($(SITE) environments.$(env).url)$(RESET)"
 
@@ -206,36 +207,68 @@ deploy: ## Deploy the payload to an environment (make deploy env=staging)
 deploy-test: ## Show what a deploy would change, without changing it
 	@$(MAKE) --no-print-directory deploy env=$(env) dryrun=--dry-run
 
+# The terminal check comes FIRST: deferring it to the confirmation once let a
+# piped ship take a production database dump before it could read the answer.
 .PHONY: ship
-ship: ## Ship to production (gate, backups, typed confirmation, deploy)
+ship: ## Ship to production: the staging commit that was deployed, or a gated hotfix
+	@$(MAKE) --no-print-directory _need-tty verb=ship
 	@if [ "$(HAS_PROD)" != "yes" ]; then \
 		echo "$(RED)✗ No production environment in site.yml yet$(RESET)"; \
 		echo "$(YELLOW)  Add environments.production once the site is live.$(RESET)"; exit 1; fi
-	@: 'The terminal check comes FIRST. Deferring it to _deploy-confirm meant'
-	@: 'a piped ship took a production database dump and a payload tarball'
-	@: 'before discovering it could never read the confirmation.'
-	@: 'Never use backticks in a : comment here - the shell substitutes them.' 
-	@$(MAKE) --no-print-directory _need-tty verb=ship
-	@$(MAKE) --no-print-directory _ship-branch
-	@$(MAKE) --no-print-directory _deploy-gate env=production
+	@if [ -n "$(dryrun)" ]; then \
+		echo "$(RED)✗ ship takes no dryrun= — it backs up and deploys production for real$(RESET)"; \
+		echo "$(YELLOW)  Preview the deploy itself: make deploy-test env=production$(RESET)"; exit 1; fi
+	@$(MAKE) --no-print-directory _ensure-clean-git verb=ship
+	@$(MAKE) --no-print-directory _worktree-guard rung=$(BR_PROD) verb=ship
+	@$(MAKE) --no-print-directory _ensure-flow
+	@$(MAKE) --no-print-directory _ship-path
+	@$(MAKE) --no-print-directory gate || { \
+		echo "$(RED)✗ the gate is red — nothing ships$(RESET)"; exit 1; }
+	@$(MAKE) --no-print-directory _ask-confirm env=production verb=ship
 	@$(MAKE) --no-print-directory _backup-data env=production
 	@$(MAKE) --no-print-directory _backup-payload env=production
-	@$(MAKE) --no-print-directory deploy env=production
+# From this push on the branch has moved: only a deploy catches the site up.
+	@SHA=$$(git rev-parse HEAD); \
+	git push --quiet origin "HEAD:refs/heads/$(BR_PROD)" || { \
+		echo "$(RED)✗ origin/$(BR_PROD) moved while this ship was running — nothing was deployed$(RESET)"; \
+		echo "$(YELLOW)  git fetch origin, then ship again$(RESET)"; exit 1; }; \
+	git checkout --quiet "$(BR_PROD)" && git merge --quiet --ff-only "$$SHA" || { \
+		echo "$(RED)✗ $(BR_PROD) is pushed, but this checkout could not follow it$(RESET)"; exit 1; }
+	@for t in _deploy-gate _deploy-transport _deploy-ledger _deploy-tag _deploy-opcache; do \
+		$(MAKE) --no-print-directory $$t env=production || { \
+			echo "$(RED)✗ $(BR_PROD) on origin is ahead of the live site — the push landed, the deploy did not$(RESET)"; \
+			echo "$(YELLOW)  recover from this checkout: make deploy env=production$(RESET)"; exit 1; }; \
+	done
+	@echo "$(GREEN)✅ shipped $(BR_PROD) @ $$(git rev-parse --short HEAD) — $$($(SITE) environments.production.url)$(RESET)"
+	@if [ "$(BR_REVIEW)" != "$(BR_PROD)" ]; then ADD=""; DROP=""; $(_rebuild-staging); \
+		echo "$(GREEN)✅ $(BR_REVIEW) rebuilt on the new $(BR_PROD)$(RESET)"; fi
 
-# ship always leaves from the production branch. Refusing when you stand
-# somewhere else sent people to raw git, so it switches instead.
-.PHONY: _ship-branch
-_ship-branch:
-	@$(MAKE) --no-print-directory _ensure-clean-git verb=ship
-	@HAVE=$$(git branch --show-current); \
-	if [ "$$HAVE" != "$(BR_PROD)" ]; then \
-		git checkout --quiet "$(BR_PROD)" || { echo "$(RED)✗ Cannot switch to $(BR_PROD) — ship from the checkout that holds it$(RESET)"; exit 1; }; \
-		echo "$(YELLOW)→ switched to $(BR_PROD) (was on $$HAVE)$(RESET)"; \
-	fi; \
-	git fetch --quiet origin "$(BR_PROD)" 2>/dev/null || true; \
-	if git rev-parse -q --verify "origin/$(BR_PROD)" >/dev/null 2>&1; then \
-		git merge --quiet --ff-only "origin/$(BR_PROD)" 2>/dev/null || { echo "$(RED)✗ $(BR_PROD) has diverged from origin/$(BR_PROD) — resolve before shipping$(RESET)"; exit 1; }; \
-	fi
+# ship leaves from exactly two places: the staging branch — the release that was
+# deployed and looked at — or a hotfix branch, production fixed in place.
+.PHONY: _ship-path
+_ship-path:
+	@BR=$$(git branch --show-current); SHA=$$(git rev-parse HEAD); \
+	case "$$BR" in hotfix/*) \
+		git merge-base --is-ancestor "origin/$(BR_PROD)" "$$SHA" || { \
+			echo "$(RED)✗ origin/$(BR_PROD) has moved on — update the hotfix from production first$(RESET)"; \
+			echo "$(YELLOW)  git merge origin/$(BR_PROD)$(RESET)"; exit 1; }; \
+		exit 0;; \
+	esac; \
+	if [ "$(BR_REVIEW)" = "$(BR_PROD)" ]; then \
+		echo "$(RED)✗ no staging environment — ship leaves from a hotfix/* branch, you are on '$$BR'$(RESET)"; \
+		echo "$(YELLOW)  make hotfix name=<x>$(RESET)"; exit 1; fi; \
+	if [ "$$BR" != "$(BR_REVIEW)" ]; then \
+		echo "$(RED)✗ ship leaves from '$(BR_REVIEW)' or a hotfix/* branch — you are on '$$BR'$(RESET)"; \
+		echo "$(YELLOW)  make promote name=<x>, deploy it, then ship — or: make hotfix name=<x>$(RESET)"; exit 1; fi; \
+	[ "$$SHA" = "$$(git rev-parse "origin/$(BR_REVIEW)")" ] || { \
+		echo "$(RED)✗ HEAD is not origin/$(BR_REVIEW) — production takes the commit staging ran$(RESET)"; exit 1; }; \
+	TAG=$$(git ls-remote origin "refs/tags/deployed/staging" \
+		| awk '$$2 == "refs/tags/deployed/staging" {print $$1}'); \
+	[ "$$TAG" = "$$SHA" ] || { \
+		echo "$(RED)✗ $(BR_REVIEW) was rebuilt since its last deploy — deployed/staging does not name this commit$(RESET)"; \
+		echo "$(YELLOW)  make deploy env=staging, look at it, then ship$(RESET)"; exit 1; }; \
+	git merge-base --is-ancestor "origin/$(BR_PROD)" "$$SHA" || { \
+		echo "$(RED)✗ $(BR_REVIEW) does not contain origin/$(BR_PROD) — make promote or unpromote rebuilds it$(RESET)"; exit 1; }
 
 .PHONY: rollback
 rollback: ## Redeploy the previously deployed commit (make rollback env=production)
@@ -520,10 +553,15 @@ _deploy-gate:
 	fi; \
 	echo "$(GREEN)✓ gate passed: $$ENV ← $$WANT @ $$(git rev-parse --short HEAD)$(RESET)"
 
+# WHETHER to ask for make deploy. ship always asks, so it calls _ask-confirm.
 _deploy-confirm:
 	@ENV="$(env)"; \
 	if [ "$$($(SITE) environments.$$ENV.confirm)" != "true" ]; then exit 0; fi; \
-	$(MAKE) --no-print-directory _need-tty verb="deploy env=$$ENV"; \
+	$(MAKE) --no-print-directory _ask-confirm env=$$ENV verb="deploy env=$$ENV"
+
+_ask-confirm:
+	@ENV="$(env)"; \
+	$(MAKE) --no-print-directory _need-tty verb="$(verb)"; \
 	echo "$(RED)╔════════════════════════════════════════╗$(RESET)"; \
 	echo "$(RED)║   DEPLOY TO $$ENV$(RESET)"; \
 	echo "$(RED)║   $$($(SITE) environments.$$ENV.role)$(RESET)"; \
@@ -532,7 +570,7 @@ _deploy-confirm:
 	read -p "Type 'yes' to deploy: " reply; \
 	if [ "$$reply" != "yes" ]; then echo "$(RED)✗ Cancelled$(RESET)"; exit 1; fi
 
-_deploy-stamp:
+_deploy-ledger:
 	@ENV="$(env)"; \
 	HOST=$$($(SITE) environments.$$ENV.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
 	DIR=$$($(SITE) deploy.state_dir); \
@@ -543,10 +581,16 @@ _deploy-stamp:
 	printf '{"sha":"%s","branch":"%s","at":"%s","by":"%s"}\n' "$$SHA" "$$BRANCH" "$$WHEN" "$$WHO" \
 		| ssh -q "$$HOST" "mkdir -p $$DIR && cat > $$DIR/$$ENV.json"; \
 	printf '%s %s %s %s\n' "$$WHEN" "$$SHA" "$$BRANCH" "$$WHO" \
-		| ssh -q "$$HOST" "cat >> $$DIR/$$ENV.log"; \
-	git tag -f "deployed/$$ENV" >/dev/null; \
-	git push -f --quiet origin "deployed/$$ENV" 2>/dev/null || \
-		echo "$(YELLOW)  (tag not pushed — no network?)$(RESET)"; \
+		| ssh -q "$$HOST" "cat >> $$DIR/$$ENV.log"
+
+# ship reads deployed/staging from origin to prove a tree was deployed, so a tag
+# that does not reach origin is a failed deploy, not a warning.
+_deploy-tag:
+	@ENV="$(env)"; \
+	git tag -f "deployed/$$ENV" >/dev/null || { \
+		echo "$(RED)✗ deploy tag not written — pushing the old one would date the ledger back$(RESET)"; exit 1; }; \
+	git push -f --quiet origin "deployed/$$ENV" || { \
+		echo "$(RED)✗ deploy tag not pushed — the ledger on origin is stale$(RESET)"; exit 1; }; \
 	echo "$(GREEN)✓ stamped $$ENV @ $$(git rev-parse --short HEAD)$(RESET)"
 
 _deploy-opcache:
@@ -755,6 +799,6 @@ _check-requirements:
 	done
 
 .PHONY: _deploy-transport _deploy-rsync _deploy-gitpush _deploy-gate _deploy-confirm \
-        _deploy-stamp _deploy-opcache _backup-payload _flow-state \
+        _ask-confirm _deploy-ledger _deploy-tag _deploy-opcache _backup-payload _flow-state \
         _branch-role _ensure-safe-branch _warn-rung-branch _need-tty _ensure-flow \
         _ensure-clean-git _refuse-production _check-requirements _worktree-guard

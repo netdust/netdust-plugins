@@ -203,23 +203,30 @@ else
     ok "ship refuses without a terminal, before any server contact"
 fi
 
-# ship always goes from the production branch. Standing on another rung made
-# ship refuse by name and sent the human to raw git; ship now switches itself,
-# or refuses when the tree is dirty. _ship-branch is the step, tested on its own
-# because ship's tty check comes first and a test has no tty.
+# ship leaves from the staging branch or a hotfix branch, and never checks you
+# out anywhere first — the old _ship-branch switched you onto production before
+# the gate ran. _ship-path is the step, tested on its own because ship's tty
+# check comes first and a test has no tty.
 git checkout -q -b staging origin/staging
-out=$(timeout 20 make _ship-branch 2>&1 | strip)
-if [ "$(git branch --show-current)" = "main" ]; then
-    ok "ship switches to the production branch"
+out=$(timeout 20 make _ship-path 2>&1 | strip)
+if [ "$(git branch --show-current)" = "staging" ] && printf '%s' "$out" | grep -q "deployed/staging"; then
+    ok "ship wants a deployed staging, and moves nobody"
 else
-    bad "ship switches to the production branch" "on $(git branch --show-current): $(printf '%s' "$out" | head -2)"
+    bad "ship wants a deployed staging, and moves nobody" "on $(git branch --show-current): $(printf '%s' "$out" | head -2)"
+fi
+git checkout -q main
+out=$(timeout 20 make _ship-path 2>&1 | strip)
+if [ "$(git branch --show-current)" = "main" ] && printf '%s' "$out" | grep -q "hotfix"; then
+    ok "ship refuses from a branch that is neither route, naming both"
+else
+    bad "ship refuses from a branch that is neither route, naming both" "on $(git branch --show-current): $(printf '%s' "$out" | head -2)"
 fi
 git checkout -q staging && echo dirty >> site.yml
-out=$(timeout 20 make _ship-branch 2>&1 | strip)
-if [ "$(git branch --show-current)" = "staging" ] && printf '%s' "$out" | grep -q "uncommitted"; then
-    ok "ship refuses to switch with a dirty tree"
+out=$(timeout 20 make _ensure-clean-git verb=ship 2>&1 | strip)
+if printf '%s' "$out" | grep -q "uncommitted" && printf '%s' "$out" | grep -q "Nothing uncommitted ships"; then
+    ok "ship refuses a dirty tree"
 else
-    bad "ship refuses to switch with a dirty tree" "on $(git branch --show-current): $(printf '%s' "$out" | head -2)"
+    bad "ship refuses a dirty tree" "$(printf '%s' "$out" | head -2)"
 fi
 git checkout -q -- site.yml && git checkout -q main
 
