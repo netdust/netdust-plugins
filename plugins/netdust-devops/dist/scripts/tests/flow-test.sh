@@ -424,6 +424,10 @@ git checkout -q main; step promote name=sh; git fetch -q origin; PSH=$(git rev-p
 M hotfix name=h >/dev/null; echo h > h.txt && git add h.txt && git commit -q -m "the fix"; HFIX=$(git rev-parse HEAD); gatescript 1
 shiprefused "(k) a hotfix with a red gate: refused, 0 backups" "gate is red"
 gatescript 0
+# A hotfix is production plus a fix. One cut from staging has the right NAME and carries every promoted feature past the staging round.
+git checkout -q -b hotfix/fromstg origin/staging && echo f > fromstg.txt && git add fromstg.txt && git commit -q -m "a fix cut from staging"
+shiprefused "(o) a hotfix cut from staging: refused, naming the promoted feature it carries" "carries promoted work: sh"
+git checkout -q hotfix/h && git branch -q -D hotfix/fromstg
 # Threat 8's neighbour: another session ships between this one's fetch and its push.
 git checkout -q --detach origin/main && echo raced > raced.txt && git add raced.txt && git commit -q -m "another session ships"; RACED=$(git rev-parse HEAD); git checkout -q hotfix/h
 shim "$TMP/shipr" <<SH

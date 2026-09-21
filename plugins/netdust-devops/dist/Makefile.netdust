@@ -318,6 +318,10 @@ _ship-path:
 		git merge-base --is-ancestor "origin/$(BR_PROD)" "$$SHA" || { \
 			echo "$(RED)✗ origin/$(BR_PROD) has moved on — update the hotfix from production first$(RESET)"; \
 			echo "$(YELLOW)  git merge origin/$(BR_PROD)$(RESET)"; exit 1; }; \
+		ON=$$(git log --merges --format=%s "origin/$(BR_PROD)..$$SHA" | sed -n 's/^promote: //p' | paste -sd' ' -); \
+		[ -z "$$ON" ] || { \
+			echo "$(RED)✗ $$BR carries promoted work: $$ON — it was cut from $(BR_REVIEW), and would ship that past its staging round$(RESET)"; \
+			echo "$(YELLOW)  make hotfix name=<x> branches from origin/$(BR_PROD); cherry-pick the fix onto it$(RESET)"; exit 1; }; \
 		echo "$(YELLOW)$$BR carries, over origin/$(BR_PROD):$(RESET)"; \
 		git --no-pager log --oneline "origin/$(BR_PROD)..$$SHA" | sed 's/^/  /'; exit 0;; \
 	esac; \
