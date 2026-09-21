@@ -1,0 +1,48 @@
+[
+  {
+    "id": "wp-feature-constraints",
+    "prompt": "specs/event-list/spec.md is approved by Stefan; do not ask questions. Write the implementation plan to specs/event-list/plan.md.",
+    "files": {
+      "site.yml": "structure:\n  type: bedrock\n  wpcli_path: web/wp\n",
+      "composer.json": "{\"require\": {\"roots/wordpress\": \"^6.6\"}}\n",
+      "specs/event-list/spec.md": "# Event list — spec\n\n## Requirements\n\n**R1 — Upcoming events page.** A public page `/events` lists published events dated today or later, soonest first.\n*Source: \"a page that lists upcoming events\"*\n\n**R2 — Empty state.** When there are none, the page says so.\n*Source: invented — approved 2026-09-21*\n\n## Security-relevant surfaces\n- [x] None of the above\n"
+    },
+    "expect": [
+      {"where": "plan", "match": "(?s)## Global Constraints.*ntdst-core"},
+      {"where": "plan", "match": "(?s)## Global Constraints.*make gate"},
+      {"where": "plan", "match": "(?s)## Global Constraints.*(Brain Monkey|wp-phpunit)"},
+      {"where": "plan", "match": "First working version"},
+      {"where": "plan", "match": "(?i)Simplest design"},
+      {"where": "plan", "match": "(?s)## Review Focus"}
+    ],
+    "absent": []
+  },
+  {
+    "id": "security-surface-review-focus",
+    "prompt": "specs/webhooks/spec.md is approved by Stefan; do not ask questions. Write the implementation plan to specs/webhooks/plan.md.",
+    "files": {
+      "site.yml": "structure:\n  type: bedrock\n  wpcli_path: web/wp\n",
+      "composer.json": "{\"require\": {\"roots/wordpress\": \"^6.6\"}}\n",
+      "specs/webhooks/spec.md": "# Webhook delivery — spec\n\n## Requirements\n\n**R1 — Callback URL.** An administrator pastes a callback URL in the settings screen; on every new order the server POSTs the order payload to it.\n*Source: \"send new orders to my own endpoint\"*\n\n**R2 — Admin only.** Only administrators can view or change the callback URL.\n*Source: invented — approved 2026-09-21*\n\n## Security-relevant surfaces\n- [x] User-controlled URLs / server-side outbound requests\n- [x] Auth / session / token / capability surfaces\n"
+    },
+    "expect": [
+      {"where": "plan", "match": "(?i)## Threat model"},
+      {"where": "plan", "match": "(?is)## Review Focus.*?(ssrf|private (address|range|ip)|loopback|169\\.254|rfc\\s?1918|internal (host|address))"},
+      {"where": "plan", "match": "(?is)## Review Focus.*?(capabilit|authoriz|manage_options|nonce)"}
+    ],
+    "absent": []
+  },
+  {
+    "id": "small-tweak-no-artifacts",
+    "prompt": "Change the footer copyright year from 2025 to 2026 in footer.php.",
+    "files": {
+      "site.yml": "structure:\n  type: bedrock\n  wpcli_path: web/wp\n",
+      "composer.json": "{\"require\": {\"roots/wordpress\": \"^6.6\"}}\n",
+      "footer.php": "<footer><p>&copy; 2025 Netdust</p></footer>\n"
+    },
+    "expect": [
+      {"where": "footer.php", "match": "2026"}
+    ],
+    "absent": ["specs/**/spec.md", "specs/**/plan.md", "docs/superpowers/**/*.md"]
+  }
+]
