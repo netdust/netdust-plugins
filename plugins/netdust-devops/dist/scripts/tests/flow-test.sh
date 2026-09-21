@@ -413,7 +413,7 @@ assert_eq "…(a) and staging is the new production tip: sa and sb are off it, s
 step promote name=sc; git fetch -q origin
 assert_eq "…(a) promoting sc after the ship puts it on the NEW production tip (AF-1)" "$(handtree origin/main origin/feature/sc) sc" "$(treeof origin/staging) $(onstg)"
 git checkout -q -f -B main "$SMAIN"; git branch -q -f staging "$SSTG"; git push -qf origin "$SMAIN:refs/heads/main" "$SSTG:refs/heads/staging"
-for f in sa sb sc; do git push -q origin ":refs/heads/feature/$f"; git branch -q -D "feature/$f"; done; for t in staging production; do git push -q origin ":refs/tags/deployed/$t" 2>/dev/null; git tag -d "deployed/$t" >/dev/null 2>&1; done; git fetch -q --prune origin; : > "$LEAVES"
+for f in sa sb sc; do git push -q origin ":refs/heads/feature/$f"; git branch -q -D "feature/$f"; done; for t in staging production; do git push -q origin ":refs/tags/deployed/$t" 2>/dev/null; git tag -d "deployed/$t" >/dev/null 2>&1; done; git push -q origin ":refs/tags/shipped/production" 2>/dev/null; git fetch -q --prune origin; : > "$LEAVES"
 assert_eq "…and the ship section leaves origin, the checkout, the tree and the leaf log as it found them" "$SHIP0 main " "$(git ls-remote origin) $(git branch --show-current) $(git status --porcelain)"
 
 echo; echo "flow — hotfix"
@@ -457,6 +457,16 @@ assert_eq "…(g) the twin: staging declares confirm: false, so its deploy still
 git checkout -q hotfix/g; HG=$(git rev-parse HEAD); : > "$LEAVES"; YF "FAILLEAF=_deploy-transport make --no-print-directory ship"; git fetch -q --prune origin
 assert_eq "(l) the transport fails after the push: non-zero, and production on origin HAS advanced (threat 8)" "1 $HG" "$(nz "$YRC") $(prodsha)"
 assert_eq "…(l) and it says the branch is ahead of the site, naming the recovery" "1 1" "$(has "$YOUT" 'ahead of') $(has "$YOUT" 'make deploy env=production')"
+# deploy env=production exists for that recovery, and for nothing else: it takes the commit ship put on production, with production's backups.
+: > "$LEAVES"; DOUT=$(M deploy env=production); DRC=$?
+assert_eq "…(l) and that recovery runs: the tip is the commit ship put there, deployed behind both backups" "0 $SHIPPED" "$DRC $(leaves)"
+echo raw > raw.txt && git add raw.txt && git commit -q -m "committed on production by hand" && git push -q origin main
+RAW=$(git ls-remote origin); : > "$LEAVES"
+assert_refuses "(p) a commit pushed to production by hand — clean, on the branch, on origin — is refused, naming make ship" "make ship" M deploy env=production
+assert_eq "…(p) 0 leaves, origin byte-identical" "$RAW|" "$(git ls-remote origin)|$(leaves)"
+git reset -q --hard "$HG"; git push -qf origin "$HG:refs/heads/main"; git fetch -q origin
+git push -q origin :refs/tags/shipped/production 2>/dev/null
+assert_ok "(p) a project that never shipped with this core: what deployed/production already names may be redeployed" M _deploy-gate env=production
 # T02-M6: with no staging environment BR_REVIEW falls back to the production branch — the rebuild must not run.
 git checkout -q -f main; git checkout -q -b hotfix/solo origin/main
 sed -i '/^  staging:/d' site.yml && echo solo > solo.txt && git add -A && git commit -q -m "no staging environment"
@@ -465,7 +475,7 @@ assert_eq "(M6) a project with no staging environment: the hotfix ships, product
 assert_eq "…(M6) and no rebuild ran: staging untouched, no lost lease, no dropped commit, the five production leaves" "$WASSTG 0 0 $SHIPPED" "$(exact refs/heads/staging) $(has "$YOUT" 'run it again') $(has "$YOUT" 'dropped') $(leaves)"
 git checkout -q -f -B main "$HMAIN"; git branch -q -f staging "$HSTG"; git push -qf origin "$HMAIN:refs/heads/main" "$HSTG:refs/heads/staging"
 git push -q origin ":refs/heads/feature/sh"; git branch -q -D feature/sh; git branch -q -D hotfix/h hotfix/g hotfix/solo >/dev/null 2>&1
-for t in staging production; do git push -q origin ":refs/tags/deployed/$t" 2>/dev/null; git tag -d "deployed/$t" >/dev/null 2>&1; done; git fetch -q --prune origin; : > "$LEAVES"
+for t in staging production; do git push -q origin ":refs/tags/deployed/$t" 2>/dev/null; git tag -d "deployed/$t" >/dev/null 2>&1; done; git push -q origin ":refs/tags/shipped/production" 2>/dev/null; git fetch -q --prune origin; : > "$LEAVES"
 assert_eq "…and the hotfix section leaves origin, the checkout, the tree and the leaf log as it found them" "$HORIG main " "$(git ls-remote origin) $(git branch --show-current) $(git status --porcelain)"
 
 echo; echo "flow — without origin every verb refuses by name"

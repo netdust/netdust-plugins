@@ -246,6 +246,8 @@ unpromote: ## Take a feature off the staging branch (make unpromote name=my-feat
 deploy: ## Deploy the payload to an environment (make deploy env=staging)
 	@$(MAKE) --no-print-directory _deploy-gate env=$(env)
 	@$(MAKE) --no-print-directory _deploy-confirm env=$(env)
+	@[ "$(env)" != "production" ] || [ -n "$(dryrun)" ] || { $(MAKE) --no-print-directory _backup-data env=production \
+		&& $(MAKE) --no-print-directory _backup-payload env=production; }
 	@$(MAKE) --no-print-directory _deploy-transport env=$(env) dryrun="$(dryrun)"
 	@[ -n "$(dryrun)" ] || { $(MAKE) --no-print-directory _deploy-ledger env=$(env) \
 		&& $(MAKE) --no-print-directory _deploy-tag env=$(env) && $(MAKE) --no-print-directory _deploy-opcache env=$(env); }
@@ -292,7 +294,7 @@ ship: ## Ship to production: the staging commit that was deployed, or a gated ho
 	$(MAKE) --no-print-directory _ask-confirm env=production verb=ship || exit 1; \
 	$(MAKE) --no-print-directory _backup-data env=production || exit 1; \
 	$(MAKE) --no-print-directory _backup-payload env=production || exit 1; \
-	git push --quiet origin "$$SHA:refs/heads/$(BR_PROD)" || { \
+	git push --quiet --atomic origin "$$SHA:refs/heads/$(BR_PROD)" "+$$SHA:refs/tags/shipped/production" || { \
 		echo "$(RED)✗ origin/$(BR_PROD) moved while this ship was running — nothing was deployed$(RESET)"; \
 		echo "$(YELLOW)  git fetch origin, then ship again$(RESET)"; exit 1; }; \
 	git checkout --quiet "$(BR_PROD)" && git merge --quiet --ff-only "$$SHA" || { $(_ship-ahead); exit 1; }
@@ -624,6 +626,13 @@ _deploy-gate:
 	if ! git merge-base --is-ancestor HEAD "origin/$$WANT" 2>/dev/null; then \
 		echo "$(RED)✗ HEAD is not on origin/$$WANT — push before deploying$(RESET)"; \
 		exit 1; \
+	fi; \
+	if [ "$$ENV" = "production" ]; then \
+		STAMPS=$$(git ls-remote origin refs/tags/shipped/production refs/tags/deployed/production | cut -f1); \
+		printf '%s\n' "$$STAMPS" | grep -qxF "$$(git rev-parse HEAD)" || { \
+			echo "$(RED)✗ origin/$$WANT was not put there by make ship — deploy env=production redeploys a shipped commit, it releases nothing$(RESET)"; \
+			echo "$(YELLOW)  a release goes through make ship: from $(BR_REVIEW), or a hotfix/* branch$(RESET)"; \
+			exit 1; }; \
 	fi; \
 	echo "$(GREEN)✓ gate passed: $$ENV ← $$WANT @ $$(git rev-parse --short HEAD)$(RESET)"
 
