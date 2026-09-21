@@ -771,6 +771,22 @@ else
         "exit $rc: ledger writes=$(grep -c 'cat >' "$CLI/ssh.log") tag=$(git ls-remote origin refs/tags/deployed/staging | cut -f1)"
 fi
 
+# Over git-push the server runs a git checkout and there is no payload to
+# rsync: the loop moved nothing, then the ledger and the tag said it had
+# (daan, netdust, stride — all git-push, all payload: []).
+sed -i 's/^  method: rsync/  method: git-push/' site.yml
+: > "$CLI/ssh.log"; : > "$CLI/rsync.log"; TAG=$(git ls-remote origin refs/tags/deployed/staging)
+out=$(env PATH="$CLIPATH" script -qec "make --no-print-directory rollback env=staging" /dev/null <<< yes 2>&1); rc=$?
+out=$(printf '%s' "$out" | strip); git checkout -q -- site.yml
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "not supported over git-push" \
+   && ! printf '%s' "$out" | grep -q "rolled back to" && [ ! -s "$CLI/ssh.log" ] && [ ! -s "$CLI/rsync.log" ] \
+   && [ "$(git ls-remote origin refs/tags/deployed/staging)" = "$TAG" ]; then
+    ok "rollback over git-push refuses by name: no server contact, no ledger, the tag unmoved"
+else
+    bad "rollback over git-push refuses by name: no server contact, no ledger, the tag unmoved" \
+        "exit $rc: ssh=$(wc -l < "$CLI/ssh.log") tag=$(git ls-remote origin refs/tags/deployed/staging | cut -f1) — $(printf '%s' "$out" | tail -1)"
+fi
+
 echo
 echo "── the rebuild: unpromote tells the truth, and local staging follows ──"
 SY="$WORK/sync"; mkdir -p "$SY"; cd "$SY" || exit 1
