@@ -1,0 +1,50 @@
+"""test_hooks_wiring.py — hooks.json must reach every tool the hook scripts handle.
+
+The 0.28 guard handled Write/Edit but hooks.json matched only `Bash`, so those floors never
+ran live while every test — which calls the script over stdin — stayed green. These tests
+read the wiring, not just the function."""
+import importlib.util
+import json
+import re
+from pathlib import Path
+
+HOOKS = Path(__file__).resolve().parent.parent / "hooks"
+
+
+def _hooks_json() -> dict:
+    return json.loads((HOOKS / "hooks.json").read_text())["hooks"]
+
+
+def _guard():
+    spec = importlib.util.spec_from_file_location("pretooluse_guard", HOOKS / "pretooluse-guard.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _guard_matchers() -> list[str]:
+    return [g["matcher"] for g in _hooks_json().get("PreToolUse", [])
+            if any("pretooluse-guard.py" in h["command"] for h in g["hooks"])]
+
+
+def _uncovered(tools, matchers) -> list[str]:
+    return [t for t in tools if not any(re.fullmatch(m, t) for m in matchers)]
+
+
+def _commands() -> list[str]:
+    return [h["command"] for groups in _hooks_json().values() for g in groups for h in g["hooks"]]
+
+
+def run() -> list[tuple[bool, str]]:
+    handled = _guard().HANDLED_TOOLS
+    matchers = _guard_matchers()
+    reproduced = _uncovered(handled, ["Bash"])
+    scripts = [re.search(r"\$\{CLAUDE_PLUGIN_ROOT\}/(\S+?)\"?$", c) for c in _commands()]
+    return [
+        (bool(matchers) and _uncovered(handled, matchers) == [],
+         f"hooks.json matcher covers every tool the guard handles (matchers {matchers}, gap {_uncovered(handled, matchers)})"),
+        (reproduced == [t for t in handled if t != "Bash"] and len(reproduced) >= 3,
+         f"the test bites: the 0.28 matcher `Bash` is reported as missing {reproduced}"),
+        (all(m and (HOOKS.parent / m.group(1)).is_file() for m in scripts),
+         "every command hooks.json registers names a script that exists"),
+    ]
