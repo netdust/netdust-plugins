@@ -339,6 +339,12 @@ _ship-path:
 rollback: ## Redeploy the previously deployed commit (make rollback env=production)
 	@ENV="$(env)"; \
 	if [ -z "$$ENV" ]; then echo "$(RED)✗ Usage: make rollback env=<name>$(RESET)"; exit 1; fi; \
+	: "rollback rsyncs a payload; over any other transport it would move nothing and stamp the ledger anyway"; \
+	METHOD=$$($(SITE) deploy.method 2>/dev/null); \
+	if [ "$$METHOD" != "rsync" ]; then \
+		echo "$(RED)✗ rollback is not supported over $$METHOD — the server runs a git checkout, and there is no payload to put back$(RESET)"; \
+		echo "$(YELLOW)  production: make hotfix name=<x>, git revert <commit>, make ship$(RESET)"; \
+		echo "$(YELLOW)  staging:    make unpromote name=<x>, then make deploy env=staging$(RESET)"; exit 1; fi; \
 	$(MAKE) --no-print-directory _need-tty verb="rollback env=$$ENV" || exit 1; \
 	HOST=$$($(SITE) environments.$$ENV.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
 	DIR=$$($(SITE) deploy.state_dir); \
