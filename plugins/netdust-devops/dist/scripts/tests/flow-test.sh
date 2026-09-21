@@ -130,6 +130,15 @@ assert_refuses "deploy gate refuses an unpushed HEAD" "push before deploying" M 
 git push -q origin staging
 assert_ok "deploy gate passes clean + right branch + pushed" M _deploy-gate env=staging
 git branch -q -D feature/unpushed
+# A checkout BEHIND origin is "on origin" too: it deployed the older commit and
+# stamped the ledger with it — a rollback nobody asked for.
+GMAIN=$(git rev-parse origin/main); git checkout -q --detach origin/main
+echo newer > newer.txt && git add newer.txt && git commit -q -m "production moved on" && git push -q origin HEAD:refs/heads/main
+git checkout -q main
+assert_eq "setup: local production is A, origin/production is B, and A is B's ancestor" "1 1" \
+  "$([ "$(git rev-parse HEAD)" = "$GMAIN" ] && echo 1) $(git fetch -q origin; git merge-base --is-ancestor HEAD origin/main && [ "$(git rev-parse origin/main)" != "$GMAIN" ] && echo 1)"
+assert_refuses "deploy gate refuses a checkout that is behind origin, naming it" "behind origin/main" M _deploy-gate env=production
+git push -qf origin "$GMAIN:refs/heads/main"; git fetch -q origin
 
 echo; echo "flow — a confirming verb needs a terminal (C1)"
 git checkout -q main

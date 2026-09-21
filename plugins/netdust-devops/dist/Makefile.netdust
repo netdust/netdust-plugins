@@ -631,6 +631,11 @@ _deploy-gate:
 		echo "$(RED)✗ HEAD is not on origin/$$WANT — push before deploying$(RESET)"; \
 		exit 1; \
 	fi; \
+	if [ "$$(git rev-parse HEAD)" != "$$(git rev-parse "origin/$$WANT")" ]; then \
+		echo "$(RED)✗ this checkout is behind origin/$$WANT — deploying it would put an older commit on $$ENV and stamp it$(RESET)"; \
+		echo "$(YELLOW)  git merge --ff-only origin/$$WANT$(RESET)"; \
+		exit 1; \
+	fi; \
 	if [ "$$ENV" = "production" ]; then \
 		STAMPS=$$(git ls-remote origin refs/tags/shipped/production refs/tags/deployed/production | cut -f1); \
 		printf '%s\n' "$$STAMPS" | grep -qxF "$$(git rev-parse HEAD)" || { \
