@@ -100,6 +100,15 @@ def run() -> list[tuple[bool, str]]:
         _case("a `wire` row `fail` → FAIL naming AF-2", DRIVEN.replace(WIRE_PASS, "| AF-2 | REST list | wire | fail | curl → 500 |\n"), PNG, has=("AF-2",)),
         _case("a `wire` row `pass` alone → PASS", HEAD + WIRE_PASS, rc=0, has=("1 rows, 0 browser rows driven",)),
         _case("a fenced sample row is not read", "```\n| AF-9 | sample | browser | pass | none |\n```\n" + DRIVEN, PNG, rc=0, has=("2 rows",)),
+        # fix pass — only `pass` passes; no row can hide from the check
+        _case("a `wire` row `not-reachable` alone → FAIL", HEAD + WIRE_PASS.replace("| pass |", "| not-reachable |"),
+              has=("AF-2", "not a pass")),
+        _case("a `wire` row with a blank verdict → FAIL", HEAD + WIRE_PASS.replace("| pass |", "|  |"), has=("AF-2",)),
+        _case("a `cli` row `pending` → FAIL", HEAD + WIRE_PASS.replace("| wire | pass |", "| cli | pending |"), has=("not a pass",)),
+        _case("a failing row after a blank line is not hidden → FAIL", DRIVEN + "\n| AF-3 | late | browser | fail | x |\n",
+              PNG, has=("outside the table",)),
+        _case("a row with a blank # cell is not dropped → FAIL", HEAD + WIRE_PASS + "|  | nameless | wire | pass | curl → 200 |\n",
+              has=("row without a # cell",)),
         # Review Focus 3 — only the human's token excuses a row
         _case("`Accepted-by-human:` excuses the row → PASS", ACCEPTED, rc=0,
               has=("[shakeout-accepted] AF-1: accepted by the human", "no browser on this box")),

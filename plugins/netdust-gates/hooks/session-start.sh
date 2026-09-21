@@ -30,6 +30,10 @@ OUTPUT=""
 FOUND=()
 MISSING=()
 
+# OUTPUT is expanded through printf %b at the end, so backslashes in file content are doubled
+# first — a Windows path or a stray \c in a memory file must arrive verbatim, not cut the rest.
+esc() { sed 's/\\/\\\\/g'; }
+
 # load_with_budget <file> <budget_bytes> <label>
 #   Loads <file> into OUTPUT, but never more than <budget_bytes>. When the
 #   file exceeds the budget, loads whole sections (## / ### headers) from the
@@ -42,7 +46,7 @@ load_with_budget() {
   total_bytes=$(wc -c <"$file" 2>/dev/null || echo 0)
 
   if (( total_bytes <= budget )); then
-    OUTPUT+="$(cat "$file")\n\n"
+    OUTPUT+="$(esc < "$file")\n\n"
     return
   fi
 
@@ -108,7 +112,7 @@ load_with_budget() {
     }
   ' "$file" > /tmp/.netdust-budget-$$.txt
 
-  OUTPUT+="$(cat /tmp/.netdust-budget-$$.txt)\n\n"
+  OUTPUT+="$(esc < /tmp/.netdust-budget-$$.txt)\n\n"
   rm -f /tmp/.netdust-budget-$$.txt
 }
 
@@ -193,7 +197,7 @@ HARNESS_GLOBAL="${CLAUDE_PLUGIN_ROOT}/memory/GLOBAL.md"
 note harness_global "$HARNESS_GLOBAL"
 if [[ -f "$HARNESS_GLOBAL" ]]; then
   OUTPUT+="## Netdust harness — GLOBAL\n"
-  OUTPUT+="$(cat "$HARNESS_GLOBAL")\n\n"
+  OUTPUT+="$(esc < "$HARNESS_GLOBAL")\n\n"
 fi
 
 # ── site.yml (per-project operational config) ───────────────────────────────
@@ -211,7 +215,7 @@ if [[ -f "$SITE_YML" ]]; then
   # out, so the agent could not see which branch belonged to which environment.
   # Third-level indent is included so environments.<env>.branch/path/role show.
   OUTPUT+='```yaml\n'
-  OUTPUT+="$(grep -E '^(schema|site|structure|hosting|environments|deploy|health|local|commands):|^  (name|domain|risk|sla|description|stack|type|webroot|wpcli_path|provider|ssh_staging|ssh_production|method|ssh_host|state_dir|wp_path|content_dir|note|ddev_project|url|test|gate|development|staging|production):|^    (branch|path|url|role|confirm):' "$SITE_YML" 2>/dev/null | head -60)\n"
+  OUTPUT+="$(grep -E '^(schema|site|structure|hosting|environments|deploy|health|local|commands):|^  (name|domain|risk|sla|description|stack|type|webroot|wpcli_path|provider|ssh_staging|ssh_production|method|ssh_host|state_dir|wp_path|content_dir|note|ddev_project|url|test|gate|development|staging|production):|^    (branch|path|url|role|confirm):' "$SITE_YML" 2>/dev/null | head -60 | esc)\n"
   OUTPUT+='```\n\n'
   # The one line that tells the agent what it may not do by hand.
   if grep -q '^environments:' "$SITE_YML" 2>/dev/null; then
@@ -246,7 +250,7 @@ TODO="$ROOT/tasks/todo.md"
 note todo "$TODO"
 if [[ -f "$TODO" ]]; then
   OUTPUT+="## Open Tasks (carried forward)\n"
-  OUTPUT+="$(tail -50 "$TODO")\n\n"
+  OUTPUT+="$(tail -50 "$TODO" | esc)\n\n"
 fi
 
 # ── Auto-memory index (Claude Code's atomic per-project memory) ─────────────

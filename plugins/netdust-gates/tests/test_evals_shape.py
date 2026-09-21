@@ -23,7 +23,7 @@ def run() -> list[tuple[bool, str]]:
     except SyntaxError:
         parses = False
     return [
-        ([c["id"] for c in cases] == IDS, f"exactly the three R10 cases, in order (got {[c['id'] for c in cases]})"),
+        (set(IDS) <= {c["id"] for c in cases}, f"the three R10 cases are present (got {[c['id'] for c in cases]}) — new incidents may add more"),
         (all({"id", "prompt", "files", "expect", "absent"} <= set(c) for c in cases),
          "every case carries id, prompt, files, expect, absent"),
         (_compiles(cases), "every expect regex compiles and names where it looks"),

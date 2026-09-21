@@ -20,7 +20,8 @@ def run() -> list[tuple[bool, str]]:
     frontmatter = re.match(r"---\nname: policy\ndescription: .+\n---\n", policy)
 
     ok_up, miss_up = _has_all(policy, ("superpowers:brainstorming", "superpowers:writing-plans",
-                                       "superpowers:finishing-a-development-branch"))
+                                       "superpowers:finishing-a-development-branch",
+                                       "superpowers:requesting-code-review"))
     ok_tok, miss_tok = _has_all(policy, (
         "Global Constraints", "Review Focus", "First working version", "Simplest design",
         "Source:", "Accepted-by-human:", "Ruling:", "make gate", "shakeout-check.py",

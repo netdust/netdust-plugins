@@ -82,7 +82,8 @@ Stefan accepts is `Accepted-by-human:` in the manifest, never `Ruling:`; only he
 2. A user-facing change runs `/shakeout`: `shakeout-qa` drives the flows through the real
    browser or wire, commits them as tests and writes `specs/<feature>/shakeout.md`;
    `bin/shakeout-check.py` exits 0; Stefan sees one screenshot per surface.
-3. Superpowers' single whole-branch review on the most capable model, joined by
+3. Superpowers' single whole-branch review (`superpowers:requesting-code-review`, a fresh
+   reviewer — the author never reviews its own diff) on the most capable model, joined by
    `security-sentinel` when the plan carries a `## Threat model` and `invariant-auditor` when
    the project carries `ARCHITECTURE-INVARIANTS.md`.
 4. One fix pass, each fix RED→GREEN. No re-review — named checks and the suites close it. Then

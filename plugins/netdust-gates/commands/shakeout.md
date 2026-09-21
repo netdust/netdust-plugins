@@ -37,6 +37,6 @@ per-flow slideshow. Beside them list every `✓ [shakeout-accepted]` row the che
 `Accepted-by-human:` is agent-writable, so one Stefan did not write is reverted and its row
 re-driven. This is a stop; wait for him.
 
-Then the whole-branch review and the single fix pass exactly as the `netdust-gates:policy`
-Close section states them, and `superpowers:finishing-a-development-branch`. Report the
+Then the whole-branch review (`superpowers:requesting-code-review`, a fresh reviewer) and the
+single fix pass exactly as the `netdust-gates:policy` Close section states them, and `superpowers:finishing-a-development-branch`. Report the
 manifest, the review verdicts and every `Ruling:` from the ledger together.

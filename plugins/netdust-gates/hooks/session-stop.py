@@ -328,11 +328,21 @@ def _file_contains_normalized(path: Path, text: str) -> bool:
 
 # ── File writers ─────────────────────────────────────────────────────────────
 
+def _inside_project(cwd: str, path: Path) -> bool:
+    """False when `path` resolves outside the project root — a symlink shipped in a cloned repo."""
+    try:
+        return path.resolve().is_relative_to(Path(cwd).resolve())
+    except (OSError, ValueError):
+        return False
+
 def append_state_from_tags(cwd: str, decisions: list[str], risks: list[str], date: str) -> bool:
     """Lift DECISION:/RISK: tags into a dated STATE.md section. Returns True if wrote."""
     if not decisions and not risks:
         return False
     path = Path(cwd) / "memory" / "STATE.md"
+    if not _inside_project(cwd, path):
+        log(f"refused write outside the project root path={path}")
+        return False
     path.parent.mkdir(parents=True, exist_ok=True)
     body = [f"\n---\n### {date} — tagged capture"]
     if decisions:
@@ -351,6 +361,9 @@ def append_lessons_from_tags(cwd: str, lessons: list[str], date: str) -> bool:
     if not lessons:
         return False
     path = Path(cwd) / "memory" / "lessons.md"
+    if not _inside_project(cwd, path):
+        log(f"refused write outside the project root path={path}")
+        return False
     path.parent.mkdir(parents=True, exist_ok=True)
     body = [f"\n### {date}"]
     body.extend(f"- {l}" for l in lessons)
@@ -367,6 +380,9 @@ def append_todos_from_tags(cwd: str, todos: list[str], date: str) -> bool:
     if not todos:
         return False
     path = Path(cwd) / "tasks" / "todo.md"
+    if not _inside_project(cwd, path):
+        log(f"refused write outside the project root path={path}")
+        return False
     path.parent.mkdir(parents=True, exist_ok=True)
     body = [f"\n---\n## Carried forward ({date})"]
     body.extend(f"- [ ] {t}" for t in todos)

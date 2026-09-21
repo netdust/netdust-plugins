@@ -76,7 +76,13 @@ def parse_rows(text: str) -> list[dict]:
             break
         rows.append({k: (cells[j] if j is not None and j < len(cells) else "")
                      for k, j in index.items()})
-    return [r for r in rows if r["n"]]
+    return [r for r in rows if any(r.values())]
+
+
+def _table_rows(text: str) -> int:
+    """Data rows of every pipe table in the file, header lines excluded."""
+    cells = [c for c in (_cells(ln) for ln in _unfenced(text) if not TABLE_SEPARATOR.match(ln)) if c is not None]
+    return sum(1 for c in cells if "#" not in c)
 
 
 def _screenshot_problem(path: str, spec_dir: Path) -> str | None:
@@ -98,12 +104,12 @@ def _screenshot_problem(path: str, spec_dir: Path) -> str | None:
 
 def _row_problem(row: dict, spec_dir: Path) -> str | None:
     layer, verdict, evidence = row["layer"].lower(), row["verdict"].lower(), row["evidence"]
+    if not row["n"]:
+        return "row without a # cell"
     if layer not in LAYERS:
         return f"layer `{row['layer']}` is not one of {', '.join(LAYERS)}"
     if layer != "browser":
-        if verdict == "fail" or verdict.startswith("unverified"):
-            return f"{layer} row verdict `{row['verdict']}`"
-        return None
+        return None if verdict == "pass" else f"{layer} row verdict `{row['verdict']}` — not a pass"
     if verdict != "pass":
         return f"browser row verdict `{row['verdict']}` — not driven"
     m = BROWSER_EVIDENCE.search(evidence)
@@ -129,6 +135,10 @@ def check(spec_dir: Path) -> list[Finding]:
     if not rows:
         return findings + [("fail", "shakeout-manifest",
                             "shakeout.md has no rows — a manifest that lists no flow proves nothing")]
+    outside = _table_rows(text) - len(rows)
+    if outside > 0:
+        findings.append(("fail", "shakeout-manifest",
+                         f"{outside} table row(s) outside the table shakeout.md's header opens — every flow row sits in one table"))
     driven = 0
     for row in rows:
         problem = _row_problem(row, spec_dir)
@@ -137,7 +147,7 @@ def check(spec_dir: Path) -> list[Finding]:
             reason = "" if CREDENTIAL.search(row["evidence"]) else f" — {accepted.group('reason').strip()}"
             findings.append(("pass", "shakeout-accepted", f"{row['n']}: accepted by the human{reason}"))
         elif problem:
-            findings.append(("fail", "shakeout-manifest", f"{row['n']}: {problem}"))
+            findings.append(("fail", "shakeout-manifest", f"{row['n'] or '?'}: {problem}"))
         driven += row["layer"].lower() == "browser" and problem is None
     findings.append(("pass", "shakeout-manifest", f"shakeout: {len(rows)} rows, {driven} browser rows driven"))
     return findings

@@ -43,7 +43,7 @@ looks at the screenshots. `Verdict` is `pass`, `fail`, `not-reachable` or `unver
 A `browser` row is `pass` only when Evidence carries `Browser: <post-login url> ·
 shakeout/<name>.png` — a real viewport PNG, 1 KB to 2 MB, committed under
 `specs/<feature>/shakeout/`. `bin/shakeout-check.py` reads the evidence, never the verdict word.
-A `wire` or `cli` row fails the check on `fail` or `unverified…`.
+A `wire` or `cli` row passes only on `pass`: `fail`, `not-reachable`, `unverified…` and a blank verdict all fail the check until the human writes `Accepted-by-human:` for that row. Every flow row sits in the one table.
 
 `Accepted-by-human: <reason>` in Evidence excuses one row. The human writes it — you never do —
 and it never excuses a credential. The WHOLE file is scanned for credentials (login links,

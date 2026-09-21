@@ -230,12 +230,32 @@ def test_no_agent_harness_text() -> tuple[bool, str]:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_backslashes_in_memory_survive() -> tuple[bool, str]:
+    """Memory content is data: a Windows path or a stray `\\c` must arrive verbatim and must not
+    cut off the files loaded after it."""
+    tmp = Path(tempfile.mkdtemp(prefix="netdust-test-"))
+    try:
+        (tmp / "memory").mkdir()
+        (tmp / "tasks").mkdir()
+        (tmp / "memory" / "STATE.md").write_text("Sentinel-A C:\\code\\notes and \\c cut \\n stays\n")
+        (tmp / "memory" / "lessons.md").write_text("Sentinel-LESSON-AFTER\n")
+        (tmp / "tasks" / "todo.md").write_text("todo with \\t tab-looking text\n")
+        rc, out, _ = _run_hook(tmp)
+        ok = (rc == 0 and "C:\\code\\notes and \\c cut \\n stays" in out
+              and "Sentinel-LESSON-AFTER" in out and "\\t tab-looking text" in out
+              and "Total injected by session-start" in out)
+        return ok, "backslashes in STATE/lessons/todo arrive verbatim and truncate nothing after them"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def run() -> list[tuple[bool, str]]:
     return [
         test_empty_cwd_emits_nothing_but_logs(),
         test_full_project_emits_all_blocks(),
         test_log_records_missing_keys(),
         test_no_agent_harness_text(),
+        test_backslashes_in_memory_survive(),
         test_site_yml_summary_carries_environments(),
         test_site_yml_summary_omits_rung_warning_without_environments(),
     ]

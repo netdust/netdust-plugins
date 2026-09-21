@@ -5,7 +5,9 @@ ran live while every test — which calls the script over stdin — stayed green
 read the wiring, not just the function."""
 import importlib.util
 import json
+import os
 import re
+import subprocess
 from pathlib import Path
 
 HOOKS = Path(__file__).resolve().parent.parent / "hooks"
@@ -35,11 +37,19 @@ def _commands() -> list[str]:
     return [h["command"] for groups in _hooks_json().values() for g in groups for h in g["hooks"]]
 
 
+def _exit_with_missing_script(command: str) -> int:
+    """Run a registered hook command the way the shell does, with its script gone. Exit 2 is the
+    one code that blocks a tool, so a launcher that cannot open its script must still exit 0."""
+    env = {**os.environ, "CLAUDE_PLUGIN_ROOT": "/nonexistent-plugin-root"}
+    return subprocess.run(["bash", "-c", command], input="{}", capture_output=True, text=True,
+                          timeout=10, env=env).returncode
+
+
 def run() -> list[tuple[bool, str]]:
     handled = _guard().HANDLED_TOOLS
     matchers = _guard_matchers()
     reproduced = _uncovered(handled, ["Bash"])
-    scripts = [re.search(r"\$\{CLAUDE_PLUGIN_ROOT\}/(\S+?)\"?$", c) for c in _commands()]
+    scripts = [re.search(r"\$\{CLAUDE_PLUGIN_ROOT\}/([^\"\s]+)", c) for c in _commands()]
     return [
         (bool(matchers) and _uncovered(handled, matchers) == [],
          f"hooks.json matcher covers every tool the guard handles (matchers {matchers}, gap {_uncovered(handled, matchers)})"),
@@ -53,4 +63,6 @@ def run() -> list[tuple[bool, str]]:
          "no command names a hook that was not carried"),
         (any("session-start.sh" in c for c in _commands()) and any("session-stop.py" in c for c in _commands()),
          "SessionStart and Stop point at the carried scripts"),
+        (all(_exit_with_missing_script(c) == 0 for c in _commands()),
+         f"a missing script fails OPEN — exit codes {[_exit_with_missing_script(c) for c in _commands()]}"),
     ]

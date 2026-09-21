@@ -29,7 +29,7 @@ def run() -> list[tuple[bool, str]]:
          and "Ruling:" not in qa,
          "shakeout-qa writes the checker's grammar and never `Ruling:`"),
         (all(s in command for s in ("bin/shakeout-check.py", "make gate", "Accepted-by-human:", "shakeout-qa",
-                                    "screenshot", "netdust-gates:policy")),
+                                    "screenshot", "netdust-gates:policy", "superpowers:requesting-code-review")),
          "/shakeout runs make gate, the qa agent, the checker, the screenshot yield and points at the policy close"),
         (not stale, f"none of the 0.28 machinery survives in the close (found {stale})"),
     ]
