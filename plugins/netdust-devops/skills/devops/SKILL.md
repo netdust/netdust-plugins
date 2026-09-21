@@ -111,7 +111,7 @@ that carry a decision:
 | `make promote name=X` | rebuild staging as production + every promoted feature, X pinned at its current tip |
 | `make unpromote name=X` | the same rebuild, without X |
 | `make ship` | from the staging checkout, or a `hotfix/*` branch: the checks below, the gate, typed confirm, both backups, deploy, then rebuild staging on the new production |
-| `make rollback env=E` | redeploy the previously deployed commit — no server-side git required |
+| `make rollback env=E` | redeploy the previously deployed commit's payload — `rsync` only; refused by name over `git-push` |
 
 `pull`, `refresh` and `block-mail` exist only on stacks that have data ops;
 `make` lists what this project actually has.
@@ -121,7 +121,7 @@ deploy cannot do.
 
 **What `ship` checks** — three equalities, read from **origin**, since a local
 ref proves nothing: HEAD is `origin/staging`, so no local-only commit ships (a `hotfix/*`
-branch skips to the last check, and ship pushes it); `deployed/staging`
+branch skips to the last check, must carry no `promote:` merge — a hotfix cut from staging is refused — and ship pushes it); `deployed/staging`
 on origin names this commit (staging was deployed and looked at since its
 last rebuild, never before); `origin/production` is an ancestor of HEAD
 (staging still contains it). Then `ship` runs `commands.gate` itself — a red
@@ -152,15 +152,26 @@ git checkout <commit before the update> -- Makefile.netdust mk scripts .netdust-
 
 ---
 
-## Three guarantees, whatever the transport
+## Two guarantees whatever the transport, and one that is rsync's
 
 1. **The gate.** A deploy refuses unless the tree is clean, the branch matches
-   `environments.<env>.branch`, and `HEAD` is already on `origin`.
+   `environments.<env>.branch`, and `HEAD` **is** `origin`'s tip — a checkout
+   that is behind would deploy an older commit and stamp it.
 2. **The ledger.** Each deploy stamps `<state_dir>/<env>.json` on the server
    and moves a `deployed/<env>` tag — `make deployed` / `git diff
    deployed/production` read it back.
-3. **Rollback.** Checks out the previous stamp in a throwaway worktree and
-   redeploys from it — no server-side git required.
+3. **Rollback — rsync only.** Checks out the previous stamp in a throwaway
+   worktree and redeploys its payload. Over `git-push` there is no payload to
+   put back, so the verb refuses by name rather than stamp a rollback that
+   moved nothing: revert through `make hotfix` + `make ship` on production,
+   `make unpromote` on staging.
+
+**`make deploy env=production` releases nothing.** It exists to catch the site
+up after a ship whose transport failed. The gate lets production take only the
+commit `make ship` put there (`shipped/production` on origin, pushed atomically
+with the branch) or the one `deployed/production` already names, and it runs
+behind the same two backups as ship. A commit pushed to the production branch
+by hand is refused, naming `make ship`.
 
 Only `deploy.method` differs: `rsync` moves a closed payload; `git-push`
 pushes, pulls on the server, and runs `deploy.post_deploy_hooks`.
