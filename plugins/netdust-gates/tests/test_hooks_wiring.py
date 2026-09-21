@@ -47,4 +47,10 @@ def run() -> list[tuple[bool, str]]:
          f"the test bites: the 0.28 matcher `Bash` is reported as missing {reproduced}"),
         (all(m and (HOOKS.parent / m.group(1)).is_file() for m in scripts),
          "every command hooks.json registers names a script that exists"),
+        (set(_hooks_json()) == {"PreToolUse", "SessionStart", "Stop"},
+         f"only the carried events are registered — no SubagentStop, no loop gate (got {sorted(_hooks_json())})"),
+        (not any("loop-gate" in c or "subagent-stop" in c for c in _commands()),
+         "no command names a hook that was not carried"),
+        (any("session-start.sh" in c for c in _commands()) and any("session-stop.py" in c for c in _commands()),
+         "SessionStart and Stop point at the carried scripts"),
     ]

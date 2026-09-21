@@ -1,0 +1,667 @@
+#!/usr/bin/env python3
+"""
+session-stop.py — netdust-gates
+
+Runs at every Claude Code session end (Stop hook).
+
+Deterministic tag scanner (always on, zero latency, zero cost):
+  Scans the session transcript for tagged lines Claude wrote during the
+  session and lifts them into memory files:
+    • DECISION: <text>     → memory/STATE.md
+    • RISK: <text>         → memory/STATE.md (as a risk bullet)
+    • LESSON: <text>       → memory/lessons.md
+    • TODO: <text>         → tasks/todo.md
+    • SKILL-EDGE: <skill>: <text>  → skills/.../<skill>/lessons.md
+  This means Claude (or Stefan via Claude) just writes "DECISION: ..." in
+  the conversation and the hook captures it deterministically. No AI call.
+
+Never blocks the session — entire hook runs in < 3s.
+
+Observability:
+  • Every fire logs to ~/.claude/logs/memory-hook.log
+  • A no-op fire writes NOTHING to the project — the log line above is the
+    liveness signal (daily marker dropped in 0.3.3)
+  • Errors are log-only (log()); they never write to STATE.md
+"""
+
+import json
+import re
+import sys
+import os
+import hashlib
+import subprocess
+import tempfile
+import traceback
+from pathlib import Path
+from datetime import datetime
+
+# ── Config ───────────────────────────────────────────────────────────────────
+
+MAX_LESSONS_FILE = 80               # warn if lessons.md exceeds this
+MAX_CONTINUATION_LINES = 10         # lines a single tag may consume past its head
+MAX_CAPTURED_HASHES = 200           # cap on the sidecar dedup ring
+
+SIDECAR_NAME = ".stop-hook-state.json"  # under memory/
+NO_AUTO_MEMORY_MARKER = ".no-auto-memory"   # at a project root: hook must not write there
+
+LOG_PATH = Path.home() / ".claude" / "logs" / "memory-hook.log"
+# Overridable per machine: the default only exists on the workstation that runs
+# the wp-manager dashboard; everywhere else the sync is a silent no-op.
+DASHBOARD_SYNC = Path(os.environ.get(
+    "NETDUST_DASHBOARD_SYNC",
+    str(Path.home() / "Sites" / "netdust-wp-manager" / "scripts" / "sync-from-site.sh"),
+))
+
+# ── Logging ──────────────────────────────────────────────────────────────────
+
+def log(msg: str) -> None:
+    """Always write a line. Never raises."""
+    try:
+        LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(LOG_PATH, "a") as f:
+            f.write(f"[{ts}] {msg}\n")
+    except Exception:
+        pass
+
+
+# ── Transcript ───────────────────────────────────────────────────────────────
+
+def read_transcript(path: str) -> list[dict]:
+    try:
+        messages = []
+        with open(path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        messages.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        pass
+        return messages
+    except Exception:
+        return []
+
+
+def slice_new_messages(messages: list[dict], last_uuid: str | None) -> list[dict]:
+    """Return only the messages AFTER the one whose top-level uuid == last_uuid.
+
+    Watermark semantics:
+      • last_uuid is None  → first run, process everything.
+      • last_uuid found    → process strictly the messages after it.
+      • last_uuid missing  → can't trust the watermark (transcript replaced /
+        compacted) → fall back to a full scan; the hash dedup is the backstop.
+    """
+    if not last_uuid:
+        return messages
+    for i, msg in enumerate(messages):
+        if msg.get("uuid") == last_uuid:
+            return messages[i + 1:]
+    return messages  # uuid not found → full re-scan, hash dedup catches dupes
+
+
+def last_message_uuid(messages: list[dict]) -> str | None:
+    """The top-level uuid of the last message that carries one."""
+    for msg in reversed(messages):
+        u = msg.get("uuid")
+        if u:
+            return u
+    return None
+
+
+def extract_claude_text(messages: list[dict]) -> str:
+    """All text Claude wrote in the given messages, joined."""
+    parts = []
+    for msg in messages:
+        if msg.get("type") != "assistant":
+            continue
+        content = msg.get("message", {}).get("content", "")
+        if isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    parts.append(block.get("text", ""))
+        elif isinstance(content, str):
+            parts.append(content)
+    return "\n".join(parts)
+
+
+# ── Deterministic tag scanner ────────────────────────────────────────────────
+
+# Head-line matchers. A tag captures its head line PLUS any continuation
+# lines (indented, or starting with "- ") until a blank line or a new tag,
+# capped at MAX_CONTINUATION_LINES — so a multi-line DECISION isn't truncated
+# mid-sentence (the 2026-06-05 "This consolidates everything:" bug).
+TAG_HEADS = {
+    "decision":   re.compile(r"^\s*DECISION:\s*(.*)$",   re.IGNORECASE),
+    "risk":       re.compile(r"^\s*RISK:\s*(.*)$",       re.IGNORECASE),
+    "lesson":     re.compile(r"^\s*LESSON:\s*(.*)$",     re.IGNORECASE),
+    "todo":       re.compile(r"^\s*TODO:\s*(.*)$",       re.IGNORECASE),
+    # SKILL-EDGE: <skill-name>: <text>
+    "skill_edge": re.compile(r"^\s*SKILL-EDGE:\s*([a-z0-9_-]+):\s*(.*)$", re.IGNORECASE),
+}
+
+# A line that continues the tag above it: indented, or a markdown bullet.
+_CONTINUATION = re.compile(r"^(\s+\S|\s*-\s+)")
+
+# Any line that opens a NEW tag (ends a continuation block).
+_ANY_TAG_HEAD = re.compile(
+    r"^\s*(DECISION|RISK|LESSON|TODO|SKILL-EDGE):", re.IGNORECASE
+)
+
+
+def _is_continuation(line: str) -> bool:
+    return bool(line.strip()) and bool(_CONTINUATION.match(line)) and not _ANY_TAG_HEAD.match(line)
+
+
+def scan_tags(text: str) -> dict:
+    """Extract DECISION/RISK/LESSON/TODO/SKILL-EDGE entries from Claude's output.
+
+    Each entry is the head line's text joined with its continuation lines
+    (newline-separated), so multi-line tags survive intact. The scan walks
+    line-by-line rather than per-line regex so it can consume continuations.
+    """
+    out = {"decisions": [], "risks": [], "lessons": [], "todos": [], "skill_edges": []}
+    lines = text.splitlines()
+    i = 0
+    n = len(lines)
+    while i < n:
+        line = lines[i]
+        matched_kind = None
+        for kind, pat in TAG_HEADS.items():
+            m = pat.match(line)
+            if m:
+                matched_kind = kind
+                break
+        if matched_kind is None:
+            i += 1
+            continue
+
+        # Gather continuation lines (bounded).
+        cont = []
+        j = i + 1
+        while j < n and len(cont) < MAX_CONTINUATION_LINES and _is_continuation(lines[j]):
+            cont.append(lines[j].rstrip())
+            j += 1
+
+        if matched_kind == "skill_edge":
+            skill = m.group(1).strip()
+            head = m.group(2).strip()
+            body = "\n".join([head] + cont).strip()
+            out["skill_edges"].append((skill, body))
+        else:
+            head = m.group(1).strip()
+            body = "\n".join([head] + cont).strip()
+            key = {"decision": "decisions", "risk": "risks",
+                   "lesson": "lessons", "todo": "todos"}[matched_kind]
+            if body:
+                out[key].append(body)
+
+        i = j  # resume after the consumed continuation block
+
+    return out
+
+
+# ── Watermark sidecar (idempotency) ──────────────────────────────────────────
+
+VENDOR_SEGMENTS = {"themes", "plugins", "mu-plugins", "vendor", "packages", "node_modules"}
+ROOT_MARKERS = ("CLAUDE.md", "site.yml", ".git", "memory")
+
+
+def project_root(cwd: str) -> Path | None:
+    """The project the shell is IN, not the directory it happens to be in.
+
+    Sessions `cd` into theme, plugin and vendor trees; writing memory/ at cwd left
+    seventeen stray sidecars under themes/ and vendor/ across ~/Sites (2026-09-02).
+    Rules, in order: cwd with a marker and not below a vendor segment → cwd; else the
+    nearest ancestor (not past $HOME, or / outside it) with a marker and not below a
+    vendor segment; else cwd itself when it is not below a vendor segment (a fresh
+    project has no marker yet); else None — nothing is written under a vendor tree.
+    """
+    start = Path(cwd).resolve()
+    home = Path.home().resolve()
+    boundary = home if (start == home or home in start.parents) else Path("/")
+
+    def below_vendor(d: Path) -> bool:
+        return any(seg in VENDOR_SEGMENTS for seg in d.relative_to(boundary).parts)
+
+    def marked(d: Path) -> bool:
+        return any((d / m).exists() for m in ROOT_MARKERS)
+
+    for cand in (start, *start.parents):
+        if cand == boundary:
+            break
+        if marked(cand) and not below_vendor(cand):
+            return cand
+    return None if below_vendor(start) or start == boundary else start
+
+
+def sidecar_path(cwd: str) -> Path:
+    return Path(cwd) / "memory" / SIDECAR_NAME
+
+
+def read_sidecar(cwd: str) -> dict:
+    """Load the watermark sidecar. Returns a well-formed default on any error."""
+    default = {"transcript_path": None, "last_processed_uuid": None, "captured_hashes": []}
+    path = sidecar_path(cwd)
+    if not path.exists():
+        return default
+    try:
+        data = json.loads(path.read_text())
+        if not isinstance(data, dict):
+            return default
+        data.setdefault("transcript_path", None)
+        data.setdefault("last_processed_uuid", None)
+        hashes = data.get("captured_hashes")
+        data["captured_hashes"] = hashes if isinstance(hashes, list) else []
+        return data
+    except Exception:
+        return default
+
+
+def write_sidecar_atomic(cwd: str, state: dict) -> None:
+    """Write the sidecar via tmp file + os.replace so a crash never leaves a
+    half-written watermark. Best-effort; never raises into the hook."""
+    path = sidecar_path(cwd)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Cap the hash ring at the most recent N.
+        state["captured_hashes"] = list(state.get("captured_hashes", []))[-MAX_CAPTURED_HASHES:]
+        fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=".stop-hook-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(state, f, indent=2)
+            os.replace(tmp_name, path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except Exception:
+                pass
+            raise
+    except Exception as e:
+        log(f"warn sidecar-write-failed cwd={cwd} err={type(e).__name__}:{e}")
+
+
+def _normalize(text: str) -> str:
+    """Whitespace-collapsed, lowercased form of text — the shared definition
+    of "same tag" for both dedup layers (hash ring + durable file backstop)."""
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def normalized_hash(text: str) -> str:
+    """Stable hash of a tag's normalized text (whitespace-collapsed, lowercased)."""
+    return hashlib.sha256(_normalize(text).encode("utf-8")).hexdigest()[:16]
+
+
+def dedup_against_hashes(items: list, captured: set, key_of) -> list:
+    """Filter items whose normalized hash is already captured. Adds survivors'
+    hashes to `captured` (mutated in place). key_of(item) -> the text to hash."""
+    kept = []
+    for item in items:
+        h = normalized_hash(key_of(item))
+        if h in captured:
+            continue
+        captured.add(h)
+        kept.append(item)
+    return kept
+
+
+def _file_contains_normalized(path: Path, text: str) -> bool:
+    """True if the normalized tag body already appears in the target file.
+
+    Backstop for a lost sidecar (fix 4, 2026-07-03): the hash ring lives in
+    a GITIGNORED sidecar and resets when it's lost — the target file itself
+    is the durable dedup record. Whitespace-collapsed, lowercased substring
+    match, mirroring normalized_hash()'s normalization.
+
+    Known accepted limitation: a tag whose normalized body coincidentally
+    appears verbatim inside unrelated file prose is skipped. Tag bodies are
+    full sentences; acceptable for memory capture."""
+    if not text.strip() or not path.exists():
+        return False
+    try:
+        norm_file = _normalize(path.read_text())
+    except Exception:
+        return False  # unreadable target → don't block capture
+    norm_text = _normalize(text)
+    return norm_text in norm_file
+
+
+# ── File writers ─────────────────────────────────────────────────────────────
+
+def append_state_from_tags(cwd: str, decisions: list[str], risks: list[str], date: str) -> bool:
+    """Lift DECISION:/RISK: tags into a dated STATE.md section. Returns True if wrote."""
+    if not decisions and not risks:
+        return False
+    path = Path(cwd) / "memory" / "STATE.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = [f"\n---\n### {date} — tagged capture"]
+    if decisions:
+        body.append("\n**Decisions**")
+        body.extend(f"- {d}" for d in decisions)
+    if risks:
+        body.append("\n**Risks**")
+        body.extend(f"- {r}" for r in risks)
+    body.append("")
+    with open(path, "a") as f:
+        f.write("\n".join(body))
+    return True
+
+
+def append_lessons_from_tags(cwd: str, lessons: list[str], date: str) -> bool:
+    if not lessons:
+        return False
+    path = Path(cwd) / "memory" / "lessons.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = [f"\n### {date}"]
+    body.extend(f"- {l}" for l in lessons)
+    body.append("")
+    with open(path, "a") as f:
+        f.write("\n".join(body))
+    line_count = sum(1 for _ in open(path))
+    if line_count > MAX_LESSONS_FILE:
+        log(f"warn lessons-file-long path={path} lines={line_count}")
+    return True
+
+
+def append_todos_from_tags(cwd: str, todos: list[str], date: str) -> bool:
+    if not todos:
+        return False
+    path = Path(cwd) / "tasks" / "todo.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = [f"\n---\n## Carried forward ({date})"]
+    body.extend(f"- [ ] {t}" for t in todos)
+    body.append("")
+    with open(path, "a") as f:
+        f.write("\n".join(body))
+    return True
+
+
+INSTALLED_PLUGINS_JSON = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
+
+
+def _installed_plugin_paths() -> dict[str, Path]:
+    """plugin name -> active install dir, from Claude Code's own registry.
+
+    v2 schema: {"plugins": {"<name>@<marketplace>": [{"installPath": ...}]}}.
+    The registry is the ONLY truth for "active version" — version-dir mtimes
+    are not (fix 3, 2026-07-03: 0.2.1's mtime was 4 ms newer than the
+    installed 0.3.0). Returns {} on any error so callers can fall back."""
+    try:
+        data = json.loads(INSTALLED_PLUGINS_JSON.read_text())
+        result: dict[str, Path] = {}
+        for key, entries in data.get("plugins", {}).items():
+            name = key.split("@", 1)[0]
+            if not isinstance(entries, list) or not entries:
+                continue
+            # registry lists one entry per key in practice; entries[0] is taken as active.
+            install_path = entries[0].get("installPath")
+            if install_path and Path(install_path).is_dir():
+                result[name] = Path(install_path)
+        return result
+    except Exception:
+        return {}
+
+
+def _netdust_plugin_dirs() -> list[Path]:
+    """Locate all installed netdust-* plugin dirs, in trust order:
+
+    1. installed_plugins.json installPath (authoritative — see
+       _installed_plugin_paths).
+    2. FALLBACK (registry missing/unreadable — e.g. bare test runs): climb
+       from CLAUDE_PLUGIN_ROOT to the marketplace dir and pick each sibling's
+       newest-mtime version dir. mtime is a heuristic, NOT truth.
+    3. Legacy flat layout glob (~/.claude/plugins/netdust-*).
+    """
+    installed = _installed_plugin_paths()
+    dirs = [p for name, p in installed.items() if name.startswith("netdust-")]
+    if dirs:
+        return dirs
+
+    root_env = os.environ.get("CLAUDE_PLUGIN_ROOT")
+    if root_env:
+        # cache/<marketplace>/<self-plugin>/<version> — climb to <marketplace>
+        marketplace_dir = Path(root_env).parent.parent
+        result = []
+        for sibling in marketplace_dir.iterdir():
+            if not sibling.is_dir() or not sibling.name.startswith("netdust-"):
+                continue
+            versions = [v for v in sibling.iterdir() if v.is_dir()]
+            if not versions:
+                continue
+            latest = max(versions, key=lambda p: p.stat().st_mtime)
+            result.append(latest)
+        return result
+
+    # Legacy fallback: pre-monorepo flat layout.
+    plugins_root = Path.home() / ".claude" / "plugins"
+    if not plugins_root.exists():
+        return []
+    return [p for p in plugins_root.glob("netdust-*") if p.is_dir()]
+
+
+def append_skill_edge(skill: str, edge_case: str, date: str, source_project: str) -> bool:
+    """
+    Append a SKILL-EDGE entry to the named skill's lessons.md.
+    Searches all installed netdust-* plugin dirs (core, wp, statamic, etc.).
+    """
+    for plugin_dir in _netdust_plugin_dirs():
+        candidate = plugin_dir / "skills" / skill / "SKILL.md"
+        if candidate.exists():
+            lessons_path = candidate.parent / "lessons.md"
+            if _file_contains_normalized(lessons_path, edge_case):
+                return True  # already captured in a prior fire — idempotent
+            lessons_path.touch(exist_ok=True)
+            entry = f"\n### {date} — {edge_case}\n- Source: {source_project}\n"
+            with open(lessons_path, "a") as f:
+                f.write(entry)
+            return True
+    return False
+
+
+# ── Git + dashboard ─────────────────────────────────────────────────────────
+
+def _ensure_sidecar_gitignored(cwd: str) -> None:
+    """The watermark sidecar is per-machine transient state, not memory
+    content — keep it out of the project's git history."""
+    entry = f"memory/{SIDECAR_NAME}"
+    gitignore = Path(cwd) / ".gitignore"
+    try:
+        existing = gitignore.read_text() if gitignore.exists() else ""
+        if entry in existing.splitlines():
+            return
+        with open(gitignore, "a") as f:
+            if existing and not existing.endswith("\n"):
+                f.write("\n")
+            f.write(entry + "\n")
+    except Exception as e:
+        log(f"warn gitignore-write-failed cwd={cwd} err={type(e).__name__}:{e}")
+
+
+def git_commit_memory(cwd: str) -> None:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=cwd, capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            return
+
+        _ensure_sidecar_gitignored(cwd)
+
+        # Stage only the dirs that exist. git treats a pathspec matching nothing as
+        # fatal for the WHOLE command, so `git add memory/ tasks/` in a project with
+        # no tasks/ staged NOTHING and the hook committed nothing — silently, because
+        # the fatal went to a captured stderr and this runs after the `done` log line.
+        # ntdst-core and ntdst-baseline were the only projects without tasks/, and the
+        # only two whose memory/ never reached git (2026-09-02).
+        paths = [p for p in ("memory/", "tasks/") if (Path(cwd) / p).is_dir()]
+        if not paths:
+            return
+
+        subprocess.run(
+            ["git", "add", *paths],
+            cwd=cwd, capture_output=True,
+        )
+
+        # Both the "is there anything to do" check and the commit are scoped to the
+        # same paths. A bare `git diff --cached` sees the WHOLE index, so an unrelated
+        # staged change made mid-session would make the hook think it had memory to
+        # capture; a bare `git commit` then writes that whole index under a
+        # memory(...) subject. That is how a mid-build `git rm` once lost 308 lines of
+        # PHP to an "auto-capture session end" commit. The hook must be structurally
+        # incapable of committing anything outside these paths.
+        # Commit the staged FILES, not the directories. Two reasons, both learned the
+        # hard way: a bare `git commit` writes the WHOLE index, which is how a
+        # mid-build `git rm` once lost 308 lines of PHP under a memory(...) subject;
+        # and a directory pathspec matching nothing is fatal for the whole command,
+        # so `-- memory/ tasks/` dies whenever one of them is empty. The staged list
+        # is exact, always non-empty here, and can name nothing outside these paths.
+        staged = subprocess.run(
+            ["git", "diff", "--cached", "--name-only", "-z", "--", *paths],
+            cwd=cwd, capture_output=True, text=True,
+        ).stdout.split("\0")
+        staged = [p for p in staged if p]
+        if not staged:
+            return  # Nothing staged under memory/ or tasks/
+
+        project = Path(cwd).name
+        subprocess.run(
+            ["git", "commit", "-m", f"memory({project}): auto-capture session end",
+             "--", *staged],
+            cwd=cwd, capture_output=True,
+        )
+    except Exception as e:
+        log(f"warn git-commit-failed cwd={cwd} err={type(e).__name__}:{e}")
+
+
+def trigger_dashboard_sync(cwd: str) -> None:
+    if not DASHBOARD_SYNC.exists():
+        return
+    try:
+        subprocess.run([str(DASHBOARD_SYNC), cwd], capture_output=True, timeout=10)
+    except Exception as e:
+        log(f"warn dashboard-sync-failed cwd={cwd} err={type(e).__name__}:{e}")
+
+
+# ── Main ─────────────────────────────────────────────────────────────────────
+
+def main() -> None:
+    try:
+        raw = sys.stdin.read()
+    except Exception:
+        log("error stdin-read-failed")
+        sys.exit(0)
+
+    try:
+        hook_input = json.loads(raw) if raw else {}
+    except Exception:
+        log(f"error stdin-json-parse raw_len={len(raw)}")
+        sys.exit(0)
+
+    transcript_path = hook_input.get("transcript_path", "")
+    launched_in = hook_input.get("cwd", os.getcwd())
+    root = project_root(launched_in)
+    if root is None:
+        log(f"skip no-project-root cwd={launched_in}")
+        sys.exit(0)
+    cwd = str(root)   # every write path below is relative to the project root
+    date = datetime.now().strftime("%Y-%m-%d")
+    project = Path(cwd).name
+
+    # ── Exclusion: manual-only projects (fix 5) ──────────────────────────────
+    # A .no-auto-memory marker at the project root means this project's memory
+    # is maintained by hand (e.g. the Layer-B fleet dir ~/Sites/netdust-wp-manager).
+    # ALL write paths — memory/, tasks/, .gitignore, sidecar, git commit,
+    # dashboard sync — are downstream of this single check.
+    if (Path(cwd) / NO_AUTO_MEMORY_MARKER).exists():
+        log(f"skip no-auto-memory cwd={cwd}")
+        sys.exit(0)
+
+    if not transcript_path:
+        log(f"skip no-transcript-path cwd={cwd}")
+        sys.exit(0)
+
+    messages = read_transcript(transcript_path)
+    if not messages:
+        log(f"skip empty-transcript cwd={cwd}")
+        sys.exit(0)
+
+    # ── Idempotency watermark ────────────────────────────────────────────────
+    # Read the sidecar, process ONLY messages after the last_processed_uuid
+    # (full scan if the uuid is missing or the transcript path changed). The
+    # hash dedup below is the belt-and-braces backstop for the full-scan case.
+    sidecar = read_sidecar(cwd)
+    same_transcript = sidecar.get("transcript_path") == transcript_path
+    last_uuid = sidecar.get("last_processed_uuid") if same_transcript else None
+    new_messages = slice_new_messages(messages, last_uuid)
+
+    captured = set(sidecar.get("captured_hashes", []))
+
+    # ── Deterministic tag scan (only the new slice) ─────────────────────────
+    claude_text = extract_claude_text(new_messages)
+    tags = scan_tags(claude_text)
+
+    # Belt-and-braces hash dedup: drop any tag already captured in a prior fire.
+    tags["decisions"] = dedup_against_hashes(tags["decisions"], captured, lambda x: x)
+    tags["risks"]     = dedup_against_hashes(tags["risks"], captured, lambda x: x)
+    tags["lessons"]   = dedup_against_hashes(tags["lessons"], captured, lambda x: x)
+    tags["todos"]     = dedup_against_hashes(tags["todos"], captured, lambda x: x)
+    tags["skill_edges"] = dedup_against_hashes(
+        tags["skill_edges"], captured, lambda se: f"{se[0]}:{se[1]}"
+    )
+
+    # ── Durable dedup: the target file itself (fix 4) ────────────────────────
+    # The hash ring above lives in the gitignored sidecar and resets when the
+    # sidecar is lost; the committed target files don't. Filter anything whose
+    # normalized body already exists in its destination file.
+    state_path = Path(cwd) / "memory" / "STATE.md"
+    lessons_path = Path(cwd) / "memory" / "lessons.md"
+    todo_path = Path(cwd) / "tasks" / "todo.md"
+    tags["decisions"] = [d for d in tags["decisions"] if not _file_contains_normalized(state_path, d)]
+    tags["risks"]     = [r for r in tags["risks"] if not _file_contains_normalized(state_path, r)]
+    tags["lessons"]   = [l for l in tags["lessons"] if not _file_contains_normalized(lessons_path, l)]
+    tags["todos"]     = [t for t in tags["todos"] if not _file_contains_normalized(todo_path, t)]
+
+    written = []
+
+    if tags["decisions"] or tags["risks"]:
+        if append_state_from_tags(cwd, tags["decisions"], tags["risks"], date):
+            written.append("STATE.md(tags)")
+
+    if tags["lessons"]:
+        if append_lessons_from_tags(cwd, tags["lessons"], date):
+            written.append("lessons.md(tags)")
+
+    if tags["todos"]:
+        if append_todos_from_tags(cwd, tags["todos"], date):
+            written.append("todo.md(tags)")
+
+    for skill, edge in tags["skill_edges"]:
+        if append_skill_edge(skill, edge, date, project):
+            written.append(f"skill:{skill}/lessons.md")
+        else:
+            log(f"warn skill-edge-no-match skill={skill}")
+
+    # ── Advance the watermark (atomic, even on partial failure above) ───────
+    # Watermark last, ON PURPOSE: appends are idempotent (file-content dedup),
+    # so a crash before this line re-scans next fire without duplicating.
+    new_uuid = last_message_uuid(messages) or sidecar.get("last_processed_uuid")
+    write_sidecar_atomic(cwd, {
+        "transcript_path": transcript_path,
+        "last_processed_uuid": new_uuid,
+        "captured_hashes": list(captured),
+    })
+
+    log(f"done cwd={cwd} tags=[{','.join(k for k,v in tags.items() if v)}] wrote=[{','.join(written)}]")
+
+    git_commit_memory(cwd)
+    trigger_dashboard_sync(cwd)
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception:
+        log("error unhandled-exception\n" + traceback.format_exc())
+        sys.exit(0)
