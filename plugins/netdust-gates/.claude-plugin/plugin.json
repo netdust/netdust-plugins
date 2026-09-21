@@ -1,0 +1,11 @@
+{
+  "name": "netdust-gates",
+  "version": "0.1.0",
+  "description": "Netdust's software-delivery policy over superpowers: standards injected into the spec and plan, verification by executables (make gate, the shake-out manifest check), authority hooks. Pilot on netdust.be; replaces netdust-agent there and never runs beside it.",
+  "author": {
+    "name": "Stefan Vermeulen",
+    "email": "stefan@netdust.be",
+    "url": "https://netdust.be"
+  },
+  "license": "UNLICENSED"
+}
