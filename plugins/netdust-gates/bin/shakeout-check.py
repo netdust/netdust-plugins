@@ -118,13 +118,16 @@ def _row_problem(row: dict, spec_dir: Path) -> str | None:
     return _screenshot_problem(m.group("path"), spec_dir)
 
 
-# ── the smoke registry ────────────────────────────────────────────────────────
-# `specs/SMOKE.md` indexes the read-only checks `make smoke env=E` runs against a
-# deployed site: `| surface | entry | test | first feature | verified |`. A row's
-# test is a committed spec tagged `@smoke`; an entry marked `auth` is listed for a
-# later runner and owes no tag. A feature that drove flows leaves at least one row.
-REGISTRY_COLUMNS = {"surface": "surface", "entry": "entry", "test": "test",
+# ── the checks registry ───────────────────────────────────────────────────────
+# `specs/CHECKS.md` indexes what the shake-outs left to run on a deployed site:
+# `| surface | tier | entry | test | first feature | verified |`. Tier `e2e` is a
+# driven flow tagged `@e2e` (make e2e, staging only); `smoke` is read-only and
+# tagged `@smoke` (make smoke, production too); `auth` is listed for a later runner
+# and owes no test. A feature that drove flows leaves an e2e row and a smoke row.
+REGISTRY_COLUMNS = {"surface": "surface", "tier": "tier", "entry": "entry", "test": "test",
                     "feature": "first feature", "verified": "verified"}
+TIER_TAG = {"e2e": "@e2e", "smoke": "@smoke"}
+TIERS = (*TIER_TAG, "auth")
 
 
 def parse_registry(text: str) -> list[dict]:
@@ -147,37 +150,45 @@ def parse_registry(text: str) -> list[dict]:
     return [r for r in rows if any(r.values())]
 
 
+def _registry_row_problem(row: dict, root: Path) -> str | None:
+    tier = row["tier"].lower()
+    if tier not in TIERS:
+        return f"tier {row['tier'] or '(none)'} is not one of {', '.join(TIERS)}"
+    if tier == "auth":
+        return None
+    test = row["test"].strip("`")
+    path = root / test
+    if not test or not path.is_file():
+        return f"test {test or '(none)'} does not exist — a registry row with no test checks nothing"
+    try:
+        tagged = TIER_TAG[tier] in path.read_text()
+    except (OSError, ValueError):
+        tagged = False
+    if not tagged:
+        return f"{test} carries no {TIER_TAG[tier]} tag — make {tier} never runs it"
+    return None
+
+
 def check_registry(spec_dir: Path, driven: int) -> list[Finding]:
     """The registry rows this feature owes and the tests those rows name."""
-    registry = spec_dir.parent / "SMOKE.md"
-    root = spec_dir.parent.parent
-    feature = spec_dir.name
+    registry = spec_dir.parent / "CHECKS.md"
     rows = parse_registry(registry.read_text()) if registry.is_file() else []
     findings: list[Finding] = []
     for row in rows:
-        if row["entry"].lower().startswith("auth"):
-            continue
-        test = row["test"].strip("`")
-        path = root / test
-        if not test or not path.is_file():
-            findings.append(("fail", "smoke-registry",
-                             f"{row['surface']}: test {test or '(none)'} does not exist — a registry row with no test checks nothing"))
-            continue
-        try:
-            tagged = "@smoke" in path.read_text()
-        except (OSError, ValueError):
-            tagged = False
-        if not tagged:
-            findings.append(("fail", "smoke-registry",
-                             f"{row['surface']}: {test} carries no @smoke tag — make smoke never runs it"))
-    mine = [r for r in rows if r["feature"] == feature]
-    if driven and not mine:
-        findings.append(("fail", "smoke-registry",
-                         f"{feature} drove {driven} flow(s) and left no row in specs/SMOKE.md — the deployed site would go unwatched"))
+        problem = _registry_row_problem(row, spec_dir.parent.parent)
+        if problem:
+            findings.append(("fail", "checks-registry", f"{row['surface']}: {problem}"))
+    if driven:
+        mine = {r["tier"].lower() for r in rows if r["feature"] == spec_dir.name}
+        for tier in TIER_TAG:
+            if tier not in mine:
+                findings.append(("fail", "checks-registry",
+                                 f"{spec_dir.name} drove {driven} flow(s) and left no {tier} row in specs/CHECKS.md"
+                                 f" — make {tier} would not watch it after a deploy"))
     if rows and not any(s == "fail" for s, _, _ in findings):
-        findings.append(("pass", "smoke-registry", f"{len(rows)} row{'s' if len(rows) != 1 else ''}, every test present and tagged"))
+        findings.append(("pass", "checks-registry",
+                         f"{len(rows)} row{'s' if len(rows) != 1 else ''}, every test present and tagged for its tier"))
     return findings
-
 
 def check(spec_dir: Path) -> list[Finding]:
     if not spec_dir.is_dir():

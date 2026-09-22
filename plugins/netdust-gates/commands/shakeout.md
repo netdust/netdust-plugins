@@ -7,10 +7,11 @@ Run the close for `specs/<feature>/`. Four steps, in order — after one read.
 
 ## Step 0 — The registry
 
-Read `specs/SMOKE.md` if it exists: every surface this project has shipped and the `@smoke`
-spec that watches it. A surface the branch diff touches is re-driven in Step 2 alongside the
-new flows, and its `verified` cell bumped — a registered check that now fails blocks the
-close like a new one. The registry is what `make smoke env=<env>` runs after a deploy.
+Read `specs/CHECKS.md` if it exists: every surface this project has shipped, its `@e2e`
+flows and its `@smoke` check. A surface the branch diff touches is re-driven in Step 2
+alongside the new flows, and its `verified` cell bumped — a registered check that now fails
+blocks the close like a new one. The registry is what `make e2e env=staging` and
+`make smoke env=<env>` run after a deploy.
 
 ## Step 1 — `make gate`
 
@@ -24,8 +25,9 @@ Dispatch **`shakeout-qa`** on the most capable available model for the flows: it
 flow list from the spec and the plan's `Review Focus`, drives each through its faithful layer
 (browser for UI, un-mocked wire for backend), commits the flows as tests, and writes
 `specs/<feature>/shakeout.md` with a screenshot under `specs/<feature>/shakeout/` for every
-browser pass — and leaves the feature's `@smoke` spec under `tests/e2e/smoke/` with its row in
-`specs/SMOKE.md`, the read-only check `make smoke` runs on the deployed site. It reports the
+browser pass — and registers what it leaves in `specs/CHECKS.md`: the driven flows as `@e2e`
+(`make e2e env=staging` re-runs them after every deploy) and a read-only `@smoke` spec per
+surface (`make smoke`, production too). It reports the
 flow list it derived; read it for what is missing.
 
 A change with no user-facing surface has nothing to drive: say so and go to Step 4.
