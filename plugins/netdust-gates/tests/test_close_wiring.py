@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 PLUGIN = Path(__file__).resolve().parent.parent
-AGENTS = ("security-sentinel", "invariant-auditor", "shakeout-qa")
+AGENTS = ("security-sentinel", "invariant-auditor", "shakeout-qa", "plan-reviewer")
 STALE = ("gate-check", "tasks.md", "Lane", "verify-budget", "model-ladder", "herdr-moments",
          "implementer", "Stage 3", "Acceptance flows", "Shake-out access", "FULL tier", "FULL-tier")
 
@@ -21,10 +21,21 @@ def _frontmatter_ok(text: str, name: str) -> bool:
 def run() -> list[tuple[bool, str]]:
     agents = {a: _read(f"agents/{a}.md") for a in AGENTS}
     command = _read("commands/shakeout.md")
-    stale = sorted({s for t in (*agents.values(), command) for s in STALE if s in t})
+    plan_cmd = _read("commands/plan-review.md")
+    policy = _read("skills/policy/SKILL.md")
+    reviewer = agents["plan-reviewer"]
+    stale = sorted({s for t in (*agents.values(), command, plan_cmd) for s in STALE if s in t})
     qa = agents["shakeout-qa"]
     return [
         (all(_frontmatter_ok(agents[a], a) for a in AGENTS), "each agent has `name:` matching its file and a description"),
+        (all(s in plan_cmd for s in ("git hash-object", "plan-reviewer", "Reviewed-plan:", "plan-review.md"))
+         and "Blocking" in plan_cmd,
+         "/plan-review computes the blob, dispatches plan-reviewer, files the report with Reviewed-plan:"),
+        (all(s in reviewer for s in ("Reviewed-plan:", "Blocking", "Should fix", "Premises checked"))
+         and "tools: Read, Grep, Glob, Bash" in reviewer,
+         "plan-reviewer writes the report grammar the guard reads, and ships without Edit/Write"),
+        (all(s in policy for s in ("/plan-review", "plan-review.md", "Reviewed-plan:")),
+         "the policy skill names /plan-review, its artifact and its token"),
         (all(s in qa for s in ("Accepted-by-human:", "shakeout-check.py", "Browser:", "shakeout/<name>.png", "edge-classes.md"))
          and "Ruling:" not in qa,
          "shakeout-qa writes the checker's grammar and never `Ruling:`"),
