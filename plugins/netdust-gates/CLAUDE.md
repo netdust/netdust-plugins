@@ -20,8 +20,12 @@ grammar. netdust-agent went 0.18 → 0.28 in six weeks by doing the opposite.
 
 - Enable this or `netdust-agent` in a project, never both — both would fire their hooks.
 - Not here, and not to be re-added: gate-check, lanes, tiers, clusters, placement, the model
-  ladder, /loop, implementer / test-author / reviewer agents, compounding, convergence,
-  run-score / run-trace / verify-budget.
+  ladder, /loop, implementer / test-author / reviewer agents, convergence,
+  run-score / run-trace / verify-budget. Compounding came back in the one shape the growth
+  rule allows: `/session-learn` proposes a lesson plus its eval case, cited `path:line` from a
+  transcript, and nothing lands until Stefan approves it.
+- `/session-review` and `/session-learn` run on demand, never as a gate. Their agents are
+  read-only; every change after them is Stefan's approval first.
 - The policy skill stays under 150 lines; past that it is restating superpowers.
 
 ## Tests

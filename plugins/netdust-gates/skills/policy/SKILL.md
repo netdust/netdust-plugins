@@ -97,3 +97,7 @@ Stefan accepts is `Accepted-by-human:` in the manifest, never `Ruling:`; only he
    the project carries `ARCHITECTURE-INVARIANTS.md`.
 4. One fix pass, each fix RED→GREEN. No re-review — named checks and the suites close it. Then
    `superpowers:finishing-a-development-branch`.
+
+On demand, whenever Stefan asks: `/session-review <feature>` audits the work (six dimensions,
+core fit on WordPress — run it before finishing, while the task reports exist), and
+`/session-learn` reads a transcript for lessons. Both report; he approves what follows.
