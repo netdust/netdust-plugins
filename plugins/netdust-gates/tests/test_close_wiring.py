@@ -39,6 +39,10 @@ def run() -> list[tuple[bool, str]]:
         (all(s in qa for s in ("Accepted-by-human:", "shakeout-check.py", "Browser:", "shakeout/<name>.png", "edge-classes.md"))
          and "Ruling:" not in qa,
          "shakeout-qa writes the checker's grammar and never `Ruling:`"),
+        (all(s in qa for s in ("@smoke", "specs/SMOKE.md", "tests/e2e/smoke/", "no login")),
+         "shakeout-qa leaves the read-only @smoke spec and its registry row"),
+        ("specs/SMOKE.md" in command and "make smoke" in command and "make smoke" in policy,
+         "/shakeout reads the registry first, and the policy close names make smoke"),
         (all(s in command for s in ("bin/shakeout-check.py", "make gate", "Accepted-by-human:", "shakeout-qa",
                                     "screenshot", "netdust-gates:policy", "superpowers:requesting-code-review")),
          "/shakeout runs make gate, the qa agent, the checker, the screenshot yield and points at the policy close"),

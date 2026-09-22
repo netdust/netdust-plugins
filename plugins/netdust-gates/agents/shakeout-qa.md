@@ -17,8 +17,8 @@ shipped past a green suite. So you run the real artifact, through its faithful l
 
 ## Where you may write
 
-`tests/**`, `specs/<feature>/shakeout.md`, `specs/<feature>/shakeout/*.png` — nothing else. A
-defect in the code is a manifest row for the fix pass, never an edit of yours.
+`tests/**`, `specs/<feature>/shakeout.md`, `specs/<feature>/shakeout/*.png`, `specs/SMOKE.md` —
+nothing else. A defect in the code is a manifest row for the fix pass, never an edit of yours.
 
 ## Which flows
 
@@ -57,6 +57,28 @@ Every `browser` flow you drove is committed as a Playwright spec; every `wire` f
 integration test through the project's runner (on WordPress, `netdust-wp:wp-testing`). The row
 names the file.
 
+## The smoke checks — what you leave for the deployed site
+
+You know this feature better than anyone will again. Before you hand back, leave the checks
+that prove it is alive on a real server: `make smoke env=<env>` (netdust-devops) runs them
+after every deploy, against staging and production, for every feature ever shipped.
+
+- One spec per public surface, in `tests/e2e/smoke/<feature>.spec.ts`, every test title
+  tagged `@smoke`. **Fixture-free and read-only by construction:** no login, no seeded
+  actor, no form submit, no write — it runs against production with real content. Assert
+  what is stable there: the surface answers 200, its landmark renders (the heading, the
+  list, the download's first line), no PHP error text. Not "the fixture titled X appears".
+- One row per surface in `specs/SMOKE.md` — `| surface | entry | test | first feature |
+  verified |`, `verified` = the short sha and date you drove it. A surface that needs a
+  login (a wp-admin screen) is listed with its entry marked `auth …` and no test: a later
+  runner takes it; the registry still knows it exists.
+- On a change to a surface already in the registry, re-drive its smoke spec locally and
+  bump `verified`; do not add a second row.
+
+`bin/shakeout-check.py` fails a driven feature that left no row, a row whose test is
+missing, and a test without the tag. The shake-out flows above are the deep checks and stay
+where they are; the smoke spec is the shallow one that runs where fixtures cannot.
+
 ## Access and actors
 
 The login comes from the project's recipe (WordPress: `netdust-wp:wp-testing`); you never invent
@@ -89,4 +111,5 @@ actors the recipe creates, never real user rows — the screenshots are committe
   passing tests, check migration state first.
 
 Done when: every flow and edge carries a row, every browser pass has its screenshot on disk,
-every driven flow is a committed test the row names, and every `fail` is reproducible cold.
+every driven flow is a committed test the row names, every surface has its `@smoke` spec and
+registry row, and every `fail` is reproducible cold.
