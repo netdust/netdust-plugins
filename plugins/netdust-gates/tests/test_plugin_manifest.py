@@ -1,5 +1,6 @@
 """test_plugin_manifest.py — the plugin is installable: manifest, marketplace entry, growth rule."""
 import json
+import re
 from pathlib import Path
 
 PLUGIN = Path(__file__).resolve().parent.parent
@@ -16,8 +17,8 @@ def run() -> list[tuple[bool, str]]:
     entry = _entry()
     claude_md = (PLUGIN / "CLAUDE.md").read_text()
     return [
-        (manifest["name"] == "netdust-gates" and manifest["version"] == "0.1.0",
-         f"plugin.json names netdust-gates 0.1.0 (got {manifest['name']} {manifest['version']})"),
+        (manifest["name"] == "netdust-gates" and re.fullmatch(r"\d+\.\d+\.\d+", manifest["version"]) is not None,
+         f"plugin.json names netdust-gates with a semver version (got {manifest['name']} {manifest['version']})"),
         (entry is not None and entry["source"] == "./plugins/netdust-gates"
          and (REPO / entry["source"]).is_dir() and entry["version"] == manifest["version"],
          "marketplace.json carries a netdust-gates entry whose source exists and whose version matches plugin.json"),
