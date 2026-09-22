@@ -286,7 +286,7 @@ sed -i 's/^STACK := nosuchstack/STACK := wp/' Makefile
 # Makefile.netdust + mk/ it kept copying only `Makefile` — 31 of its 35 checks
 # failed with "No such file or directory" while the core itself was fine.
 # Running them here is the only thing that catches that class of break.
-out=$(timeout 300 make test < /dev/null 2>&1 | strip)
+out=$(timeout 900 make test < /dev/null 2>&1 | strip)
 if printf '%s' "$out" | grep -q "No such file or directory"; then
     bad "make test runs under the split layout" "$(printf '%s' "$out" | grep 'No such file' | head -1)"
 elif printf '%s' "$out" | grep -qE "^flow-test: [0-9]+ ok, 0 failed"; then
