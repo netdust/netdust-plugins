@@ -191,6 +191,17 @@ git checkout -q -b hotfix/state origin/main
 assert_eq "a hotfix is sent to gate, a verb that exists" "gate 1" "$(nextverb) $(isverb "$(nextverb)")"
 assert_eq "…and to ship after it" "1" "$(M _flow-state | grep -c 'make ship')"
 git checkout -q main && git branch -q -D feature/state hotfix/state
+# A project's site.yml is never rewritten by an update, so a command key a newer core
+# expects is reported by doctor, with the line to add. Declared empty is deliberate.
+DC=$(M _doctor-commands | strip)
+assert_eq "doctor names the commands.* keys site.yml never declared, not the one it did" "1 1 0" \
+  "$(has "$DC" 'commands.smoke not declared') $(has "$DC" 'commands.e2e not declared') $(has "$DC" 'commands.gate not declared')"
+assert_eq "…each with the line to add" "1" "$(has "$DC" 'npx playwright test --grep @smoke')"
+sed -i "s|^commands: {gate: \(.*\)}$|commands: {gate: \1, smoke: '', e2e: ''}|" site.yml
+DC=$(M _doctor-commands | strip)
+assert_eq "…and a key declared empty is a decision, not a gap" "0 0 1" \
+  "$(has "$DC" 'commands.smoke not declared') $(has "$DC" 'commands.e2e not declared') $(has "$DC" 'commands.e2e declared')"
+git checkout -q -- site.yml
 
 echo; echo "flow — promote"
 # Staging stores nothing: what is on it is read back from its own `promote:`

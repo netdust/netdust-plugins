@@ -162,6 +162,17 @@ else
     bad "site.yml template excludes the mail block from --delete" "deploy.exclude is missing the entry"
 fi
 
+# doctor reports the commands.* keys a core reads that site.yml never declared; a
+# key it expects must also be one a new project is scaffolded with.
+EXPECTED=$(sed -n 's/^_DOCTOR_COMMANDS := //p' "$DIST/Makefile.netdust")
+MISSING=""
+for k in $EXPECTED; do grep -qE "^  $k: " "$ROOT/templates/site.yml.tmpl" || MISSING="$MISSING $k"; done
+if [ -n "$EXPECTED" ] && [ -z "$MISSING" ]; then
+    ok "every commands.* key doctor expects ($EXPECTED) is in the site.yml template"
+else
+    bad "every commands.* key doctor expects is in the site.yml template" "missing:${MISSING:- (no list found)}"
+fi
+
 echo "── behaviour ──"
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 P="$WORK/proj"; mkdir -p "$P/web/app/plugins/p" "$P/web/app/themes/t"; cd "$P"
@@ -286,7 +297,7 @@ sed -i 's/^STACK := nosuchstack/STACK := wp/' Makefile
 # Makefile.netdust + mk/ it kept copying only `Makefile` — 31 of its 35 checks
 # failed with "No such file or directory" while the core itself was fine.
 # Running them here is the only thing that catches that class of break.
-out=$(timeout 300 make test < /dev/null 2>&1 | strip)
+out=$(timeout 900 make test < /dev/null 2>&1 | strip)
 if printf '%s' "$out" | grep -q "No such file or directory"; then
     bad "make test runs under the split layout" "$(printf '%s' "$out" | grep 'No such file' | head -1)"
 elif printf '%s' "$out" | grep -qE "^flow-test: [0-9]+ ok, 0 failed"; then
