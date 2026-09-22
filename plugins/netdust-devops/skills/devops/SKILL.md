@@ -72,6 +72,7 @@ if `make promote` breaks, fix the Makefile or report it.
 | "what's on prod", "what's live" | `make deployed` | — |
 | "what isn't live yet" | `git diff deployed/production` | — |
 | "roll it back" | `make rollback env=<name>` | — |
+| "is it up?", "check the site", after any deploy | `make smoke env=<name>` | — |
 | "sync from live", "staging is stale" | `make refresh env=<name>` | staging |
 | "pull the database" | `make pull env=production` | local |
 | "is anything unpushed?" | `make audit` | — |
@@ -112,12 +113,18 @@ that carry a decision:
 | `make unpromote name=X` | the same rebuild, without X |
 | `make ship` | from the staging checkout, or a `hotfix/*` branch: the checks below, the gate, typed confirm, both backups, deploy, then rebuild staging on the new production |
 | `make rollback env=E` | redeploy the previously deployed commit's payload — `rsync` only; refused by name over `git-push` |
+| `make smoke env=E` | run `commands.smoke` against `environments.E.url` — the read-only `@smoke` checks every shake-out leaves (`tests/e2e/smoke/`, indexed in `specs/SMOKE.md`); needs no terminal and no confirm, so it runs against production too |
 
 `pull`, `refresh` and `block-mail` exist only on stacks that have data ops;
 `make` lists what this project actually has.
 
 **Run `make health` after ANY third-party plugin update** — it is the check a
 deploy cannot do.
+
+**Run `make smoke env=<env>` after every deploy** — `deploy` and `ship` end by naming
+it. It contacts the site from outside and asserts what a visitor would see; the checks
+are written by the shake-out that built each feature (netdust-gates), so the list grows
+with the project and never depends on fixtures or a login.
 
 **What `ship` checks** — three equalities, read from **origin**, since a local
 ref proves nothing: HEAD is `origin/staging`, so no local-only commit ships (a `hotfix/*`

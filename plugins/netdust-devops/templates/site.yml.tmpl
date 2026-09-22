@@ -136,6 +136,10 @@ commands:
   # never contact a server. The gate's exit code is the single source of truth.
   test: {{TEST_COMMAND}}
   gate: {{GATE_COMMAND}}
+  # The deployed site checked from outside, read-only: `make smoke env=<env>` runs
+  # this with SMOKE_URL and SMOKE_ENV set. The checks are the shake-outs' artifact
+  # (tests/e2e/smoke/, indexed in specs/SMOKE.md); a stack without them leaves this empty.
+  smoke: {{SMOKE_COMMAND}}
   # The local loop, read by mk/<stack>.mk. Empty means the stack has no such
   # verb — a DDEV stack gets its dev loop from `ddev start`, not from here.
   install: {{INSTALL_COMMAND}}

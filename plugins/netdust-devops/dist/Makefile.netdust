@@ -115,6 +115,7 @@ help: ## Show this help
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "deploy-test env=E" "dry run — read the deletions"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "deploy env=E"      "gate, transport, ledger, tag"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "rollback env=E"    "redeploy the previously deployed commit"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "smoke env=E"       "check the deployed site from outside (commands.smoke, read-only)"
 	@echo ""
 	@echo "$(YELLOW)INSPECT$(RESET)      read-only — safe to run anywhere, any time"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "status"   "branch, flow position, what runs where"
@@ -252,6 +253,7 @@ deploy: ## Deploy the payload to an environment (make deploy env=staging)
 	@[ -n "$(dryrun)" ] || { $(MAKE) --no-print-directory _deploy-ledger env=$(env) \
 		&& $(MAKE) --no-print-directory _deploy-tag env=$(env) && $(MAKE) --no-print-directory _deploy-opcache env=$(env); }
 	@echo "$(GREEN)🌐 $$($(SITE) environments.$(env).url)$(RESET)"
+	@[ -n "$(dryrun)" ] || echo "$(YELLOW)   next: make smoke env=$(env)$(RESET)"
 
 .PHONY: deploy-test
 deploy-test: ## Show what a deploy would change, without changing it
@@ -302,6 +304,7 @@ ship: ## Ship to production: the staging commit that was deployed, or a gated ho
 		$(MAKE) --no-print-directory $$t env=production || { $(_ship-ahead); exit 1; }; \
 	done
 	@echo "$(GREEN)✅ shipped $(BR_PROD) @ $$(git rev-parse --short HEAD) — $$($(SITE) environments.production.url)$(RESET)"
+	@echo "$(YELLOW)   next: make smoke env=production$(RESET)"
 	@[ "$(BR_REVIEW)" != "$(BR_PROD)" ] || exit 0; \
 	if ( ADD=""; DROP=""; $(_rebuild-staging) ); then \
 		echo "$(GREEN)✅ $(BR_REVIEW) rebuilt on the new $(BR_PROD)$(RESET)"; \
@@ -420,6 +423,27 @@ gate: ## Run this project's own test suite (commands.gate from site.yml)
 	@G=$$($(SITE) commands.gate 2>/dev/null); \
 	if [ -z "$$G" ]; then echo "$(RED)✗ No commands.gate in site.yml$(RESET)"; exit 1; fi; \
 	echo "$(BLUE)$$G$(RESET)"; eval "$$G"
+
+# The deployed environment, checked from outside: commands.smoke runs with the
+# environment's URL in SMOKE_URL. Read-only by construction — no login, no
+# writes — so it may run against production without a confirmation. The smoke
+# tests themselves are the shake-outs' artifact (netdust-gates: tests/e2e/smoke/,
+# indexed in specs/SMOKE.md); this verb only points them at a server.
+.PHONY: smoke
+smoke: ## Run the smoke checks against a deployed environment (make smoke env=staging)
+	@ENV="$(env)"; \
+	if [ -z "$$ENV" ]; then echo "$(RED)✗ Usage: make smoke env=<staging|production>$(RESET)"; exit 1; fi; \
+	URL=$$($(SITE) environments.$$ENV.url 2>/dev/null); \
+	if [ -z "$$URL" ]; then \
+		echo "$(RED)✗ Unknown environment: $$ENV$(RESET)"; \
+		echo "$(YELLOW)Known: $$($(SITE) environments | tr '\n' ' ')$(RESET)"; exit 1; fi; \
+	S=$$($(SITE) commands.smoke 2>/dev/null); \
+	if [ -z "$$S" ]; then \
+		echo "$(RED)✗ No commands.smoke in site.yml — nothing knows how to check $$ENV from outside$(RESET)"; \
+		echo "$(YELLOW)  e.g. smoke: PLAYWRIGHT_BASE_URL=\$$SMOKE_URL npx playwright test --grep @smoke$(RESET)"; exit 1; fi; \
+	echo "$(BLUE)$$S  ← $$URL$(RESET)"; \
+	SMOKE_URL="$$URL" SMOKE_ENV="$$ENV" sh -c "$$S" || { echo "$(RED)✗ smoke failed on $$ENV ($$URL)$(RESET)"; exit 1; }; \
+	echo "$(GREEN)✅ smoke passed on $$ENV$(RESET)"
 
 .PHONY: test
 test: ## Run the deploy tooling + branch-flow tests (never contacts a server)
