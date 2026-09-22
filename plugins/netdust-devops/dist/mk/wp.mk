@@ -132,6 +132,13 @@ _backup-data:
 	mkdir -p backups; \
 	STAMP=$$(date +%Y%m%d-%H%M%S); \
 	OUT="backups/$$ENV-$$STAMP.sql.gz"; \
+	: "FIRST BRING-UP: there is no WordPress on the server yet, so there is nothing"; \
+	: "to back up and nothing to lose. Refusing here would block the very first"; \
+	: "deploy of an environment — the install only arrives WITH it."; \
+	if ! ssh -qn "$$HOST" "test -f $$REMOTE/$(WP_CORE)/wp-settings.php"; then \
+		echo "$(YELLOW)  no WordPress at $$REMOTE/$(WP_CORE) yet — first bring-up, nothing to back up$(RESET)"; \
+		rm -f "$$OUT"; exit 0; \
+	fi; \
 	echo "$(YELLOW)Backing up the $$ENV database...$(RESET)"; \
 	if ! ssh -qn "$$HOST" "cd $$REMOTE && wp db export --path=$(WP_CORE) - | gzip" > "$$OUT"; then \
 		echo "$(RED)❌ Failed to back up the $$ENV database$(RESET)"; rm -f "$$OUT"; exit 1; \

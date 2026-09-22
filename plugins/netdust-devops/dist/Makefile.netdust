@@ -635,7 +635,7 @@ _deploy-gitpush:
 	BRANCH=$$($(SITE) environments.$$ENV.branch); \
 	if [ -n "$(dryrun)" ]; then \
 		echo "$(YELLOW)  would: git push origin $$BRANCH$(RESET)"; \
-		echo "$(YELLOW)  would: ssh $$HOST 'cd $$REMOTE && git pull --ff-only origin $$BRANCH'$(RESET)"; \
+		echo "$(YELLOW)  would: ssh $$HOST 'cd $$REMOTE && git fetch origin $$BRANCH && git reset --hard origin/$$BRANCH'$(RESET)"; \
 		$(SITE) deploy.post_deploy_hooks 2>/dev/null | while read -r c; do \
 			[ -n "$$c" ] && echo "$(YELLOW)  would: ssh $$HOST 'cd $$REMOTE && $$c'$(RESET)"; \
 		done; \
@@ -643,8 +643,11 @@ _deploy-gitpush:
 	fi; \
 	echo "$(BLUE)  → push $$BRANCH$(RESET)"; \
 	git push --quiet origin "$$BRANCH" || exit 1; \
-	echo "$(BLUE)  → pull on $$ENV$(RESET)"; \
-	ssh -qn "$$HOST" "cd $$REMOTE && git pull --ff-only origin $$BRANCH" || exit 1; \
+	: "RESET, not pull: promote REBUILDS the review rung, so its history is new every"; \
+	: "time and --ff-only aborts. A rung checkout is a deploy artifact that never"; \
+	: "carries local work, so taking origin's branch whole is both safe and correct."; \
+	echo "$(BLUE)  → take $$BRANCH on $$ENV$(RESET)"; \
+	ssh -qn "$$HOST" "cd $$REMOTE && git fetch --quiet origin $$BRANCH && git reset --quiet --hard origin/$$BRANCH" || exit 1; \
 	$(SITE) deploy.post_deploy_hooks 2>/dev/null | while read -r c; do \
 		[ -z "$$c" ] && continue; \
 		echo "$(BLUE)  → $$c$(RESET)"; \
@@ -763,7 +766,8 @@ _backup-payload:
 	echo "$(YELLOW)Backing up $$ENV payload directories...$(RESET)"; \
 	ARCHIVE="$$DIR/backups/$$ENV-$$STAMP.tar.gz"; \
 	: "GNU tar exits 1 for a warning (a file changed while being read), 2 for an error: check the archive instead"; \
-	ssh -qn "$$HOST" "mkdir -p $$DIR/backups && cd $$REMOTE && tar czf $$ARCHIVE $$PATHS 2>/dev/null; rc=\$$?; [ \$$rc -le 1 ] || exit \$$rc"; \
+	: "deploy.payload is read relative to structure.webroot — as rollback and doctor read it."; \
+	ssh -qn "$$HOST" "mkdir -p $$DIR/backups && cd $$REMOTE/$(WEBROOT) && tar czf $$ARCHIVE $$PATHS 2>/dev/null; rc=\$$?; [ \$$rc -le 1 ] || exit \$$rc"; \
 	SIZE=$$(ssh -qn "$$HOST" "stat -c %s $$ARCHIVE 2>/dev/null || echo 0"); \
 	if [ "$$SIZE" -lt 1024 ]; then \
 		echo "$(RED)✗ Payload backup missing or empty ($$SIZE bytes) — not deploying$(RESET)"; exit 1; \
