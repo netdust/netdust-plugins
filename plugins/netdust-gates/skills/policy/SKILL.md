@@ -60,6 +60,13 @@ Invoke `superpowers:writing-plans`; it owns the format. Netdust fills its slots:
 Nothing else is added. A plan field is not how an incident is remembered (see the plugin's
 `CLAUDE.md`).
 
+**Then `/plan-review`, before Stefan reads it.** A fresh `plan-reviewer` subagent ground-truths
+every premise against the source, checks coverage and invention, and judges the simplest
+design; its report is filed as `specs/<feature>/plan-review.md` naming the plan's blob
+(`Reviewed-plan: <sha>`). Blocking findings go back into the plan and the review runs again.
+The guard refuses product code while a plan open on this branch has no review of its current
+text — the review is a file, never a claim. The plan and its review reach Stefan together.
+
 ## Execution mode
 
 Stefan chooses at the plan handoff; you recommend by rule. **Native** by default. Recommend
