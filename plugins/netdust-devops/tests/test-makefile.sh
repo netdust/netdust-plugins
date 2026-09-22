@@ -162,6 +162,17 @@ else
     bad "site.yml template excludes the mail block from --delete" "deploy.exclude is missing the entry"
 fi
 
+# doctor reports the commands.* keys a core reads that site.yml never declared; a
+# key it expects must also be one a new project is scaffolded with.
+EXPECTED=$(sed -n 's/^_DOCTOR_COMMANDS := //p' "$DIST/Makefile.netdust")
+MISSING=""
+for k in $EXPECTED; do grep -qE "^  $k: " "$ROOT/templates/site.yml.tmpl" || MISSING="$MISSING $k"; done
+if [ -n "$EXPECTED" ] && [ -z "$MISSING" ]; then
+    ok "every commands.* key doctor expects ($EXPECTED) is in the site.yml template"
+else
+    bad "every commands.* key doctor expects is in the site.yml template" "missing:${MISSING:- (no list found)}"
+fi
+
 echo "── behaviour ──"
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 P="$WORK/proj"; mkdir -p "$P/web/app/plugins/p" "$P/web/app/themes/t"; cd "$P"

@@ -492,6 +492,8 @@ doctor: ## Check required tools, SSH reachability, and the payload
 	@echo "$(BLUE)netdust-devops$(RESET)"
 	@bash scripts/devops-version --check 2>/dev/null || echo "  $(YELLOW)⚠  not stamped — run: make devops-update$(RESET)"
 	@echo ""
+	@$(MAKE) --no-print-directory _doctor-commands
+	@echo ""
 	@echo "$(BLUE)Environments (from site.yml)$(RESET)"
 	@for e in $$($(SITE) environments); do \
 		HOST=$$($(SITE) environments.$$e.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
@@ -922,6 +924,22 @@ _ensure-clean-git:
 		exit 1; \
 	fi
 
+# An update never rewrites site.yml — the project owns it — so a command key a newer
+# core reads is reported here, with the line to add. `key: ''` is a decision (this
+# project has no such runner) and is respected; only a key never declared is a gap.
+# The lines are the wp stack's; another stack reads them as the shape to adapt.
+_DOCTOR_COMMANDS := gate smoke e2e
+_doctor-line-gate  := gate: ddev composer test:unit
+_doctor-line-smoke := smoke: PLAYWRIGHT_BASE_URL=$$SMOKE_URL npx playwright test --grep @smoke
+_doctor-line-e2e   := e2e: E2E_ENV=$$E2E_ENV PLAYWRIGHT_BASE_URL=$$E2E_URL bin/e2e.sh
+
+_doctor-commands:
+	@echo "$(BLUE)Commands (site.yml)$(RESET)"
+	@$(foreach k,$(_DOCTOR_COMMANDS),\
+		if $(SITE) commands.$(k) 2>&1 >/dev/null | grep -q 'no such key'; then \
+			printf "  $(YELLOW)⚠  commands.$(k) not declared — make $(k) refuses until it is. Add under commands:$(RESET)\n      %s\n" '$(_doctor-line-$(k))'; \
+		else printf "  ✅ commands.$(k) declared\n"; fi;) true
+
 # Data moves backward only. Every verb that overwrites an environment's data
 # routes through this first.
 _refuse-production:
@@ -942,4 +960,4 @@ _check-requirements:
 .PHONY: _deploy-transport _deploy-rsync _deploy-gitpush _deploy-gate _deploy-confirm \
         _ask-confirm _deploy-ledger _deploy-tag _deploy-opcache _backup-payload _flow-state \
         _branch-role _ensure-safe-branch _warn-rung-branch _need-tty _flow-ready _ensure-flow \
-        _ensure-clean-git _refuse-production _check-requirements _worktree-guard
+        _ensure-clean-git _refuse-production _check-requirements _worktree-guard _doctor-commands

@@ -234,6 +234,11 @@ make devops-update      # pull the current core in
 make doctor             # says if this project is behind, or edited in place
 ```
 
+An update never touches `site.yml` — it is the project's. When a newer core reads a
+`commands.*` key the project never declared (`smoke`, `e2e`), `make doctor` names it with
+the line to add. Declaring it empty (`e2e: ''`) records that this project has no such
+runner, and doctor stops asking.
+
 A fix belongs upstream in the plugin, where every project gets it. Editing a
 vendored file in a project means the next update silently reverts it — which
 is exactly how "the deploy template carries the fixes projects had to
