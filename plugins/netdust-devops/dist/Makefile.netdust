@@ -115,6 +115,8 @@ help: ## Show this help
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "deploy-test env=E" "dry run — read the deletions"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "deploy env=E"      "gate, transport, ledger, tag"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "rollback env=E"    "redeploy the previously deployed commit"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "e2e env=E"         "drive the e2e flows on a deployed environment (commands.e2e) — never production"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "smoke env=E"       "check the deployed site from outside (commands.smoke, read-only)"
 	@echo ""
 	@echo "$(YELLOW)INSPECT$(RESET)      read-only — safe to run anywhere, any time"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "status"   "branch, flow position, what runs where"
@@ -252,6 +254,8 @@ deploy: ## Deploy the payload to an environment (make deploy env=staging)
 	@[ -n "$(dryrun)" ] || { $(MAKE) --no-print-directory _deploy-ledger env=$(env) \
 		&& $(MAKE) --no-print-directory _deploy-tag env=$(env) && $(MAKE) --no-print-directory _deploy-opcache env=$(env); }
 	@echo "$(GREEN)🌐 $$($(SITE) environments.$(env).url)$(RESET)"
+	@[ -n "$(dryrun)" ] || { if [ "$(env)" = "production" ]; then echo "$(YELLOW)   next: make smoke env=production$(RESET)"; \
+		else echo "$(YELLOW)   next: make e2e env=$(env)  ·  make smoke env=$(env)$(RESET)"; fi; }
 
 .PHONY: deploy-test
 deploy-test: ## Show what a deploy would change, without changing it
@@ -302,6 +306,7 @@ ship: ## Ship to production: the staging commit that was deployed, or a gated ho
 		$(MAKE) --no-print-directory $$t env=production || { $(_ship-ahead); exit 1; }; \
 	done
 	@echo "$(GREEN)✅ shipped $(BR_PROD) @ $$(git rev-parse --short HEAD) — $$($(SITE) environments.production.url)$(RESET)"
+	@echo "$(YELLOW)   next: make smoke env=production$(RESET)"
 	@[ "$(BR_REVIEW)" != "$(BR_PROD)" ] || exit 0; \
 	if ( ADD=""; DROP=""; $(_rebuild-staging) ); then \
 		echo "$(GREEN)✅ $(BR_REVIEW) rebuilt on the new $(BR_PROD)$(RESET)"; \
@@ -420,6 +425,51 @@ gate: ## Run this project's own test suite (commands.gate from site.yml)
 	@G=$$($(SITE) commands.gate 2>/dev/null); \
 	if [ -z "$$G" ]; then echo "$(RED)✗ No commands.gate in site.yml$(RESET)"; exit 1; fi; \
 	echo "$(BLUE)$$G$(RESET)"; eval "$$G"
+
+# The deployed environment, checked from outside: commands.smoke runs with the
+# environment's URL in SMOKE_URL. Read-only by construction — no login, no
+# writes — so it may run against production without a confirmation. The smoke
+# tests themselves are the shake-outs' artifact (netdust-gates: tests/e2e/smoke/,
+# the @smoke rows of specs/CHECKS.md); this verb only points them at a server.
+.PHONY: smoke
+smoke: ## Run the smoke checks against a deployed environment (make smoke env=staging)
+	@ENV="$(env)"; \
+	if [ -z "$$ENV" ]; then echo "$(RED)✗ Usage: make smoke env=<staging|production>$(RESET)"; exit 1; fi; \
+	URL=$$($(SITE) environments.$$ENV.url 2>/dev/null); \
+	if [ -z "$$URL" ]; then \
+		echo "$(RED)✗ Unknown environment: $$ENV$(RESET)"; \
+		echo "$(YELLOW)Known: $$($(SITE) environments | tr '\n' ' ')$(RESET)"; exit 1; fi; \
+	S=$$($(SITE) commands.smoke 2>/dev/null); \
+	if [ -z "$$S" ]; then \
+		echo "$(RED)✗ No commands.smoke in site.yml — nothing knows how to check $$ENV from outside$(RESET)"; \
+		echo "$(YELLOW)  e.g. smoke: PLAYWRIGHT_BASE_URL=\$$SMOKE_URL npx playwright test --grep @smoke$(RESET)"; exit 1; fi; \
+	echo "$(BLUE)$$S  ← $$URL$(RESET)"; \
+	SMOKE_URL="$$URL" SMOKE_ENV="$$ENV" sh -c "$$S" || { echo "$(RED)✗ smoke failed on $$ENV ($$URL)$(RESET)"; exit 1; }; \
+	echo "$(GREEN)✅ smoke passed on $$ENV$(RESET)"
+
+# The deployed environment driven for real: commands.e2e with the environment's URL
+# in E2E_URL. It seeds actors and writes, so production is refused by name — the
+# proof that a flow works after a deploy or a plugin update is made on staging, on
+# the commit that will ship. The flows are the shake-outs' artifact (netdust-gates:
+# the @e2e specs indexed in specs/CHECKS.md); how they seed and log in on E2E_ENV
+# is the project's own script (netdust-wp:wp-testing).
+.PHONY: e2e
+e2e: ## Drive the e2e flows against a deployed environment, never production (make e2e env=staging)
+	@ENV="$(env)"; \
+	if [ -z "$$ENV" ]; then echo "$(RED)✗ Usage: make e2e env=<staging>$(RESET)"; exit 1; fi; \
+	if [ "$$ENV" = "production" ]; then \
+		echo "$(RED)✗ Refused: e2e seeds actors and writes — never against production. Prove it on staging, then ship that commit; production gets make smoke$(RESET)"; exit 1; fi; \
+	URL=$$($(SITE) environments.$$ENV.url 2>/dev/null); \
+	if [ -z "$$URL" ]; then \
+		echo "$(RED)✗ Unknown environment: $$ENV$(RESET)"; \
+		echo "$(YELLOW)Known: $$($(SITE) environments | tr '\n' ' ')$(RESET)"; exit 1; fi; \
+	E=$$($(SITE) commands.e2e 2>/dev/null); \
+	if [ -z "$$E" ]; then \
+		echo "$(RED)✗ No commands.e2e in site.yml — nothing knows how to drive $$ENV$(RESET)"; \
+		echo "$(YELLOW)  e.g. e2e: E2E_ENV=\$$E2E_ENV bin/e2e.sh   (seeds, logs in, runs the @e2e specs against \$$E2E_URL)$(RESET)"; exit 1; fi; \
+	echo "$(BLUE)$$E  ← $$URL$(RESET)"; \
+	E2E_URL="$$URL" E2E_ENV="$$ENV" sh -c "$$E" || { echo "$(RED)✗ e2e failed on $$ENV ($$URL)$(RESET)"; exit 1; }; \
+	echo "$(GREEN)✅ e2e passed on $$ENV$(RESET)"
 
 .PHONY: test
 test: ## Run the deploy tooling + branch-flow tests (never contacts a server)

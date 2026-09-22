@@ -118,6 +118,78 @@ def _row_problem(row: dict, spec_dir: Path) -> str | None:
     return _screenshot_problem(m.group("path"), spec_dir)
 
 
+# ── the checks registry ───────────────────────────────────────────────────────
+# `specs/CHECKS.md` indexes what the shake-outs left to run on a deployed site:
+# `| surface | tier | entry | test | first feature | verified |`. Tier `e2e` is a
+# driven flow tagged `@e2e` (make e2e, staging only); `smoke` is read-only and
+# tagged `@smoke` (make smoke, production too); `auth` is listed for a later runner
+# and owes no test. A feature that drove flows leaves an e2e row and a smoke row.
+REGISTRY_COLUMNS = {"surface": "surface", "tier": "tier", "entry": "entry", "test": "test",
+                    "feature": "first feature", "verified": "verified"}
+TIER_TAG = {"e2e": "@e2e", "smoke": "@smoke"}
+TIERS = (*TIER_TAG, "auth")
+
+
+def parse_registry(text: str) -> list[dict]:
+    lines = _unfenced(text)
+    index, rows = None, []
+    for i, ln in enumerate(lines):
+        if TABLE_SEPARATOR.match(ln):
+            continue
+        cells = _cells(ln)
+        if index is None:
+            if cells and "surface" in [c.lower() for c in cells] and i + 1 < len(lines) \
+                    and TABLE_SEPARATOR.match(lines[i + 1]):
+                names = [c.lower() for c in cells]
+                index = {k: names.index(h) if h in names else None for k, h in REGISTRY_COLUMNS.items()}
+            continue
+        if cells is None:
+            break
+        rows.append({k: (cells[j] if j is not None and j < len(cells) else "")
+                     for k, j in index.items()})
+    return [r for r in rows if any(r.values())]
+
+
+def _registry_row_problem(row: dict, root: Path) -> str | None:
+    tier = row["tier"].lower()
+    if tier not in TIERS:
+        return f"tier {row['tier'] or '(none)'} is not one of {', '.join(TIERS)}"
+    if tier == "auth":
+        return None
+    test = row["test"].strip("`")
+    path = root / test
+    if not test or not path.is_file():
+        return f"test {test or '(none)'} does not exist — a registry row with no test checks nothing"
+    try:
+        tagged = TIER_TAG[tier] in path.read_text()
+    except (OSError, ValueError):
+        tagged = False
+    if not tagged:
+        return f"{test} carries no {TIER_TAG[tier]} tag — make {tier} never runs it"
+    return None
+
+
+def check_registry(spec_dir: Path, driven: int) -> list[Finding]:
+    """The registry rows this feature owes and the tests those rows name."""
+    registry = spec_dir.parent / "CHECKS.md"
+    rows = parse_registry(registry.read_text()) if registry.is_file() else []
+    findings: list[Finding] = []
+    for row in rows:
+        problem = _registry_row_problem(row, spec_dir.parent.parent)
+        if problem:
+            findings.append(("fail", "checks-registry", f"{row['surface']}: {problem}"))
+    if driven:
+        mine = {r["tier"].lower() for r in rows if r["feature"] == spec_dir.name}
+        for tier in TIER_TAG:
+            if tier not in mine:
+                findings.append(("fail", "checks-registry",
+                                 f"{spec_dir.name} drove {driven} flow(s) and left no {tier} row in specs/CHECKS.md"
+                                 f" — make {tier} would not watch it after a deploy"))
+    if rows and not any(s == "fail" for s, _, _ in findings):
+        findings.append(("pass", "checks-registry",
+                         f"{len(rows)} row{'s' if len(rows) != 1 else ''}, every test present and tagged for its tier"))
+    return findings
+
 def check(spec_dir: Path) -> list[Finding]:
     if not spec_dir.is_dir():
         return [("fail", "shakeout-manifest", f"{spec_dir} is not a directory")]
@@ -150,6 +222,8 @@ def check(spec_dir: Path) -> list[Finding]:
             findings.append(("fail", "shakeout-manifest", f"{row['n'] or '?'}: {problem}"))
         driven += row["layer"].lower() == "browser" and problem is None
     findings.append(("pass", "shakeout-manifest", f"shakeout: {len(rows)} rows, {driven} browser rows driven"))
+    passed = sum(1 for row in rows if _row_problem(row, spec_dir) is None)
+    findings += check_registry(spec_dir, passed)
     return findings
 
 

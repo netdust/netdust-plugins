@@ -87,7 +87,9 @@ Stefan accepts is `Accepted-by-human:` in the manifest, never `Ruling:`; only he
 1. `make gate` exits 0 — the project's own suite (`commands.gate` in `site.yml`). A project with
    no declared gate declares one as the first task of the work; that is not a reason to skip.
 2. A user-facing change runs `/shakeout`: `shakeout-qa` drives the flows through the real
-   browser or wire, commits them as tests and writes `specs/<feature>/shakeout.md`;
+   browser or wire, commits them as tests and writes `specs/<feature>/shakeout.md`; it
+   registers them in `specs/CHECKS.md` as `@e2e` (`make e2e env=staging`, the proof after a
+   deploy or a plugin update) beside a read-only `@smoke` check (`make smoke`, production too);
    `bin/shakeout-check.py` exits 0; Stefan sees one screenshot per surface.
 3. Superpowers' single whole-branch review (`superpowers:requesting-code-review`, a fresh
    reviewer — the author never reviews its own diff) on the most capable model, joined by

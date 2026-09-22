@@ -72,6 +72,8 @@ if `make promote` breaks, fix the Makefile or report it.
 | "what's on prod", "what's live" | `make deployed` | — |
 | "what isn't live yet" | `git diff deployed/production` | — |
 | "roll it back" | `make rollback env=<name>` | — |
+| "does it still work?", after a deploy or a plugin update | `make e2e env=staging` | — |
+| "is it up?", after any deploy | `make smoke env=<name>` | — |
 | "sync from live", "staging is stale" | `make refresh env=<name>` | staging |
 | "pull the database" | `make pull env=production` | local |
 | "is anything unpushed?" | `make audit` | — |
@@ -112,12 +114,20 @@ that carry a decision:
 | `make unpromote name=X` | the same rebuild, without X |
 | `make ship` | from the staging checkout, or a `hotfix/*` branch: the checks below, the gate, typed confirm, both backups, deploy, then rebuild staging on the new production |
 | `make rollback env=E` | redeploy the previously deployed commit's payload — `rsync` only; refused by name over `git-push` |
+| `make e2e env=E` | run `commands.e2e` against `environments.E.url` — the `@e2e` flows every shake-out drove and left in `specs/CHECKS.md`: the real enrollment, form, send. It seeds and writes, so production is refused by name |
+| `make smoke env=E` | run `commands.smoke` against `environments.E.url` — the read-only `@smoke` checks in `specs/CHECKS.md`; needs no terminal and no confirm, so it runs against production too |
 
 `pull`, `refresh` and `block-mail` exist only on stacks that have data ops;
 `make` lists what this project actually has.
 
 **Run `make health` after ANY third-party plugin update** — it is the check a
 deploy cannot do.
+
+**After a staging deploy or a plugin update: `make e2e env=staging`, then
+`make smoke`.** e2e is the proof — the flows each feature's shake-out drove, re-run on the
+commit that will ship; smoke is the quick look, and the only check production gets, because
+e2e writes. `deploy` and `ship` end by naming them. The list is written by the shake-outs
+(netdust-gates, `specs/CHECKS.md`), so it grows with the project.
 
 **What `ship` checks** — three equalities, read from **origin**, since a local
 ref proves nothing: HEAD is `origin/staging`, so no local-only commit ships (a `hotfix/*`

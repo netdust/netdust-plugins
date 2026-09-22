@@ -62,6 +62,16 @@ The plan's `## Shake-out access` section names ONE command and the environment i
 
 Never in git: the link, the app password, the state file — the `.env` rule in `netdust-devops:devops` applies (a secret arrives per run through the environment, never through a committed file). The manifest's Evidence cell carries the URL of the page AFTER login; `gate-check.py --shakeout` scans the whole manifest and fails on a login link, an application password, the `storageState` token or a `wordpress_logged_in_*` cookie name — it matches those tokens, not file paths (`shakeout-credential`, no override).
 
+### After a deploy — `make e2e` and `make smoke`
+
+The specs the shake-out commits are the project's stability proof: `netdust-devops`'s
+`make e2e env=staging` runs `commands.e2e` with `E2E_URL` and `E2E_ENV` set, and the tests are
+registered in `specs/CHECKS.md` (netdust-gates). `bin/e2e.sh` reads `E2E_ENV`: unset or `local`
+seeds through `ddev wp`, a deployed environment seeds through `wp --ssh=<environments.<env>.ssh_host>`
+(recipe item 3 above), then runs `playwright test --grep @e2e` with `PLAYWRIGHT_BASE_URL=$E2E_URL`.
+The verb refuses production; nothing seeds there. `@smoke` specs need none of this — they are
+read-only, log in nowhere, and `make smoke env=<env>` runs them anywhere.
+
 ### Falsifiability culture
 
 Every gate tier has a recorded red demonstration — deliberate violation, non-zero exit, green re-run — in the project's `docs/gate-falsifiability.md`. If you add a gate or check, prove it can fail before you trust it green. (Projects that ADOPT the gate later won't have `docs/gate-falsifiability.md` — the doc ships with template-scaffolded projects; adopters inherit the discipline, not the file.)

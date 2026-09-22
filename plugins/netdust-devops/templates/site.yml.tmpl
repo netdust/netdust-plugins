@@ -136,6 +136,14 @@ commands:
   # never contact a server. The gate's exit code is the single source of truth.
   test: {{TEST_COMMAND}}
   gate: {{GATE_COMMAND}}
+  # The deployed site checked from outside, read-only: `make smoke env=<env>` runs
+  # this with SMOKE_URL and SMOKE_ENV set. The checks are the shake-outs' artifact
+  # (the @smoke rows of specs/CHECKS.md); a stack without them leaves this empty.
+  smoke: {{SMOKE_COMMAND}}
+  # The deployed environment driven for real: `make e2e env=<env>` runs this with
+  # E2E_URL and E2E_ENV set, never against production. The flows are the shake-outs'
+  # @e2e specs; the script seeds actors and logs in on E2E_ENV (netdust-wp:wp-testing).
+  e2e: {{E2E_COMMAND}}
   # The local loop, read by mk/<stack>.mk. Empty means the stack has no such
   # verb — a DDEV stack gets its dev loop from `ddev start`, not from here.
   install: {{INSTALL_COMMAND}}

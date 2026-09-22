@@ -418,6 +418,7 @@ assert_eq "(f) a typed no: Cancelled, nothing moved, 0 leaves" "1 1 $BEFORE|" "$
 assert_eq "(a) Y make ship from the staging checkout: exit 0, production is the deployed staging commit (SC-2)" "0 $STGC" "$YRC $(prodsha)"
 assert_eq "…(a) its tree is a hand-merged main+sa+sb, with 0 commits of sc in production" "$ABTREE 0" "$(treeof origin/main) $(git merge-base --is-ancestor origin/feature/sc origin/main && echo 1 || echo 0)"
 assert_eq "…(a) both backups, then one production deploy, ledger and opcache — nothing on staging" "$SHIPPED" "$(leaves)"
+assert_eq "…(a) and ship closes by naming smoke for production, never e2e" "1 0" "$(has "$YOUT" 'make smoke env=production') $(has "$YOUT" 'make e2e')"
 assert_eq "…(a) and staging is the new production tip: sa and sb are off it, shipped (FR-8)" "$STGC " "$(exact refs/heads/staging) $(onstg)"
 step promote name=sc; git fetch -q origin
 assert_eq "…(a) promoting sc after the ship puts it on the NEW production tip (AF-1)" "$(handtree origin/main origin/feature/sc) sc" "$(treeof origin/staging) $(onstg)"
@@ -467,6 +468,9 @@ assert_eq "setup: production declares no confirm key at all" "" "$(scripts/site 
 askedanyway "(g) no confirm key, nothing typed: the same — the key never governed ship"
 git checkout -q -B staging origin/staging; : > "$LEAVES"; DOUT=$(M deploy-test env=staging < /dev/null); DRC=$?
 assert_eq "…(g) the twin: staging declares confirm: false, so its deploy still runs unprompted" "0 0 _deploy-transport staging" "$DRC $(has "$DOUT" "Type 'yes'") $(leaves)"
+assert_eq "…(g) a dry run names no smoke step — nothing was deployed" "0" "$(has "$DOUT" 'make smoke')"
+: > "$LEAVES"; DOUT=$(M deploy env=staging < /dev/null); DRC=$?
+assert_eq "(q) a real staging deploy closes by naming e2e then smoke for staging" "0 1 1" "$DRC $(has "$DOUT" 'make e2e env=staging') $(has "$DOUT" 'make smoke env=staging')"
 git checkout -q hotfix/g; HG=$(git rev-parse HEAD); : > "$LEAVES"; YF "FAILLEAF=_deploy-transport make --no-print-directory ship"; git fetch -q --prune origin
 assert_eq "(l) the transport fails after the push: non-zero, and production on origin HAS advanced (threat 8)" "1 $HG" "$(nz "$YRC") $(prodsha)"
 assert_eq "…(l) and it says the branch is ahead of the site, naming the recovery" "1 1" "$(has "$YOUT" 'ahead of') $(has "$YOUT" 'make deploy env=production')"
@@ -490,6 +494,41 @@ git checkout -q -f -B main "$HMAIN"; git branch -q -f staging "$HSTG"; git push 
 git push -q origin ":refs/heads/feature/sh"; git branch -q -D feature/sh; git branch -q -D hotfix/h hotfix/g hotfix/solo >/dev/null 2>&1
 for t in staging production; do git push -q origin ":refs/tags/deployed/$t" 2>/dev/null; git tag -d "deployed/$t" >/dev/null 2>&1; done; git push -q origin ":refs/tags/shipped/production" 2>/dev/null; git fetch -q --prune origin; : > "$LEAVES"
 assert_eq "…and the hotfix section leaves origin, the checkout, the tree and the leaf log as it found them" "$HORIG main " "$(git ls-remote origin) $(git branch --show-current) $(git status --porcelain)"
+
+echo; echo "flow — smoke: the deployed environment, read-only, from commands.smoke"
+# make smoke env=E runs the project's own smoke command against environments.E.url.
+# It contacts no server itself and asks nothing: the checks are read-only by construction.
+git checkout -q main
+SMOKELOG="$TMP/smoke.log"; : > "$SMOKELOG"
+assert_refuses "smoke refuses a missing env= by name" "Usage: make smoke env=" M smoke
+assert_refuses "smoke refuses an unknown environment" "Unknown environment" M smoke env=nope
+assert_refuses "smoke refuses a project with no commands.smoke, naming the key" "No commands.smoke" M smoke env=staging
+assert_eq "…and ran nothing" "0" "$(wc -c < "$SMOKELOG" | tr -d ' ')"
+printf '#!/bin/sh\necho "url=$SMOKE_URL env=$SMOKE_ENV" >> %s; [ "$SMOKE_ENV" != "production" ]\n' "$SMOKELOG" > "$TMP/smoke.sh"
+sed -i "s|^commands: {gate: \(.*\)}$|commands: {gate: \1, smoke: sh $TMP/smoke.sh}|" site.yml
+assert_eq "setup: commands.smoke is declared" "sh $TMP/smoke.sh" "$(scripts/site commands.smoke)"
+assert_ok "make smoke env=staging runs commands.smoke" M smoke env=staging
+assert_eq "…with the environment's URL and name in SMOKE_URL / SMOKE_ENV" "url=https://stg.flowtest.test env=staging" "$(tail -1 "$SMOKELOG")"
+assert_eq "…and does not need a terminal — it is read-only" "url=https://stg.flowtest.test env=staging" "$(bash -c 'make --no-print-directory smoke env=staging' </dev/null >/dev/null 2>&1; tail -1 "$SMOKELOG")"
+assert_refuses "a failing smoke command fails the verb" "smoke failed" M smoke env=production
+assert_eq "…having run against production's URL" "url=https://flowtest.test env=production" "$(tail -1 "$SMOKELOG")"
+git checkout -q -- site.yml
+assert_eq "…and the smoke section leaves the tree clean" "" "$(git status --porcelain)"
+
+echo; echo "flow — e2e: the deployed environment driven for real, never production"
+# make e2e env=E runs commands.e2e against environments.E.url. It seeds actors and
+# writes, so production is refused by name — data moves backward only.
+E2ELOG="$TMP/e2e.log"; : > "$E2ELOG"
+assert_refuses "e2e refuses a missing env= by name" "Usage: make e2e env=" M e2e
+assert_refuses "e2e refuses production by name — it writes" "never against production" M e2e env=production
+assert_refuses "e2e refuses an unknown environment" "Unknown environment" M e2e env=nope
+assert_refuses "e2e refuses a project with no commands.e2e, naming the key" "No commands.e2e" M e2e env=staging
+assert_eq "…and ran nothing" "0" "$(wc -c < "$E2ELOG" | tr -d ' ')"
+printf '#!/bin/sh\necho "url=$E2E_URL env=$E2E_ENV" >> %s\n' "$E2ELOG" > "$TMP/e2e.sh"
+sed -i "s|^commands: {gate: \(.*\)}$|commands: {gate: \1, e2e: sh $TMP/e2e.sh}|" site.yml
+assert_ok "make e2e env=staging runs commands.e2e" M e2e env=staging
+assert_eq "…with the environment's URL and name in E2E_URL / E2E_ENV" "url=https://stg.flowtest.test env=staging" "$(tail -1 "$E2ELOG")"
+git checkout -q -- site.yml
 
 echo; echo "flow — without origin every verb refuses by name"
 git remote remove origin

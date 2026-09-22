@@ -130,7 +130,7 @@ render() {  # render <template> <output>
                WEBROOT WPCLI_PATH THEME_FLAVOUR WP_PATH CONTENT_DIR \
                HOSTING_PROVIDER SSH_STAGING SSH_PRODUCTION DEPLOY_METHOD \
                DEPLOY_NOTE INSTALL_COMMAND DEV_COMMAND BUILD_COMMAND \
-               TEST_COMMAND GATE_COMMAND DDEV_TYPE PAYLOAD_TODO; do
+               TEST_COMMAND GATE_COMMAND SMOKE_COMMAND E2E_COMMAND DDEV_TYPE PAYLOAD_TODO; do
         val="$(esc "${!key-}")"
         sed -i "s|{{${key}}}|${val}|g" "$out"
     done
@@ -153,6 +153,11 @@ DEV_COMMAND="$DEV_CMD"
 BUILD_COMMAND="$BUILD_CMD"
 TEST_COMMAND="$TEST_CMD"
 GATE_COMMAND="$GATE_CMD"
+# The smoke runner is the stack's e2e tool pointed at SMOKE_URL; a stack without one leaves the key empty.
+SMOKE_COMMAND=""
+[[ "$STACK" == "wp" ]] && SMOKE_COMMAND='PLAYWRIGHT_BASE_URL=$SMOKE_URL npx playwright test --grep @smoke'
+E2E_COMMAND=""
+[[ "$STACK" == "wp" ]] && E2E_COMMAND='E2E_ENV=$E2E_ENV PLAYWRIGHT_BASE_URL=$E2E_URL bin/e2e.sh'
 PAYLOAD_TODO=""
 [[ "$DEPLOY_METHOD" == "rsync" ]] && PAYLOAD_TODO=", and \`deploy.payload\` (every entry must exist locally AND be tracked in git)"
 

@@ -17,8 +17,8 @@ shipped past a green suite. So you run the real artifact, through its faithful l
 
 ## Where you may write
 
-`tests/**`, `specs/<feature>/shakeout.md`, `specs/<feature>/shakeout/*.png` — nothing else. A
-defect in the code is a manifest row for the fix pass, never an edit of yours.
+`tests/**`, `specs/<feature>/shakeout.md`, `specs/<feature>/shakeout/*.png`, `specs/CHECKS.md` —
+nothing else. A defect in the code is a manifest row for the fix pass, never an edit of yours.
 
 ## Which flows
 
@@ -57,6 +57,31 @@ Every `browser` flow you drove is committed as a Playwright spec; every `wire` f
 integration test through the project's runner (on WordPress, `netdust-wp:wp-testing`). The row
 names the file.
 
+## What you leave for the deployed site
+
+You know this feature better than anyone will again. Before you hand back, leave the checks
+that prove it keeps working after a deploy or a plugin update. Two tiers, both indexed in
+`specs/CHECKS.md` — `| surface | tier | entry | test | first feature | verified |`,
+`verified` = the short sha and date you drove it:
+
+- **`e2e` — the flows you drove.** Every browser and wire flow you committed above is this
+  tier: tag its test titles `@e2e` and give each flow a row. `make e2e env=staging`
+  (netdust-devops) re-runs them against the deployed staging site after every deploy — the
+  real enrollment, the real form, the real mail-blocked send — seeding and logging in through
+  the project's own script on `E2E_ENV`. Never production: they write. This is the proof of
+  stability, so leave the flows that would catch a regression, not only the happy path.
+- **`smoke` — the quick check.** One fixture-free, read-only spec per public surface in
+  `tests/e2e/smoke/<feature>.spec.ts`, every title tagged `@smoke`: no login, no seeded actor,
+  no form submit, no write — it runs on production with real content. Assert what is stable
+  there: the surface answers 200, its landmark renders, no PHP error text.
+- **`auth`** — a surface you can only reach logged in and cannot yet drive on a deployed
+  site: list it with no test, so the registry knows it exists.
+
+On a change to a surface already registered, re-drive its tests locally and bump
+`verified`; never add a second row. `bin/shakeout-check.py` fails a driven feature that left
+no e2e row or no smoke row, a row whose test is missing, a test without its tier's tag, and a
+tier it does not know.
+
 ## Access and actors
 
 The login comes from the project's recipe (WordPress: `netdust-wp:wp-testing`); you never invent
@@ -89,4 +114,5 @@ actors the recipe creates, never real user rows — the screenshots are committe
   passing tests, check migration state first.
 
 Done when: every flow and edge carries a row, every browser pass has its screenshot on disk,
-every driven flow is a committed test the row names, and every `fail` is reproducible cold.
+every driven flow is a committed `@e2e` test the row names, every surface has its `@smoke`
+spec, both are in `specs/CHECKS.md`, and every `fail` is reproducible cold.

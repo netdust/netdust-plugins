@@ -20,15 +20,26 @@ ACCEPTED = HEAD + BROWSER.format("Accepted-by-human: no browser on this box, dri
 
 def _drive(manifest, binaries=None, target="feat") -> tuple[int, str]:
     with tempfile.TemporaryDirectory() as root:
-        feature = Path(root) / "feat"
-        feature.mkdir()
+        feature = Path(root) / "specs" / "feat"
+        feature.mkdir(parents=True)
         if manifest is not None:
             (feature / "shakeout.md").write_text(manifest)
         for name, data in (binaries or {}).items():
             path = feature / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
-        proc = subprocess.run([sys.executable, str(CHECKER), str(Path(root) / target)],
+        # A complete close: the driven feature also left its smoke row and the tagged spec
+        # (test_smoke_registry.py pins that rule; here it is background).
+        (Path(root) / "specs").mkdir(exist_ok=True)
+        (Path(root) / "specs" / "CHECKS.md").write_text(
+            "| surface | tier | entry | test | first feature | verified |\n|---|---|---|---|---|---|\n"
+            "| audit | smoke | GET /audit/ | tests/e2e/smoke/audit.spec.ts | feat | 0000000 2026-09-06 |\n"
+            "| audit rows | e2e | /wp/wp-admin/admin.php?page=audit | tests/e2e/audit.spec.ts | feat | 0000000 2026-09-06 |\n")
+        for rel, tag in (("tests/e2e/smoke/audit.spec.ts", "@smoke"), ("tests/e2e/audit.spec.ts", "@e2e")):
+            spec = Path(root) / rel
+            spec.parent.mkdir(parents=True, exist_ok=True)
+            spec.write_text(f"test('audit {tag}', async () => {{}});\n")
+        proc = subprocess.run([sys.executable, str(CHECKER), str(Path(root) / "specs" / target)],
                               capture_output=True, text=True, timeout=15)
         return proc.returncode, proc.stdout + proc.stderr
 
