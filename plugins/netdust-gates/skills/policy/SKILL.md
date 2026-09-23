@@ -45,8 +45,8 @@ with `netdust-gates:threat-modeling` before the tasks.
 Invoke `superpowers:writing-plans`; it owns the format. Netdust fills its slots:
 
 - **Global Constraints** — on a WordPress project (a `site.yml` with `structure:`, or
-  `roots/wordpress` in `composer.json`) copy the constraint lines of `wordpress.md`, beside
-  this file, verbatim, then the spec's own. Other stacks: the spec's own until a pack exists.
+  `roots/wordpress` in `composer.json`) copy the Global Constraints of `wordpress.md`, beside
+  this file, verbatim — lines and red flags — then the spec's own. Other stacks: the spec's own until a pack exists.
 - **Review Focus** — one line per mitigation in the threat model, per convergence point of an
   `ARCHITECTURE-INVARIANTS.md` the diff touches, and per class in `edge-classes.md` the feature
   can actually meet, most likely first. Each line is pinned to a test in the task that owns the

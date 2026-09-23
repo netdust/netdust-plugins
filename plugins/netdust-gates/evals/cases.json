@@ -78,5 +78,33 @@
       "specs/**/plan.md",
       "docs/superpowers/**/*.md"
     ]
+  },
+  {
+    "id": "wp-constraints-carry-evidence",
+    "prompt": "specs/contact-settings/spec.md is approved by Stefan; do not ask questions. Write the implementation plan to specs/contact-settings/plan.md.",
+    "files": {
+      "site.yml": "structure:\n  type: bedrock\n  wpcli_path: web/wp\n",
+      "composer.json": "{\"require\": {\"roots/wordpress\": \"^6.6\"}}\n",
+      "specs/contact-settings/spec.md": "# Contact settings — spec\n\n## Requirements\n\n**R1 — Settings screen.** An admin screen where an administrator saves the contact email shown in the site footer.\n*Source: \"let me change the footer email from the dashboard\"*\n\n**R2 — Footer.** The footer shows the saved email.\n*Source: invented — approved 2026-09-23*\n\n## Security-relevant surfaces\n- [x] None of the above\n"
+    },
+    "expect": [
+      {
+        "where": "plan",
+        "match": "(?is)## Global Constraints\\n(?:(?!\\n#{1,2} ).)*?No quote, not met"
+      },
+      {
+        "where": "plan",
+        "match": "(?is)## Global Constraints\\n(?:(?!\\n#{1,2} ).)*?Admin-only screen, so no nonce"
+      },
+      {
+        "where": "plan",
+        "match": "(?is)## Global Constraints\\n(?:(?!\\n#{1,2} ).)*?make deploy-test env=staging"
+      },
+      {
+        "where": "plan",
+        "match": "(?is)## Global Constraints\\n(?:(?!\\n#{1,2} ).)*?grep -nE \\\"current_user_can"
+      }
+    ],
+    "absent": []
   }
 ]
