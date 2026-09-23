@@ -7,38 +7,33 @@ start of every session. Operational config (stack, hosting, deploy, risk): `site
 
 ## How to work here
 
-1. **Every code-changing request enters through `netdust-agent:harnessed-development`**
-   (Skill tool). It costs one sentence — a work Class (A–F, priced by open decisions,
-   not files) and Stakes — and routes the work: a tweak goes straight to one TDD cycle;
-   a feature runs `planning` → your approval at the seam → `building`. Superpowers does
-   the process work; the netdust overlays add the gates and this stack's environment.
+1. **Every code-changing request enters through `netdust-gates:policy`** (Skill tool).
+   It runs superpowers' brainstorm → plan → execute → review and adds the netdust rules:
+   a small change is a chat design and the change; a feature gets a spec, a plan with the
+   WordPress pack in its Global Constraints, `/plan-review`, then your execution choice.
 
 2. **Design uses the framework skills for the technical shape** —
    `netdust-wp:ntdst-framework` (services, DI, boundaries, CPTs, fields, queries,
-   REST), `ntdst-patterns` (where files live). Intent questions still
+   REST), `ntdst-patterns` (where files live, golden paths). Intent questions still
    go to the human via `superpowers:brainstorming` — every requirement in a spec quotes
-   the ask or is an approved invention (`Source:` lines, machine-checked).
+   the ask or is an approved invention (`Source:` lines).
 
 3. **ntdst-core is always the base.** Framework conventions apply to all new code —
    never reinvent what the framework or an existing module already solves; the
    `invariant-auditor` and `ntdst-drift-reviewer` check for bypasses AND second homes
-   against `ARCHITECTURE-INVARIANTS.md` (author it via `/architecture-invariants audit`
-   if missing) and `docs/architecture/CODE-MAP.md`.
+   against `ARCHITECTURE-INVARIANTS.md` and `docs/architecture/CODE-MAP.md`.
 
-4. **Plan gates on WP work**: `netdust-wp:wp-plan-requirements` injects the four-pillar
-   security line per data-flow and the ntdst-core layering checklist into every plan;
-   `netdust-agent:threat-modeling` fires on any untrusted-input / auth / capability /
-   outbound surface — including ad-hoc one-liners (Class D).
+4. **Security**: `netdust-gates:threat-modeling` fires on any untrusted-input / auth /
+   capability / outbound surface — a one-line edit to one of those owes a threat model too.
+   The four pillars per data flow come from the WordPress pack (`netdust-wp:wp-security`).
 
-5. **Tests run through the netdust harness, always** — per-task:
-   `ddev composer test:unit` (Brain Monkey, seconds); integration:
-   `ddev composer test:int` (wp-phpunit); full gate: `composer gate` — its exit code is
-   the single source of truth. Superpowers doesn't know this environment; the dispatch
-   carries it. Feature tests are written by the independent `test-author` after each
-   task group.
+5. **Tests** — per-task: `ddev composer test:unit` (Brain Monkey, seconds); integration:
+   `ddev composer test:int` (wp-phpunit); the close: `make gate` (runs `commands.gate`
+   from `site.yml`) — its exit code is the single source of truth. User-facing work
+   closes with `/shakeout`, then the whole-branch review.
 
 6. Commit atomically per task. Update `memory/STATE.md` and `tasks/todo.md` as you go;
-   at spec-close, `compounding` harvests what the session taught.
+   `/session-learn` harvests what a session taught, on request.
 
 7. **Every Makefile, branch or deploy action enters through `netdust-devops:devops`** —
    `make` verbs, the promotion path, the deploy gate and ledger, `site.yml`, `.env`,

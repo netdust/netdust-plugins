@@ -10,7 +10,7 @@ description: Use when setting up or writing tests for a WordPress project — tw
 - `phpunit.unit.xml` / `bin/gate.sh` present → **gate stack**. All born-gated projects (2026-07+). Primary, below.
 - `codeception.yml` present → **legacy stack** (Stride family). Section at the end.
 - Both present (not expected): the gate stack wins — write new tests there.
-- The project's own `README-testing.md` is the always-current per-project reference; read it before the first test. `netdust-agent:testing-workflow` LOCATES the runner/commands (`site.yml` `commands:` binding first, markers as fallback); this skill teaches how to WRITE the tests.
+- The project's own `README-testing.md` is the always-current per-project reference; read it before the first test. `make gate` runs the project's `commands.gate` from `site.yml`; this skill teaches how to WRITE the tests it runs.
 
 ## Gate stack
 
@@ -57,7 +57,7 @@ The plan's `## Shake-out access` section names ONE command and the environment i
 
 1. **DDEV (the default).** Once per project: `ddev wp package install aaemnnosttv/wp-cli-login-command`, then `ddev wp login install --activate`. The companion `wp-cli-login-server` plugin is DDEV-only: `bin/e2e.sh` installs it, it is never in `deploy.payload`, and no deploy-side script carries a `wp login` command — the recipe is valid on `WP_ENV != production`; production sits behind the typed confirmation in `netdust-devops:devops`, which refuses piped input. Per run, at the top of `bin/e2e.sh`: `ddev wp login create <seeded-admin> --url-only --expires=900`. The Playwright spec opens that URL once and saves `storageState` to `tests/e2e/.auth/` — the one path `templates/gitignore.tmpl` already ignores. Teardown: `ddev wp login invalidate` — the command takes no flags and voids every link.
 2. **`wire` rows.** Per run: `ddev wp user application-password create <user> shakeout --porcelain`, exported to the spec as env. Teardown deletes by uuid: `ddev wp user application-password list <user> --fields=uuid,name --format=csv`, then `ddev wp user application-password delete <user> <uuid>` — `--all` would take a developer's own passwords with it.
-3. **Staging.** The same two commands through `wp --ssh=<host>`, the host being `site.yml`'s `environments.<env>.ssh_host`. `wp --ssh` is raw WP-CLI with no netdust guard in front of it; the floors that exist are these: on production `wp login create` fails because the server plugin is never in `deploy.payload`; never `wp login install` over `--ssh`; `shakeout-qa` refuses a production URL (`netdust-agent`'s `agents/shakeout-qa.md`). An application password created over `--ssh` on production has NO machine floor — this recipe forbids it in words, and nothing else will.
+3. **Staging.** The same two commands through `wp --ssh=<host>`, the host being `site.yml`'s `environments.<env>.ssh_host`. `wp --ssh` is raw WP-CLI with no netdust guard in front of it; the floors that exist are these: on production `wp login create` fails because the server plugin is never in `deploy.payload`; never `wp login install` over `--ssh`; `shakeout-qa` refuses a production URL (`netdust-gates`' `agents/shakeout-qa.md`). An application password created over `--ssh` on production has NO machine floor — this recipe forbids it in words, and nothing else will.
 4. **Standalone packages** (a plugin repo with no `site.yml`): WordPress Playground MAY be the browser, its Blueprint `login` step the recipe. Named, not required.
 
 Never in git: the link, the app password, the state file — the `.env` rule in `netdust-devops:devops` applies (a secret arrives per run through the environment, never through a committed file). The manifest's Evidence cell carries the URL of the page AFTER login; `gate-check.py --shakeout` scans the whole manifest and fails on a login link, an application password, the `storageState` token or a `wordpress_logged_in_*` cookie name — it matches those tokens, not file paths (`shakeout-credential`, no override).
@@ -110,8 +110,7 @@ Known traps: WPTestCase reset doesn't roll back transients in object cache (flus
 
 ## See also
 
-- `netdust-agent:testing-workflow` — stack/runner detection, per-task tier decision (it locates; this skill teaches)
-- `netdust-agent:building` — the build overlay that dispatches this skill into every WP task, and owns the review + feature-test gates
-- `/shakeout` (netdust-agent command) — the spec-complete gate: `shakeout-qa` drives the artifact, then the reviewer panel runs on the branch diff
+- `netdust-gates:policy` — its WordPress pack puts `make gate` and these tiers in every WP plan's Global Constraints
+- `/shakeout` (netdust-gates) — the close on user-facing work: `shakeout-qa` drives the artifact, then the whole-branch review
 - Gate stack reference: the project's `README-testing.md` + `tests/` (canonical template: github netdust/bedrock)
 - Legacy reference: `~/Sites/stride/codeception.yml` + `~/Sites/stride/tests/`

@@ -21,7 +21,6 @@ prints the commands and touches nothing.
 Any code-changing request starts at `netdust-gates:policy`. On a WordPress project it copies
 the WordPress pack (`netdust-gates/skills/policy/wordpress.md`) into the plan's
 `Global Constraints` — that pack, not this file, is where the WP plan requirements live.
-`wp-plan-requirements` is its old home; do not fire it on top of the pack.
 
 - **Intent vs shape.** Brainstorming and Stefan own intent — what we build and why.
   `ntdst-framework` (services, data, routes, templates) and `ntdst-patterns` (where files live,

@@ -20,7 +20,7 @@ For a medium feature, don't assemble from rules and don't copy the nearest sibli
 | An admin settings/options page ("a settings screen", "an options page", "store config in the admin", "manage X from wp-admin") | `golden-paths/admin-settings-page.md` |
 | A YOOtheme Builder source/element (YOOtheme Pro projects only — Dynamic Content source, custom query in the builder) | `golden-paths/yootheme-integration.md` |
 
-**The instruction:** read the golden path *before* writing the plan, then build the feature to its structure. A deviation from the slice is allowed — but it must be **named and justified in the plan** (per `wp-plan-requirements`); an unnamed deviation is the drift the reviewer will flag. If a request spans two shapes (e.g. a CPT *with* a settings page *and* an enrollment form), open each relevant slice.
+**The instruction:** read the golden path *before* writing the plan, then build the feature to its structure. A deviation from the slice is allowed — but it must be **named and justified in the plan** (per the WordPress pack in `netdust-gates:policy`); an unnamed deviation is the drift the reviewer will flag. If a request spans two shapes (e.g. a CPT *with* a settings page *and* an enrollment form), open each relevant slice.
 
 ## Project layout (Bedrock + NTDST)
 
