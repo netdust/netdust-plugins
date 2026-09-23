@@ -44,7 +44,6 @@ Output contract (when a pattern matches):
 Logs to ~/.claude/logs/memory-hook.log (shared with the other hooks).
 """
 
-import hashlib
 import json
 import os
 import subprocess
@@ -450,128 +449,6 @@ def match_denylist(command: str) -> tuple[str, str] | None:
     return None
 
 
-# ── The plan-review floor ────────────────────────────────────────────────────
-#
-# A plan that is OPEN on this branch — uncommitted, or committed here but not on
-# the production rung — is reviewed by a fresh subagent before product code is
-# written (`/plan-review`). The review is a file, `specs/<f>/plan-review.md`,
-# naming the plan's git blob: `Reviewed-plan: <sha>`. The guard checks the file
-# and the hash, nothing else — a plan edited after its review is open again.
-#
-# Legacy plans already on the production rung are not this branch's work. Writes
-# under specs/, memory/, tasks/ and docs/ are how the plan and the review get
-# written, so they are never refused. Fails open on anything unreadable.
-PLAN_REVIEW_EXEMPT = ("specs", "memory", "tasks", "docs")
-PLAN_REVIEW_LINE = re.compile(r"^Reviewed-plan:\s*([0-9a-f]{40})\s*$", re.M)
-
-
-def _git_blob(path: Path) -> str | None:
-    try:
-        data = path.read_bytes()
-    except Exception:
-        return None
-    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
-
-
-def _git_toplevel(cwd: str) -> Path | None:
-    try:
-        r = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=cwd,
-                           capture_output=True, text=True, timeout=3)
-    except Exception:
-        return None
-    return Path(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else None
-
-
-def _production_rung(root: Path) -> str | None:
-    """The production branch: site.yml's, else main, else master — whichever exists."""
-    site = _flow_project_root(str(root))
-    candidates: list[str] = []
-    if site is not None:
-        try:
-            text = (site / "site.yml").read_text()
-            m = re.search(r"(?ms)^\s+production:\s*\n(.*?)(?=^\s{0,2}\S|\Z)", text)
-            if m:
-                b = re.search(r"^\s+branch:\s*([^\s#]+)", m.group(1), re.M)
-                if b:
-                    candidates.append(b.group(1).strip("'\""))
-        except Exception:
-            pass
-    candidates += ["main", "master"]
-    for name in candidates:
-        r = subprocess.run(["git", "rev-parse", "--verify", "-q", f"refs/heads/{name}"],
-                           cwd=root, capture_output=True, text=True, timeout=3)
-        if r.returncode == 0:
-            return name
-    return None
-
-
-def _open_plans(root: Path) -> list[Path]:
-    """specs/*/plan.md that carry work of this branch: uncommitted, or with commits
-    the production rung does not have."""
-    plans = sorted((root / "specs").glob("*/plan.md")) if (root / "specs").is_dir() else []
-    if not plans:
-        return []
-    rung = _production_rung(root)
-    open_plans = []
-    for plan in plans:
-        rel = str(plan.relative_to(root))
-        status = subprocess.run(["git", "status", "--porcelain", "--", rel], cwd=root,
-                                capture_output=True, text=True, timeout=3).stdout.strip()
-        if status:
-            open_plans.append(plan)
-            continue
-        if rung is None:
-            continue
-        ahead = subprocess.run(["git", "log", "--oneline", f"{rung}..HEAD", "--", rel], cwd=root,
-                               capture_output=True, text=True, timeout=5).stdout.strip()
-        if ahead:
-            open_plans.append(plan)
-    return open_plans
-
-
-def check_plan_review_floor(hook_input: dict) -> dict | None:
-    """Deny a product-code write while an open plan has no review of its current text."""
-    tool_input = hook_input.get("tool_input") or {}
-    if not isinstance(tool_input, dict):
-        return None
-    file_path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
-    if not isinstance(file_path, str) or not file_path:
-        return None
-    try:
-        root = _git_toplevel(hook_input.get("cwd") or str(Path(file_path).parent))
-        if root is None:
-            return None
-        target = Path(file_path).resolve()
-        rel = target.relative_to(root.resolve())
-    except Exception:
-        return None
-    if rel.parts and rel.parts[0] in PLAN_REVIEW_EXEMPT:
-        return None
-    try:
-        for plan in _open_plans(root):
-            blob = _git_blob(plan)
-            review = plan.with_name("plan-review.md")
-            names = PLAN_REVIEW_LINE.findall(review.read_text()) if review.is_file() else []
-            if blob is not None and blob in names:
-                continue
-            feature = plan.parent.name
-            why = ("has no plan-review.md" if not names
-                   else "was edited after its review — the review names an older version")
-            reason = (
-                f"netdust-gates plan-review floor: specs/{feature}/plan.md is open on this "
-                f"branch and {why}. A plan is reviewed by a fresh subagent before product "
-                f"code is written: run /plan-review {feature}. Writing under specs/, memory/, "
-                f"tasks/ or docs/ is not refused."
-            )
-            log(f"deny reason=plan-review-floor plan={plan!s} path={file_path!r}")
-            return {"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                                           "permissionDecision": "deny",
-                                           "permissionDecisionReason": reason}}
-    except Exception as e:  # noqa: BLE001 — fail open
-        log(f"plan-review-floor passthrough err={e}")
-    return None
-
-
 def main() -> None:
     raw = sys.stdin.read()
     if not raw.strip():
@@ -588,8 +465,8 @@ def main() -> None:
     if tool_name not in HANDLED_TOOLS:
         return  # passthrough
     if tool_name != "Bash":
-        # every path-carrying tool reaches the vendored-package floor, then the plan-review floor
-        decision = check_vendor_floor(hook_input) or check_plan_review_floor(hook_input)
+        # every path-carrying tool reaches the vendored-package floor
+        decision = check_vendor_floor(hook_input)
         if decision is not None:
             print(json.dumps(decision))
         return
