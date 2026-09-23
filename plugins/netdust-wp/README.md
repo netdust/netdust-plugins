@@ -1,6 +1,6 @@
 # netdust-wp
 
-WordPress layer of the Netdust harness for Claude Code. Layers on top of [`netdust-devops`](../netdust-devops/README.md) (branch flow, deploy, site.yml), [`netdust-core`](../netdust-core/README.md) (memory conventions, server management, cross-domain skills) and [`netdust-agent`](../netdust-agent/README.md) (the coding harness — `harnessed-development`, `testing-workflow`, `shake-out`, the reviewer agents, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard).
+WordPress layer of the Netdust harness for Claude Code. Layers on top of [`netdust-devops`](../netdust-devops/README.md) (branch flow, deploy, site.yml), [`netdust-core`](../netdust-core/README.md) (memory conventions, server management, cross-domain skills) and [`netdust-gates`](../netdust-gates/CLAUDE.md) (the coding policy over superpowers — `policy`, `threat-modeling`, `/plan-review`, `/shakeout`, the review agents, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard).
 
 ## What this plugin adds
 
@@ -61,7 +61,7 @@ Both imports — core for memory conventions/cross-stack, wp for WP-specific def
 │   ├── sync-db.md
 │   └── wp-new-project.md
 │
-├── skills/                          ← 10 WP skills, flat layout
+├── skills/                          ← 9 WP skills, flat layout
 │   ├── bedrock-composer/            (discipline + RED tests)
 │   ├── ntdst-framework/             ntdst-core + ntdst-baseline contract
 │   │                                  SKILL.md · references/traps.md
@@ -71,7 +71,6 @@ Both imports — core for memory conventions/cross-stack, wp for WP-specific def
 │   ├── wp-database/                 (discipline + RED tests)
 │   ├── wp-frontend/
 │   ├── wp-infra/
-│   ├── wp-plan-requirements/        (the Stage-1 plan gate)
 │   ├── wp-security/                 (discipline + RED tests)
 │   └── wp-testing/
 │
@@ -86,25 +85,18 @@ Both imports — core for memory conventions/cross-stack, wp for WP-specific def
     └── site.yml.tmpl
 ```
 
-## Relationship to netdust-core + netdust-agent
+## Relationship to netdust-core, netdust-devops + netdust-gates
 
-netdust-wp depends on netdust-core for:
+- **netdust-core** — memory conventions, voice + universal rules (`SOUL.md`, `RULES.md`),
+  `secure-server` + `ploi` + the ploi MCP, the cross-domain skills, `/memory-audit`, `/pattern-miner`.
+- **netdust-devops** — the `devops` skill (DDEV, the branch flow, make verbs, `.env`,
+  `site.yml`), `/deploy`, `/new-project`.
+- **netdust-gates** — the coding policy (`netdust-gates:policy`, whose WordPress pack carries
+  the WP plan requirements), `threat-modeling`, `/plan-review`, `/shakeout`, `/session-review`,
+  `/session-learn`, the agents `plan-reviewer`, `security-sentinel`, `invariant-auditor`,
+  `shakeout-qa`, and the live hooks.
 
-- **Memory conventions** (per-project STATE.md / lessons.md / tasks; live tag-scanner hook runs in netdust-agent)
-- **Voice + universal rules** (SOUL.md, RULES.md)
-- **/deploy** command (9-method dispatcher; reads `site.yml.deploy.method`)
-- **`devops` skill** (DDEV, the branch flow, make verbs, deploy, `.env` — netdust-devops)
-- **`secure-server` + `ploi` skills + ploi MCP** (server management)
-- **`research`, `market-research`, `brand-voice`, `marketing`** (cross-domain)
-- **`/memory-audit`, `/pattern-miner`** (`/skill-audit` lives in netdust-agent)
-
-…and on netdust-agent for:
-
-- **The coding harness** — `harnessed-development` (the intake router), `planning` and `building` (the two overlays), `testing-workflow`, `threat-modeling`, `architecture-invariants`, `convergence`, `compounding` (cross-stack workflow)
-- **The gate commands** — `/integration` at a task-group boundary, `/shakeout` at spec-complete, `/converge`, `/skill-audit`
-- **The 7 harness agents** — `implementer` and `test-author` build; `reviewer`, `security-sentinel`, `code-simplicity-reviewer` and `invariant-auditor` review; `shakeout-qa` drives the built artifact
-
-You can technically use netdust-wp without these, but you'll miss memory, observability, deploy, server management, the coding harness, and review agents. The dependency is soft — nothing enforces it at install time.
+The dependency is soft — nothing enforces it at install time.
 
 ## Adding a WP skill
 
@@ -128,6 +120,6 @@ For discipline skills, add `red-tests.md` and run `/red-test <skill>` from core.
 ## Not in scope
 
 - Memory conventions, server — netdust-core. Branch flow, deploy — netdust-devops.
-- The coding harness, review agents, and live hooks (SessionStart injector, Stop-hook tag capture, PreToolUse guard) — those are netdust-agent.
+- The coding policy, review agents, and live hooks (SessionStart injector, Stop-hook tag capture, PreToolUse guard) — those are netdust-gates.
 - Non-WP work — Statamic, Bun/React, etc. — those get their own plugins (`netdust-statamic`, `netdust-bun-react`).
 - Engineering process — defer to `obra/superpowers`.

@@ -3,7 +3,7 @@
 set -uo pipefail
 cd "$(dirname "$0")" || exit 1
 RC=0
-for t in yootheme/run.sh test-upstream-skills.sh; do
+for t in yootheme/run.sh test-upstream-skills.sh test-live-routing.sh; do
     printf '\n═══ %s ═══\n' "$t"
     bash "$t" || RC=1
 done

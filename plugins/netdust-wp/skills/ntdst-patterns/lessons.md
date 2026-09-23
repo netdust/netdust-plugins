@@ -12,7 +12,7 @@ For canonical structure rules read `SKILL.md`; for the worked vertical slices re
 
 **Rule:** Build to the framework reference (and now the matching `golden-paths/*.md` slice), never to the nearest sibling. The golden path names what changes per project vs what never does — so "the sibling does it this way" is not justification for a structural choice.
 
-**Where it lives:** `SKILL.md` → *Golden paths* routing table; enforced at review by `ntdst-drift-reviewer` check #11 and front-loaded into plans by `wp-plan-requirements` Block 0.
+**Where it lives:** `SKILL.md` → *Golden paths* routing table; enforced at review by `ntdst-drift-reviewer` check #11 and front-loaded into plans by the golden-path line of netdust-gates' WordPress pack.
 
 ---
 

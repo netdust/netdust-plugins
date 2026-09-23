@@ -21,7 +21,6 @@ prints the commands and touches nothing.
 Any code-changing request starts at `netdust-gates:policy`. On a WordPress project it copies
 the WordPress pack (`netdust-gates/skills/policy/wordpress.md`) into the plan's
 `Global Constraints` — that pack, not this file, is where the WP plan requirements live.
-`wp-plan-requirements` is its old home; do not fire it on top of the pack.
 
 - **Intent vs shape.** Brainstorming and Stefan own intent — what we build and why.
   `ntdst-framework` (services, data, routes, templates) and `ntdst-patterns` (where files live,
@@ -55,6 +54,15 @@ running anything path-dependent or destructive, at any stage.
 | `deploy.method` | `rsync` or `git-push` — the only two. `makefile`, `git-bundle-makefile` and `rsync-staging-prod` are retired |
 
 Then `memory/STATE.md` for where the project actually stands.
+
+## Where a new site comes from
+
+`netdust-wp-manager/scripts/new-site.sh` clones a stack skeleton — `netdust/bedrock` or
+`netdust/stackedWP` — then `scaffold_wp_starter` lays the `netdust/wp-starter` payload over
+it: the framework loader shims, the theme (plain or yootheme) and the whole gate. The gate has
+one home, wp-starter's `gate/` (INV-1 in netdust-wp-manager's `ARCHITECTURE-INVARIANTS.md`):
+a gate change lands there, never in a stack skeleton or a single site. It reaches new sites
+only; an existing site adopts it by hand (`/setup-tests`).
 
 ## Where knowledge lives (three layers, do not conflate)
 

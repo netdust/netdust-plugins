@@ -24,8 +24,8 @@ the Makefile is vendored so a fix made once reaches every project. See
 ## 2. Add the WordPress harness layer
 
 Render `CLAUDE.md` from `~/.claude/plugins/netdust-wp/templates/project-CLAUDE.md.tmpl`
-— it carries the WP-specific rules (harnessed-development routing, the
-framework skills, the plan gates, the test bindings) and imports
+— it carries the WP-specific rules (the `netdust-gates:policy` entry, the
+framework skills, the test bindings, the devops entry) and imports
 `@~/.claude/plugins/netdust-wp/CLAUDE.md`. This **replaces** the generic
 `CLAUDE.md` the scaffolder wrote.
 
