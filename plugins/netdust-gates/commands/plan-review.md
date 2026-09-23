@@ -1,5 +1,5 @@
 ---
-description: Review a written plan with a fresh subagent before Stefan reads it — premises ground-truthed against source, coverage, invented scope, the simplest design. Writes specs/<feature>/plan-review.md naming the plan's blob; the guard refuses product code until it exists.
+description: Review a written plan with a fresh subagent before Stefan reads it — premises ground-truthed against source, coverage, invented scope, the simplest design. Writes specs/<feature>/plan-review.md naming the plan's blob.
 argument-hint: <feature>
 allowed_tools: ["Bash", "Read", "Glob", "Write", "Agent"]
 ---
@@ -12,8 +12,8 @@ Review `specs/$ARGUMENTS/plan.md`. Three steps.
 git hash-object specs/$ARGUMENTS/plan.md
 ```
 
-That sha is what the review names. A plan edited after its review has a new blob, and the
-guard treats it as unreviewed — run this command again.
+That sha is what the review names. A plan edited after its review has a new blob — run this
+command again when the change matters.
 
 ## Step 2 — Dispatch `plan-reviewer`
 
@@ -27,8 +27,7 @@ reviewer's context is fresh and yours is not.
 ## Step 3 — File the report, then act on it
 
 Write the returned report verbatim to `specs/$ARGUMENTS/plan-review.md`. Its second line
-must be `Reviewed-plan: <sha>` — check it before writing; a report without it does not
-satisfy the guard.
+must be `Reviewed-plan: <sha>` — check it before writing.
 
 - **Blocking** findings: fix the plan now (it is yours to edit at this stage), then run
   `/plan-review` again — the new blob needs its own review.

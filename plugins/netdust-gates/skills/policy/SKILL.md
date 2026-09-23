@@ -64,8 +64,8 @@ Nothing else is added. A plan field is not how an incident is remembered (see th
 every premise against the source, checks coverage and invention, and judges the simplest
 design; its report is filed as `specs/<feature>/plan-review.md` naming the plan's blob
 (`Reviewed-plan: <sha>`). Blocking findings go back into the plan and the review runs again.
-The guard refuses product code while a plan open on this branch has no review of its current
-text — the review is a file, never a claim. The plan and its review reach Stefan together.
+The review is a file, never a claim. The plan and its review reach Stefan together. Nothing
+blocks code on a plan's state — an old or half plan never holds up the work (Stefan, 2026-09-23).
 
 ## Execution mode
 

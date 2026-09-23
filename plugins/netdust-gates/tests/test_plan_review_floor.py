@@ -1,15 +1,9 @@
-"""test_plan_review_floor.py — the plan-review floor in the PreToolUse guard.
+"""test_plan_review_floor.py — the plan-review floor is GONE (0.4.1).
 
-A plan that is OPEN on this branch (uncommitted, or committed here but not on the
-production rung) must carry `specs/<f>/plan-review.md` naming the plan's current git
-blob (`Reviewed-plan: <sha>`) before product code is written. The review is a subagent's
-artifact (`/plan-review`); the guard checks the file, never the transcript.
-
-Product code = anything outside specs/, memory/, tasks/, docs/. Writing the plan, the
-review, notes or the ledger is never refused — that is how the review gets written.
-
-Legacy plans already on the production rung are not this branch's work and are ignored.
-Fails OPEN on anything the guard cannot read.
+Stefan, 2026-09-23: "if we have a plan good, but we can't get stuck on old plans or half
+plans." The floor refused every code edit on daan because a shipped-to-staging plan was
+still "open" against production. `/plan-review` stays a practice; no plan state, reviewed
+or not, may block a write. These cases pin that.
 """
 
 import hashlib
@@ -94,24 +88,16 @@ def run() -> list[tuple[bool, str]]:
     v1 = "# plan v1\n"
     v2 = "# plan v2 — edited after review\n"
     r = [
-        _case("(a) an open plan with no review: product write is DENIED, naming /plan-review",
-              "deny", reason_has="/plan-review"),
-        _case("(a') …and Edit is denied the same way", "deny", tool="Edit"),
-        _case("(b) the review names the plan's current blob: passthrough",
-              "passthrough", review_for=v1),
-        _case("(c) the plan was edited after the review: denied again — a review is of a version",
-              "deny", plan=v2, review_for=v1),
-        _case("(d) writing the plan itself is never refused", "passthrough",
-              rel="specs/f/plan.md"),
-        _case("(d') writing the review itself is never refused", "passthrough",
-              rel="specs/f/plan-review.md"),
-        _case("(d'') memory/, tasks/, docs/ are not product code", "passthrough",
-              rel="memory/STATE.md"),
-        _case("(e) a legacy plan already on the production rung is ignored", "passthrough",
+        _case("(a) an open plan with no review does not block a product Write", "passthrough"),
+        _case("(a') …nor an Edit", "passthrough", tool="Edit"),
+        _case("(b) a reviewed plan: passthrough", "passthrough", review_for=v1),
+        _case("(c) a plan edited after its review does not block", "passthrough",
+              plan=v2, review_for=v1),
+        _case("(d) writing the plan itself: passthrough", "passthrough", rel="specs/f/plan.md"),
+        _case("(e) a legacy plan on the production rung: passthrough", "passthrough",
               plan_on_main=True),
-        _case("(f) no plan at all (bounded work): passthrough", "passthrough", plan=None),
-        _case("(g) no site.yml: the rung falls back to main and the floor still holds",
-              "deny", site_yml=False),
+        _case("(f) no plan at all: passthrough", "passthrough", plan=None),
+        _case("(g) no site.yml: passthrough", "passthrough", site_yml=False),
     ]
     # (h) a repo the guard cannot read fails OPEN
     payload = json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Write",
