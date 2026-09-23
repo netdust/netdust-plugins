@@ -112,5 +112,5 @@ Known traps: WPTestCase reset doesn't roll back transients in object cache (flus
 
 - `netdust-gates:policy` — its WordPress pack puts `make gate` and these tiers in every WP plan's Global Constraints
 - `/shakeout` (netdust-gates) — the close on user-facing work: `shakeout-qa` drives the artifact, then the whole-branch review
-- Gate stack reference: the project's `README-testing.md` + `tests/` (canonical template: github netdust/bedrock)
+- Gate stack reference: the project's `README-testing.md` + `tests/` (single home: the `gate/` payload of github netdust/wp-starter)
 - Legacy reference: `~/Sites/stride/codeception.yml` + `~/Sites/stride/tests/`

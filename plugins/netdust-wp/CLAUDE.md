@@ -55,6 +55,15 @@ running anything path-dependent or destructive, at any stage.
 
 Then `memory/STATE.md` for where the project actually stands.
 
+## Where a new site comes from
+
+`netdust-wp-manager/scripts/new-site.sh` clones a stack skeleton — `netdust/bedrock` or
+`netdust/stackedWP` — then `scaffold_wp_starter` lays the `netdust/wp-starter` payload over
+it: the framework loader shims, the theme (plain or yootheme) and the whole gate. The gate has
+one home, wp-starter's `gate/` (INV-1 in netdust-wp-manager's `ARCHITECTURE-INVARIANTS.md`):
+a gate change lands there, never in a stack skeleton or a single site. It reaches new sites
+only; an existing site adopts it by hand (`/setup-tests`).
+
 ## Where knowledge lives (three layers, do not conflate)
 
 - **A — atomic recall**: `~/.claude/projects/<slug>/memory/`, injected at session start.
