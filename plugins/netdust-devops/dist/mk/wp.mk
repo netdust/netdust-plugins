@@ -14,8 +14,15 @@ WP_CORE     := $(shell $(SITE) deploy.wp_path 2>/dev/null || $(SITE) structure.w
 CONTENT_DIR := $(shell $(SITE) deploy.content_dir)
 # content_dir is relative to the environment: the web root over rsync, the repo root over git-push.
 LOCAL_CONTENT := $(patsubst ./%,%,$(if $(filter git-push,$(shell $(SITE) deploy.method 2>/dev/null)),,$(if $(WEBROOT),$(WEBROOT)/))$(CONTENT_DIR))
-# What git tracks under a local dir, as rsync excludes: a mirror's --delete never touches it.
-_git-owned = $$(git -c core.quotePath=false ls-files -- '$(1)/' | sed 's|^$(1)/||' | cut -d/ -f1 | sort -u | sed 's|^|--exclude=/|' | tr '\n' ' ')
+# What git tracks under $(1) — at ref $(2), else in the index — as rsync exclude lines for
+# --exclude-from=-, so a mirror's --delete never touches it. Without $(3) each top-level entry is
+# kept whole: a project's own theme keeps its untracked node_modules and dist.
+_git-owned = { $(if $(2),git -c core.quotePath=false ls-tree -r --name-only "$(2):$(1)",git -C '$(1)' -c core.quotePath=false ls-files) \
+	| $(if $(3),cat,cut -d/ -f1 | sort -u) | sed 's|^|/|'; } 2>/dev/null
+# refresh protects what the destination's branch tracks: its server checkout, not this one.
+_dest-branch = B=$$($(SITE) environments.$$ENV.branch); git fetch --quiet origin "$$B" 2>/dev/null; \
+	git rev-parse --verify --quiet "origin/$$B" >/dev/null \
+	|| { echo "$(RED)✗ origin/$$B not found — refresh keeps what $$ENV's branch tracks and cannot read it$(RESET)"; exit 1; }
 
 # The doctor line for content_dir, read the way pull and refresh read it.
 _doctor-stack: _doctor-content
@@ -195,18 +202,19 @@ _pull-plugins:
 	@ENV="$(env)"; \
 	HOST=$$($(SITE) environments.$$ENV.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
 	SRC=$$($(SITE) environments.$$ENV.path); \
-	EXCL="$(call _git-owned,$(LOCAL_CONTENT)/plugins)"; \
+	EXCL=""; \
 	for p in $$($(SITE) deploy.payload 2>/dev/null); do EXCL="$$EXCL --exclude=$$(basename $$p)/"; done; \
 	for x in $$($(SITE) deploy.pull_exclude 2>/dev/null); do EXCL="$$EXCL --exclude=$$x"; done; \
 	echo "$(YELLOW)Mirroring third-party plugins from $$ENV (git-owned and pull_exclude entries skipped)...$(RESET)"; \
-	rsync -az --delete -e "ssh -q" $$EXCL \
+	$(call _git-owned,$(LOCAL_CONTENT)/plugins) | rsync -az --delete -e "ssh -q" --exclude-from=- $$EXCL \
 		"$$HOST:$$SRC/$(CONTENT_DIR)/plugins/" $(LOCAL_CONTENT)/plugins/ || exit 1; \
-	TEXCL="$(call _git-owned,$(LOCAL_CONTENT)/themes)"; \
+	TEXCL=""; \
 	for p in $$($(SITE) deploy.payload 2>/dev/null); do \
 		case "$$p" in content/themes/*|*/themes/*) TEXCL="$$TEXCL --exclude=$$(basename $$p)/";; esac; \
 	done; \
 	echo "$(YELLOW)Mirroring themes (payload themes excluded)...$(RESET)"; \
-	rsync -az --delete -e "ssh -q" $$TEXCL "$$HOST:$$SRC/$(CONTENT_DIR)/themes/" $(LOCAL_CONTENT)/themes/ || exit 1; \
+	$(call _git-owned,$(LOCAL_CONTENT)/themes) | rsync -az --delete -e "ssh -q" --exclude-from=- $$TEXCL \
+		"$$HOST:$$SRC/$(CONTENT_DIR)/themes/" $(LOCAL_CONTENT)/themes/ || exit 1; \
 	echo "$(GREEN)✓ third-party plugins and themes match $$ENV$(RESET)"
 
 _pull-uploads:
@@ -214,7 +222,7 @@ _pull-uploads:
 	HOST=$$($(SITE) environments.$$ENV.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
 	SRC=$$($(SITE) environments.$$ENV.path); \
 	echo "$(YELLOW)Mirroring uploads from $$ENV (incremental)...$(RESET)"; \
-	rsync -az --delete -e "ssh -q" --info=stats1 $(call _git-owned,$(LOCAL_CONTENT)/uploads) \
+	$(call _git-owned,$(LOCAL_CONTENT)/uploads,,all) | rsync -az --delete -e "ssh -q" --info=stats1 --exclude-from=- \
 		"$$HOST:$$SRC/$(CONTENT_DIR)/uploads/" $(LOCAL_CONTENT)/uploads/ || exit 1; \
 	echo "$(GREEN)✓ uploads mirrored$(RESET)"
 
@@ -236,8 +244,10 @@ _refresh-uploads:
 	HOST=$$($(SITE) environments.$$ENV.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
 	SRC=$$($(SITE) environments.production.path); \
 	DST=$$($(SITE) environments.$$ENV.path); \
+	$(_dest-branch); \
 	echo "$(YELLOW)Mirroring uploads (server-side, incremental)...$(RESET)"; \
-	ssh -qn "$$HOST" "rsync -a --delete --info=stats2 $(call _git-owned,$(LOCAL_CONTENT)/uploads) $$SRC/$(CONTENT_DIR)/uploads/ $$DST/$(CONTENT_DIR)/uploads/" || exit 1; \
+	$(call _git-owned,$(LOCAL_CONTENT)/uploads,origin/$$B,all) \
+		| ssh -q "$$HOST" "rsync -a --delete --info=stats2 --exclude-from=- $$SRC/$(CONTENT_DIR)/uploads/ $$DST/$(CONTENT_DIR)/uploads/" || exit 1; \
 	echo "$(GREEN)✓ uploads mirrored$(RESET)"
 
 _refresh-plugins:
@@ -245,17 +255,20 @@ _refresh-plugins:
 	HOST=$$($(SITE) environments.$$ENV.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
 	SRC=$$($(SITE) environments.production.path); \
 	DST=$$($(SITE) environments.$$ENV.path); \
-	EXCL="$(call _git-owned,$(LOCAL_CONTENT)/plugins)"; \
+	$(_dest-branch); \
+	EXCL=""; \
 	for p in $$($(SITE) deploy.payload 2>/dev/null); do EXCL="$$EXCL --exclude=$$(basename $$p)/"; done; \
 	for x in $$($(SITE) deploy.pull_exclude 2>/dev/null); do EXCL="$$EXCL --exclude=$$x"; done; \
 	echo "$(YELLOW)Mirroring third-party plugins (git-owned and pull_exclude entries skipped)...$(RESET)"; \
-	ssh -qn "$$HOST" "rsync -a --delete $$EXCL $$SRC/$(CONTENT_DIR)/plugins/ $$DST/$(CONTENT_DIR)/plugins/" || exit 1; \
-	TEXCL="$(call _git-owned,$(LOCAL_CONTENT)/themes)"; \
+	$(call _git-owned,$(LOCAL_CONTENT)/plugins,origin/$$B) \
+		| ssh -q "$$HOST" "rsync -a --delete --exclude-from=- $$EXCL $$SRC/$(CONTENT_DIR)/plugins/ $$DST/$(CONTENT_DIR)/plugins/" || exit 1; \
+	TEXCL=""; \
 	for p in $$($(SITE) deploy.payload 2>/dev/null); do \
 		case "$$p" in content/themes/*|*/themes/*) TEXCL="$$TEXCL --exclude=$$(basename $$p)/";; esac; \
 	done; \
 	echo "$(YELLOW)Mirroring themes (payload themes excluded)...$(RESET)"; \
-	ssh -qn "$$HOST" "rsync -a --delete $$TEXCL $$SRC/$(CONTENT_DIR)/themes/ $$DST/$(CONTENT_DIR)/themes/" || exit 1; \
+	$(call _git-owned,$(LOCAL_CONTENT)/themes,origin/$$B) \
+		| ssh -q "$$HOST" "rsync -a --delete --exclude-from=- $$TEXCL $$SRC/$(CONTENT_DIR)/themes/ $$DST/$(CONTENT_DIR)/themes/" || exit 1; \
 	echo "$(GREEN)✓ third-party plugins and themes mirrored (mu-plugins untouched)$(RESET)"
 
 .PHONY: _help-stack push _backup-data _pull-db _pull-plugins _pull-uploads \

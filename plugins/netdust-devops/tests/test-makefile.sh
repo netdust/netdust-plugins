@@ -530,11 +530,13 @@ cat > "$CLI/bin/ssh" <<SH
 #!/bin/sh
 echo "\$*" >> "$CLI/ssh.log"
 case " \$* " in *" -qn "*|*" -n "*) exec < /dev/null;; esac
-case "\$*" in *"tail -2"*) tail -2 "$CLI/ledger" 2>/dev/null | head -1;; *) cat >/dev/null;; esac
+case "\$*" in *"tail -2"*) tail -2 "$CLI/ledger" 2>/dev/null | head -1;;
+    *) last="\${*##* }"; sed "s|^|\$last |" >> "$CLI/ssh.in";; esac
 SH
 cat > "$CLI/bin/rsync" <<SH
 #!/bin/sh
 printf '[%s]' "\$@" >> "$CLI/rsync.log"; echo >> "$CLI/rsync.log"
+case "\$*" in *--exclude-from=-*) eval last=\\\${\$#}; sed "s|^|\$last |" >> "$CLI/rsync.in";; esac
 SH
 chmod +x "$CLI/bin/ssh" "$CLI/bin/rsync"
 CLIPATH="$CLI/bin:$PATH"
@@ -938,38 +940,75 @@ NETDUST_DEVOPS_DIST="$DIST" scripts/devops-version --update >/dev/null 2>&1
 printf 'STACK := wp\ninclude Makefile.netdust\n' > Makefile
 echo '<?php' > web/app/plugins/own/own.php; echo '/* mine */' > web/app/themes/mine/style.css
 touch web/app/uploads/.gitkeep
-mkdir -p web/app/themes/café && echo '/* é */' > web/app/themes/café/style.css
-git init -q . && git add -A && git -c user.email=t@t -c user.name=T commit -qm init
+mkdir -p web/app/themes/café "web/app/themes/my theme" web/app/uploads/2024
+echo '/* é */' > web/app/themes/café/style.css; echo '/* sp */' > "web/app/themes/my theme/style.css"
+echo png > web/app/uploads/2024/logo.png
+git init -q . && git add -A && git -c user.email=t@t -c user.name=T commit -qm init && git branch -q -M main
+git init -q --bare "$WORK/pull-origin.git" && git remote add origin "$WORK/pull-origin.git"
+git push -q origin main main:staging 2>/dev/null && git fetch -q origin
 # the target of a pull: rsync runs on the stub, so a missing parent is a wrong path
 rsynced() { grep -F -- "[$1]" "$CLI/rsync.log" | grep -F -- "[$2]"; }
+# excludes travel on stdin, one path per line, recorded as "<destination> <line>"
+excluded() { grep -qxF -- "$2 $3" "$CLI/$1.in"; }
 
-: > "$CLI/rsync.log"; out=$(M _pull-plugins env=staging | strip)
+: > "$CLI/rsync.log"; : > "$CLI/rsync.in"; out=$(M _pull-plugins env=staging | strip)
 if rsynced "nobody@pull.invalid:/srv/staging/web/app/plugins/" "web/app/plugins/" >/dev/null \
    && rsynced "nobody@pull.invalid:/srv/staging/web/app/themes/" "web/app/themes/" >/dev/null; then
     ok "git-push pull mirrors env/web/app into web/app — local and remote agree"
 else
     bad "git-push pull mirrors env/web/app into web/app — local and remote agree" "$(cat "$CLI/rsync.log")"
 fi
-if rsynced "web/app/themes/" "--exclude=/mine" >/dev/null && rsynced "web/app/plugins/" "--exclude=/own" >/dev/null \
+if excluded rsync web/app/themes/ /mine && excluded rsync web/app/plugins/ /own \
    && ! printf '%s' "$out" | grep -q "no such key"; then
     ok "…and with no deploy.payload, the tracked theme and plugin are excluded from --delete"
 else
-    bad "…and with no deploy.payload, the tracked theme and plugin are excluded from --delete" "$(cat "$CLI/rsync.log") $out"
+    bad "…and with no deploy.payload, the tracked theme and plugin are excluded from --delete" "$(cat "$CLI/rsync.in") $out"
+fi
+# git quotes a non-ASCII path unless told not to, and a quoted path matched no prefix.
+excluded rsync web/app/themes/ /café \
+    && ok "a tracked theme with a non-ASCII name is excluded too" \
+    || bad "a tracked theme with a non-ASCII name is excluded too" "$(cat "$CLI/rsync.in")"
+# An unquoted list split "my theme" into /my plus a stray source argument.
+if excluded rsync web/app/themes/ "/my theme" && ! grep -qF "[theme]" "$CLI/rsync.log"; then
+    ok "a tracked theme with a space in its name is excluded whole, and adds no rsync argument"
+else
+    bad "a tracked theme with a space in its name is excluded whole, and adds no rsync argument" "$(grep themes "$CLI/rsync.log") $(cat "$CLI/rsync.in")"
 fi
 
-: > "$CLI/rsync.log"; M _pull-uploads env=staging > /dev/null
-rsynced "web/app/uploads/" "--exclude=/.gitkeep" >/dev/null \
-    && ok "pull uploads lands in web/app/uploads and keeps what git tracks there" \
-    || bad "pull uploads lands in web/app/uploads and keeps what git tracks there" "$(cat "$CLI/rsync.log")"
+# One tracked upload protects that file, not its whole year of media.
+: > "$CLI/rsync.log"; : > "$CLI/rsync.in"; M _pull-uploads env=staging > /dev/null
+if rsynced "nobody@pull.invalid:/srv/staging/web/app/uploads/" "web/app/uploads/" >/dev/null \
+   && excluded rsync web/app/uploads/ /.gitkeep && excluded rsync web/app/uploads/ /2024/logo.png \
+   && ! excluded rsync web/app/uploads/ /2024; then
+    ok "pull uploads lands in web/app/uploads and keeps exactly the files git tracks there"
+else
+    bad "pull uploads lands in web/app/uploads and keeps exactly the files git tracks there" "$(cat "$CLI/rsync.log") $(cat "$CLI/rsync.in")"
+fi
 
-: > "$CLI/ssh.log"; M _refresh-plugins env=staging > /dev/null
-grep "themes/" "$CLI/ssh.log" | grep -qF -- "--exclude=/mine" \
-    && ok "refresh over git-push keeps the tracked theme out of the server-side --delete" \
-    || bad "refresh over git-push keeps the tracked theme out of the server-side --delete" "$(cat "$CLI/ssh.log")"
+# refresh protects what the DESTINATION's branch tracks — that checkout is the
+# server's, not this one. Here the theme is gone on the local branch only.
+git checkout -q -b local-drop && git rm -rq web/app/themes/mine && git -c user.email=t@t -c user.name=T commit -qm drop
+: > "$CLI/ssh.log"; : > "$CLI/ssh.in"; M _refresh-plugins env=staging > /dev/null
+M _refresh-uploads env=staging > /dev/null
+git checkout -q main
+if excluded ssh /srv/staging/web/app/themes/ /mine && excluded ssh /srv/staging/web/app/themes/ "/my theme" \
+   && excluded ssh /srv/staging/web/app/plugins/ /own && excluded ssh /srv/staging/web/app/uploads/ /2024/logo.png; then
+    ok "refresh keeps what origin/staging tracks out of the server-side --delete, whatever is checked out here"
+else
+    bad "refresh keeps what origin/staging tracks out of the server-side --delete, whatever is checked out here" "$(cat "$CLI/ssh.log") | $(cat "$CLI/ssh.in")"
+fi
+sed -i 's/branch: staging,/branch: nosuch,/' site.yml
+: > "$CLI/ssh.log"; out=$(M _refresh-plugins env=staging | strip); rc=$?
+git checkout -q -- site.yml
+if [ -n "$out" ] && printf '%s' "$out" | grep -q "origin/nosuch" && [ ! -s "$CLI/ssh.log" ]; then
+    ok "refresh refuses, before any ssh, when the destination branch is not on origin"
+else
+    bad "refresh refuses, before any ssh, when the destination branch is not on origin" "$out | $(cat "$CLI/ssh.log")"
+fi
 
 # rsync: the environment directory IS the web root, so content_dir is read under it.
 sed -i 's/^  method: git-push/  method: rsync/; s/^  content_dir: web\/app/  content_dir: app/' site.yml
-: > "$CLI/rsync.log"; M _pull-plugins env=staging > /dev/null
+: > "$CLI/rsync.log"; : > "$CLI/rsync.in"; M _pull-plugins env=staging > /dev/null
 rsynced "nobody@pull.invalid:/srv/staging/app/plugins/" "web/app/plugins/" >/dev/null \
     && ok "rsync pull mirrors env/app into web/app, as before" \
     || bad "rsync pull mirrors env/app into web/app, as before" "$(cat "$CLI/rsync.log")"
@@ -981,20 +1020,13 @@ out=$(M _doctor-stack | strip)
 printf '%s' "$out" | grep -q "content_dir: app" \
     && ok "doctor names content_dir: app when rsync would read web/web/app" \
     || bad "doctor names content_dir: app when rsync would read web/web/app" "$out"
-sed -i 's/^  content_dir: web\/app/  content_dir: app/' site.yml
-
-# git quotes a non-ASCII path ("web/app/themes/caf\303\251/…") unless told not to,
-# and a quoted path matched no prefix: the tracked theme went unprotected.
-rsynced "web/app/themes/" "--exclude=/café" >/dev/null \
-    && ok "a tracked theme with a non-ASCII name is excluded too" \
-    || bad "a tracked theme with a non-ASCII name is excluded too" "$(grep themes "$CLI/rsync.log")"
 
 # webroot "." over rsync: ./web/app is what git prints as web/app.
-sed -i 's/webroot: web,/webroot: ".",/; s/^  content_dir: app/  content_dir: web\/app/' site.yml
-: > "$CLI/rsync.log"; M _pull-plugins env=staging > /dev/null
-rsynced "web/app/themes/" "--exclude=/mine" >/dev/null \
+sed -i 's/webroot: web,/webroot: ".",/' site.yml
+: > "$CLI/rsync.in"; M _pull-plugins env=staging > /dev/null
+excluded rsync web/app/themes/ /mine \
     && ok "with webroot . the tracked theme is still excluded" \
-    || bad "with webroot . the tracked theme is still excluded" "$(grep themes "$CLI/rsync.log")"
+    || bad "with webroot . the tracked theme is still excluded" "$(cat "$CLI/rsync.in")"
 
 # new-project scaffolds rsync, where the environment directory is the web root:
 # a wp_path or content_dir that starts with the webroot is read there twice.
