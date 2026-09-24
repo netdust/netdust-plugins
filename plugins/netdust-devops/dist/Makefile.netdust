@@ -824,7 +824,12 @@ _staging-state:
 	@PROD="origin/$(BR_PROD)"; STG="origin/$(BR_REVIEW)"; \
 	[ "$(BR_REVIEW)" != "$(BR_PROD)" ] && git rev-parse --verify --quiet "$$STG" >/dev/null || exit 0; \
 	P=$$(git log --merges --first-parent --format=%s "$$PROD..$$STG" | sed -n 's/^promote: //p' | sort); \
-	VIA=""; NOT=""; \
+	PL=""; VIA=""; NOT=""; \
+	for n in $$P; do r="origin/feature/$$n"; s=""; \
+		if git rev-parse --verify --quiet "$$r" >/dev/null && ! git merge-base --is-ancestor "$$r" "$$STG"; then \
+			s=" (+$$(git rev-list --count "$$STG..$$r") newer, not on staging)"; fi; \
+		PL="$$PL, $$n$$s"; \
+	done; \
 	for r in $$(git for-each-ref --format='%(refname:short)' refs/remotes/origin/feature/); do \
 		n=$${r#origin/feature/}; \
 		printf '%s\n' "$$P" | grep -qxF "$$n" && continue; \
@@ -834,7 +839,7 @@ _staging-state:
 	done; \
 	[ -n "$$P$$VIA$$NOT" ] || exit 0; \
 	echo ""; echo "$(YELLOW)STAGING$(RESET)      $$STG as of the last fetch"; \
-	[ -z "$$P" ] || printf "  promoted:     %s\n" "$$(printf '%s\n' "$$P" | paste -sd, - | sed 's/,/, /g')"; \
+	[ -z "$$PL" ] || printf "  promoted:     %s\n" "$${PL#, }"; \
 	[ -z "$$VIA" ] || printf "  via another:  %s\n" "$${VIA#, }"; \
 	[ -z "$$NOT" ] || printf "  not promoted: %s\n" "$${NOT#, }"
 

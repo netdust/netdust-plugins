@@ -833,6 +833,18 @@ else
     bad "status lists what is promoted, what rides in through another, and what is not on staging" "$(printf '%s' "$out" | sed -n '/STAGING/,/^$/p')"
 fi
 git push -q origin --delete feature/c 2>/dev/null
+
+# A promote pins the commit it merged; a push after it is not on staging.
+B2=$(git rev-parse origin/feature/b2)
+git worktree add -q "$SY/b2" feature/b2 2>/dev/null || git worktree add -q "$SY/b2" "$B2"
+git -C "$SY/b2" -c user.email=t@t -c user.name=T commit -q --allow-empty -m "after promote"
+git -C "$SY/b2" push -q origin HEAD:refs/heads/feature/b2 2>/dev/null; git fetch -q origin
+out=$(M status | strip)
+printf '%s' "$out" | grep -qE '^  promoted: +a, b2 \(\+1 newer, not on staging\)$' \
+    && ok "status marks a promoted feature pushed again after its promote" \
+    || bad "status marks a promoted feature pushed again after its promote" "$(printf '%s' "$out" | sed -n '/STAGING/,/^$/p')"
+git push -q -f origin "$B2:refs/heads/feature/b2" 2>/dev/null; git fetch -q origin
+git worktree remove --force "$SY/b2"; git branch -q -f feature/b2 "$B2" 2>/dev/null
 REMOTES=$(git ls-remote origin)
 out=$(PTY "unpromote name=a"); rc=$?; out=$(printf '%s' "$out" | strip)
 if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "feature/a is still on staging through another promoted feature" \
