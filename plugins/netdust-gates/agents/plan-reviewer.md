@@ -27,7 +27,10 @@ codebase, checked in the codebase.
    does not exist (`tableview-premise`: one grep would have falsified a premise that survived
    spec, plan and handoff). Quote the plan's claim and the source line that contradicts it.
 2. **Coverage.** Each requirement in the spec has a task. Each `Review Focus` line names a
-   test that exists in a task's steps with a real assertion, not a wish. Each threat-model
+   test that exists in a task's steps with a real assertion, not a wish — through a caller's
+   seam, expected value from the spec. A "never"/"only"/"exactly one" line names an
+   `ARCHITECTURE-INVARIANTS.md` check instead; a test that reads source for it is Should fix.
+   A snapshot guarding a refactor with no task deleting it is Should fix. Each threat-model
    mitigation has a named home in a task. On a WordPress project the pack's constraints are
    met by the tasks, not merely pasted into `Global Constraints`; every data flow's four
    pillars are decided, and each flow's denial path is driven by a test.

@@ -28,7 +28,8 @@ skill, do not paraphrase it here.
 - Tests: the close is `make gate`. Unit = Brain Monkey, integration = wp-phpunit through
   DDEV, e2e = Playwright; commands and setup are `netdust-wp:wp-testing`'s. Evidence: the exit
   code and the summary lines of a run after the task's last edit. A tier that did not run is
-  reported as not run, never as a pass.
+  reported as not run, never as a pass. A site's tests cover its code and its configuration of
+  ntdst-core and ntdst-baseline; the packages' own behaviour is tested in their repos.
 - Local and ship: DDEV always; the Makefile is the only route to a server
   (`netdust-devops:devops`); anything that must ship names its `deploy.payload` path, and
   `make deploy-test env=staging` output listing it is quoted. An rsync, scp or SFTP to a server

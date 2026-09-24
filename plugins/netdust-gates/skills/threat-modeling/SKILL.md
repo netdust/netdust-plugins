@@ -27,6 +27,7 @@ A property statement ("keys are encrypted") is not a threat model — it is a cl
 interrogate. On WordPress the four pillars (validate / sanitize / escape / authorize) apply
 per data flow; `netdust-wp:wp-security` owns them.
 
-Every mitigation becomes a `Review Focus` line pinned to a test, and the denial — the actor
+Every mitigation becomes a `Review Focus` line pinned as the policy says — a behavioural test,
+or for a "never"/"only" mitigation an `ARCHITECTURE-INVARIANTS.md` check — and the denial — the actor
 who is refused — is asserted, not only the allowed path (`traverse-clause`: every route had a
 guard, no test asserted the denial, cross-tenant reads shipped green).

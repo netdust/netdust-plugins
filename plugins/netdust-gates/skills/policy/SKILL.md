@@ -49,8 +49,16 @@ Invoke `superpowers:writing-plans`; it owns the format. Netdust fills its slots:
   this file, verbatim — lines and red flags — then the spec's own. Other stacks: the spec's own until a pack exists.
 - **Review Focus** — one line per mitigation in the threat model, per convergence point of an
   `ARCHITECTURE-INVARIANTS.md` the diff touches, and per class in `edge-classes.md` the feature
-  can actually meet, most likely first. Each line is pinned to a test in the task that owns the
-  code; a line with no test is a wish.
+  can actually meet, most likely first. Each line is pinned to one of two checks; a line with
+  neither is a wish:
+  - **a behaviour** — a test in the task that owns the code, acting through the seam a caller
+    uses (request, route, render, public method), its expected value taken from the spec;
+  - **an absence or a count** ("never", "only", "exactly one", "no X anywhere") — a mechanical
+    check added to `ARCHITECTURE-INVARIANTS.md` (the grep, its roots, "must be empty"), which
+    `invariant-auditor` runs at review. Its test is the behaviour the absence protects, never a
+    test that reads source (`source-scan-ratchets`: ~40 in one suite, each a change detector).
+- **Scaffolding** — a snapshot or characterization test that holds output still through a
+  refactor is deleted by the refactor's last task.
 - **First working version** — one line under Architecture: the task that produces the first
   thing Stefan can see or run, ordered first. Tests and scaffolding for something nobody can
   yet see come after it.
@@ -95,7 +103,8 @@ Stefan accepts is `Accepted-by-human:` in the manifest, never `Ruling:`; only he
    reviewer — the author never reviews its own diff) on the most capable model, joined by
    `security-sentinel` when the plan carries a `## Threat model` and `invariant-auditor` when
    the project carries `ARCHITECTURE-INVARIANTS.md`.
-4. One fix pass, each fix RED→GREEN. No re-review — named checks and the suites close it. Then
+4. One fix pass, each fix RED→GREEN through the seam where the finding showed — the request,
+   route or render — not reflection on the private method the fix touched. No re-review — named checks and the suites close it. Then
    `superpowers:finishing-a-development-branch`.
 
 On demand, whenever Stefan asks: `/session-review <feature>` audits the work (six dimensions,
