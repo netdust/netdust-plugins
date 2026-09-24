@@ -881,5 +881,52 @@ fi
 cd "$P" || exit 1
 
 echo
+echo "── pull and refresh: the local tree, and what git owns in it ──"
+# daan, make pull env=staging (2026-09-24): git-push Bedrock, content_dir web/app,
+# no deploy.payload. The local side prefixed the webroot to a path that is
+# relative to the environment (the repo root over git-push) — web/web/app — and
+# the empty payload left the themes mirror running --delete with nothing
+# excluded, over the project's own tracked theme.
+PL="$WORK/pull"; mkdir -p "$PL/scripts" "$PL/web/app/plugins/own" "$PL/web/app/themes/mine" "$PL/web/app/uploads"; cd "$PL"
+cat > site.yml <<'PLYML'
+site: {name: pull, domain: pull.invalid, risk: low}
+structure: {type: bedrock, stack: wp, webroot: web, wpcli_path: web/wp}
+environments:
+  staging:    {url: "https://staging.pull.invalid", path: /srv/staging, branch: staging, role: review, confirm: false}
+  production: {url: "https://pull.invalid", path: /srv/prod, branch: main, role: live, confirm: true}
+deploy:
+  method: git-push
+  ssh_host: nobody@pull.invalid
+  state_dir: /srv/.state
+  wp_path: web/wp
+  content_dir: web/app
+local: {ddev_project: pull, url: "https://pull.ddev.site"}
+commands: {gate: "true"}
+PLYML
+cp "$DIST/scripts/devops-version" scripts/ && chmod +x scripts/devops-version
+NETDUST_DEVOPS_DIST="$DIST" scripts/devops-version --update >/dev/null 2>&1
+printf 'STACK := wp\ninclude Makefile.netdust\n' > Makefile
+echo '<?php' > web/app/plugins/own/own.php; echo '/* mine */' > web/app/themes/mine/style.css
+touch web/app/uploads/.gitkeep
+git init -q . && git add -A && git -c user.email=t@t -c user.name=T commit -qm init
+# the target of a pull: rsync runs on the stub, so a missing parent is a wrong path
+rsynced() { grep -F -- "[$1]" "$CLI/rsync.log" | grep -F -- "[$2]"; }
+
+: > "$CLI/rsync.log"; out=$(M _pull-plugins env=staging | strip)
+if rsynced "nobody@pull.invalid:/srv/staging/web/app/plugins/" "web/app/plugins/" >/dev/null \
+   && rsynced "nobody@pull.invalid:/srv/staging/web/app/themes/" "web/app/themes/" >/dev/null; then
+    ok "git-push pull mirrors env/web/app into web/app — local and remote agree"
+else
+    bad "git-push pull mirrors env/web/app into web/app — local and remote agree" "$(cat "$CLI/rsync.log")"
+fi
+# rsync: the environment directory IS the web root, so content_dir is read under it.
+sed -i 's/^  method: git-push/  method: rsync/; s/^  content_dir: web\/app/  content_dir: app/' site.yml
+: > "$CLI/rsync.log"; M _pull-plugins env=staging > /dev/null
+rsynced "nobody@pull.invalid:/srv/staging/app/plugins/" "web/app/plugins/" >/dev/null \
+    && ok "rsync pull mirrors env/app into web/app, as before" \
+    || bad "rsync pull mirrors env/app into web/app, as before" "$(cat "$CLI/rsync.log")"
+cd "$P" || exit 1
+
+echo
 printf '%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

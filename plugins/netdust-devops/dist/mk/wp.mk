@@ -12,6 +12,8 @@ include mk/ddev.mk
 
 WP_CORE     := $(shell $(SITE) deploy.wp_path 2>/dev/null || $(SITE) structure.wpcli_path 2>/dev/null)
 CONTENT_DIR := $(shell $(SITE) deploy.content_dir)
+# content_dir is relative to the environment: the web root over rsync, the repo root over git-push.
+LOCAL_CONTENT := $(if $(filter git-push,$(shell $(SITE) deploy.method 2>/dev/null)),,$(if $(WEBROOT),$(WEBROOT)/))$(CONTENT_DIR)
 
 _help-stack:
 	@echo "$(YELLOW)LOCAL$(RESET)        DDEV + WordPress"
@@ -184,13 +186,13 @@ _pull-plugins:
 	for x in $$($(SITE) deploy.pull_exclude 2>/dev/null); do EXCL="$$EXCL --exclude=$$x"; done; \
 	echo "$(YELLOW)Mirroring third-party plugins from $$ENV (git-owned and pull_exclude entries skipped)...$(RESET)"; \
 	rsync -az --delete -e "ssh -q" $$EXCL \
-		"$$HOST:$$SRC/$(CONTENT_DIR)/plugins/" $(WEBROOT)/$(CONTENT_DIR)/plugins/ || exit 1; \
+		"$$HOST:$$SRC/$(CONTENT_DIR)/plugins/" $(LOCAL_CONTENT)/plugins/ || exit 1; \
 	TEXCL=""; \
 	for p in $$($(SITE) deploy.payload); do \
 		case "$$p" in content/themes/*|*/themes/*) TEXCL="$$TEXCL --exclude=$$(basename $$p)/";; esac; \
 	done; \
 	echo "$(YELLOW)Mirroring themes (payload themes excluded)...$(RESET)"; \
-	rsync -az --delete -e "ssh -q" $$TEXCL "$$HOST:$$SRC/$(CONTENT_DIR)/themes/" $(WEBROOT)/$(CONTENT_DIR)/themes/ || exit 1; \
+	rsync -az --delete -e "ssh -q" $$TEXCL "$$HOST:$$SRC/$(CONTENT_DIR)/themes/" $(LOCAL_CONTENT)/themes/ || exit 1; \
 	echo "$(GREEN)✓ third-party plugins and themes match $$ENV$(RESET)"
 
 _pull-uploads:
@@ -199,7 +201,7 @@ _pull-uploads:
 	SRC=$$($(SITE) environments.$$ENV.path); \
 	echo "$(YELLOW)Mirroring uploads from $$ENV (incremental)...$(RESET)"; \
 	rsync -az --delete -e "ssh -q" --info=stats1 \
-		"$$HOST:$$SRC/$(CONTENT_DIR)/uploads/" $(WEBROOT)/$(CONTENT_DIR)/uploads/ || exit 1; \
+		"$$HOST:$$SRC/$(CONTENT_DIR)/uploads/" $(LOCAL_CONTENT)/uploads/ || exit 1; \
 	echo "$(GREEN)✓ uploads mirrored$(RESET)"
 
 _refresh-db:
