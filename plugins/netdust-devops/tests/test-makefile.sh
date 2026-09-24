@@ -926,6 +926,7 @@ NETDUST_DEVOPS_DIST="$DIST" scripts/devops-version --update >/dev/null 2>&1
 printf 'STACK := wp\ninclude Makefile.netdust\n' > Makefile
 echo '<?php' > web/app/plugins/own/own.php; echo '/* mine */' > web/app/themes/mine/style.css
 touch web/app/uploads/.gitkeep
+mkdir -p web/app/themes/café && echo '/* é */' > web/app/themes/café/style.css
 git init -q . && git add -A && git -c user.email=t@t -c user.name=T commit -qm init
 # the target of a pull: rsync runs on the stub, so a missing parent is a wrong path
 rsynced() { grep -F -- "[$1]" "$CLI/rsync.log" | grep -F -- "[$2]"; }
@@ -960,6 +961,19 @@ sed -i 's/^  method: git-push/  method: rsync/; s/^  content_dir: web\/app/  con
 rsynced "nobody@pull.invalid:/srv/staging/app/plugins/" "web/app/plugins/" >/dev/null \
     && ok "rsync pull mirrors env/app into web/app, as before" \
     || bad "rsync pull mirrors env/app into web/app, as before" "$(cat "$CLI/rsync.log")"
+
+# git quotes a non-ASCII path ("web/app/themes/caf\303\251/…") unless told not to,
+# and a quoted path matched no prefix: the tracked theme went unprotected.
+rsynced "web/app/themes/" "--exclude=/café" >/dev/null \
+    && ok "a tracked theme with a non-ASCII name is excluded too" \
+    || bad "a tracked theme with a non-ASCII name is excluded too" "$(grep themes "$CLI/rsync.log")"
+
+# webroot "." over rsync: ./web/app is what git prints as web/app.
+sed -i 's/webroot: web,/webroot: ".",/; s/^  content_dir: app/  content_dir: web\/app/' site.yml
+: > "$CLI/rsync.log"; M _pull-plugins env=staging > /dev/null
+rsynced "web/app/themes/" "--exclude=/mine" >/dev/null \
+    && ok "with webroot . the tracked theme is still excluded" \
+    || bad "with webroot . the tracked theme is still excluded" "$(grep themes "$CLI/rsync.log")"
 cd "$P" || exit 1
 
 echo

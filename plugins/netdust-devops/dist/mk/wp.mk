@@ -13,9 +13,9 @@ include mk/ddev.mk
 WP_CORE     := $(shell $(SITE) deploy.wp_path 2>/dev/null || $(SITE) structure.wpcli_path 2>/dev/null)
 CONTENT_DIR := $(shell $(SITE) deploy.content_dir)
 # content_dir is relative to the environment: the web root over rsync, the repo root over git-push.
-LOCAL_CONTENT := $(if $(filter git-push,$(shell $(SITE) deploy.method 2>/dev/null)),,$(if $(WEBROOT),$(WEBROOT)/))$(CONTENT_DIR)
+LOCAL_CONTENT := $(patsubst ./%,%,$(if $(filter git-push,$(shell $(SITE) deploy.method 2>/dev/null)),,$(if $(WEBROOT),$(WEBROOT)/))$(CONTENT_DIR))
 # What git tracks under a local dir, as rsync excludes: a mirror's --delete never touches it.
-_git-owned = $$(git ls-files -- '$(1)/' | sed 's|^$(1)/||' | cut -d/ -f1 | sort -u | sed 's|^|--exclude=/|' | tr '\n' ' ')
+_git-owned = $$(git -c core.quotePath=false ls-files -- '$(1)/' | sed 's|^$(1)/||' | cut -d/ -f1 | sort -u | sed 's|^|--exclude=/|' | tr '\n' ' ')
 
 _help-stack:
 	@echo "$(YELLOW)LOCAL$(RESET)        DDEV + WordPress"
