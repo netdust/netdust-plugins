@@ -137,13 +137,13 @@ done
 
 echo
 echo "deploy gate — refusals"
-assert_refuses "refuses a missing env argument" "Usage: make deploy env=" make -s _deploy-gate
-assert_refuses "refuses an unknown environment" "Unknown environment"    make -s _deploy-gate env=nope
+assert_refuses "refuses a missing env argument" "Usage: make deploy env=" make -s _deploy-guard
+assert_refuses "refuses an unknown environment" "Unknown environment"    make -s _deploy-guard env=nope
 CURRENT=$(git branch --show-current)
 PROD_BRANCH=$(scripts/site environments.production.branch 2>/dev/null)
 if [ "$HAS_PROD" = "yes" ] && [ "$CURRENT" != "$PROD_BRANCH" ]; then
   assert_refuses "refuses production from the wrong branch" "deploys from" \
-    make -s _deploy-gate env=production
+    make -s _deploy-guard env=production
 fi
 
 echo

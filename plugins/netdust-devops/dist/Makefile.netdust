@@ -246,7 +246,7 @@ unpromote: ## Take a feature off the staging branch (make unpromote name=my-feat
 
 .PHONY: deploy
 deploy: ## Deploy the payload to an environment (make deploy env=staging)
-	@$(MAKE) --no-print-directory _deploy-gate env=$(env)
+	@$(MAKE) --no-print-directory _deploy-guard env=$(env)
 	@$(MAKE) --no-print-directory _deploy-confirm env=$(env)
 	@[ "$(env)" != "production" ] || [ -n "$(dryrun)" ] || { $(MAKE) --no-print-directory _backup-data env=production \
 		&& $(MAKE) --no-print-directory _backup-payload env=production; }
@@ -302,7 +302,7 @@ ship: ## Ship to production: the staging commit that was deployed, or a gated ho
 		echo "$(RED)✗ origin/$(BR_PROD) moved while this ship was running — nothing was deployed$(RESET)"; \
 		echo "$(YELLOW)  git fetch origin, then ship again$(RESET)"; exit 1; }; \
 	git checkout --quiet "$(BR_PROD)" && git merge --quiet --ff-only "$$SHA" || { $(_ship-ahead); exit 1; }
-	@for t in _deploy-gate _deploy-transport _deploy-ledger _deploy-tag _deploy-opcache; do \
+	@for t in _deploy-guard _deploy-transport _deploy-ledger _deploy-tag _deploy-opcache; do \
 		$(MAKE) --no-print-directory $$t env=production || { $(_ship-ahead); exit 1; }; \
 	done
 	@echo "$(GREEN)✅ shipped $(BR_PROD) @ $$(git rev-parse --short HEAD) — $$($(SITE) environments.production.url)$(RESET)"
@@ -655,7 +655,10 @@ _deploy-gitpush:
 		ssh -qn "$$HOST" "cd $$REMOTE && $$c" || exit 1; \
 	done
 
-_deploy-gate:
+# Git state, not the suite: right branch, clean tree, HEAD is origin's tip, and for
+# production the commit ship stamped. `commands.gate` runs in `make gate` and inside
+# `ship` — never here, which is why this says guards and never "gate passed".
+_deploy-guard:
 	@ENV="$(env)"; \
 	if [ -z "$$ENV" ]; then \
 		echo "$(RED)✗ Usage: make deploy env=<staging|production>$(RESET)"; \
@@ -699,7 +702,7 @@ _deploy-gate:
 			echo "$(YELLOW)  a release goes through make ship: from $(BR_REVIEW), or a hotfix/* branch$(RESET)"; \
 			exit 1; }; \
 	fi; \
-	echo "$(GREEN)✓ gate passed: $$ENV ← $$WANT @ $$(git rev-parse --short HEAD)$(RESET)"
+	echo "$(GREEN)✓ deploy guards passed: $$ENV ← $$WANT @ $$(git rev-parse --short HEAD)$(RESET)"
 
 # WHETHER to ask for make deploy. ship always asks, so it calls _ask-confirm.
 _deploy-confirm:
@@ -959,7 +962,7 @@ _ensure-clean-git:
 # project has no such runner) and is respected; only a key never declared is a gap.
 # The lines are the wp stack's; another stack reads them as the shape to adapt.
 _DOCTOR_COMMANDS := gate smoke e2e
-_doctor-line-gate  := gate: ddev composer test:unit
+_doctor-line-gate  := gate: composer gate
 _doctor-line-smoke := smoke: PLAYWRIGHT_BASE_URL=$$SMOKE_URL npx playwright test --grep @smoke
 _doctor-line-e2e   := e2e: E2E_ENV=$$E2E_ENV PLAYWRIGHT_BASE_URL=$$E2E_URL bin/e2e.sh
 
@@ -987,7 +990,7 @@ _check-requirements:
 		command -v $$c >/dev/null 2>&1 || { echo "$(RED)❌ $$c not installed$(RESET)"; exit 1; }; \
 	done
 
-.PHONY: _deploy-transport _deploy-rsync _deploy-gitpush _deploy-gate _deploy-confirm \
+.PHONY: _deploy-transport _deploy-rsync _deploy-gitpush _deploy-guard _deploy-confirm \
         _ask-confirm _deploy-ledger _deploy-tag _deploy-opcache _backup-payload _flow-state \
         _branch-role _ensure-safe-branch _warn-rung-branch _need-tty _flow-ready _ensure-flow \
         _ensure-clean-git _refuse-production _check-requirements _worktree-guard _doctor-commands

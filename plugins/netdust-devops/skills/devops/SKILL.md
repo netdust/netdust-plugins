@@ -164,9 +164,11 @@ git checkout <commit before the update> -- Makefile.netdust mk scripts .netdust-
 
 ## Two guarantees whatever the transport, and one that is rsync's
 
-1. **The gate.** A deploy refuses unless the tree is clean, the branch matches
-   `environments.<env>.branch`, and `HEAD` **is** `origin`'s tip — a checkout
-   that is behind would deploy an older commit and stamp it.
+1. **The deploy guards.** A deploy refuses unless the tree is clean, the branch
+   matches `environments.<env>.branch`, and `HEAD` **is** `origin`'s tip — a checkout
+   that is behind would deploy an older commit and stamp it. They are git state only:
+   `commands.gate` runs in `make gate` and inside `ship`, never in a deploy, so
+   `✓ deploy guards passed` never means a suite ran.
 2. **The ledger.** Each deploy stamps `<state_dir>/<env>.json` on the server
    and moves a `deployed/<env>` tag — `make deployed` / `git diff
    deployed/production` read it back.
