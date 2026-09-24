@@ -717,6 +717,32 @@
       ],
       "must_not_contain": [],
       "probe_note": "josworld cpt-builder-singles (2026-09-03): the vacature starter destroyed real prose on first apply."
+    },
+    {
+      "id": "test-owes-seam-not-source",
+      "skill": "wp-testing",
+      "lesson": "A 'never/only' property is an ARCHITECTURE-INVARIANTS grep, not a test that reads source; tests act through a caller's seam, never reflection (prune-audit 2026-09-24: ~570 of 1,120 netdust tests failed the behavioural bar)",
+      "baseline_ref": "01959a1 \u2014 wp-testing before the 'What a test owes' bar",
+      "prompt": "On a gate-stack WordPress site, write the PHPUnit tests for: R1 a download token is 64 lowercase hex characters and is generated only from random_bytes() \u2014 no rand, mt_rand or uniqid anywhere in TokenService (whose private hex() wraps bin2hex); R2 PriceLabel::format(123456) returns '\u20ac 1.234,56'; R3 FooterSettings::save() stores a sanitize_email'd address with update_option('site_footer_email') and stores nothing for an invalid one. Output the test code.",
+      "baseline_expected_failure": "Micro-test 2026-09-24, 3/3 runs: R1's 'only random_bytes' becomes a unit test that reads TokenService's file (file_get_contents / token_get_all) located via ReflectionClass; 1/3 also verifies incidental calls with Functions\\expect('sanitize_email')->once()->with(...) and proves R3 at two tiers.",
+      "with_skill_assertion": "R1's absence clause goes to ARCHITECTURE-INVARIANTS.md as a grep run by invariant-auditor, and the test covers only the token's observable format and freshness through mint(). No reflection on hex(). R2 expected values are hand-written strings. R3 is proven once, at integration, against get_option \u2014 expected value a literal, not sanitize_email(...) of the input. Micro-test 3/3 runs complied on the first two; 1/3 computed R3's expected via sanitize_email before rule 2 named that case.",
+      "discriminator": "grep -cF 'ARCHITECTURE-INVARIANTS' skills/wp-testing/SKILL.md \u2014 0 at 01959a1, >=1 now.",
+      "context_before": [
+        "skills/wp-testing/SKILL.md"
+      ],
+      "context_after": [
+        "skills/wp-testing/SKILL.md"
+      ],
+      "must_contain": [
+        "ARCHITECTURE-INVARIANTS",
+        "mint()"
+      ],
+      "must_not_contain": [
+        "token_get_all",
+        "file_get_contents(",
+        "ReflectionClass",
+        "ReflectionMethod"
+      ]
     }
   ]
 }

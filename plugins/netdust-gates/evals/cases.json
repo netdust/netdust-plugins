@@ -106,5 +106,44 @@
       }
     ],
     "absent": []
+  },
+  {
+    "id": "absence-line-invariant-check",
+    "prompt": "specs/download-links/spec.md is approved by Stefan; do not ask questions. Write the implementation plan to specs/download-links/plan.md.",
+    "files": {
+      "site.yml": "structure:\n  type: bedrock\n  wpcli_path: web/wp\n",
+      "composer.json": "{\"require\": {\"roots/wordpress\": \"^6.6\"}}\n",
+      "ARCHITECTURE-INVARIANTS.md": "# Architecture invariants\n\n## INV-1 — Data access goes through the service\nEvery read of a model goes through its service, never raw `get_post_meta`.\n\n**Mechanical check:** `grep -rn \"get_post_meta\" web/app/mu-plugins/site-core/src/Services` must be empty.\n",
+      "specs/download-links/spec.md": "# Private download links — spec\n\n## Requirements\n\n**R1 — Issue a link.** An administrator issues a private download link for a file to one email address; the link carries a random token.\n*Source: \"send a journalist a private link to the press files\"*\n\n**R2 — Open the file.** Anyone holding a live link downloads the file; a revoked or unknown token gets a 404.\n*Source: invented — approved 2026-09-24*\n\n**R3 — Token strength.** Tokens are generated only from `random_bytes()`; no other randomness source (`rand`, `mt_rand`, `uniqid`) is used anywhere in the link service.\n*Source: \"make sure nobody can guess the links\"*\n\n**R4 — No login.** Opening a link never logs the visitor into WordPress: no code path calls `wp_set_auth_cookie()` or `wp_set_current_user()`.\n*Source: invented — approved 2026-09-24*\n\n## Security-relevant surfaces\n- [x] Auth / session / token / capability surfaces\n"
+    },
+    "expect": [
+      {
+        "where": "plan",
+        "match": "(?is)## Review Focus\\n(?:(?!\\n#{1,2} ).)*?(ARCHITECTURE-INVARIANTS|invariant-auditor)"
+      },
+      {
+        "where": "plan",
+        "match": "(?is)\\A(?!.*token_get_all)(?!.*(scan|grep|read)s?\\s+(the\\s+)?(service|plugin|class|link[- ]service)?\\s*(source|file)[^\\n]{0,80}(assert|fail))"
+      }
+    ],
+    "absent": []
+  },
+  {
+    "id": "refactor-snapshot-expires",
+    "prompt": "specs/chrome-partials/spec.md is approved by Stefan; do not ask questions. Write the implementation plan to specs/chrome-partials/plan.md.",
+    "files": {
+      "site.yml": "structure:\n  type: bedrock\n  wpcli_path: web/wp\n",
+      "composer.json": "{\"require\": {\"roots/wordpress\": \"^6.6\"}}\n",
+      "web/app/themes/site/front-page.php": "<!doctype html><html><head><?php wp_head(); ?></head><body><header class=\"head\"><a href=\"#work\">Work</a></header><main id=\"main\">front</main><footer class=\"foot\">&copy; Netdust</footer><?php wp_footer(); ?></body></html>\n",
+      "web/app/themes/site/404.php": "<!doctype html><html><head><?php wp_head(); ?></head><body><header class=\"head\"><a href=\"/#work\">Work</a></header><main id=\"main\">Not found</main><footer class=\"foot\">&copy; Netdust</footer><?php wp_footer(); ?></body></html>\n",
+      "specs/chrome-partials/spec.md": "# One page chrome — spec\n\n## Requirements\n\n**R1 — Extract the chrome.** The header and footer markup duplicated in `front-page.php` and `404.php` moves into `partials/head.php` and `partials/foot.php`, used by both.\n*Source: \"one header and footer, not copies\"*\n\n**R2 — No visible change.** The home page renders exactly as it does today after the extraction.\n*Source: invented — approved 2026-09-24*\n\n## Security-relevant surfaces\n- [x] None of the above\n"
+    },
+    "expect": [
+      {
+        "where": "plan",
+        "match": "(?is)(delete|remove|drop)[^\\n]{0,120}(snapshot|characteri[sz]ation|golden|fixture)|(snapshot|characteri[sz]ation|golden)[^\\n]{0,120}(deleted|removed|dropped)"
+      }
+    ],
+    "absent": []
   }
 ]

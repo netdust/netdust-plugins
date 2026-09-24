@@ -24,4 +24,7 @@ Two more, from what green hid:
 8. **Shape, not behaviour / compiled, not rendered** — a test that asserts what a callable
    reference looks like never calls it (`shape-not-behaviour`); a build that exits 0 and
    changes a hash says nothing about the computed values on the page (`compiled-not-rendered`).
-   Invoke it; compare rendered values to the design's own numbers.
+   Invoke it; compare rendered values to the design's own numbers. The same holds for the
+   test's own expectation: reflection on a private method, an expected value computed by the
+   production helper, a count of classes, routes or files, copy the spec never approved — each
+   passes by construction or fails on a refactor (`prune-audit`: ~570 of 1,120 in one suite).

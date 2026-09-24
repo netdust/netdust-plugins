@@ -34,7 +34,9 @@ Two were invisible BY CONSTRUCTION, and both are worth recognising:
   PASSED before the fix, because the group carrying that key was dropped upstream by a
   stale `GROUP_LABELS` const. The test could not fail while the thing it guarded was
   unreachable. It was closed by a reflection check binding all three copies of the
-  stripped-key list together, so they can only drift through a RED.
+  stripped-key list together. Superseded (2026-09-24, `prune-audit`): three copies are
+  the defect — make the list one constant, and prove the wire test can fail by making the
+  guarded group reachable. A reflection check is a change detector, not the fix.
 
 **Check:** every task claiming a user-visible behaviour owes one assertion through the
 real entry point — the route or the rendered page, not the service behind it. And a
