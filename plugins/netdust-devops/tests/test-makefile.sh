@@ -165,6 +165,15 @@ fi
 # doctor reports the commands.* keys a core reads that site.yml never declared; a
 # key it expects must also be one a new project is scaffolded with.
 EXPECTED=$(sed -n 's/^_DOCTOR_COMMANDS := //p' "$DIST/Makefile.netdust")
+# doctor must not recommend a weaker command than a new project is scaffolded with:
+# the gate line it prints is the stacks.tsv GATE column, never the test column.
+TSV_GATE=$(awk -F'\t' '$1 == "wp" && $2 == "bedrock" {print $13}' "$ROOT/templates/stacks.tsv")
+DOC_GATE=$(sed -n 's/^_doctor-line-gate *:= *gate: *//p' "$DIST/Makefile.netdust")
+if [ -n "$TSV_GATE" ] && [ "$DOC_GATE" = "$TSV_GATE" ]; then
+    ok "doctor recommends the same gate a new project gets ($TSV_GATE)"
+else
+    bad "doctor recommends the same gate a new project gets" "doctor: '$DOC_GATE' vs stacks.tsv: '$TSV_GATE'"
+fi
 MISSING=""
 for k in $EXPECTED; do grep -qE "^  $k: " "$ROOT/templates/site.yml.tmpl" || MISSING="$MISSING $k"; done
 if [ -n "$EXPECTED" ] && [ -z "$MISSING" ]; then

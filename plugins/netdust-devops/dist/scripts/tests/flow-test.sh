@@ -121,14 +121,21 @@ assert_eq "…and did not move you off it" "main" "$(git branch --show-current)"
 echo; echo "flow — the deploy gate"
 git checkout -q -B staging origin/staging
 echo dirty > dirty.txt
-assert_refuses "deploy gate refuses a dirty tree" "Uncommitted" M _deploy-gate env=staging
+assert_refuses "deploy gate refuses a dirty tree" "Uncommitted" M _deploy-guard env=staging
 rm dirty.txt
-assert_refuses "deploy gate refuses the wrong branch" "deploys from" M _deploy-gate env=production
+assert_refuses "deploy gate refuses the wrong branch" "deploys from" M _deploy-guard env=production
 git checkout -q -b feature/unpushed origin/staging && echo u > u.txt && git add u.txt && git commit -q -m u
 git checkout -q staging && git merge -q --no-ff feature/unpushed -m "local only"
-assert_refuses "deploy gate refuses an unpushed HEAD" "push before deploying" M _deploy-gate env=staging
+assert_refuses "deploy gate refuses an unpushed HEAD" "push before deploying" M _deploy-guard env=staging
 git push -q origin staging
-assert_ok "deploy gate passes clean + right branch + pushed" M _deploy-gate env=staging
+assert_ok "deploy guards pass clean + right branch + pushed" M _deploy-guard env=staging
+# The guards are git state, never the suite: only `ship` runs commands.gate. A line
+# reading "gate passed" after a deploy is read as "the tests ran", and they did not.
+GOUT=$(M _deploy-guard env=staging | strip)
+assert_eq "…and say so — guards, not the gate" "1 0" \
+  "$(has "$GOUT" 'deploy guards passed') $(has "$GOUT" 'gate passed')"
+assert_eq "…the core PRINTS no gate verdict for a deploy (a comment may name the phrase)" "0" \
+  "$(grep -cE '(echo|printf)[^#]*gate passed' "$PROJECT_CORE")"
 git branch -q -D feature/unpushed
 # A checkout BEHIND origin is "on origin" too: it deployed the older commit and
 # stamped the ledger with it — a rollback nobody asked for.
@@ -137,7 +144,7 @@ echo newer > newer.txt && git add newer.txt && git commit -q -m "production move
 git checkout -q main
 assert_eq "setup: local production is A, origin/production is B, and A is B's ancestor" "1 1" \
   "$([ "$(git rev-parse HEAD)" = "$GMAIN" ] && echo 1) $(git fetch -q origin; git merge-base --is-ancestor HEAD origin/main && [ "$(git rev-parse origin/main)" != "$GMAIN" ] && echo 1)"
-assert_refuses "deploy gate refuses a checkout that is behind origin, naming it" "behind origin/main" M _deploy-gate env=production
+assert_refuses "deploy gate refuses a checkout that is behind origin, naming it" "behind origin/main" M _deploy-guard env=production
 git push -qf origin "$GMAIN:refs/heads/main"; git fetch -q origin
 
 echo; echo "flow — a confirming verb needs a terminal (C1)"
@@ -494,7 +501,7 @@ assert_refuses "(p) a commit pushed to production by hand — clean, on the bran
 assert_eq "…(p) 0 leaves, origin byte-identical" "$RAW|" "$(git ls-remote origin)|$(leaves)"
 git reset -q --hard "$HG"; git push -qf origin "$HG:refs/heads/main"; git fetch -q origin
 git push -q origin :refs/tags/shipped/production 2>/dev/null
-assert_ok "(p) a project that never shipped with this core: what deployed/production already names may be redeployed" M _deploy-gate env=production
+assert_ok "(p) a project that never shipped with this core: what deployed/production already names may be redeployed" M _deploy-guard env=production
 # T02-M6: with no staging environment BR_REVIEW falls back to the production branch — the rebuild must not run.
 git checkout -q -f main; git checkout -q -b hotfix/solo origin/main
 sed -i '/^  staging:/d' site.yml && echo solo > solo.txt && git add -A && git commit -q -m "no staging environment"
@@ -557,7 +564,7 @@ assert_refuses "no origin, no terminal: make ship refuses for the terminal first
 assert_refuses "no origin, with a terminal: make ship stops at the deploy gate" "no 'origin' remote" \
   Y "make --no-print-directory ship"
 assert_eq "…and it reached no backup and no transport" "" "$(cat "$LEAVES")"
-assert_refuses "no origin: the deploy gate" "no 'origin' remote" M _deploy-gate env=production
+assert_refuses "no origin: the deploy gate" "no 'origin' remote" M _deploy-guard env=production
 assert_eq "flow state shows origin MISSING" "1" "$(M _flow-state | grep -c 'MISSING')"
 
 echo
