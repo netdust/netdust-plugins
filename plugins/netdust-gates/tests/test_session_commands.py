@@ -1,4 +1,4 @@
-"""test_session_commands.py — /session-review and /session-learn are wired, and their reviewers
+"""test_session_commands.py — /session-review, /session-learn and /prune-tests are wired, and their reviewers
 cannot write.
 
 Only what breaks a dispatch or the approval rule is pinned: an agent's `name:` matching its
@@ -10,7 +10,8 @@ import re
 from pathlib import Path
 
 PLUGIN = Path(__file__).resolve().parent.parent
-PAIRS = {"session-review": "session-reviewer", "session-learn": "session-learner"}
+PAIRS = {"session-review": "session-reviewer", "session-learn": "session-learner",
+         "prune-tests": "test-pruner"}
 WRITE_TOOLS = ("Edit", "Write", "NotebookEdit")
 
 
