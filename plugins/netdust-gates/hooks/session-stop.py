@@ -474,80 +474,40 @@ def append_skill_edge(skill: str, edge_case: str, date: str, source_project: str
     return False
 
 
-# ── Git + dashboard ─────────────────────────────────────────────────────────
+# ── Sidecar exclude + dashboard ─────────────────────────────────────────────────────────
 
-def _ensure_sidecar_gitignored(cwd: str) -> None:
-    """The watermark sidecar is per-machine transient state, not memory
-    content — keep it out of the project's git history."""
-    entry = f"memory/{SIDECAR_NAME}"
-    gitignore = Path(cwd) / ".gitignore"
-    try:
-        existing = gitignore.read_text() if gitignore.exists() else ""
-        if entry in existing.splitlines():
-            return
-        with open(gitignore, "a") as f:
-            if existing and not existing.endswith("\n"):
-                f.write("\n")
-            f.write(entry + "\n")
-    except Exception as e:
-        log(f"warn gitignore-write-failed cwd={cwd} err={type(e).__name__}:{e}")
+def exclude_sidecar(cwd: str) -> None:
+    """Keep the watermark sidecar out of `git status` without touching any
+    tracked file: it goes in this checkout's own .git/info/exclude.
 
-
-def git_commit_memory(cwd: str) -> None:
+    The hook used to append it to .gitignore and commit memory/ + tasks/ on
+    whatever branch was checked out. On netdust (2026-09-24) that dirtied
+    .gitignore on every branch without the line, blocking `git checkout`, and
+    landed an auto-capture commit on `main`, a deploy rung, which the Makefile
+    then refused to branch from. The hook writes memory; committing it is the
+    author's job, on a feature branch.
+    """
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "--is-inside-work-tree"],
+            ["git", "rev-parse", "--git-path", "info/exclude"],
             cwd=cwd, capture_output=True, text=True,
         )
         if result.returncode != 0:
             return
 
-        _ensure_sidecar_gitignored(cwd)
-
-        # Stage only the dirs that exist. git treats a pathspec matching nothing as
-        # fatal for the WHOLE command, so `git add memory/ tasks/` in a project with
-        # no tasks/ staged NOTHING and the hook committed nothing — silently, because
-        # the fatal went to a captured stderr and this runs after the `done` log line.
-        # ntdst-core and ntdst-baseline were the only projects without tasks/, and the
-        # only two whose memory/ never reached git (2026-09-02).
-        paths = [p for p in ("memory/", "tasks/") if (Path(cwd) / p).is_dir()]
-        if not paths:
+        exclude = Path(cwd) / result.stdout.strip()
+        entry = f"memory/{SIDECAR_NAME}"
+        existing = exclude.read_text() if exclude.exists() else ""
+        if entry in existing.splitlines():
             return
 
-        subprocess.run(
-            ["git", "add", *paths],
-            cwd=cwd, capture_output=True,
-        )
-
-        # Both the "is there anything to do" check and the commit are scoped to the
-        # same paths. A bare `git diff --cached` sees the WHOLE index, so an unrelated
-        # staged change made mid-session would make the hook think it had memory to
-        # capture; a bare `git commit` then writes that whole index under a
-        # memory(...) subject. That is how a mid-build `git rm` once lost 308 lines of
-        # PHP to an "auto-capture session end" commit. The hook must be structurally
-        # incapable of committing anything outside these paths.
-        # Commit the staged FILES, not the directories. Two reasons, both learned the
-        # hard way: a bare `git commit` writes the WHOLE index, which is how a
-        # mid-build `git rm` once lost 308 lines of PHP under a memory(...) subject;
-        # and a directory pathspec matching nothing is fatal for the whole command,
-        # so `-- memory/ tasks/` dies whenever one of them is empty. The staged list
-        # is exact, always non-empty here, and can name nothing outside these paths.
-        staged = subprocess.run(
-            ["git", "diff", "--cached", "--name-only", "-z", "--", *paths],
-            cwd=cwd, capture_output=True, text=True,
-        ).stdout.split("\0")
-        staged = [p for p in staged if p]
-        if not staged:
-            return  # Nothing staged under memory/ or tasks/
-
-        project = Path(cwd).name
-        subprocess.run(
-            ["git", "commit", "-m", f"memory({project}): auto-capture session end",
-             "--", *staged],
-            cwd=cwd, capture_output=True,
-        )
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        with open(exclude, "a") as f:
+            if existing and not existing.endswith("\n"):
+                f.write("\n")
+            f.write(entry + "\n")
     except Exception as e:
-        log(f"warn git-commit-failed cwd={cwd} err={type(e).__name__}:{e}")
+        log(f"warn exclude-write-failed cwd={cwd} err={type(e).__name__}:{e}")
 
 
 def trigger_dashboard_sync(cwd: str) -> None:
@@ -587,7 +547,7 @@ def main() -> None:
     # ── Exclusion: manual-only projects (fix 5) ──────────────────────────────
     # A .no-auto-memory marker at the project root means this project's memory
     # is maintained by hand (e.g. the Layer-B fleet dir ~/Sites/netdust-wp-manager).
-    # ALL write paths — memory/, tasks/, .gitignore, sidecar, git commit,
+    # ALL write paths — memory/, tasks/, the sidecar and its local exclude,
     # dashboard sync — are downstream of this single check.
     if (Path(cwd) / NO_AUTO_MEMORY_MARKER).exists():
         log(f"skip no-auto-memory cwd={cwd}")
@@ -627,7 +587,7 @@ def main() -> None:
     )
 
     # ── Durable dedup: the target file itself (fix 4) ────────────────────────
-    # The hash ring above lives in the gitignored sidecar and resets when the
+    # The hash ring above lives in the git-excluded sidecar and resets when the
     # sidecar is lost; the committed target files don't. Filter anything whose
     # normalized body already exists in its destination file.
     state_path = Path(cwd) / "memory" / "STATE.md"
@@ -670,7 +630,7 @@ def main() -> None:
 
     log(f"done cwd={cwd} tags=[{','.join(k for k,v in tags.items() if v)}] wrote=[{','.join(written)}]")
 
-    git_commit_memory(cwd)
+    exclude_sidecar(cwd)
     trigger_dashboard_sync(cwd)
     sys.exit(0)
 
