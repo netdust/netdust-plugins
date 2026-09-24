@@ -104,7 +104,8 @@ deploy:
 
   # ── stack-specific ──────────────────────────────────────────────────────
   # wp:  where WordPress and wp-content live ON THE SERVER, relative to the
-  #      environment path. bedrock: web/wp + web/app · custom-app: wp + content
+  #      environment path — the web root over rsync (bedrock: wp + app ·
+  #      custom-app: wp + content), the repo root over git-push (bedrock: web/wp + web/app)
   wp_path: {{WP_PATH}}
   content_dir: {{CONTENT_DIR}}
   # wp:  third-party plugin directories `make pull` / `make refresh` must NOT

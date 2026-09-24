@@ -17,6 +17,18 @@ LOCAL_CONTENT := $(patsubst ./%,%,$(if $(filter git-push,$(shell $(SITE) deploy.
 # What git tracks under a local dir, as rsync excludes: a mirror's --delete never touches it.
 _git-owned = $$(git -c core.quotePath=false ls-files -- '$(1)/' | sed 's|^$(1)/||' | cut -d/ -f1 | sort -u | sed 's|^|--exclude=/|' | tr '\n' ' ')
 
+# The doctor line for content_dir, read the way pull and refresh read it.
+_doctor-stack: _doctor-content
+_doctor-content:
+	@if [ -d "$(LOCAL_CONTENT)" ]; then printf "  ✅ content_dir → %s\n" "$(LOCAL_CONTENT)"; \
+	else printf "  $(RED)❌ content_dir → $(LOCAL_CONTENT) does not exist here$(RESET)\n"; fi
+	@M=$$($(SITE) deploy.method 2>/dev/null); \
+	for k in wp_path content_dir; do \
+		v=$$($(SITE) deploy.$$k 2>/dev/null); \
+		case "$$M:$$v" in rsync:$(WEBROOT)/*) \
+			printf "  $(RED)❌ deploy.$$k: $$v is read under the web root over rsync — set $$k: %s$(RESET)\n" "$${v#$(WEBROOT)/}";; esac; \
+	done
+
 _help-stack:
 	@echo "$(YELLOW)LOCAL$(RESET)        DDEV + WordPress"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "setup"             "first clone: .env, ddev, composer"
@@ -247,4 +259,4 @@ _refresh-plugins:
 	echo "$(GREEN)✓ third-party plugins and themes mirrored (mu-plugins untouched)$(RESET)"
 
 .PHONY: _help-stack push _backup-data _pull-db _pull-plugins _pull-uploads \
-        _refresh-db _refresh-uploads _refresh-plugins
+        _refresh-db _refresh-uploads _refresh-plugins _doctor-content

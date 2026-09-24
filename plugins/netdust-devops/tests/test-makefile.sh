@@ -974,6 +974,15 @@ rsynced "nobody@pull.invalid:/srv/staging/app/plugins/" "web/app/plugins/" >/dev
     && ok "rsync pull mirrors env/app into web/app, as before" \
     || bad "rsync pull mirrors env/app into web/app, as before" "$(cat "$CLI/rsync.log")"
 
+# The scaffold's old rsync default: content_dir web/app under a web-root
+# environment. doctor names the line that fixes it.
+sed -i 's/^  content_dir: app/  content_dir: web\/app/' site.yml
+out=$(M _doctor-stack | strip)
+printf '%s' "$out" | grep -q "content_dir: app" \
+    && ok "doctor names content_dir: app when rsync would read web/web/app" \
+    || bad "doctor names content_dir: app when rsync would read web/web/app" "$out"
+sed -i 's/^  content_dir: web\/app/  content_dir: app/' site.yml
+
 # git quotes a non-ASCII path ("web/app/themes/caf\303\251/…") unless told not to,
 # and a quoted path matched no prefix: the tracked theme went unprotected.
 rsynced "web/app/themes/" "--exclude=/café" >/dev/null \
@@ -986,6 +995,21 @@ sed -i 's/webroot: web,/webroot: ".",/; s/^  content_dir: app/  content_dir: web
 rsynced "web/app/themes/" "--exclude=/mine" >/dev/null \
     && ok "with webroot . the tracked theme is still excluded" \
     || bad "with webroot . the tracked theme is still excluded" "$(grep themes "$CLI/rsync.log")"
+
+# new-project scaffolds rsync, where the environment directory is the web root:
+# a wp_path or content_dir that starts with the webroot is read there twice.
+scafbad=""
+for tp in bedrock stackwp; do
+    d="$WORK/scaf-$tp"
+    "$SCAFF" "scaf$tp" --stack=wp --template="$tp" --dir="$d" >/dev/null 2>&1 || { scafbad="$scafbad $tp(scaffold-failed)"; continue; }
+    m=$("$d/scripts/site" deploy.method); w=$("$d/scripts/site" structure.webroot)
+    for k in wp_path content_dir; do
+        v=$("$d/scripts/site" deploy.$k)
+        [ "$m" = rsync ] && case "$v" in "$w"/*) scafbad="$scafbad $tp($k=$v under webroot $w)";; esac
+    done
+done
+[ -z "$scafbad" ] && ok "a scaffolded rsync WordPress site reads wp_path and content_dir under the web root once" \
+                  || bad "a scaffolded rsync WordPress site reads wp_path and content_dir under the web root once" "$scafbad"
 cd "$P" || exit 1
 
 echo
