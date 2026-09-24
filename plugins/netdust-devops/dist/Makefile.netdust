@@ -407,6 +407,7 @@ deployed: ## Show which commit runs on each environment
 .PHONY: status
 status: ## Branch, flow position, and what runs on each environment
 	@$(MAKE) --no-print-directory _flow-state
+	@$(MAKE) --no-print-directory _staging-state
 	@echo ""
 	@echo "$(YELLOW)LOCAL$(RESET)"
 	@printf "  changes: %s files\n" "$$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
@@ -816,6 +817,31 @@ _flow-state:
 		if git rev-parse --verify --quiet "origin/$$b" >/dev/null 2>&1; then printf "  rung:    %-14s on origin\n" "$$b"; \
 		else printf "  rung:    %-14s $(YELLOW)not on origin$(RESET)\n" "$$b"; fi; \
 	done
+
+# Which features staging carries, read from its own `promote: <name>` merges on
+# origin — the list _rebuild-staging rebuilds from. Silent without a staging rung.
+_staging-state:
+	@PROD="origin/$(BR_PROD)"; STG="origin/$(BR_REVIEW)"; \
+	[ "$(BR_REVIEW)" != "$(BR_PROD)" ] && git rev-parse --verify --quiet "$$STG" >/dev/null || exit 0; \
+	P=$$(git log --merges --first-parent --format=%s "$$PROD..$$STG" | sed -n 's/^promote: //p' | sort); \
+	PL=""; VIA=""; NOT=""; \
+	for n in $$P; do r="origin/feature/$$n"; s=""; \
+		if git rev-parse --verify --quiet "$$r" >/dev/null && ! git merge-base --is-ancestor "$$r" "$$STG"; then \
+			s=" (+$$(git rev-list --count "$$STG..$$r") newer, not on staging)"; fi; \
+		PL="$$PL, $$n$$s"; \
+	done; \
+	for r in $$(git for-each-ref --format='%(refname:short)' refs/remotes/origin/feature/); do \
+		n=$${r#origin/feature/}; \
+		printf '%s\n' "$$P" | grep -qxF "$$n" && continue; \
+		[ "$$(git rev-list --count "$$PROD..$$r")" -gt 0 ] || continue; \
+		if git merge-base --is-ancestor "$$r" "$$STG"; then VIA="$$VIA, $$n"; \
+		else NOT="$$NOT, $$n ($$(git rev-list --count "$$STG..$$r") commits)"; fi; \
+	done; \
+	[ -n "$$P$$VIA$$NOT" ] || exit 0; \
+	echo ""; echo "$(YELLOW)STAGING$(RESET)      $$STG as of the last fetch"; \
+	[ -z "$$PL" ] || printf "  promoted:     %s\n" "$${PL#, }"; \
+	[ -z "$$VIA" ] || printf "  via another:  %s\n" "$${VIA#, }"; \
+	[ -z "$$NOT" ] || printf "  not promoted: %s\n" "$${NOT#, }"
 
 # feature | hotfix | rung:<env> | other | none — the one classifier every flow line reads.
 _branch-role:
