@@ -484,9 +484,13 @@ else
     [ -f Makefile.netdust ] && [ -f scripts/site ] && [ -f .netdust-devops ] \
         && ok "--adopt vendors the core" \
         || bad "--adopt vendors the core" "missing Makefile.netdust / scripts/site / .netdust-devops"
-    make status >/dev/null 2>&1 \
+    stout=$(make status 2>&1); strc=$?
+    [ $strc -eq 0 ] \
         && ok "make runs in the adopted project" \
-        || bad "make runs in the adopted project" "$(make status 2>&1 | head -2)"
+        || bad "make runs in the adopted project" "$(printf '%s' "$stout" | head -2)"
+    printf '%s' "$stout" | grep -q "STAGING" \
+        && bad "a project with no staging environment shows no staging block" "$(printf '%s' "$stout" | grep -A3 STAGING)" \
+        || ok "a project with no staging environment shows no staging block"
 fi
 cd "$P"
 
@@ -815,6 +819,20 @@ PTY() { env PATH="$CLIPATH" timeout 60 script -qec "make --no-print-directory $1
 
 # feature/b2 was branched from feature/a, so a's commits ride in on b2's pin.
 PTY "promote name=a" > /dev/null; PTY "promote name=b2" > /dev/null
+
+# "Which branches are promoted and which are not?" — a feature branches from
+# production, so nothing on it says. status reads staging's own promote: merges.
+git push -q origin feature/a:refs/heads/feature/c 2>/dev/null
+out=$(M status | strip)
+if printf '%s' "$out" | grep -qE '^  promoted: +a, b2$' \
+   && printf '%s' "$out" | grep -qE '^  via another: +c$' \
+   && printf '%s' "$out" | grep -qE '^  not promoted: +b \(1 commit' \
+   && ! printf '%s' "$out" | grep -qE '(empty|h)\b.*commit'; then
+    ok "status lists what is promoted, what rides in through another, and what is not on staging"
+else
+    bad "status lists what is promoted, what rides in through another, and what is not on staging" "$(printf '%s' "$out" | sed -n '/STAGING/,/^$/p')"
+fi
+git push -q origin --delete feature/c 2>/dev/null
 REMOTES=$(git ls-remote origin)
 out=$(PTY "unpromote name=a"); rc=$?; out=$(printf '%s' "$out" | strip)
 if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "feature/a is still on staging through another promoted feature" \
