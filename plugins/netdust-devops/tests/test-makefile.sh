@@ -919,6 +919,23 @@ if rsynced "nobody@pull.invalid:/srv/staging/web/app/plugins/" "web/app/plugins/
 else
     bad "git-push pull mirrors env/web/app into web/app — local and remote agree" "$(cat "$CLI/rsync.log")"
 fi
+if rsynced "web/app/themes/" "--exclude=/mine" >/dev/null && rsynced "web/app/plugins/" "--exclude=/own" >/dev/null \
+   && ! printf '%s' "$out" | grep -q "no such key"; then
+    ok "…and with no deploy.payload, the tracked theme and plugin are excluded from --delete"
+else
+    bad "…and with no deploy.payload, the tracked theme and plugin are excluded from --delete" "$(cat "$CLI/rsync.log") $out"
+fi
+
+: > "$CLI/rsync.log"; M _pull-uploads env=staging > /dev/null
+rsynced "web/app/uploads/" "--exclude=/.gitkeep" >/dev/null \
+    && ok "pull uploads lands in web/app/uploads and keeps what git tracks there" \
+    || bad "pull uploads lands in web/app/uploads and keeps what git tracks there" "$(cat "$CLI/rsync.log")"
+
+: > "$CLI/ssh.log"; M _refresh-plugins env=staging > /dev/null
+grep "themes/" "$CLI/ssh.log" | grep -qF -- "--exclude=/mine" \
+    && ok "refresh over git-push keeps the tracked theme out of the server-side --delete" \
+    || bad "refresh over git-push keeps the tracked theme out of the server-side --delete" "$(cat "$CLI/ssh.log")"
+
 # rsync: the environment directory IS the web root, so content_dir is read under it.
 sed -i 's/^  method: git-push/  method: rsync/; s/^  content_dir: web\/app/  content_dir: app/' site.yml
 : > "$CLI/rsync.log"; M _pull-plugins env=staging > /dev/null

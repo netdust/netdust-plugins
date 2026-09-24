@@ -14,6 +14,8 @@ WP_CORE     := $(shell $(SITE) deploy.wp_path 2>/dev/null || $(SITE) structure.w
 CONTENT_DIR := $(shell $(SITE) deploy.content_dir)
 # content_dir is relative to the environment: the web root over rsync, the repo root over git-push.
 LOCAL_CONTENT := $(if $(filter git-push,$(shell $(SITE) deploy.method 2>/dev/null)),,$(if $(WEBROOT),$(WEBROOT)/))$(CONTENT_DIR)
+# What git tracks under a local dir, as rsync excludes: a mirror's --delete never touches it.
+_git-owned = $$(git ls-files -- '$(1)/' | sed 's|^$(1)/||' | cut -d/ -f1 | sort -u | sed 's|^|--exclude=/|' | tr '\n' ' ')
 
 _help-stack:
 	@echo "$(YELLOW)LOCAL$(RESET)        DDEV + WordPress"
@@ -181,14 +183,14 @@ _pull-plugins:
 	@ENV="$(env)"; \
 	HOST=$$($(SITE) environments.$$ENV.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
 	SRC=$$($(SITE) environments.$$ENV.path); \
-	EXCL=""; \
-	for p in $$($(SITE) deploy.payload); do EXCL="$$EXCL --exclude=$$(basename $$p)/"; done; \
+	EXCL="$(call _git-owned,$(LOCAL_CONTENT)/plugins)"; \
+	for p in $$($(SITE) deploy.payload 2>/dev/null); do EXCL="$$EXCL --exclude=$$(basename $$p)/"; done; \
 	for x in $$($(SITE) deploy.pull_exclude 2>/dev/null); do EXCL="$$EXCL --exclude=$$x"; done; \
 	echo "$(YELLOW)Mirroring third-party plugins from $$ENV (git-owned and pull_exclude entries skipped)...$(RESET)"; \
 	rsync -az --delete -e "ssh -q" $$EXCL \
 		"$$HOST:$$SRC/$(CONTENT_DIR)/plugins/" $(LOCAL_CONTENT)/plugins/ || exit 1; \
-	TEXCL=""; \
-	for p in $$($(SITE) deploy.payload); do \
+	TEXCL="$(call _git-owned,$(LOCAL_CONTENT)/themes)"; \
+	for p in $$($(SITE) deploy.payload 2>/dev/null); do \
 		case "$$p" in content/themes/*|*/themes/*) TEXCL="$$TEXCL --exclude=$$(basename $$p)/";; esac; \
 	done; \
 	echo "$(YELLOW)Mirroring themes (payload themes excluded)...$(RESET)"; \
@@ -200,7 +202,7 @@ _pull-uploads:
 	HOST=$$($(SITE) environments.$$ENV.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
 	SRC=$$($(SITE) environments.$$ENV.path); \
 	echo "$(YELLOW)Mirroring uploads from $$ENV (incremental)...$(RESET)"; \
-	rsync -az --delete -e "ssh -q" --info=stats1 \
+	rsync -az --delete -e "ssh -q" --info=stats1 $(call _git-owned,$(LOCAL_CONTENT)/uploads) \
 		"$$HOST:$$SRC/$(CONTENT_DIR)/uploads/" $(LOCAL_CONTENT)/uploads/ || exit 1; \
 	echo "$(GREEN)✓ uploads mirrored$(RESET)"
 
@@ -223,7 +225,7 @@ _refresh-uploads:
 	SRC=$$($(SITE) environments.production.path); \
 	DST=$$($(SITE) environments.$$ENV.path); \
 	echo "$(YELLOW)Mirroring uploads (server-side, incremental)...$(RESET)"; \
-	ssh -qn "$$HOST" "rsync -a --delete --info=stats2 $$SRC/$(CONTENT_DIR)/uploads/ $$DST/$(CONTENT_DIR)/uploads/" || exit 1; \
+	ssh -qn "$$HOST" "rsync -a --delete --info=stats2 $(call _git-owned,$(LOCAL_CONTENT)/uploads) $$SRC/$(CONTENT_DIR)/uploads/ $$DST/$(CONTENT_DIR)/uploads/" || exit 1; \
 	echo "$(GREEN)✓ uploads mirrored$(RESET)"
 
 _refresh-plugins:
@@ -231,13 +233,13 @@ _refresh-plugins:
 	HOST=$$($(SITE) environments.$$ENV.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
 	SRC=$$($(SITE) environments.production.path); \
 	DST=$$($(SITE) environments.$$ENV.path); \
-	EXCL=""; \
-	for p in $$($(SITE) deploy.payload); do EXCL="$$EXCL --exclude=$$(basename $$p)/"; done; \
+	EXCL="$(call _git-owned,$(LOCAL_CONTENT)/plugins)"; \
+	for p in $$($(SITE) deploy.payload 2>/dev/null); do EXCL="$$EXCL --exclude=$$(basename $$p)/"; done; \
 	for x in $$($(SITE) deploy.pull_exclude 2>/dev/null); do EXCL="$$EXCL --exclude=$$x"; done; \
 	echo "$(YELLOW)Mirroring third-party plugins (git-owned and pull_exclude entries skipped)...$(RESET)"; \
 	ssh -qn "$$HOST" "rsync -a --delete $$EXCL $$SRC/$(CONTENT_DIR)/plugins/ $$DST/$(CONTENT_DIR)/plugins/" || exit 1; \
-	TEXCL=""; \
-	for p in $$($(SITE) deploy.payload); do \
+	TEXCL="$(call _git-owned,$(LOCAL_CONTENT)/themes)"; \
+	for p in $$($(SITE) deploy.payload 2>/dev/null); do \
 		case "$$p" in content/themes/*|*/themes/*) TEXCL="$$TEXCL --exclude=$$(basename $$p)/";; esac; \
 	done; \
 	echo "$(YELLOW)Mirroring themes (payload themes excluded)...$(RESET)"; \
