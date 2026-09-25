@@ -568,9 +568,10 @@ inject "$P" deploy          env
 inject "$P" _need-tty       verb
 inject "$P" _worktree-guard rung
 inject "$P" deploy          dryrun env=staging
+inject "$P" review          review name=x
 echo dirt > dirt.txt; inject "$P" _ensure-clean-git verb; rm -f dirt.txt
-[ -z "$(pwned)" ] && ok "env=, verb=, rung= and dryrun= run nothing in the targets that interpolate them" \
-                  || bad "env=, verb=, rung= and dryrun= run nothing in the targets that interpolate them" "$(pwned)"
+[ -z "$(pwned)" ] && ok "env=, verb=, rung=, dryrun= and review= run nothing in the targets that interpolate them" \
+                  || bad "env=, verb=, rung=, dryrun= and review= run nothing in the targets that interpolate them" "$(pwned)"
 
 out=$(M _need-tty 'verb=a"; echo "' | strip)
 printf '%s' "$out" | grep -q "Refused verb=" \
