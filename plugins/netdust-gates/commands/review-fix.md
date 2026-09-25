@@ -4,9 +4,9 @@ argument-hint: <feature>
 allowed_tools: ["Bash", "Read", "Glob", "Grep", "Edit", "Write", "Skill", "AskUserQuestion"]
 ---
 
-1. **The review.** Read `$(git rev-parse --git-common-dir)/reviews/$ARGUMENTS.md`. None: say
-   so, name `make review name=$ARGUMENTS` (`/feature-review $ARGUMENTS` on a project without
-   devops, whose summary is then the review), change nothing, stop.
+1. **The review.** Read `$(git rev-parse --git-common-dir)/reviews/$ARGUMENTS.md`, else `specs/$ARGUMENTS/review.md`
+   (where a project without devops keeps the `/feature-review` summary). Neither: say so, name
+   `make review name=$ARGUMENTS` (or `/feature-review $ARGUMENTS`), change nothing, stop.
 2. **The branch.** Work where `feature/$ARGUMENTS` is checked out: in another worktree, go
    there; a dirty checkout, stop and say what is dirty — never stash. Otherwise
    `git checkout feature/$ARGUMENTS && git pull --ff-only`.

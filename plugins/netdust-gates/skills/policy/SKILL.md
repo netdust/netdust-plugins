@@ -122,9 +122,11 @@ Stefan accepts is `Accepted-by-human:` in the manifest, never `Ruling:`; only he
    reviews its own diff) on the most capable model, joined by `security-sentinel` when the plan carries a `## Threat model`
    or the diff touches a security-boundary path, and `invariant-auditor` when the project carries
    `ARCHITECTURE-INVARIANTS.md`.
-3. One fix pass, each fix RED→GREEN through the seam where the finding showed — the request,
-   route or render — not reflection on the private method the fix touched; the saved review is
-   copied to `specs/<feature>/review.md` and committed with it. No re-review — named checks and the suites close it.
+3. One fix pass on every Blocking and Should fix finding (a finding that is a decision goes to
+   Stefan), each fix RED→GREEN through the seam where the finding showed — the request, route or
+   render — not reflection on the private method the fix touched; the review is kept as
+   `specs/<feature>/review.md` (copied from `make review`'s saved report, or the
+   `/feature-review` summary without devops) and committed with it. No re-review — named checks and the suites close it.
 4. A user-facing change runs `/shakeout`, once, on the fixed code: `shakeout-qa` drives the flows through the real
    browser or wire, commits them as tests and writes `specs/<feature>/shakeout.md`; it
    registers them in `specs/CHECKS.md` as `@e2e` (`make e2e env=staging`, the proof after a
@@ -132,7 +134,7 @@ Stefan accepts is `Accepted-by-human:` in the manifest, never `Ruling:`; only he
    `bin/shakeout-check.py` exits 0; Stefan sees one screenshot per surface. This shake-out
    writes the checks; `make e2e env=staging` re-runs all of them on the composition, and
    `ship` waits for it.
-   Then `superpowers:finishing-a-development-branch` — on a project with `site.yml`,
+5. Every change: `superpowers:finishing-a-development-branch` — on a project with `site.yml`,
    in place of its menu: the branch pushed and `make promote name=<feature>` handed to Stefan
    (it finds the saved review and skips it); a feature never merges into production by hand.
 

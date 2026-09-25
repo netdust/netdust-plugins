@@ -67,7 +67,9 @@ def run() -> list[tuple[bool, str]]:
          and "/review-fix" in policy,
          "/review-fix: the saved report, Stefan picks, the policy's fix pass, the record in specs/, re-promote"),
         (policy.index("make review name=<feature>") < policy.index("runs `/shakeout`")
-         and "(Close, step 4)" in policy,
+         and "(Close, step 4)" in policy and "\n5. Every change:" in policy
+         and "every Blocking and Should fix finding" in policy
+         and "else `specs/$ARGUMENTS/review.md`" in _read("commands/review-fix.md"),
          "Close orders by cost: gate, review, fix pass, then the shakeout once on settled code"),
         (not stale, f"none of the 0.28 machinery survives in the close (found {stale})"),
     ]
