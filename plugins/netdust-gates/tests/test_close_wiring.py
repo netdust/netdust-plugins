@@ -54,7 +54,7 @@ def run() -> list[tuple[bool, str]]:
          "the feature shake-out writes the checks; staging's e2e run is the gate ship waits for"),
         (all(t in _read("commands/feature-review.md") for t in (
             "printenv REVIEW_NAME", "most capable", "ntdst-drift-reviewer", "Pass each reviewer the diff",
-            "environments.staging.branch")),
+            "environments.staging.branch", "REVIEW_LEVEL", "ultra", "Findings: <b> Blocking")),
          "/feature-review reads make's env, hands reviewers the diff, keeps the model and the WP join"),
         ("flows.md" in command and "no spec" in command and "flows.md" in qa
          and "flow list" in policy and "no `plan.md`" in command and "**Stop.**" in command

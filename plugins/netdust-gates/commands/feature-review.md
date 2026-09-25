@@ -14,6 +14,14 @@ production. For `staging`: head `origin/<environments.staging.branch>` (else `st
 production, and the features are the `promote: <name>` merges on
 `git log --merges --first-parent <base>..<head>`, each with its second parent.
 
+**How much.** `$REVIEW_LEVEL` (`printenv REVIEW_LEVEL`), default `full`: `low` dispatches
+superpowers' reviewer only; `full` adds the joiners below that apply; `ultra` adds, for a
+feature, `staging-reviewer` on staging's promoted features with this feature added at its head, so
+what it would collide with shows before it lands: base production, head
+`origin/<staging branch>`, the features staging's `promote:` merges plus
+`<name>:origin/feature/<name>` (replacing its old pin if it is already on staging). For the new
+feature's files there is no merged version yet, so the reviewer compares the pins' diffs.
+
 **Feature.** When `specs/<name>/plan.md` exists, give the reviewers its requirements,
 `Review Focus` and threat model; otherwise the diff and the commit messages — a feature without
 a plan is reviewed, never refused. Pass each reviewer the diff itself (`git diff <base>..<head>`) with the range: a headless
@@ -29,4 +37,5 @@ feature, its `git diff $(git merge-base <base> <pin>) <pin>`.
 
 **Report back** one summary: what was reviewed (range; plan or none), then the findings grouped
 Blocking / Should fix / Note, each with file:line and the reviewer that raised it. No findings is
-a legitimate report.
+a legitimate report. End with one plain line — no backticks, no bold:
+Findings: <b> Blocking · <s> Should fix · <n> Note
