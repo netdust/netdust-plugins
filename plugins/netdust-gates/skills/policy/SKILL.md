@@ -16,10 +16,12 @@ Spec `specs/<feature>/spec.md`, plan `specs/<feature>/plan.md` — the location 
 `superpowers:brainstorming` and `superpowers:writing-plans` say overrides their
 `docs/superpowers/...` defaults.
 
-**The plan is the feature.** When brainstorming splits a spec into sub-projects, the spec stays
-at `specs/<topic>/spec.md` and each plan is `specs/<feature>/plan.md`, naming its parent on a
-`Spec:` line. `<feature>` is the branch `feature/<feature>`: one plan, one branch, one promotable
-unit. No plan declares another as a dependency — staging's e2e run is the dependency test.
+**The plan is the feature.** When a spec covers independent subsystems
+(writing-plans' Scope Check; brainstorming's sub-project decomposition lands here too, as one spec), the spec stays at
+`specs/<topic>/spec.md` with no plan beside it, and each plan is `specs/<feature>/plan.md`, its
+`**Spec:**` header naming the parent. `<feature>` is the branch `feature/<feature>`: one plan,
+one branch, one promotable unit. No plan declares another as a dependency, and no build order is
+recorded — staging's e2e run is the dependency test.
 
 ## Intake
 
@@ -113,8 +115,8 @@ Stefan accepts is `Accepted-by-human:` in the manifest, never `Ruling:`; only he
    the project carries `ARCHITECTURE-INVARIANTS.md`.
 4. One fix pass, each fix RED→GREEN through the seam where the finding showed — the request,
    route or render — not reflection on the private method the fix touched. No re-review — named checks and the suites close it. Then
-   `superpowers:finishing-a-development-branch` — on a project with `site.yml` that means the
-   branch pushed and `make promote name=<feature>` handed to Stefan; a feature never merges
+   `superpowers:finishing-a-development-branch` — on a project with `site.yml`, in place of its menu:
+   the branch pushed and `make promote name=<feature>` handed to Stefan; a feature never merges
    into production by hand.
 
 On demand, whenever Stefan asks: `/session-review <feature>` audits the work (six dimensions,

@@ -56,9 +56,9 @@ approved it. A plan that passes is a legitimate report; do not manufacture findi
 ## Report
 
 ```
-# Plan review — <feature>
+# Plan review — <feature, or topic for a set>
 
-Reviewed-plan: <the git blob sha the controller gave you>   (a set: one line per plan, sha then path)
+Reviewed-plan: <the git blob sha the controller gave you>
 Verdict: ready | ready with fixes | not ready
 
 ## Blocking      (a premise false in source; a requirement with no task; a mitigation with no home)
@@ -68,6 +68,8 @@ Verdict: ready | ready with fixes | not ready
 <one line each: claim → file:line → holds | does not hold>
 ## The cut        (a set only: one line per plan → one feature | too broad | artificially split with <plan>)
 ```
+
+A set carries one `Reviewed-plan: <sha> <plan path>` line per plan, in place of the single one.
 
 Every finding: the plan line (task and step), the source file:line, what is wrong, and the
 smallest change to the plan. Blocking findings go back to the plan before Stefan reads it.

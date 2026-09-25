@@ -49,10 +49,14 @@ def run_case(case: dict) -> tuple[bool, list[str]]:
         for rel, content in case["files"].items():
             _write(root, rel, content)
         subprocess.run(["git", "init", "-q"], cwd=root, check=True)
-        proc = subprocess.run(
-            ["claude", "-p", case["prompt"], "--plugin-dir", str(PLUGIN),
-             "--permission-mode", "acceptEdits", "--max-turns", "25"],
-            cwd=root, capture_output=True, text=True, timeout=900)
+        timeout = case.get("timeout", 900)
+        try:
+            proc = subprocess.run(
+                ["claude", "-p", case["prompt"], "--plugin-dir", str(PLUGIN),
+                 "--permission-mode", "acceptEdits", "--max-turns", "25"],
+                cwd=root, capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return False, [f"timed out after {timeout}s"]
         reply = proc.stdout
         failures = []
         for e in case["expect"]:

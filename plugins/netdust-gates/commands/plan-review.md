@@ -5,8 +5,8 @@ allowed_tools: ["Bash", "Read", "Glob", "Write", "Agent"]
 ---
 
 Review `specs/$ARGUMENTS/plan.md` — or, when `specs/$ARGUMENTS/` holds a spec and no plan,
-the set of plans whose `Spec:` line names `specs/$ARGUMENTS/spec.md`
-(`grep -l "Spec: specs/$ARGUMENTS/spec.md" specs/*/plan.md`). Three steps.
+the set of plans whose `**Spec:**` header names `specs/$ARGUMENTS/spec.md`
+(`grep -lE "Spec:\**[[:space:]]*\`?specs/$ARGUMENTS/spec\.md" specs/*/plan.md`). Three steps.
 
 ## Step 1 — The blob
 
