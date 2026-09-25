@@ -45,7 +45,7 @@ def run() -> list[tuple[bool, str]]:
          and all(s in policy for s in ("specs/CHECKS.md", "make e2e", "make smoke")),
          "/shakeout reads the registry first, and the policy close names both verbs"),
         (all(s in command for s in ("bin/shakeout-check.py", "make gate", "Accepted-by-human:", "shakeout-qa",
-                                    "screenshot", "netdust-gates:policy", "superpowers:requesting-code-review")),
+                                    "screenshot", "netdust-gates:policy", "came before")),
          "/shakeout runs make gate, the qa agent, the checker, the screenshot yield and points at the policy close"),
         (all(s in reviewer for s in ("The cut", "too broad", "artificially split")) and "/plan-review <topic>" in policy
          and "Spec:\\**" in plan_cmd and "in place of its menu" in policy and "Scope Check" in policy,
@@ -54,11 +54,22 @@ def run() -> list[tuple[bool, str]]:
          "the feature shake-out writes the checks; staging's e2e run is the gate ship waits for"),
         (all(t in _read("commands/feature-review.md") for t in (
             "printenv REVIEW_NAME", "most capable", "ntdst-drift-reviewer", "Pass each reviewer the diff",
-            "environments.staging.branch")),
+            "environments.staging.branch", "REVIEW_LEVEL", "ultra", "Findings: <b> Blocking")),
          "/feature-review reads make's env, hands reviewers the diff, keeps the model and the WP join"),
         ("flows.md" in command and "no spec" in command and "flows.md" in qa
          and "flow list" in policy and "no `plan.md`" in command and "**Stop.**" in command
          and "new flows" in qa and "Write" in command.split("---")[1] and "or `flows.md`" in command,
          "/shakeout on a branch with no spec proposes flows.md and stops; shakeout-qa drives only the approved list"),
+        ((PLUGIN / "commands" / "review-fix.md").is_file()
+         and all(t in _read("commands/review-fix.md") for t in (
+            "git-common-dir", "Close's fix pass", "make promote name=", "which findings", "never stash",
+            "specs/$ARGUMENTS/review.md"))
+         and "/review-fix" in policy,
+         "/review-fix: the saved report, Stefan picks, the policy's fix pass, the record in specs/, re-promote"),
+        (policy.index("make review name=<feature>") < policy.index("runs `/shakeout`")
+         and "(Close, step 4)" in policy and "\n5. Every change:" in policy
+         and "every Blocking and Should fix finding" in policy
+         and "else `specs/$ARGUMENTS/review.md`" in _read("commands/review-fix.md"),
+         "Close orders by cost: gate, review, fix pass, then the shakeout once on settled code"),
         (not stale, f"none of the 0.28 machinery survives in the close (found {stale})"),
     ]

@@ -14,7 +14,21 @@ Stefan grants). Anything not written here is upstream's rule.
 
 Spec `specs/<feature>/spec.md`, plan `specs/<feature>/plan.md` — the location preference that
 `superpowers:brainstorming` and `superpowers:writing-plans` say overrides their
-`docs/superpowers/...` defaults.
+`docs/superpowers/...` defaults. Everything about a feature lives in `specs/<feature>/`:
+
+| File | Holds | Written by |
+|---|---|---|
+| `spec.md` | the requirements, each with its `Source:` | brainstorming |
+| `plan.md` | the plan, its `**Spec:**` header naming the spec | writing-plans |
+| `plan-review.md` | the plan review, `Reviewed-plan:` per plan | `/plan-review` |
+| `review.md` | the feature review, committed with its fix pass | `make review` · `/review-fix` |
+| `flows.md` | the approved flows of a branch with no spec | `/shakeout` |
+| `shakeout.md`, `shakeout/*.png` | the shake-out manifest and screenshots | `/shakeout` |
+| `session-review.md` | the on-demand session audit | `/session-review` |
+| `CHECKS.md` | in `specs/` itself: every surface's `@e2e` and `@smoke` checks | `/shakeout` |
+| `test-prune/<date>.md` | in `specs/` itself: a suite audit | `/prune-tests` |
+
+Nothing goes elsewhere; superpowers' ledger (`.superpowers/sdd/`) is its own scratch, deleted at finish.
 
 **The plan is the feature.** When a spec covers independent subsystems
 (writing-plans' Scope Check; brainstorming's sub-project decomposition lands here too, as one spec), the spec stays at
@@ -92,7 +106,7 @@ path, or the plan is long enough to outlive one context. Give the rule that fire
 ## Stops
 
 Upstream's four stops stand. Netdust names the ones that occur: the plan approval and the
-execution-mode choice; the shake-out screenshot yield (Close, step 2); the flow list a shake-out proposes for a branch with no spec; and every devops verb
+execution-mode choice; the shake-out screenshot yield (Close, step 4); the flow list a shake-out proposes for a branch with no spec; and every devops verb
 that belongs to the operator — `promote`, `unpromote`, `ship`, deploy — which Stefan runs or
 confirms by typing. Everything else you decide and ledger as
 `Ruling: <what> — <why> — <cost if wrong>`, and list in the final message. A shake-out exception
@@ -102,26 +116,30 @@ Stefan accepts is `Accepted-by-human:` in the manifest, never `Ruling:`; only he
 
 1. `make gate` exits 0 — the project's own suite (`commands.gate` in `site.yml`). A project with
    no declared gate declares one as the first task of the work; that is not a reason to skip.
-2. A user-facing change runs `/shakeout`: `shakeout-qa` drives the flows through the real
+2. The feature review, plan or no plan:
+   `make review name=<feature>` (`/feature-review <feature>` without devops) — superpowers'
+   whole-branch review (`superpowers:requesting-code-review`, a fresh reviewer; the author never
+   reviews its own diff) on the most capable model, joined by `security-sentinel` when the plan carries a `## Threat model`
+   or the diff touches a security-boundary path, and `invariant-auditor` when the project carries
+   `ARCHITECTURE-INVARIANTS.md`.
+3. One fix pass on every Blocking and Should fix finding (a finding that is a decision goes to
+   Stefan), each fix RED→GREEN through the seam where the finding showed — the request, route or
+   render — not reflection on the private method the fix touched; the review is kept as
+   `specs/<feature>/review.md` (copied from `make review`'s saved report, or the
+   `/feature-review` summary without devops) and committed with it. No re-review — named checks and the suites close it.
+4. A user-facing change runs `/shakeout`, once, on the fixed code: `shakeout-qa` drives the flows through the real
    browser or wire, commits them as tests and writes `specs/<feature>/shakeout.md`; it
    registers them in `specs/CHECKS.md` as `@e2e` (`make e2e env=staging`, the proof after a
    deploy or a plugin update) beside a read-only `@smoke` check (`make smoke`, production too);
    `bin/shakeout-check.py` exits 0; Stefan sees one screenshot per surface. This shake-out
    writes the checks; `make e2e env=staging` re-runs all of them on the composition, and
    `ship` waits for it.
-3. The feature review, plan or no plan:
-   `make review name=<feature>` (`/feature-review <feature>` without devops) — superpowers'
-   whole-branch review (`superpowers:requesting-code-review`, a fresh reviewer; the author never
-   reviews its own diff) on the most capable model, joined by `security-sentinel` when the plan carries a `## Threat model`
-   or the diff touches a security-boundary path, and `invariant-auditor` when the project carries
-   `ARCHITECTURE-INVARIANTS.md`.
-4. One fix pass, each fix RED→GREEN through the seam where the finding showed — the request,
-   route or render — not reflection on the private method the fix touched. No re-review — named checks and the suites close it. Then
-   `superpowers:finishing-a-development-branch` — on a project with `site.yml`, in place of its menu:
-   the branch pushed and `make promote name=<feature>` handed to Stefan; a feature never merges
-   into production by hand.
+5. Every change: `superpowers:finishing-a-development-branch` — on a project with `site.yml`,
+   in place of its menu: the branch pushed and `make promote name=<feature>` handed to Stefan
+   (it finds the saved review and skips it); a feature never merges into production by hand.
 
 On demand, whenever Stefan asks: `/session-review <feature>` audits the work (six dimensions,
 core fit on WordPress — run it before finishing, while the task reports exist), and
 `/session-learn` reads a transcript for lessons, `/prune-tests` audits a suite against the
-behavioural bar. All three report; he approves what follows.
+behavioural bar. Those three report; he approves what follows. `/review-fix <feature>` turns a
+saved review into follow-up commits on the branch — it changes only what Stefan picks.

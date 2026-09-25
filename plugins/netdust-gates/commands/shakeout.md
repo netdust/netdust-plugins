@@ -1,5 +1,5 @@
 ---
-description: Close a user-facing change — make gate, shakeout-qa drives the artifact and writes the manifest, bin/shakeout-check.py must exit 0, the human sees one screenshot per surface. Then the whole-branch review per the netdust-gates:policy close.
+description: Close a user-facing change — make gate, shakeout-qa drives the artifact and writes the manifest, bin/shakeout-check.py must exit 0, the human sees one screenshot per surface. The review and its fix pass came before it (netdust-gates:policy Close).
 allowed_tools: ["Bash", "Read", "Glob", "Skill", "Agent", "Write", "Edit"]
 ---
 
@@ -60,13 +60,13 @@ python3 "${CLAUDE_PLUGIN_ROOT}/bin/shakeout-check.py" specs/<feature>
 On exit 1: each `fail` row is one fix, RED→GREEN; re-dispatch `shakeout-qa` for the affected
 flows; re-run the check until it exits 0. Nothing after this runs while it fails.
 
-## Step 4 — The screenshot yield, then the branch review
+## Step 4 — The screenshot yield
 
 Show Stefan one screenshot per surface — the PNGs the manifest's browser rows name, never a
 per-flow slideshow. Beside them list every `✓ [shakeout-accepted]` row the check printed:
 `Accepted-by-human:` is agent-writable, so one Stefan did not write is reverted and its row
 re-driven. This is a stop; wait for him.
 
-Then the whole-branch review (`superpowers:requesting-code-review`, a fresh reviewer) and the
-single fix pass exactly as the `netdust-gates:policy` Close section states them, and `superpowers:finishing-a-development-branch`. Report the
-manifest, the review verdicts and every `Ruling:` from the ledger together.
+The review and its fix pass came before this shake-out (the `netdust-gates:policy` Close); what
+remains is `superpowers:finishing-a-development-branch`. Report the manifest and every `Ruling:`
+from the ledger together.
