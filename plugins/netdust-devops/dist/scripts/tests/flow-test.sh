@@ -458,13 +458,29 @@ git checkout -q -b feature/se origin/main && echo se > se.txt && git add se.txt 
 git checkout -q main; step promote name=se; git fetch -q origin
 git checkout -q -B staging origin/staging; deploytag origin/staging; gatescript 0; e2escript 0; ESC=$(git rev-parse HEAD)
 shiprefused "(r) staging deployed, its e2e never run: refused naming the tag" "e2e/staging"
-e2escript 1; M e2e env=staging >/dev/null
-assert_eq "(r) a red e2e run stamps nothing" "" "$(e2etag)"
-e2escript 0
+e2escript 1; M e2e env=staging >/dev/null; ERC=$?
+assert_eq "(r) a red e2e run fails the verb and stamps nothing" "1 " "$(nz "$ERC") $(e2etag)"
+e2escript 0; git checkout -q main; EOUT=$(M e2e env=staging); git checkout -q staging
+assert_eq "(r) a green run from a checkout that is not deployed/staging stamps nothing, and says so" " 1" "$(e2etag) $(has "$EOUT" 'not stamped')"
+: > dirt.txt; EOUT=$(M e2e env=staging); rm -f dirt.txt
+assert_eq "(r) nor does one from a dirty tree" " 1" "$(e2etag) $(has "$EOUT" 'not stamped')"
+printf '#!/bin/sh\ngit tag -f deployed/staging %s >/dev/null && git push -qf origin deployed/staging\n' "$EMAIN" > "$E2ESHIP"
+M e2e env=staging >/dev/null
+assert_eq "(r) a deploy while the flows run: the stamp names the commit deployed before the run" "$ESC" "$(e2etag)"
+deploytag "$ESC"; e2escript 0
 assert_ok "(r) make e2e env=staging, green" M e2e env=staging
 assert_eq "…(r) stamps e2e/staging on origin with the commit deployed/staging names" "$ESC" "$(e2etag)"
 e2escript 1; M e2e env=staging >/dev/null
 assert_eq "(r) a red re-run on the same commit takes the stamp back" "" "$(e2etag)"
+e2escript 0; M e2e env=staging >/dev/null; e2escript 1
+shim "$TMP/nodel" <<SH
+#!/bin/sh
+case "\$*" in *:refs/tags/e2e/*) exit 1;; esac
+exec "$(command -v git)" "\$@"
+SH
+EOUT=$("$TMP/nodel/mk" e2e env=staging 2>&1); rm -rf "$TMP/nodel"
+assert_eq "(r) a red run whose stamp cannot be removed says ship would still accept it" "1 $ESC" "$(has "$EOUT" 'NOT removed') $(e2etag)"
+git push -q origin :refs/tags/e2e/staging
 e2escript 0; git push -qf origin "$EMAIN:refs/tags/e2e/staging"
 shiprefused "(r) e2e/staging names an older commit: refused" "e2e/staging"
 M e2e env=staging >/dev/null; : > "$LEAVES"; YF "make --no-print-directory ship"; git fetch -q --prune origin
