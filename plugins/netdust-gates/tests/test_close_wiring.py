@@ -45,7 +45,7 @@ def run() -> list[tuple[bool, str]]:
          and all(s in policy for s in ("specs/CHECKS.md", "make e2e", "make smoke")),
          "/shakeout reads the registry first, and the policy close names both verbs"),
         (all(s in command for s in ("bin/shakeout-check.py", "make gate", "Accepted-by-human:", "shakeout-qa",
-                                    "screenshot", "netdust-gates:policy", "superpowers:requesting-code-review")),
+                                    "screenshot", "netdust-gates:policy", "came before")),
          "/shakeout runs make gate, the qa agent, the checker, the screenshot yield and points at the policy close"),
         (all(s in reviewer for s in ("The cut", "too broad", "artificially split")) and "/plan-review <topic>" in policy
          and "Spec:\\**" in plan_cmd and "in place of its menu" in policy and "Scope Check" in policy,
@@ -66,5 +66,8 @@ def run() -> list[tuple[bool, str]]:
             "specs/$ARGUMENTS/review.md"))
          and "/review-fix" in policy,
          "/review-fix: the saved report, Stefan picks, the policy's fix pass, the record in specs/, re-promote"),
+        (policy.index("make review name=<feature>") < policy.index("runs `/shakeout`")
+         and "(Close, step 4)" in policy,
+         "Close orders by cost: gate, review, fix pass, then the shakeout once on settled code"),
         (not stale, f"none of the 0.28 machinery survives in the close (found {stale})"),
     ]

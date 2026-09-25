@@ -208,6 +208,10 @@
       {
         "where": "reply",
         "match": "make promote name=banner"
+      },
+      {
+        "where": "reply",
+        "match": "(?s)make review name=banner.*make promote name=banner"
       }
     ],
     "absent": []
