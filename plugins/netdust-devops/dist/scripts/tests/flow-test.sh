@@ -492,18 +492,41 @@ assert_eq "…and the e2e ship section leaves origin, the checkout, the tree and
 
 echo; echo "flow — review: runs commands.review and reports back"
 git checkout -q main; RLOG="$TMP/review.log"; : > "$RLOG"
+RORIG=$(git ls-remote origin); RSTG=$(exact refs/heads/staging)
 assert_refuses "review with no commands.review: refused naming the key" "No commands.review" M review name=x
-printf '#!/bin/sh\necho "name=$REVIEW_NAME scope=$REVIEW_SCOPE" | tee -a %s\n' "$RLOG" > "$TMP/review.sh"
+printf '#!/bin/sh\necho "name=$REVIEW_NAME scope=$REVIEW_SCOPE level=$REVIEW_LEVEL" | tee -a %s\necho "Findings: 1 Blocking · 0 Should fix · 2 Note"\n[ ! -e %s/review.fail ]\n' "$RLOG" "$TMP" > "$TMP/review.sh"
 sed -i "s|^commands: {gate: \(.*\)}$|commands: {gate: \1, review: sh $TMP/review.sh}|" site.yml
 assert_refuses "review with neither name= nor env=: usage" "Usage: make review" M review
 assert_refuses "a name outside the charset, before anything runs" "Invalid name" M review 'name=a;b'
 assert_refuses "env=production: refused by name" "staging only" M review env=production
 ROUT=$(M review name=banner)
-assert_eq "review name=banner runs commands.review for the feature, and prints what it says" "name=banner scope=feature 1" "$(tail -1 "$RLOG") $(has "$ROUT" 'name=banner scope=feature')"
+assert_eq "review name=banner runs commands.review for the feature, and prints what it says" "name=banner scope=feature level=full 1" "$(tail -1 "$RLOG") $(has "$ROUT" 'name=banner scope=feature')"
 M review env=staging >/dev/null
-assert_eq "review env=staging runs it for staging" "name=staging scope=staging" "$(tail -1 "$RLOG")"
+assert_eq "review env=staging runs it for staging" "name=staging scope=staging level=full" "$(tail -1 "$RLOG")"
+assert_refuses "review=bogus: refused by name" "Refused review=" M review name=banner review=bogus
+M review name=banner review=low >/dev/null
+assert_eq "review=low reaches the reviewer as REVIEW_LEVEL" "name=banner scope=feature level=low" "$(tail -1 "$RLOG")"
+RD="$(git rev-parse --git-common-dir)/reviews"; ROUT=$(M review name=banner)
+assert_eq "…the report is saved under the common git dir, and the findings line and follow-up are printed" "1 1 1" \
+  "$(grep -c '^Findings: 1 Blocking' "$RD/banner.md") $(has "$ROUT" 'Findings: 1 Blocking') $(has "$ROUT" '/review-fix banner')"
+git checkout -q -b feature/rv origin/main && echo rv > rv.txt && git add rv.txt && git commit -q -m rv && git push -q origin feature/rv
+git checkout -q main; : > "$RLOG"; YF "make --no-print-directory promote name=rv"
+assert_eq "promote reviews first (level full), then asks, then promotes" "0 name=rv scope=feature level=full 1" \
+  "$YRC $(head -1 "$RLOG") $([ "$(printf '%s' "$YOUT" | grep -n -m1 'Findings:' | cut -d: -f1)" -lt "$(printf '%s' "$YOUT" | grep -n "Continue?" | cut -d: -f1)" ] && echo 1)"
+RVTIP=$(git rev-parse origin/feature/rv)
+assert_eq "…and its report opens with the commit it reviewed" "Reviewed: $RVTIP" "$(head -1 "$RD/rv.md")"
+: > "$RLOG"; YF "make --no-print-directory promote name=rv"
+assert_eq "promote again, no flag: the saved review is named and skipped" "0 0 1" "$YRC $(wc -c < "$RLOG" | tr -d ' ') $(has "$YOUT" "reviewed at $(git rev-parse --short "$RVTIP")")"
+: > "$RLOG"; YF "make --no-print-directory promote name=rv review=low"
+assert_eq "promote review=low forces a fresh review" "0 name=rv scope=feature level=low" "$YRC $(head -1 "$RLOG")"
+: > "$RLOG"; rm -f "$RD/rv.md"; YF "make --no-print-directory promote name=rv review=off"
+assert_eq "promote review=off: no review even with none saved" "0 0" "$YRC $(wc -c < "$RLOG" | tr -d ' ')"
+M review name=rv >/dev/null; : > "$TMP/review.fail"; YF "make --no-print-directory promote name=rv review=full"; rm -f "$TMP/review.fail"
+assert_eq "a review that fails: promote says so, still promotes, and keeps the last good report" "0 1 Reviewed: $RVTIP" "$YRC $(has "$YOUT" 'review failed') $(head -1 "$RD/rv.md")"
+git branch -q -f staging "$RSTG"; git push -qf origin "$RSTG:refs/heads/staging"
+git push -q origin :refs/heads/feature/rv; git branch -q -D feature/rv; rm -rf "$RD"; git fetch -q --prune origin
 git checkout -q -- site.yml
-assert_eq "…and the review section leaves the tree clean, origin untouched" "" "$(git status --porcelain)"
+assert_eq "…and the review section leaves the tree clean, origin untouched" "$RORIG|" "$(git ls-remote origin)|$(git status --porcelain)"
 
 echo; echo "flow — hotfix"
 # FR-7: a hotfix ships from its own branch with no staging round, and FR-8 still rebuilds staging over it.

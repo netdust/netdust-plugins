@@ -22,7 +22,7 @@
 # real values need. A make variable is global to the invocation, so this block
 # covers the mk/*.mk sinks too. Anything else is not an operator input at all;
 # a project that adds one declares it before the include: `_CLI_EXTRA := NAME`.
-_CLI_GUARDED := env verb dryrun rung uploads
+_CLI_GUARDED := env verb dryrun rung uploads review
 _CLI_VARS  := name $(_CLI_GUARDED) $(if $(filter file override,$(origin _CLI_EXTRA)),$(_CLI_EXTRA))
 _CLI_TYPED := $(foreach v,$(_CLI_VARS),$(if $(findstring command line,$(origin $v)),$v))
 _CLI_LOOSE := $(filter-out $(_CLI_VARS),$(foreach a,$(MAKEOVERRIDES),$(if $(findstring =,$a),$(firstword $(subst =, ,$a)))))
@@ -51,11 +51,13 @@ _rung-ok = $(call _word-ok,$(rung),$(_WORD) . _ - /,$(_WORD))
 # verb= carries a space and an '=' — verb="promote name=$(name)".
 _verb-ok = $(call _chars-ok,$(verb),$(_WORD) = . _ -)
 _dryrun-ok = $(call _word-ok,$(dryrun),$(_WORD),$(_WORD))
+_review-ok = $(and $(filter 1,$(words $(review))),$(filter off low full ultra,$(review)))
 _why-env := a letter, then letters, digits, dash, underscore
 _why-uploads := $(_why-env)
 _why-rung := a branch name — letters, digits, dot, dash, underscore, slash
 _why-verb := letters, digits, spaces, '=', dot, dash, underscore
 _why-dryrun := a switch — dryrun=1, or nothing
+_why-review := off, low, full or ultra
 # Typed on the command line it is refused; inherited from the environment it is
 # dropped, so a polluted shell cannot halt help, status or gate.
 _cli-check = $(if $($1),$(if $(_$1-ok),,$(if $(filter $1,$(_CLI_TYPED)),$(error $(_RED)✗ Refused $1= — $(_why-$1)$(_OFF)),$(eval override undefine $1)$(warning $(_RED)✗ ignoring $1= from the environment — $(_why-$1)$(_OFF)))))
@@ -106,8 +108,8 @@ help: ## Show this help
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "feature name=X"  "start work — branches from origin/$(BR_PROD)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "hotfix name=X"   "fix production — branches from origin/$(BR_PROD)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "save"            "commit the current branch"
-	@printf "  $(GREEN)%-22s$(RESET) %s\n" "review name=X"   "run the reviewers on a feature and report (commands.review); env=staging: where features meet"
-	@printf "  $(GREEN)%-22s$(RESET) %s\n" "promote name=X"  "put a feature on $(BR_REVIEW)"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "review name=X"   "review a feature now (review=low|full|ultra); env=staging: where features meet"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "promote name=X"  "put a feature on $(BR_REVIEW) — reviews it first unless already reviewed (review=low|full|ultra forces, off skips)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "unpromote name=X" "take a feature off $(BR_REVIEW)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "gate"            "this project's own suite (commands.gate) — optional, ship runs it itself"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "ship"            "production: gate, backups, typed confirm"
@@ -220,6 +222,13 @@ promote: ## Put a feature on the staging branch (make promote name=my-feature)
 		|| echo "  (nothing — $(BR_REVIEW) is origin/$(BR_PROD))"; \
 	echo "$(YELLOW)feature/$(name) since origin/$(BR_PROD):$(RESET)"; \
 	git --no-pager log --oneline origin/$(BR_PROD)..origin/feature/$(name) | head -20 | sed 's/^/  /'; \
+	RF="$$(git rev-parse --git-common-dir)/reviews/$(name).md"; \
+	if [ "$(review)" != off ] && [ -n "$$($(SITE) commands.review 2>/dev/null)" ]; then \
+		if [ -z "$(review)" ] && [ -f "$$RF" ]; then \
+			AT=$$(sed -n '1s/^Reviewed: //p' "$$RF"); \
+			echo "$(YELLOW)reviewed at $$(git rev-parse --short "$$AT" 2>/dev/null || echo ?), $$(git rev-list --count "$$AT..origin/feature/$(name)" 2>/dev/null || echo ?) commit(s) since — skipping (review=full to review again)$(RESET)"; \
+		else $(MAKE) --no-print-directory review name=$(name) review=$(or $(review),full) \
+			|| echo "$(YELLOW)⚠ the review failed — promote goes on$(RESET)"; fi; fi; \
 	read -p "Continue? Type 'yes': " reply; \
 	[ "$$reply" = "yes" ] || { echo "$(RED)✗ Cancelled$(RESET)"; exit 1; }; \
 	ADD="$(name)"; DROP=""; $(_rebuild-staging); \
@@ -507,8 +516,14 @@ review: ## Review a feature (make review name=X) or where staging's features mee
 	elif [ "$(env)" = staging ]; then N=staging; S=staging; \
 	elif [ -n "$(env)" ]; then echo "$(RED)✗ review env= takes staging only — production carries only what staging had$(RESET)"; exit 1; \
 	else echo "$(RED)✗ Usage: make review name=<feature>  ·  make review env=staging$(RESET)"; exit 1; fi; \
-	echo "$(BLUE)$$R  ← $$S $$N$(RESET)"; \
-	REVIEW_NAME="$$N" REVIEW_SCOPE="$$S" sh -c "$$R"
+	L="$(or $(review),full)"; [ "$$L" != off ] || { echo "review=off — nothing reviewed"; exit 0; }; \
+	D="$$(git rev-parse --git-common-dir)/reviews"; mkdir -p "$$D"; OUT="$$D/$$N.md"; \
+	TIP=$$(git rev-parse -q --verify "origin/feature/$$N^{commit}" || git rev-parse -q --verify "feature/$$N^{commit}" || git rev-parse HEAD); \
+	echo "$(BLUE)$$R  ← $$S $$N ($$L)$(RESET)"; \
+	{ echo "Reviewed: $$TIP"; REVIEW_NAME="$$N" REVIEW_SCOPE="$$S" REVIEW_LEVEL="$$L" sh -c "$$R"; } > "$$OUT.tmp"; RC=$$?; \
+	cat "$$OUT.tmp"; [ $$RC = 0 ] || { rm -f "$$OUT.tmp"; exit $$RC; }; mv "$$OUT.tmp" "$$OUT"; \
+	echo "$(YELLOW)report: $$OUT$(RESET)"; \
+	[ "$$S" = staging ] || echo "$(YELLOW)follow-up: /review-fix $$N — then make promote name=$$N again$(RESET)"
 
 .PHONY: test
 test: ## Run the deploy tooling + branch-flow tests (never contacts a server)
