@@ -47,5 +47,9 @@ def run() -> list[tuple[bool, str]]:
         (all(s in command for s in ("bin/shakeout-check.py", "make gate", "Accepted-by-human:", "shakeout-qa",
                                     "screenshot", "netdust-gates:policy", "superpowers:requesting-code-review")),
          "/shakeout runs make gate, the qa agent, the checker, the screenshot yield and points at the policy close"),
+        (all(s in reviewer for s in ("The cut", "too broad", "artificially split")) and "/plan-review <topic>" in policy,
+         "a spec cut into several plans is reviewed as one set, and the reviewer judges the cut"),
+        ("make ship" in command and "make e2e env=staging" in policy,
+         "the feature shake-out writes the checks; staging's e2e run is the gate ship waits for"),
         (not stale, f"none of the 0.28 machinery survives in the close (found {stale})"),
     ]

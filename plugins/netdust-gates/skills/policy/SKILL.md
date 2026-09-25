@@ -16,6 +16,11 @@ Spec `specs/<feature>/spec.md`, plan `specs/<feature>/plan.md` — the location 
 `superpowers:brainstorming` and `superpowers:writing-plans` say overrides their
 `docs/superpowers/...` defaults.
 
+**The plan is the feature.** When brainstorming splits a spec into sub-projects, the spec stays
+at `specs/<topic>/spec.md` and each plan is `specs/<feature>/plan.md`, naming its parent on a
+`Spec:` line. `<feature>` is the branch `feature/<feature>`: one plan, one branch, one promotable
+unit. No plan declares another as a dependency — staging's e2e run is the dependency test.
+
 ## Intake
 
 Invoke `superpowers:brainstorming`. Its three paths (spike, bounded, architectural) stand as
@@ -72,7 +77,8 @@ Nothing else is added. A plan field is not how an incident is remembered (see th
 every premise against the source, checks coverage and invention, and judges the simplest
 design; its report is filed as `specs/<feature>/plan-review.md` naming the plan's blob
 (`Reviewed-plan: <sha>`). Blocking findings go back into the plan and the review runs again.
-The review is a file, never a claim. The plan and its review reach Stefan together. Nothing
+A spec cut into several plans is reviewed as one set, `/plan-review <topic>`, so the cut is
+judged too. The review is a file, never a claim. The plan and its review reach Stefan together. Nothing
 blocks code on a plan's state — an old or half plan never holds up the work (Stefan, 2026-09-23).
 
 ## Execution mode
@@ -98,14 +104,18 @@ Stefan accepts is `Accepted-by-human:` in the manifest, never `Ruling:`; only he
    browser or wire, commits them as tests and writes `specs/<feature>/shakeout.md`; it
    registers them in `specs/CHECKS.md` as `@e2e` (`make e2e env=staging`, the proof after a
    deploy or a plugin update) beside a read-only `@smoke` check (`make smoke`, production too);
-   `bin/shakeout-check.py` exits 0; Stefan sees one screenshot per surface.
+   `bin/shakeout-check.py` exits 0; Stefan sees one screenshot per surface. This shake-out
+   writes the checks; `make e2e env=staging` re-runs all of them on the composition, and
+   `ship` waits for it.
 3. Superpowers' single whole-branch review (`superpowers:requesting-code-review`, a fresh
    reviewer — the author never reviews its own diff) on the most capable model, joined by
    `security-sentinel` when the plan carries a `## Threat model` and `invariant-auditor` when
    the project carries `ARCHITECTURE-INVARIANTS.md`.
 4. One fix pass, each fix RED→GREEN through the seam where the finding showed — the request,
    route or render — not reflection on the private method the fix touched. No re-review — named checks and the suites close it. Then
-   `superpowers:finishing-a-development-branch`.
+   `superpowers:finishing-a-development-branch` — on a project with `site.yml` that means the
+   branch pushed and `make promote name=<feature>` handed to Stefan; a feature never merges
+   into production by hand.
 
 On demand, whenever Stefan asks: `/session-review <feature>` audits the work (six dimensions,
 core fit on WordPress — run it before finishing, while the task reports exist), and
