@@ -112,7 +112,7 @@ Stefan accepts is `Accepted-by-human:` in the manifest, never `Ruling:`; only he
 3. The feature review, plan or no plan:
    `make review name=<feature>` (`/feature-review <feature>` without devops) — superpowers'
    whole-branch review (`superpowers:requesting-code-review`, a fresh reviewer; the author never
-   reviews its own diff), joined by `security-sentinel` when the plan carries a `## Threat model`
+   reviews its own diff) on the most capable model, joined by `security-sentinel` when the plan carries a `## Threat model`
    or the diff touches a security-boundary path, and `invariant-auditor` when the project carries
    `ARCHITECTURE-INVARIANTS.md`.
 4. One fix pass, each fix RED→GREEN through the seam where the finding showed — the request,
