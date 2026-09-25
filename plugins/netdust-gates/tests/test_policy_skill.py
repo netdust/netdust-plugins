@@ -26,7 +26,7 @@ def run() -> list[tuple[bool, str]]:
         "Global Constraints", "Review Focus", "First working version", "Simplest design",
         "Source:", "Accepted-by-human:", "Ruling:", "make gate", "shakeout-check.py",
         "security-sentinel", "invariant-auditor", "wordpress.md", "edge-classes.md",
-        "netdust-gates:threat-modeling", "Spec:", "make promote name=<feature>"))
+        "netdust-gates:threat-modeling", "Spec:", "make promote name=<feature>", "make review name=<feature>"))
     ok_pack, miss_pack = _has_all(pack, (
         "netdust-wp:ntdst-framework", "netdust-wp:ntdst-patterns", "netdust-wp:wp-security",
         "netdust-wp:wp-testing", "netdust-devops:devops", "make gate", "Brain Monkey",
