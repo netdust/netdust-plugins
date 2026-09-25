@@ -114,7 +114,7 @@ that carry a decision:
 | `make unpromote name=X` | the same rebuild, without X |
 | `make ship` | from the staging checkout, or a `hotfix/*` branch: the checks below, the gate, typed confirm, both backups, deploy, then rebuild staging on the new production |
 | `make rollback env=E` | redeploy the previously deployed commit's payload — `rsync` only; refused by name over `git-push` |
-| `make e2e env=E` | run `commands.e2e` against `environments.E.url` — the `@e2e` flows every shake-out drove and left in `specs/CHECKS.md`: the real enrollment, form, send. It seeds and writes, so production is refused by name |
+| `make e2e env=E` | run `commands.e2e` against `environments.E.url` — the `@e2e` flows every shake-out drove and left in `specs/CHECKS.md`: the real enrollment, form, send. It seeds and writes, so production is refused by name. Green stamps `e2e/<env>` on origin with the commit `deployed/<env>` names; red deletes it |
 | `make smoke env=E` | run `commands.smoke` against `environments.E.url` — the read-only `@smoke` checks in `specs/CHECKS.md`; needs no terminal and no confirm, so it runs against production too |
 
 `pull`, `refresh` and `block-mail` exist only on stacks that have data ops;
@@ -125,16 +125,18 @@ deploy cannot do.
 
 **After a staging deploy or a plugin update: `make e2e env=staging`, then
 `make smoke`.** e2e is the proof — the flows each feature's shake-out drove, re-run on the
-commit that will ship; smoke is the quick look, and the only check production gets, because
+commit that will ship, and `ship` waits for it; smoke is the quick look, and the only check production gets, because
 e2e writes. `deploy` and `ship` end by naming them. The list is written by the shake-outs
 (netdust-gates, `specs/CHECKS.md`), so it grows with the project.
 
-**What `ship` checks** — three equalities, read from **origin**, since a local
+**What `ship` checks** — three equalities (four with e2e), read from **origin**, since a local
 ref proves nothing: HEAD is `origin/staging`, so no local-only commit ships (a `hotfix/*`
 branch skips to the last check, must carry no `promote:` merge — a hotfix cut from staging is refused — and ship pushes it); `deployed/staging`
 on origin names this commit (staging was deployed and looked at since its
 last rebuild, never before); `origin/production` is an ancestor of HEAD
-(staging still contains it). Then `ship` runs `commands.gate` itself — a red
+(staging still contains it). When `commands.e2e` is declared, a fourth: `e2e/staging` on
+origin names this commit — anything may be promoted, but only a composition whose flows
+passed after its deploy ships. Then `ship` runs `commands.gate` itself — a red
 gate ships nothing — and re-checks HEAD and the tree right after, so a gate
 that commits or checks out cannot slip a different tree past the checks above.
 
