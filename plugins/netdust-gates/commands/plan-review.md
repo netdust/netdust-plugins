@@ -1,25 +1,27 @@
 ---
-description: Review a written plan with a fresh subagent before Stefan reads it — premises ground-truthed against source, coverage, invented scope, the simplest design. Writes specs/<feature>/plan-review.md naming the plan's blob.
-argument-hint: <feature>
+description: Review a written plan — or every plan a spec was cut into — with a fresh subagent before Stefan reads it — premises ground-truthed against source, coverage, invented scope, the simplest design, and the cut. Writes plan-review.md naming each plan's blob.
+argument-hint: <feature | topic>
 allowed_tools: ["Bash", "Read", "Glob", "Write", "Agent"]
 ---
 
-Review `specs/$ARGUMENTS/plan.md`. Three steps.
+Review `specs/$ARGUMENTS/plan.md` — or, when `specs/$ARGUMENTS/` holds a spec and no plan,
+the set of plans whose `**Spec:**` header names `specs/$ARGUMENTS/spec.md`
+(`grep -lE "Spec:\**[[:space:]]*\`?specs/$ARGUMENTS/spec\.md" specs/*/plan.md`). Three steps.
 
 ## Step 1 — The blob
 
 ```bash
-git hash-object specs/$ARGUMENTS/plan.md
+git hash-object specs/$ARGUMENTS/plan.md     # or each plan of the set
 ```
 
-That sha is what the review names. A plan edited after its review has a new blob — run this
+Each sha is what the review names. A plan edited after its review has a new blob — run this
 command again when the change matters.
 
 ## Step 2 — Dispatch `plan-reviewer`
 
 Dispatch the **`plan-reviewer`** agent on the most capable available model with: the plan
-path, the spec path (`specs/$ARGUMENTS/spec.md`), the repository root, and the blob sha from
-Step 1. It is read-only and returns the report; it never edits the plan.
+path (every plan path, for a set, with its sha), the spec path, the repository root, and the
+blob sha from Step 1. A set is one dispatch, never one per plan — the cut is only visible whole. It is read-only and returns the report; it never edits the plan.
 
 You are not the reviewer. If you wrote this plan in this session, that is the point — the
 reviewer's context is fresh and yours is not.
@@ -27,7 +29,8 @@ reviewer's context is fresh and yours is not.
 ## Step 3 — File the report, then act on it
 
 Write the returned report verbatim to `specs/$ARGUMENTS/plan-review.md`. Its second line
-must be `Reviewed-plan: <sha>` — check it before writing.
+must be `Reviewed-plan: <sha>` — one such line per plan for a set, each followed by the plan's
+path — check it before writing.
 
 - **Blocking** findings: fix the plan now (it is yours to edit at this stage), then run
   `/plan-review` again — the new blob needs its own review.

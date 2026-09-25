@@ -145,5 +145,53 @@
       }
     ],
     "absent": []
+  },
+  {
+    "id": "spec-splits-into-plans",
+    "prompt": "specs/calendar/spec.md is approved by Stefan; do not ask questions. It covers two independent subsystems — write one implementation plan per subsystem.",
+    "files": {
+      "site.yml": "structure:\n  type: bedrock\n  wpcli_path: web/wp\nenvironments:\n  staging: {branch: staging, url: https://stg.example.test}\n  production: {branch: main, url: https://example.test}\n",
+      "specs/calendar/spec.md": "# Calendar — spec\n\n## Requirements\n\n**R1 — Event storage.** Events (title, start, end) are stored and queryable by date range through a PHP service.\n*Source: \"a calendar service that stores events\"*\n\n**R2 — Room booking form.** A public form lets a visitor request a meeting room by name and email; requests are emailed to the office. It does not read events.\n*Source: \"and a separate room booking form\"*\n\n## Security-relevant surfaces\n- [x] Public form input\n"
+    },
+    "expect": [
+      {
+        "where": "plan",
+        "match": "(?s)Spec:\\**\\s*`?specs/calendar/spec\\.md.*Spec:\\**\\s*`?specs/calendar/spec\\.md"
+      }
+    ],
+    "absent": [
+      "specs/calendar/plan.md"
+    ],
+    "timeout": 1800
+  },
+  {
+    "id": "plan-review-flags-artificial-split",
+    "prompt": "Run /plan-review newsletter. Do not ask questions.",
+    "files": {
+      "specs/newsletter/spec.md": "# Newsletter signup — spec\n\n## Requirements\n\n**R1 — Signup.** A footer form takes an email address and stores it in the `subscribers` table through `SubscriberService::add()`, showing \"Thanks\" on success.\n*Source: \"a newsletter signup in the footer\"*\n",
+      "specs/newsletter-form/plan.md": "# Newsletter form — plan\n\n**Spec:** `specs/newsletter/spec.md`\n\n## Tasks\n\n### Task 1 — Render the footer form and POST handler\nThe handler calls `SubscriberService::add($email)` (created in the newsletter-store plan) and renders \"Thanks\". Test: posting an email shows \"Thanks\".\n",
+      "specs/newsletter-store/plan.md": "# Newsletter store — plan\n\n**Spec:** `specs/newsletter/spec.md`\n\n## Tasks\n\n### Task 1 — `SubscriberService::add()` writes to `subscribers`\nOnly the footer form calls it. Test: add() inserts one row.\n"
+    },
+    "expect": [
+      {
+        "where": "specs/newsletter/plan-review.md",
+        "match": "(?i)artificially split with"
+      }
+    ],
+    "absent": []
+  },
+  {
+    "id": "close-hands-over-promote",
+    "prompt": "The feature/banner branch is done: make gate is green, it has no user-facing flow, and the whole-branch review's fix pass is complete. Close it as the policy says. Do not ask questions.",
+    "files": {
+      "site.yml": "structure:\n  type: bedrock\n  wpcli_path: web/wp\nenvironments:\n  staging: {branch: staging, url: https://stg.example.test}\n  production: {branch: main, url: https://example.test}\n"
+    },
+    "expect": [
+      {
+        "where": "reply",
+        "match": "make promote name=banner"
+      }
+    ],
+    "absent": []
   }
 ]

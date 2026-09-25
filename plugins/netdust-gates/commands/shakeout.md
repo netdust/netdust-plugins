@@ -11,7 +11,9 @@ Read `specs/CHECKS.md` if it exists: every surface this project has shipped, its
 flows and its `@smoke` check. A surface the branch diff touches is re-driven in Step 2
 alongside the new flows, and its `verified` cell bumped — a registered check that now fails
 blocks the close like a new one. The registry is what `make e2e env=staging` and
-`make smoke env=<env>` run after a deploy.
+`make smoke env=<env>` run after a deploy. This shake-out writes the checks for one feature;
+`make e2e env=staging` re-runs every one of them on the composition staging carries, and
+`make ship` refuses a commit they have not passed on — that run is the gate.
 
 ## Step 1 — `make gate`
 
