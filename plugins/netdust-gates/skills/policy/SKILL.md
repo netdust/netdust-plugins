@@ -109,10 +109,12 @@ Stefan accepts is `Accepted-by-human:` in the manifest, never `Ruling:`; only he
    `bin/shakeout-check.py` exits 0; Stefan sees one screenshot per surface. This shake-out
    writes the checks; `make e2e env=staging` re-runs all of them on the composition, and
    `ship` waits for it.
-3. Superpowers' single whole-branch review (`superpowers:requesting-code-review`, a fresh
-   reviewer — the author never reviews its own diff) on the most capable model, joined by
-   `security-sentinel` when the plan carries a `## Threat model` and `invariant-auditor` when
-   the project carries `ARCHITECTURE-INVARIANTS.md`.
+3. The feature review, plan or no plan:
+   `make review name=<feature>` (`/feature-review <feature>` without devops) — superpowers'
+   whole-branch review (`superpowers:requesting-code-review`, a fresh reviewer; the author never
+   reviews its own diff) on the most capable model, joined by `security-sentinel` when the plan carries a `## Threat model`
+   or the diff touches a security-boundary path, and `invariant-auditor` when the project carries
+   `ARCHITECTURE-INVARIANTS.md`.
 4. One fix pass, each fix RED→GREEN through the seam where the finding showed — the request,
    route or render — not reflection on the private method the fix touched. No re-review — named checks and the suites close it. Then
    `superpowers:finishing-a-development-branch` — on a project with `site.yml`, in place of its menu:

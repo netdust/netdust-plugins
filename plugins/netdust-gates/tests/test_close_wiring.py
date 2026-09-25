@@ -52,5 +52,9 @@ def run() -> list[tuple[bool, str]]:
          "a spec cut into several plans is reviewed as one set, and the reviewer judges the cut"),
         ("make ship" in command and "`ship` waits for it" in policy,
          "the feature shake-out writes the checks; staging's e2e run is the gate ship waits for"),
+        (all(t in _read("commands/feature-review.md") for t in (
+            "printenv REVIEW_NAME", "most capable", "ntdst-drift-reviewer", "Pass each reviewer the diff",
+            "environments.staging.branch")),
+         "/feature-review reads make's env, hands reviewers the diff, keeps the model and the WP join"),
         (not stale, f"none of the 0.28 machinery survives in the close (found {stale})"),
     ]

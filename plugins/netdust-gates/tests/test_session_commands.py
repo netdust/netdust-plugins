@@ -11,7 +11,7 @@ from pathlib import Path
 
 PLUGIN = Path(__file__).resolve().parent.parent
 PAIRS = {"session-review": "session-reviewer", "session-learn": "session-learner",
-         "prune-tests": "test-pruner"}
+         "prune-tests": "test-pruner", "feature-review": "staging-reviewer"}
 WRITE_TOOLS = ("Edit", "Write", "NotebookEdit")
 
 

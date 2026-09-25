@@ -193,5 +193,23 @@
       }
     ],
     "absent": []
+  },
+  {
+    "id": "close-calls-make-review",
+    "prompt": "feature/banner is done: make gate is green and it has no user-facing flow. It was started by hand — there is no plan. Close it as the policy says. Do not ask questions.",
+    "files": {
+      "site.yml": "structure:\n  type: bedrock\nenvironments:\n  staging: {branch: staging, url: https://stg.example.test}\n  production: {branch: main, url: https://example.test}\ncommands:\n  gate: composer gate\n  review: claude -p \"/netdust-gates:feature-review\"\n"
+    },
+    "expect": [
+      {
+        "where": "reply",
+        "match": "make review name=banner"
+      },
+      {
+        "where": "reply",
+        "match": "make promote name=banner"
+      }
+    ],
+    "absent": []
   }
 ]
