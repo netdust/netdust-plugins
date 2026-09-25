@@ -211,5 +211,23 @@
       }
     ],
     "absent": []
+  },
+  {
+    "id": "review-fix-no-report",
+    "prompt": "/netdust-gates:review-fix banner",
+    "files": {
+      "banner.php": "<?php echo 'hi';\n"
+    },
+    "expect": [
+      {
+        "where": "reply",
+        "match": "make review name=banner"
+      },
+      {
+        "where": "banner.php",
+        "match": "^<\\?php echo 'hi';\\n?$"
+      }
+    ],
+    "absent": []
   }
 ]

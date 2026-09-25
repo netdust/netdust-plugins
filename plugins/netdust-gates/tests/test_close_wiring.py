@@ -60,5 +60,11 @@ def run() -> list[tuple[bool, str]]:
          and "flow list" in policy and "no `plan.md`" in command and "**Stop.**" in command
          and "new flows" in qa and "Write" in command.split("---")[1] and "or `flows.md`" in command,
          "/shakeout on a branch with no spec proposes flows.md and stops; shakeout-qa drives only the approved list"),
+        ((PLUGIN / "commands" / "review-fix.md").is_file()
+         and all(t in _read("commands/review-fix.md") for t in (
+            "git-common-dir", "Close's fix pass", "make promote name=", "which findings", "never stash",
+            "specs/$ARGUMENTS/review.md"))
+         and "/review-fix" in policy,
+         "/review-fix: the saved report, Stefan picks, the policy's fix pass, the record in specs/, re-promote"),
         (not stale, f"none of the 0.28 machinery survives in the close (found {stale})"),
     ]

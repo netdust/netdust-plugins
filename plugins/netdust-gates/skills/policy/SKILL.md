@@ -124,4 +124,5 @@ Stefan accepts is `Accepted-by-human:` in the manifest, never `Ruling:`; only he
 On demand, whenever Stefan asks: `/session-review <feature>` audits the work (six dimensions,
 core fit on WordPress — run it before finishing, while the task reports exist), and
 `/session-learn` reads a transcript for lessons, `/prune-tests` audits a suite against the
-behavioural bar. All three report; he approves what follows.
+behavioural bar. Those three report; he approves what follows. `/review-fix <feature>` turns a
+saved review into follow-up commits on the branch — it changes only what Stefan picks.
