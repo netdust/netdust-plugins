@@ -106,6 +106,7 @@ help: ## Show this help
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "feature name=X"  "start work — branches from origin/$(BR_PROD)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "hotfix name=X"   "fix production — branches from origin/$(BR_PROD)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "save"            "commit the current branch"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "review name=X"   "run the reviewers on a feature and report (commands.review); env=staging: where features meet"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "promote name=X"  "put a feature on $(BR_REVIEW)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "unpromote name=X" "take a feature off $(BR_REVIEW)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "gate"            "this project's own suite (commands.gate) — optional, ship runs it itself"
@@ -492,6 +493,22 @@ e2e: ## Drive the e2e flows against a deployed environment, never production (ma
 	git push --quiet -f origin "$$DEPLOYED:refs/tags/e2e/$$ENV" || { \
 		echo "$(RED)✗ e2e tag not pushed — ship will not see this run$(RESET)"; exit 1; }; \
 	echo "$(GREEN)✓ stamped e2e/$$ENV @ $$(git rev-parse --short "$$DEPLOYED")$(RESET)"
+
+# The review is the project's own reviewer (commands.review): an agent that runs the
+# reviewers and reports back. It reads and reports; it stamps and gates nothing.
+.PHONY: review
+review: ## Review a feature (make review name=X) or where staging's features meet (make review env=staging)
+	@$(if $(name),$(call _check-name,review,my-feature))
+	@R=$$($(SITE) commands.review 2>/dev/null); \
+	if [ -z "$$R" ]; then \
+		echo "$(RED)✗ No commands.review in site.yml — nothing knows how to review$(RESET)"; \
+		printf "$(YELLOW)  e.g. %s$(RESET)\n" '$(_doctor-line-review)'; exit 1; fi; \
+	if [ -n "$(name)" ]; then N="$(name)"; S=feature; \
+	elif [ "$(env)" = staging ]; then N=staging; S=staging; \
+	elif [ -n "$(env)" ]; then echo "$(RED)✗ review env= takes staging only — production carries only what staging had$(RESET)"; exit 1; \
+	else echo "$(RED)✗ Usage: make review name=<feature>  ·  make review env=staging$(RESET)"; exit 1; fi; \
+	echo "$(BLUE)$$R  ← $$S $$N$(RESET)"; \
+	REVIEW_NAME="$$N" REVIEW_SCOPE="$$S" sh -c "$$R"
 
 .PHONY: test
 test: ## Run the deploy tooling + branch-flow tests (never contacts a server)
@@ -982,9 +999,10 @@ _ensure-clean-git:
 # core reads is reported here, with the line to add. `key: ''` is a decision (this
 # project has no such runner) and is respected; only a key never declared is a gap.
 # The lines are the wp stack's; another stack reads them as the shape to adapt.
-_DOCTOR_COMMANDS := gate smoke e2e
+_DOCTOR_COMMANDS := gate smoke e2e review
 _doctor-line-gate  := gate: composer gate
 _doctor-line-smoke := smoke: PLAYWRIGHT_BASE_URL=$$SMOKE_URL npx playwright test --grep @smoke
+_doctor-line-review := review: claude -p "/netdust-gates:feature-review"
 _doctor-line-e2e   := e2e: E2E_ENV=$$E2E_ENV PLAYWRIGHT_BASE_URL=$$E2E_URL bin/e2e.sh
 
 _doctor-commands:
