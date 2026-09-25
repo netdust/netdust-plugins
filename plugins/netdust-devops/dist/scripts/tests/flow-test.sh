@@ -444,6 +444,52 @@ git checkout -q -f -B main "$SMAIN"; git branch -q -f staging "$SSTG"; git push 
 for f in sa sb sc; do git push -q origin ":refs/heads/feature/$f"; git branch -q -D "feature/$f"; done; for t in staging production; do git push -q origin ":refs/tags/deployed/$t" 2>/dev/null; git tag -d "deployed/$t" >/dev/null 2>&1; done; git push -q origin ":refs/tags/shipped/production" 2>/dev/null; git fetch -q --prune origin; : > "$LEAVES"
 assert_eq "…and the ship section leaves origin, the checkout, the tree and the leaf log as it found them" "$SHIP0 main " "$(git ls-remote origin) $(git branch --show-current) $(git status --porcelain)"
 
+echo; echo "flow — ship waits for the staging e2e"
+# Anything may be promoted; the composition is the dependency test. With commands.e2e
+# declared, production takes only the staging commit whose flows passed after it was
+# deployed — e2e/staging on origin names it, the way deployed/staging names the deploy.
+EORIG=$(git ls-remote origin); EMAIN=$(exact refs/heads/main); ESTG=$(exact refs/heads/staging)
+E2ESHIP="$TMP/e2eship.sh"; e2escript() { printf '#!/bin/sh\necho "flows ran"\nexit %s\n' "$1" > "$E2ESHIP"; }
+e2etag() { exact refs/tags/e2e/staging; }
+git checkout -q main
+sed -i "s|^commands: {gate: \(.*\)}$|commands: {gate: \1, e2e: sh $E2ESHIP}|" site.yml
+git commit -q -am "declare commands.e2e" && git push -q origin main
+git checkout -q -b feature/se origin/main && echo se > se.txt && git add se.txt && git commit -q -m se && git push -q origin feature/se
+git checkout -q main; step promote name=se; git fetch -q origin
+git checkout -q -B staging origin/staging; deploytag origin/staging; gatescript 0; e2escript 0; ESC=$(git rev-parse HEAD)
+shiprefused "(r) staging deployed, its e2e never run: refused naming the tag" "e2e/staging"
+e2escript 1; M e2e env=staging >/dev/null; ERC=$?
+assert_eq "(r) a red e2e run fails the verb and stamps nothing" "1 " "$(nz "$ERC") $(e2etag)"
+e2escript 0; git checkout -q main; EOUT=$(M e2e env=staging); git checkout -q staging
+assert_eq "(r) a green run from a checkout that is not deployed/staging stamps nothing, and says so" " 1" "$(e2etag) $(has "$EOUT" 'not stamped')"
+: > dirt.txt; EOUT=$(M e2e env=staging); rm -f dirt.txt
+assert_eq "(r) nor does one from a dirty tree" " 1" "$(e2etag) $(has "$EOUT" 'not stamped')"
+printf '#!/bin/sh\ngit tag -f deployed/staging %s >/dev/null && git push -qf origin deployed/staging\n' "$EMAIN" > "$E2ESHIP"
+M e2e env=staging >/dev/null
+assert_eq "(r) a deploy while the flows run: the stamp names the commit deployed before the run" "$ESC" "$(e2etag)"
+deploytag "$ESC"; e2escript 0
+assert_ok "(r) make e2e env=staging, green" M e2e env=staging
+assert_eq "…(r) stamps e2e/staging on origin with the commit deployed/staging names" "$ESC" "$(e2etag)"
+e2escript 1; M e2e env=staging >/dev/null
+assert_eq "(r) a red re-run on the same commit takes the stamp back" "" "$(e2etag)"
+e2escript 0; M e2e env=staging >/dev/null; e2escript 1
+shim "$TMP/nodel" <<SH
+#!/bin/sh
+case "\$*" in *:refs/tags/e2e/*) exit 1;; esac
+exec "$(command -v git)" "\$@"
+SH
+EOUT=$("$TMP/nodel/mk" e2e env=staging 2>&1); rm -rf "$TMP/nodel"
+assert_eq "(r) a red run whose stamp cannot be removed says ship would still accept it" "1 $ESC" "$(has "$EOUT" 'NOT removed') $(e2etag)"
+git push -q origin :refs/tags/e2e/staging
+e2escript 0; git push -qf origin "$EMAIN:refs/tags/e2e/staging"
+shiprefused "(r) e2e/staging names an older commit: refused" "e2e/staging"
+M e2e env=staging >/dev/null; : > "$LEAVES"; YF "make --no-print-directory ship"; git fetch -q --prune origin
+assert_eq "(r) Y make ship once the e2e passed on this commit: exit 0, production is that commit" "0 $ESC" "$YRC $(prodsha)"
+git checkout -q -f -B main "$EMAIN"; git branch -q -f staging "$ESTG"; git push -qf origin "$EMAIN:refs/heads/main" "$ESTG:refs/heads/staging"
+git push -q origin ":refs/heads/feature/se"; git branch -q -D feature/se
+for t in deployed/staging deployed/production e2e/staging shipped/production; do git push -q origin ":refs/tags/$t" 2>/dev/null; git tag -d "$t" >/dev/null 2>&1; done; git fetch -q --prune origin; : > "$LEAVES"
+assert_eq "…and the e2e ship section leaves origin, the checkout, the tree and the leaf log as it found them" "$EORIG main " "$(git ls-remote origin) $(git branch --show-current) $(git status --porcelain)"
+
 echo; echo "flow — hotfix"
 # FR-7: a hotfix ships from its own branch with no staging round, and FR-8 still rebuilds staging over it.
 HORIG=$(git ls-remote origin); HMAIN=$(exact refs/heads/main); HSTG=$(exact refs/heads/staging)

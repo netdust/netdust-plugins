@@ -343,6 +343,13 @@ _ship-path:
 	[ "$$TAG" = "$$SHA" ] || { \
 		echo "$(RED)✗ $(BR_REVIEW) was rebuilt since its last deploy — deployed/staging does not name this commit$(RESET)"; \
 		echo "$(YELLOW)  make deploy env=staging, look at it, then ship$(RESET)"; exit 1; }; \
+	if [ -n "$$($(SITE) commands.e2e 2>/dev/null)" ]; then \
+		PASSED=$$(git ls-remote origin "refs/tags/e2e/staging" \
+			| awk '$$2 == "refs/tags/e2e/staging" {print $$1}'); \
+		[ "$$PASSED" = "$$SHA" ] || { \
+			echo "$(RED)✗ the e2e flows have not passed on this commit — e2e/staging does not name it$(RESET)"; \
+			echo "$(YELLOW)  make e2e env=staging, then ship$(RESET)"; exit 1; }; \
+	fi; \
 	git merge-base --is-ancestor "origin/$(BR_PROD)" "$$SHA" || { \
 		echo "$(RED)✗ $(BR_REVIEW) does not contain origin/$(BR_PROD) — make promote or unpromote rebuilds it$(RESET)"; exit 1; }
 
@@ -453,7 +460,10 @@ smoke: ## Run the smoke checks against a deployed environment (make smoke env=st
 # proof that a flow works after a deploy or a plugin update is made on staging, on
 # the commit that will ship. The flows are the shake-outs' artifact (netdust-gates:
 # the @e2e specs indexed in specs/CHECKS.md); how they seed and log in on E2E_ENV
-# is the project's own script (netdust-wp:wp-testing).
+# is the project's own script (netdust-wp:wp-testing). A green run stamps e2e/<env> on
+# origin with the commit deployed/<env> named BEFORE the run — only from a clean checkout
+# of that commit, so the flows that ran are the ones it carries. A red run deletes the
+# stamp. ship reads e2e/staging.
 .PHONY: e2e
 e2e: ## Drive the e2e flows against a deployed environment, never production (make e2e env=staging)
 	@ENV="$(env)"; \
@@ -468,9 +478,20 @@ e2e: ## Drive the e2e flows against a deployed environment, never production (ma
 	if [ -z "$$E" ]; then \
 		echo "$(RED)✗ No commands.e2e in site.yml — nothing knows how to drive $$ENV$(RESET)"; \
 		echo "$(YELLOW)  e.g. e2e: E2E_ENV=\$$E2E_ENV bin/e2e.sh   (seeds, logs in, runs the @e2e specs against \$$E2E_URL)$(RESET)"; exit 1; fi; \
+	DEPLOYED=$$(git ls-remote origin "refs/tags/deployed/$$ENV" 2>/dev/null \
+		| awk -v r="refs/tags/deployed/$$ENV" '$$2 == r {print $$1}'); \
 	echo "$(BLUE)$$E  ← $$URL$(RESET)"; \
-	E2E_URL="$$URL" E2E_ENV="$$ENV" sh -c "$$E" || { echo "$(RED)✗ e2e failed on $$ENV ($$URL)$(RESET)"; exit 1; }; \
-	echo "$(GREEN)✅ e2e passed on $$ENV$(RESET)"
+	E2E_URL="$$URL" E2E_ENV="$$ENV" sh -c "$$E" || { \
+		git push --quiet origin ":refs/tags/e2e/$$ENV" 2>/dev/null \
+			|| echo "$(RED)✗ e2e/$$ENV NOT removed — ship would still accept the commit it names$(RESET)"; \
+		echo "$(RED)✗ e2e failed on $$ENV ($$URL)$(RESET)"; exit 1; }; \
+	echo "$(GREEN)✅ e2e passed on $$ENV$(RESET)"; \
+	[ -n "$$DEPLOYED" ] || { echo "$(YELLOW)   no deployed/$$ENV on origin — nothing to stamp$(RESET)"; exit 0; }; \
+	{ [ "$$(git rev-parse HEAD)" = "$$DEPLOYED" ] && [ -z "$$(git status --porcelain)" ]; } || { \
+		echo "$(YELLOW)   not stamped: the flows ran from a checkout that is not a clean deployed/$$ENV$(RESET)"; exit 0; }; \
+	git push --quiet -f origin "$$DEPLOYED:refs/tags/e2e/$$ENV" || { \
+		echo "$(RED)✗ e2e tag not pushed — ship will not see this run$(RESET)"; exit 1; }; \
+	echo "$(GREEN)✓ stamped e2e/$$ENV @ $$(git rev-parse --short "$$DEPLOYED")$(RESET)"
 
 .PHONY: test
 test: ## Run the deploy tooling + branch-flow tests (never contacts a server)
