@@ -32,6 +32,21 @@ approves before any test is written. Then it drives, commits and registers the f
 so a hand-started feature reaches `make e2e env=staging` too.
 *Source: "what if we start creating a branch and finish a feature without a spec / plan. then we need a command that checks the branch" · "its seperate from review, add it like you say"*
 
+**R6 — Promote reviews first, like opening a PR.** `make promote name=X` runs the review of
+feature X after showing what it carries and before its "Continue?", so the review is read before
+the feature lands. The review never refuses; a review that fails to run is reported and promote goes
+on. `review=off|low|full|ultra` sets how much (default `full`), on `promote` and on `review`.
+*Source: "what if reviews start before promote, but never stop promote and we add a flag to promote, to skip reviewers or tune them ( low, ultra or something? )"*
+
+**R7 — The report is kept, like PR comments.** `make` saves it as `<git-common-dir>/reviews/<name>.md`
+and prints its findings count and the follow-up command.
+*Source: "it let the promote continue and propose a followup dev in same branch" · "if it follows what a pr is , good ,easy to understand."*
+
+**R8 — `/review-fix X` is the follow-up commits.** In a session: check out `feature/X`, show the
+saved findings, Stefan picks which to act on (decisions come back as questions), one fix pass
+RED→GREEN, push; then `make promote name=X` again re-pins the fixed tip, like a push to the PR.
+*Source: same.*
+
 ## Out of scope
 
 Stamps, ship checks, and any refusal. Reviewers inspect; e2e on staging is the gate.
