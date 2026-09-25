@@ -2,12 +2,10 @@
 description: Pull content + assets from the remote (production) into local DDEV
 ---
 
-Pull remote content and assets into the local environment.
+Pull remote content into the local environment.
 
 Steps:
-1. Confirm the remote sync env vars are set in `.env` (`REMOTE_HOST`, `REMOTE_USER`, `REMOTE_PATH`, `REMOTE_SSH_KEY`).
-2. Run `make sync-down` — pulls both content (`content/`) and assets (`public/assets/`) from production.
-3. After sync, run `/cache-bust` (or `make cache-clear && php please statamic:stache:warm`) so the stache picks up the new content.
-4. If you only need one side, use `make sync-content` or `make sync-assets`.
+1. Run `make pull-content` (production by default; `make pull-content env=staging` for another environment). It rsyncs each directory in `site.yml` `deploy.data_paths` (default `content users storage`) from the environment's `path` over SSH (`ssh_host` from `site.yml`). Assets come down only if their directory is listed there.
+2. After sync, run `/cache-bust` so the stache picks up the new content.
 
-**Direction guard:** This command is always *down* (remote → local). To push local changes upstream use `make sync-up`, but **only** after confirming with the user — pushing local content over production is destructive.
+**Direction guard:** This is always *down* (remote → local), and `--delete` makes local match the remote — commit or save local content edits first. There is no push-up verb — never rsync local content over an environment by hand.

@@ -14,14 +14,14 @@ These hold regardless of: time pressure, sunk cost, "admin-only" framing, client
 ## Git + deploy
 
 5. **Never commit directly to `main` or `staging`.** Work through the Makefile verbs (`make feature`, `make promote`, `make ship`). A hotfix branches from production too — nothing is backported afterwards, because `make ship` rebuilds staging over it.
-6. **Never deploy to production without explicit "production" confirmation.** `/deploy` enforces this. Manual deploys must follow the same discipline.
+6. **Never deploy to production without explicit "production" confirmation.** `make ship` enforces it — its checks, then a typed confirmation and backups. Never deploy outside the Makefile.
 7. **Always read `site.yml` first.** It tells you the deploy method, SSH alias, remote paths, risk level. Confirm site + environment before any destructive operation.
 
 ## Operational
 
 8. **Local-first.** DDEV (or stack equivalent) locally. Never edit files directly on production. No "just this one fix" via SSH.
 9. **Database changes flow forward.** local → staging → production. Never reverse-sync prod content into a feature branch.
-10. **Never flush Redis globally** — VAD Vormingen (and other LMS sites) has cache exclusions that get destroyed by `wp cache flush` / `redis-cli FLUSHALL`. Always check `object-cache.php` exclusions first. See netdust-agent's `memory/GLOBAL.md`.
+10. **Never flush Redis globally** — VAD Vormingen (and other LMS sites) has cache exclusions that get destroyed by `wp cache flush` / `redis-cli FLUSHALL`. Always check `object-cache.php` exclusions first. See netdust-gates' `memory/GLOBAL.md`.
 
 ## Memory + skill discipline
 

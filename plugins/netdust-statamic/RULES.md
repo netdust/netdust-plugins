@@ -26,7 +26,7 @@ These are non-negotiable because they prevent the "client can't use the CP" fail
 ## Statamic stache
 
 12. **Warm the stache after blueprint changes.** `php please stache:warm` (or `/cache-bust`). Otherwise the editor sees stale field structures.
-13. **In production**: stache is warmed automatically on deploy (see `/deploy` post-deploy hooks). Don't run `php please stache:warm` manually on prod unless debugging.
+13. **In production**: stache is warmed on deploy by `php please stache:warm` in `site.yml` `deploy.post_deploy_hooks` (run by the `git-push` method). Don't run `php please stache:warm` manually on prod unless debugging.
 14. **`STATAMIC_GIT_ENABLED=true` in production** — content edits in the CP commit to git on the server. Treat the server's git as a source of truth that local must sync from (`/sync-content`).
 
 ## Editor roles

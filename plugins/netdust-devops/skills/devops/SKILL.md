@@ -51,7 +51,7 @@ prints the topology and the next verb before you type anything.
 onto `main` is how `staging` ends up meaning production.
 
 **A rung is deploy-only.** You never commit on `staging` or `main`. The verbs
-are the only door: the Makefile refuses by name, and netdust-agent's
+are the only door: the Makefile refuses by name, and netdust-gates'
 PreToolUse guard denies raw `git commit` / `merge` / `rebase` / `push` /
 `checkout -b` on a rung, naming the verb that does it instead.
 
@@ -67,9 +67,11 @@ if `make promote` breaks, fix the Makefile or report it.
 | "we work on X" | `make feature name=X` | nothing yet |
 | "review it before it lands" | `make promote name=X` (it reviews first) | staging |
 | "put it on staging", "colleagues can look" | `make promote name=X`, then `make deploy env=staging` | staging |
+| "do the promoted features collide?" | `make review env=staging` | — |
+| "fix what the review found" | `/review-fix X`, then `make promote name=X` (it skips the saved review) | staging |
 | "take it off staging" | `make unpromote name=X`, then `make deploy env=staging` | staging |
 | "fix this", "we have a bug" | `make hotfix name=X`, then `make ship` | **production** |
-| "ship it", "go live" | take what is not shipping off staging, `make deploy env=staging`, look — then `make ship` from the staging checkout | **production** |
+| "ship it", "go live" | take what is not shipping off staging, `make deploy env=staging`, `make e2e env=staging`, look — then `make ship` from the staging checkout | **production** |
 | "what's on prod", "what's live" | `make deployed` | — |
 | "what isn't live yet" | `git diff deployed/production` | — |
 | "roll it back" | `make rollback env=<name>` | — |
@@ -109,8 +111,8 @@ that carry a decision:
 
 | Verb | What it does |
 |---|---|
-| `make feature name=X` | branch `feature/X` from **origin/production** |
-| `make hotfix name=X` | branch `hotfix/X` from **origin/production** |
+| `make feature name=X` | branch `feature/X` from origin's production branch (**`main`**), wherever you stand |
+| `make hotfix name=X` | branch `hotfix/X` from origin's production branch (**`main`**), wherever you stand |
 | `make promote name=X` | rebuild staging as production + every promoted feature, X pinned at its current tip. Like opening a PR, it reviews X first, before its Continue?, unless a review is already saved, which it names and skips. `review=low\|full\|ultra` forces one, `review=off` skips. The review never refuses |
 | `make unpromote name=X` | the same rebuild, without X |
 | `make ship` | from the staging checkout, or a `hotfix/*` branch: the checks below, the gate, typed confirm, both backups, deploy, then rebuild staging on the new production |
@@ -135,7 +137,7 @@ e2e writes. `deploy` and `ship` end by naming them. The list is written by the s
 ref proves nothing: HEAD is `origin/staging`, so no local-only commit ships (a `hotfix/*`
 branch skips to the last check, must carry no `promote:` merge — a hotfix cut from staging is refused — and ship pushes it); `deployed/staging`
 on origin names this commit (staging was deployed and looked at since its
-last rebuild, never before); `origin/production` is an ancestor of HEAD
+last rebuild, never before); origin's production branch is an ancestor of HEAD
 (staging still contains it). When `commands.e2e` is declared, a fourth: `e2e/staging` on
 origin names this commit — anything may be promoted, but only a composition whose flows
 passed after its deploy ships. Then `ship` runs `commands.gate` itself — a red
@@ -241,7 +243,7 @@ make doctor             # says if this project is behind, or edited in place
 ```
 
 An update never touches `site.yml` — it is the project's. When a newer core reads a
-`commands.*` key the project never declared (`smoke`, `e2e`), `make doctor` names it with
+`commands.*` key the project never declared (`gate`, `smoke`, `e2e`, `review`), `make doctor` names it with
 the line to add. Declaring it empty (`e2e: ''`) records that this project has no such
 runner, and doctor stops asking.
 
@@ -360,7 +362,7 @@ in `site.yml`.
 | Smell | Fix |
 |---|---|
 | Raw `git commit` / `merge` / `push` on a rung branch | the make verb it names. The guard denies these. |
-| A feature or hotfix branched from `staging` | `make feature` / `make hotfix` — both branch from origin/production |
+| A feature or hotfix branched from `staging` | `make feature` / `make hotfix` — both branch from origin's production branch (`main`) |
 | Editing `Makefile.netdust` or `mk/*.mk` in a project | fix it upstream in the plugin, then `make devops-update` |
 | Deploying, pulling or refreshing from outside the project | `cd` to the project; the verbs act on the repo they stand in |
 | `.env` committed | rotate every secret, then untrack. `.env.example` only |

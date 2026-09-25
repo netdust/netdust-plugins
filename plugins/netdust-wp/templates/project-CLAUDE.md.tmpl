@@ -28,9 +28,11 @@ start of every session. Operational config (stack, hosting, deploy, risk): `site
    The four pillars per data flow come from the WordPress pack (`netdust-wp:wp-security`).
 
 5. **Tests** — per-task: `ddev composer test:unit` (Brain Monkey, seconds); integration:
-   `ddev composer test:int` (wp-phpunit); the close: `make gate` (runs `commands.gate`
-   from `site.yml`) — its exit code is the single source of truth. User-facing work
-   closes with `/shakeout`, then the whole-branch review.
+   `ddev composer test:int` (wp-phpunit); `make gate` (runs `commands.gate` from
+   `site.yml`) — its exit code is the single source of truth. The close is
+   `netdust-gates:policy`'s, by cost: `make gate` → `make review name=<feature>` → one fix
+   pass (kept as `specs/<feature>/review.md`) → `/shakeout` on user-facing work → push and
+   `make promote name=<feature>`.
 
 6. Commit atomically per task. Update `memory/STATE.md` and `tasks/todo.md` as you go;
    `/session-learn` harvests what a session taught, on request.

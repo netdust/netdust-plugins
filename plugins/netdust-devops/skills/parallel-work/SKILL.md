@@ -82,8 +82,9 @@ silently overwrite each other, and neither will report it.
 
 ## How the make verbs behave across checkouts
 
-- `make feature` / `make hotfix` / `make save` / `make deploy` / `make gate`
-  work anywhere. They act on the branch you are standing on.
+- `make feature` / `make hotfix` branch from `origin/main` (the production
+  branch), whatever you stand on. `make save` / `make deploy` / `make gate`
+  work anywhere and act on the branch you are standing on.
 - `make promote` / `make unpromote` **rebuild staging — they need no
   checkout.** The rebuild happens in a throwaway worktree of its own and
   pushes straight to origin, so two agents can promote different features

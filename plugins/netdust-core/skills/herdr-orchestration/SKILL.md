@@ -130,7 +130,7 @@ approval.
 ## Recipe — the dispatch brief (proven daan 2026-08-10, `5751775`)
 
 A handoff prompt must carry, in one message: the symptom **with its source quoted**
-(ledger line, failing output); the branch contract (base, name); harness entry + class;
+(ledger line, failing output); the branch contract (base, name); the entry (`netdust-gates:policy`);
 boundaries (atomic commit on the fix branch, NO merge, NO push, nothing outside scope,
 which surfaces are hot in other sessions); and the report shape (branch, sha, RED→GREEN
 evidence, changed files). Environment notes are **hints, not facts**: tell the agent to
@@ -169,9 +169,9 @@ these are the decisions:
   `focus` — focusing marks its tab seen and steals the operator's context, while CLI
   reads do not. You are a camera, not a hand.
 - **Propose, never write.** You are the herdr-native face of
-  `netdust-agent:compounding`: same output — proposals into what future sessions read
+  `/session-learn` (netdust-gates): same output — proposals into what future sessions read
   (skill and agent lessons, CODE-MAP, evals) — sourced from live observation instead of
-  a session's own recollection at spec-close. Compounding never auto-writes and neither
+  a finished transcript. `/session-learn` never auto-writes and neither
   do you. A watcher that edits a skill mid-run changes the agent it is watching.
 - **Your subject is the main agent in YOUR session**, found with `api snapshot` and
   identified by cwd — the project's checkout, not yours. You watch the session you live

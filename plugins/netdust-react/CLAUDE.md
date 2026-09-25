@@ -1,6 +1,6 @@
 # Netdust React Plugin
 
-You are working on a Netdust **React** project — a Vite + React + TypeScript web app, packaged to iOS and Android with Capacitor. This plugin layers on `netdust-core` (memory conventions, ops, deploy) and `netdust-agent` (the coding harness — `harnessed-development`, the planning/building spines, `testing-workflow`, `standards-gate`, the reviewer agents, and the live hooks). Install both first.
+You are working on a Netdust **React** project — a Vite + React + TypeScript web app, packaged to iOS and Android with Capacitor. This plugin layers on `netdust-core` (ops), `netdust-devops` (branches, `make` verbs, deploy) and `netdust-gates` (the delivery policy over superpowers — `netdust-gates:policy`, `/plan-review`, `/feature-review`, `/shakeout`, the reviewer agents, and the live hooks). Install them first.
 
 ## Default assumptions (project `CLAUDE.md` can override)
 
@@ -15,9 +15,9 @@ You are working on a Netdust **React** project — a Vite + React + TypeScript w
 
 **This plugin is deliberately thin.** It holds what more than one project has already needed. When a pattern proves itself in a real build, harvest it here; do not author skills ahead of the code that would use them.
 
-## The gate wiring netdust-agent reads
+## The gate wiring
 
-`netdust-agent`'s `standards-gate` and `testing-workflow` auto-detect the stack's runners. On this stack they are:
+`make gate` runs the project's own suite — site.yml `commands.gate`. On this stack it wires:
 
 | Gate | Command |
 |---|---|
@@ -37,21 +37,21 @@ A task close that touches `.ts`/`.tsx` runs tests + typecheck + lint. Typecheck 
 | **Skills** | `react-architecture` (project shape, gate wiring, storage durability, the Capacitor seam), `capacitor-react` (native feature access from React — lifted from capawesome-team/skills, MIT) |
 | **Templates** | `tsconfig.json`, `eslint.config.mjs`, `prettier.config.mjs`, `lefthook.yml`, `knip.config.ts` — the thin mechanical layer, single-app (not monorepo) |
 
-## What lives in netdust-core / netdust-agent (not here)
+## What lives elsewhere (not here)
 
-- Memory + tag conventions (`DECISION:`, `RISK:`, `LESSON:`, `TODO:`) — netdust-core
-- `ploi`, `secure-server`, `netdust-devops:devops`, `/deploy` — netdust-devops
-- The harness — `harnessed-development`, `planning`, `building`, `testing-workflow`, `standards-gate`, `threat-modeling`, `architecture-invariants`, `feature-acceptance`, `test-effectiveness`, `shake-out`, `compounding` — netdust-agent
-- The reviewer agents (`reviewer`, `security-sentinel`, `performance-oracle`, `code-simplicity-reviewer`, `invariant-auditor`, `shakeout-qa`) — netdust-agent
-- Generic frontend craft — `netdust-agent:building-frontend` and the `frontend-design` plugin
+- Memory + tag hooks (`DECISION:`, `RISK:`, `LESSON:`, `TODO:`) — netdust-gates
+- `ploi`, `secure-server` — netdust-core; `netdust-devops:devops`, `/deploy` — netdust-devops
+- The policy — `netdust-gates:policy`, `threat-modeling`, `/plan-review`, `/feature-review`, `/review-fix`, `/shakeout`, `/session-review`, `/session-learn` — netdust-gates
+- The reviewer agents (`security-sentinel`, `invariant-auditor`, `shakeout-qa`, `plan-reviewer`) — netdust-gates
+- Generic frontend craft — the `frontend-design` plugin
 
-## How this plugs into `harnessed-development`
+## How this plugs into `netdust-gates:policy`
 
-`netdust-agent:harnessed-development` is the entry point for any code-changing work. It routes by class; this plugin supplies the stack layer it defers to:
+`netdust-gates:policy` is the entry point for any code-changing work; superpowers runs the loop and this plugin supplies the stack layer it defers to:
 
-- **Plan (Stage 1)** — `react-architecture` for project shape and the Capacitor seam. No React-specific plan-requirements gate exists yet (unlike `netdust-wp:wp-plan-requirements`); if one earns its place, author it here.
-- **Execute (Stage 2)** — `capacitor-react` when the task touches native features; `netdust-agent:building-frontend` for UI craft. Gates as per the table above.
-- **Shake-out (Stage 3)** — the generic `netdust-agent:shake-out`. A device pass on real iOS and Android hardware is part of it; a passing browser E2E run is **not** a passing native run.
+- **Plan** — `react-architecture` for project shape and the Capacitor seam. No React constraints pack exists yet (unlike the WordPress pack in the policy); if one earns its place, author it here.
+- **Execute** — `capacitor-react` when the task touches native features; the `frontend-design` plugin for UI craft. Gates as per the table above.
+- **Close** — the policy's, by cost: `make gate` → `make review name=<feature>` (`/feature-review` without devops) → one fix pass → `/shakeout` → push and hand over `make promote name=<feature>`. A device pass on real iOS and Android hardware is part of the shake-out; a passing browser E2E run is **not** a passing native run.
 
 ## The Capacitor seam — the rule that matters most
 

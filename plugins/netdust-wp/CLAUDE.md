@@ -30,9 +30,9 @@ the WordPress pack (`netdust-gates/skills/policy/wordpress.md`) into the plan's
   approved tasks built plain WordPress on the framework because neither was loaded.)
 - **Security.** `netdust-gates:threat-modeling` fires on its triggers; `wp-security` and
   `wp-database` self-trigger on PHP edits and supply the four pillars it checks.
-- **Tests.** The close is `make gate`, which runs `commands.gate` from `site.yml` — on a
-  gate-stack project that is `composer gate` (Brain Monkey, wp-phpunit through DDEV, Vitest,
-  Playwright). Codeception/wp-browser is the legacy stack, Stride family only. Runners and the
+- **Tests.** `make gate` is step 1 of the `netdust-gates:policy` Close; it runs
+  `commands.gate` from `site.yml` — on a gate-stack project that is `composer gate` (Brain
+  Monkey, wp-phpunit through DDEV, Vitest, Playwright). Codeception/wp-browser is the legacy stack, Stride family only. Runners and the
   shake-out login recipe are `wp-testing`'s.
 - **Drift.** The pack makes `ntdst-drift-reviewer`'s list a plan constraint, so the
   whole-branch review checks the diff against it. `/drift-reviewer <path>` runs the agent on a

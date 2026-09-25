@@ -25,6 +25,7 @@ Spec `specs/<feature>/spec.md`, plan `specs/<feature>/plan.md` — the location 
 | `flows.md` | the approved flows of a branch with no spec | `/shakeout` |
 | `shakeout.md`, `shakeout/*.png` | the shake-out manifest and screenshots | `/shakeout` |
 | `session-review.md` | the on-demand session audit | `/session-review` |
+| `shakeout-bugs.md`, `shakeout-abort.md` | a stack sweep's bug list and abort note | stack shake-out skills |
 | `CHECKS.md` | in `specs/` itself: every surface's `@e2e` and `@smoke` checks | `/shakeout` |
 | `test-prune/<date>.md` | in `specs/` itself: a suite audit | `/prune-tests` |
 

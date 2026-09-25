@@ -67,10 +67,12 @@ location ~ ^/app/logs/ { deny all; return 404; }
 
 ## Makefile targets
 
-The verbs — `deploy`, `deploy-test`, `ship`, `deployed`, `rollback`, `refresh`, `pull`, `gate` —
-are `netdust-devops:devops`'s table, identical on WordPress. `templates/Makefile` +
-`templates/scripts/` are copied verbatim and carry no project value; the WP data verbs live in
-`netdust-devops` `dist/mk/wp.mk`.
+The flow verbs — `feature`, `hotfix`, `save`, `review`, `promote`, `unpromote`, `gate`, `ship`,
+`deploy`, `deploy-test`, `rollback`, `e2e`, `smoke`, `status`, `deployed`, `health`, `doctor` —
+are `netdust-devops:devops`'s table, identical on WordPress. The core (`Makefile.netdust`, `mk/`,
+`scripts/`) is vendored from `netdust-devops` `dist/` by `make devops-update` and carries no
+project value; the WP data verbs (`setup`, `pull`, `push`, `refresh`, `block-mail`) live in its
+`dist/mk/wp.mk`.
 
 ## Asset pipeline (Vite in a WP theme)
 

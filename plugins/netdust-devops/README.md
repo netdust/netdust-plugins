@@ -23,7 +23,7 @@ Agents followed whichever source they read last. So did people.
 | `templates/site.yml.tmpl` | schema 2 — `environments:` is the only place a branch is bound to a server |
 | `bin/new-project` | the one scaffolder (call by path — plugin `bin/` is not on `PATH`) |
 | `skills/devops/` | the flow, in one voice, with no raw-git recipes |
-| `commands/` | `/deploy`, `/new-project`, `/fleet` |
+| `commands/` | `/deploy`, `/new-project` |
 
 ## Vendored, not copied
 
@@ -57,7 +57,9 @@ fleet tool reporting across many repos. It exposes verbs and refuses by name
 when a precondition fails; who called is not its concern. Read-only verbs
 (`deployed`, `status`, `health`, `doctor`, `audit`) are safe for anything to
 run; the ones that write are gated on a clean tree, the right branch, a pushed
-HEAD, and — for production — a confirmation typed by a human at a terminal.
+HEAD, and — for production — `make ship`'s checks (`deployed/staging` and, when
+`commands.e2e` is declared, `e2e/staging` name the commit), a green
+`commands.gate`, and a confirmation typed by a human at a terminal.
 
 ## Tests
 

@@ -4,15 +4,7 @@ description: Clear all Statamic + Laravel caches and warm the stache (use after 
 
 Clear all caches and warm the stache.
 
-Run, in order (inside DDEV — `make` targets handle that automatically):
-
-```bash
-make cache-clear      # clears Laravel caches + stache:clear
-make stache-warm      # php please stache:warm
-ddev exec php please search:update --all   # rebuild search index (only if search is configured)
-```
-
-If `make cache-clear` / `make stache-warm` aren't in this project's Makefile, the equivalents are:
+Run, in order, inside DDEV (the devops core has no cache verbs):
 
 ```bash
 ddev exec php artisan cache:clear
@@ -21,6 +13,7 @@ ddev exec php artisan route:clear
 ddev exec php artisan view:clear
 ddev exec php please stache:clear
 ddev exec php please stache:warm
+ddev exec php please search:update --all   # only if search is configured
 ```
 
 Use this after:

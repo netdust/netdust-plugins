@@ -2,7 +2,7 @@
 
 Stack plugin for **Vite + React 18 + TypeScript + Tailwind**, packaged to iOS and Android with **Capacitor**.
 
-Layers on `netdust-core` (memory, ops, deploy) and `netdust-agent` (the harness). It supplies only the stack layer — the planning/building spines, gates, and reviewer agents all live in `netdust-agent` and are stack-agnostic.
+Layers on `netdust-core` (ops), `netdust-devops` (branches, deploy) and `netdust-gates` (the delivery policy over superpowers). It supplies only the stack layer — the policy, its Close, the review and the reviewer agents all live in `netdust-gates` and are stack-agnostic.
 
 ## Contents
 
@@ -27,7 +27,7 @@ So: **grow this from the build.** When a pattern proves itself twice, harvest it
 
 ## Gates
 
-`netdust-agent`'s `standards-gate` and `testing-workflow` run these on this stack:
+The project's `make gate` (site.yml `commands.gate`) runs these on this stack:
 
 ```
 npx vitest run        # tests

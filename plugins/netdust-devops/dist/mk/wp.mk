@@ -45,7 +45,7 @@ _help-stack:
 	@echo ""
 	@echo "$(YELLOW)DATA$(RESET)         moves backward only — never into production"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "pull env=E"        "DB + third-party plugins → local (uploads=yes for media)"
-	@printf "  $(GREEN)%-22s$(RESET) %s\n" "refresh env=E"     "production data → staging or development"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "refresh env=E"     "production data → staging"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "push env=E"        "local DB → a NON-production environment"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "block-mail env=E"  "install the outgoing-mail block"
 	@echo ""
@@ -84,7 +84,7 @@ pull: ## Pull DB + third-party plugins from an environment down to local (upload
 	echo "$(GREEN)✅ local refreshed from $$ENV$(RESET)"
 
 .PHONY: refresh
-refresh: ## Copy production data down to staging or development (make refresh env=staging)
+refresh: ## Copy production data down to staging (make refresh env=staging)
 	@ENV="$(env)"; \
 	$(MAKE) --no-print-directory _refuse-production env=$$ENV || exit 1; \
 	$(MAKE) --no-print-directory _need-tty verb="refresh env=$$ENV"; \

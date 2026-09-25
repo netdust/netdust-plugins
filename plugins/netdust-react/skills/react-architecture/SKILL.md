@@ -5,7 +5,7 @@ description: "Netdust React project shape, the mechanical gate wiring the harnes
 
 # React Architecture (Netdust)
 
-The stack layer `netdust-agent`'s harness defers to on a Vite + React + TypeScript app shipped to iOS and Android via Capacitor.
+The stack layer `netdust-gates:policy` defers to on a Vite + React + TypeScript app shipped to iOS and Android via Capacitor.
 
 ## 1. The shape
 
@@ -123,7 +123,7 @@ Do not add a state library until the requirements force it. On a small app with 
 
 ## 6. Reviewing a change on this stack
 
-Beyond what `netdust-agent:reviewer` covers generically, check:
+Beyond what the feature review (`make review` / `/feature-review`) covers generically, check:
 
 1. Does any component reach `localStorage`/`Preferences` directly instead of through its feature's `storage.ts`?
 2. Is anything read back from storage cast rather than parsed?

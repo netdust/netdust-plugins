@@ -1,3 +1,5 @@
+> Historical — describes the netdust-agent era; the current flow is in netdust-gates:policy and netdust-devops:devops.
+
 # Harness-Engineering Course — netdust-core Gap Analysis
 
 **Created:** 2026-06-07
