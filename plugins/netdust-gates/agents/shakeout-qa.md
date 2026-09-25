@@ -29,6 +29,10 @@ edges from `edge-classes.md` beside the `netdust-gates:policy` skill (empty, den
 re-entry, concurrent, boundary, mid-flow failure, delivery seam). A flow driven on its happy path
 only is `unverified`, not `pass`.
 
+With no plan and no spec, the new flows are the ones in `specs/<feature>/flows.md` that Stefan
+approved, and nothing else — a struck flow gets no test and no row. Registered surfaces the diff
+touches are still re-driven, as below.
+
 ## The manifest
 
 `specs/<feature>/shakeout.md`: one table, one row per flow:

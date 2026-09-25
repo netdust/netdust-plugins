@@ -56,5 +56,9 @@ def run() -> list[tuple[bool, str]]:
             "printenv REVIEW_NAME", "most capable", "ntdst-drift-reviewer", "Pass each reviewer the diff",
             "environments.staging.branch")),
          "/feature-review reads make's env, hands reviewers the diff, keeps the model and the WP join"),
+        ("flows.md" in command and "no spec" in command and "flows.md" in qa
+         and "flow list" in policy and "no `plan.md`" in command and "**Stop.**" in command
+         and "new flows" in qa and "Write" in command.split("---")[1] and "or `flows.md`" in command,
+         "/shakeout on a branch with no spec proposes flows.md and stops; shakeout-qa drives only the approved list"),
         (not stale, f"none of the 0.28 machinery survives in the close (found {stale})"),
     ]

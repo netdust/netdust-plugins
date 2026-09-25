@@ -92,7 +92,7 @@ path, or the plan is long enough to outlive one context. Give the rule that fire
 ## Stops
 
 Upstream's four stops stand. Netdust names the ones that occur: the plan approval and the
-execution-mode choice; the shake-out screenshot yield (Close, step 2); and every devops verb
+execution-mode choice; the shake-out screenshot yield (Close, step 2); the flow list a shake-out proposes for a branch with no spec; and every devops verb
 that belongs to the operator — `promote`, `unpromote`, `ship`, deploy — which Stefan runs or
 confirms by typing. Everything else you decide and ledger as
 `Ruling: <what> — <why> — <cost if wrong>`, and list in the final message. A shake-out exception

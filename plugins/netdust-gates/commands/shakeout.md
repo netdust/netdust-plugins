@@ -1,6 +1,6 @@
 ---
 description: Close a user-facing change — make gate, shakeout-qa drives the artifact and writes the manifest, bin/shakeout-check.py must exit 0, the human sees one screenshot per surface. Then the whole-branch review per the netdust-gates:policy close.
-allowed_tools: ["Bash", "Read", "Glob", "Skill", "Agent"]
+allowed_tools: ["Bash", "Read", "Glob", "Skill", "Agent", "Write", "Edit"]
 ---
 
 Run the close for `specs/<feature>/`. Four steps, in order — after one read.
@@ -21,10 +21,27 @@ Run the project's own suite: `make gate`. It must exit 0. Exit 1 with "No comman
 site.yml" means the project has no declared gate — declare it (`commands.gate`) as the first
 fix, then run it; that is not a reason to skip.
 
+## Step 1b — A branch with no spec: propose the flows, then stop
+
+When `specs/<feature>/` holds no `plan.md` and no `spec.md` — a planned feature cut from a split
+spec has a `plan.md` whose `**Spec:**` header names its spec, and takes the planned path — nothing
+records what this feature should do except Stefan. Derive a proposal:
+
+1. What changed: `git diff --name-only $(git merge-base origin/<production> HEAD)..HEAD` and
+   `git log --format=%s` over the same range — the routes, templates, forms, REST endpoints,
+   admin screens and shortcodes the branch touched. None user-facing: say so and go to Step 4.
+2. Explore only those surfaces on the running dev site (`superpowers-chrome:browsing`, or the
+   Playwright planner against those URLs).
+3. Write `specs/<feature>/flows.md`: one line per flow — surface, what a person does, what they
+   should see — with its edges from `edge-classes.md`.
+
+**Stop.** Show Stefan the list. He confirms, strikes or adds; the file is edited to what he
+approved. Only then Step 2, with `flows.md` as the flow source.
+
 ## Step 2 — Drive the artifact
 
 Dispatch **`shakeout-qa`** on the most capable available model for the flows: it derives the
-flow list from the spec and the plan's `Review Focus`, drives each through its faithful layer
+flow list from the spec and the plan's `Review Focus`, or `flows.md` on a branch with no spec, drives each through its faithful layer
 (browser for UI, un-mocked wire for backend), commits the flows as tests, and writes
 `specs/<feature>/shakeout.md` with a screenshot under `specs/<feature>/shakeout/` for every
 browser pass — and registers what it leaves in `specs/CHECKS.md`: the driven flows as `@e2e`
