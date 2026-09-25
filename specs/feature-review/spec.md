@@ -35,7 +35,7 @@ so a hand-started feature reaches `make e2e env=staging` too.
 **R6 — Promote reviews first, like opening a PR.** `make promote name=X` runs the review of
 feature X after showing what it carries and before its "Continue?", so the review is read before
 the feature lands. The review never refuses; a review that fails to run is reported and promote goes
-on. `review=off|low|full|ultra` sets how much (default `full`), on `promote` and on `review`.
+on. With no `review=`, promote skips a feature that already has a saved review and says so ("reviewed at <sha>, N commits since"); `review=low|full|ultra` forces a fresh one, `review=off` skips. `make review` always reviews, at `full` unless told.
 *Source: "what if reviews start before promote, but never stop promote and we add a flag to promote, to skip reviewers or tune them ( low, ultra or something? )"*
 
 **R7 — The report is kept, like PR comments.** `make` saves it as `<git-common-dir>/reviews/<name>.md`
@@ -46,6 +46,18 @@ and prints its findings count and the follow-up command.
 saved findings, Stefan picks which to act on (decisions come back as questions), one fix pass
 RED→GREEN, push; then `make promote name=X` again re-pins the fixed tip, like a push to the PR.
 *Source: same.*
+
+**R9 — Close orders by cost: gate → review → fix → shakeout.** The cheap mechanical gate, then
+the review, then its fix pass (`/review-fix`), then the expensive shakeout once on settled code, then
+promote, which skips the review it finds.
+*Source: "gate, shakout, reviews — the gate is mechanical mostly, the shakeout happens but is a more expensive test then reviewers" · "ok, good continue"*
+
+**R10 — Every artifact in one obvious place.** Everything about feature X lives in `specs/X/`
+(spec, plan, plan-review, review, flows, shakeout, session-review); a split spec in
+`specs/<topic>/`; the checks registry in `specs/CHECKS.md`. The policy lists them in one table, and
+a gates test fails any command or agent that writes a `specs/` path outside it. The review report is
+kept at `specs/<feature>/review.md`, committed with its fix pass.
+*Source: "can gates make sure that where specs/plans reviews etc are stored, keep everything in obvious place?"*
 
 ## Out of scope
 
