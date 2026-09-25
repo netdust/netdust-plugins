@@ -14,7 +14,21 @@ Stefan grants). Anything not written here is upstream's rule.
 
 Spec `specs/<feature>/spec.md`, plan `specs/<feature>/plan.md` — the location preference that
 `superpowers:brainstorming` and `superpowers:writing-plans` say overrides their
-`docs/superpowers/...` defaults.
+`docs/superpowers/...` defaults. Everything about a feature lives in `specs/<feature>/`:
+
+| File | Holds | Written by |
+|---|---|---|
+| `spec.md` | the requirements, each with its `Source:` | brainstorming |
+| `plan.md` | the plan, its `**Spec:**` header naming the spec | writing-plans |
+| `plan-review.md` | the plan review, `Reviewed-plan:` per plan | `/plan-review` |
+| `review.md` | the feature review, committed with its fix pass | `make review` · `/review-fix` |
+| `flows.md` | the approved flows of a branch with no spec | `/shakeout` |
+| `shakeout.md`, `shakeout/*.png` | the shake-out manifest and screenshots | `/shakeout` |
+| `session-review.md` | the on-demand session audit | `/session-review` |
+| `CHECKS.md` | in `specs/` itself: every surface's `@e2e` and `@smoke` checks | `/shakeout` |
+| `test-prune/<date>.md` | in `specs/` itself: a suite audit | `/prune-tests` |
+
+Nothing goes elsewhere; superpowers' ledger (`.superpowers/sdd/`) is its own scratch, deleted at finish.
 
 **The plan is the feature.** When a spec covers independent subsystems
 (writing-plans' Scope Check; brainstorming's sub-project decomposition lands here too, as one spec), the spec stays at
@@ -109,7 +123,8 @@ Stefan accepts is `Accepted-by-human:` in the manifest, never `Ruling:`; only he
    or the diff touches a security-boundary path, and `invariant-auditor` when the project carries
    `ARCHITECTURE-INVARIANTS.md`.
 3. One fix pass, each fix RED→GREEN through the seam where the finding showed — the request,
-   route or render — not reflection on the private method the fix touched. No re-review — named checks and the suites close it.
+   route or render — not reflection on the private method the fix touched; the saved review is
+   copied to `specs/<feature>/review.md` and committed with it. No re-review — named checks and the suites close it.
 4. A user-facing change runs `/shakeout`, once, on the fixed code: `shakeout-qa` drives the flows through the real
    browser or wire, commits them as tests and writes `specs/<feature>/shakeout.md`; it
    registers them in `specs/CHECKS.md` as `@e2e` (`make e2e env=staging`, the proof after a
