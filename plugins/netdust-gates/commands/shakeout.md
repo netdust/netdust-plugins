@@ -21,6 +21,22 @@ Run the project's own suite: `make gate`. It must exit 0. Exit 1 with "No comman
 site.yml" means the project has no declared gate — declare it (`commands.gate`) as the first
 fix, then run it; that is not a reason to skip.
 
+## Step 1b — A branch with no spec: propose the flows, then stop
+
+When `specs/<feature>/spec.md` does not exist, nothing records what this feature should do
+except Stefan. Derive a proposal:
+
+1. What changed: `git diff --name-only $(git merge-base origin/<production> HEAD)..HEAD` and
+   `git log --format=%s` over the same range — the routes, templates, forms, REST endpoints,
+   admin screens and shortcodes the branch touched. None user-facing: say so and go to Step 4.
+2. Explore only those surfaces on the running dev site (`superpowers-chrome:browsing`, or the
+   Playwright planner against those URLs).
+3. Write `specs/<feature>/flows.md`: one line per flow — surface, what a person does, what they
+   should see — with its edges from `edge-classes.md`.
+
+**Stop.** Show Stefan the list. He confirms, strikes or adds; the file is edited to what he
+approved. Only then Step 2, with `flows.md` as the flow source.
+
 ## Step 2 — Drive the artifact
 
 Dispatch **`shakeout-qa`** on the most capable available model for the flows: it derives the

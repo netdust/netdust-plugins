@@ -52,5 +52,8 @@ def run() -> list[tuple[bool, str]]:
          "a spec cut into several plans is reviewed as one set, and the reviewer judges the cut"),
         ("make ship" in command and "`ship` waits for it" in policy,
          "the feature shake-out writes the checks; staging's e2e run is the gate ship waits for"),
+        ("flows.md" in command and "no spec" in command and "flows.md" in qa
+         and "flow list" in policy,
+         "/shakeout on a branch with no spec proposes flows.md and stops; shakeout-qa drives only the approved list"),
         (not stale, f"none of the 0.28 machinery survives in the close (found {stale})"),
     ]
