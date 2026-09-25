@@ -113,6 +113,7 @@ that carry a decision:
 | `make promote name=X` | rebuild staging as production + every promoted feature, X pinned at its current tip |
 | `make unpromote name=X` | the same rebuild, without X |
 | `make ship` | from the staging checkout, or a `hotfix/*` branch: the checks below, the gate, typed confirm, both backups, deploy, then rebuild staging on the new production |
+| `make review name=X` | run `commands.review` on feature X (`env=staging`: where the promoted features meet) and print its report — reviewers inspect, they gate nothing |
 | `make rollback env=E` | redeploy the previously deployed commit's payload — `rsync` only; refused by name over `git-push` |
 | `make e2e env=E` | run `commands.e2e` against `environments.E.url` — the `@e2e` flows every shake-out drove and left in `specs/CHECKS.md`: the real enrollment, form, send. It seeds and writes, so production is refused by name. Green, from a clean checkout of the commit `deployed/<env>` names, stamps `e2e/<env>` on origin; red deletes it. Like `deployed/*`, the tag is a record, not a lock — never push it by hand |
 | `make smoke env=E` | run `commands.smoke` against `environments.E.url` — the read-only `@smoke` checks in `specs/CHECKS.md`; needs no terminal and no confirm, so it runs against production too |

@@ -102,7 +102,7 @@ echo; echo "flow — the vocabulary is the verbs of FR-2"
 flowverbs() { M help | strip | awk '/^FLOW/ {f=1; next} f && /^$/ {exit} f {print $1}' | paste -sd' '; }
 pathverbs() { M help | strip | sed -n 's/^Path: //p' | sed 's/ → /\n/g' | awk '{print $1}' | paste -sd' '; }
 assert_eq "help's flow block lists the verbs that exist, in flow order, and nothing else" \
-  "feature hotfix save promote unpromote gate ship" "$(flowverbs)"
+  "feature hotfix save review promote unpromote gate ship" "$(flowverbs)"
 assert_eq "…and the path it closes with names only verbs that exist" \
   "feature promote deploy ship" "$(pathverbs)"
 assert_refuses "the verb that merged one rung into the next is gone" "No rule to make target" M finish
@@ -489,6 +489,21 @@ git checkout -q -f -B main "$EMAIN"; git branch -q -f staging "$ESTG"; git push 
 git push -q origin ":refs/heads/feature/se"; git branch -q -D feature/se
 for t in deployed/staging deployed/production e2e/staging shipped/production; do git push -q origin ":refs/tags/$t" 2>/dev/null; git tag -d "$t" >/dev/null 2>&1; done; git fetch -q --prune origin; : > "$LEAVES"
 assert_eq "…and the e2e ship section leaves origin, the checkout, the tree and the leaf log as it found them" "$EORIG main " "$(git ls-remote origin) $(git branch --show-current) $(git status --porcelain)"
+
+echo; echo "flow — review: runs commands.review and reports back"
+git checkout -q main; RLOG="$TMP/review.log"; : > "$RLOG"
+assert_refuses "review with no commands.review: refused naming the key" "No commands.review" M review name=x
+printf '#!/bin/sh\necho "name=$REVIEW_NAME scope=$REVIEW_SCOPE" | tee -a %s\n' "$RLOG" > "$TMP/review.sh"
+sed -i "s|^commands: {gate: \(.*\)}$|commands: {gate: \1, review: sh $TMP/review.sh}|" site.yml
+assert_refuses "review with neither name= nor env=: usage" "Usage: make review" M review
+assert_refuses "a name outside the charset, before anything runs" "Invalid name" M review 'name=a;b'
+assert_refuses "env=production: refused by name" "staging only" M review env=production
+ROUT=$(M review name=banner)
+assert_eq "review name=banner runs commands.review for the feature, and prints what it says" "name=banner scope=feature 1" "$(tail -1 "$RLOG") $(has "$ROUT" 'name=banner scope=feature')"
+M review env=staging >/dev/null
+assert_eq "review env=staging runs it for staging" "name=staging scope=staging" "$(tail -1 "$RLOG")"
+git checkout -q -- site.yml
+assert_eq "…and the review section leaves the tree clean, origin untouched" "" "$(git status --porcelain)"
 
 echo; echo "flow — hotfix"
 # FR-7: a hotfix ships from its own branch with no staging round, and FR-8 still rebuilds staging over it.
