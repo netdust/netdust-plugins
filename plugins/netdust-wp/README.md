@@ -9,8 +9,8 @@ WordPress layer of the Netdust harness for Claude Code. Layers on top of [`netdu
 | **WP discipline skills** | `wp-security`, `wp-database`, `bedrock-composer` (each with RED tests) |
 | **WP reference skills** | `wp-frontend`, `wp-testing`, `wp-infra` |
 | **ntdst-core framework skills** (ntdst-core 5.2.0) | `ntdst-framework`, `ntdst-patterns`, `ntdst-yootheme` |
-| **WP commands** | `/wp-new-project`, `/scaffold-plugin`, `/sync-db`, `/setup-tests` |
-| **Templates** | portable `Makefile` + `scripts/` (gate, ledger, rollback; rsync or git-push transport) |
+| **WP commands** | `/wp-new-project`, `/scaffold-plugin`, `/setup-tests`, `/drift-reviewer` |
+| **Templates** | `project-CLAUDE.md.tmpl`, `gitignore.tmpl` — the `Makefile` and `site.yml` come from `netdust-devops` |
 | **Identity** | `CLAUDE.md` (WP-specific defaults), `RULES.md` (WP-specific rules — universal rules come from netdust-core) |
 
 ## Install
@@ -33,7 +33,7 @@ cd ~/Sites/my-new-wp-project
 /wp-new-project
 ```
 
-Scaffolds `CLAUDE.md` (with `@-import` of the core CLAUDE.md), `site.yml`, `memory/`, `tasks/`, and a Bedrock-shaped `Makefile` matching the chosen deploy method.
+Runs `netdust-devops`' `new-project` (`site.yml`, the `Makefile` over the vendored `Makefile.netdust` core, `memory/`, `tasks/`, the production and staging branches), then adds the WP `CLAUDE.md` rules.
 
 Or manually, in any WP project's `CLAUDE.md`:
 
@@ -56,9 +56,9 @@ Both imports — core for memory conventions/cross-stack, wp for WP-specific def
 ├── CLAUDE.md, RULES.md, README.md
 │
 ├── commands/                        ← 4 WP-specific commands
+│   ├── drift-reviewer.md
 │   ├── scaffold-plugin.md
 │   ├── setup-tests.md
-│   ├── sync-db.md
 │   └── wp-new-project.md
 │
 ├── skills/                          ← 9 WP skills, flat layout
@@ -79,10 +79,8 @@ Both imports — core for memory conventions/cross-stack, wp for WP-specific def
 ├── memory/                          ← STATE.md, lessons.md
 │
 └── templates/
-    ├── Makefile
-    ├── scripts/
-    ├── project-CLAUDE.md.tmpl
-    └── site.yml.tmpl
+    ├── gitignore.tmpl
+    └── project-CLAUDE.md.tmpl
 ```
 
 ## Relationship to netdust-core, netdust-devops + netdust-gates

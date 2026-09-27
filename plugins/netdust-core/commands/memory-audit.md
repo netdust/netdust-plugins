@@ -6,8 +6,8 @@ allowed_tools: ["Bash", "Read", "Write", "Edit", "Glob", "Grep"]
 Run the **memory audit**. The three files this command checks (`memory/STATE.md`, `memory/lessons.md`, `tasks/todo.md`) are the project's living state — they only stay useful if they evolve as the work evolves. This command finds where they've drifted AND, on `--apply`, prunes the historical bloat into `memory/ARCHIVE.md`.
 
 Boundary:
-- `/integration` audits whether the code works.
-- `/evaluate` audits how a sub-phase was executed.
+- `make gate` / `make review` audit whether the code works.
+- `/session-review` audits how a session's work was done.
 - **`/memory-audit` audits whether the project's memory files reflect current reality — and prunes them so they keep loading under the session-start budget.**
 
 ## Modes (read this FIRST)
@@ -282,13 +282,13 @@ Apply dedup to the KEEP set too (a duplicated recent capture should still collap
 ## What this command is NOT
 
 - NOT a code review — `/code-review` does that.
-- NOT a correctness gate — `/integration` does that.
-- NOT a process retro — `/evaluate` does that.
+- NOT a correctness gate — `make gate` and `make review` do that.
+- NOT a process retro — `/session-review` and `/session-learn` do that.
 - NOT a blind auto-cleaner — the staleness findings (Steps 1–8) never edit the three files, and the ARCHIVE (Steps A1–A4) writes ONLY on `--apply` and ONLY after showing you the diff. KEEP is always the safe default when classification is uncertain.
 
 ## When NOT to run it
 
-- Right after `/evaluate` ran (which already updated memory). Wait at least one substantive commit before re-running.
+- Right after a previous `/memory-audit --apply`. Wait at least one substantive commit before re-running.
 - On a freshly-initialized project with empty STATE/lessons/todo. The command needs content to audit.
 - In the middle of a sub-phase. Findings will include "tasks in-progress that look shipped" because the in-progress markers can't be distinguished from staleness mid-stream. Run at sub-phase close or later.
 

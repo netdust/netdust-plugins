@@ -68,5 +68,7 @@ per-flow slideshow. Beside them list every `✓ [shakeout-accepted]` row the che
 re-driven. This is a stop; wait for him.
 
 The review and its fix pass came before this shake-out (the `netdust-gates:policy` Close); what
-remains is `superpowers:finishing-a-development-branch`. Report the manifest and every `Ruling:`
+remains is `superpowers:finishing-a-development-branch` — on a project with `site.yml`, push
+and hand Stefan `make promote name=<feature>` (it skips the saved review); a feature never
+merges into production by hand. Report the manifest and every `Ruling:`
 from the ledger together.

@@ -1,21 +1,21 @@
 # netdust-core
 
-The always-on **business + ops + content + memory** layer for Claude Code. Stack-agnostic — applies to WordPress, Statamic, Bun/Node, plain HTML alike. Stack-specific plugins (`netdust-wp`, `netdust-statamic`) layer on top, and the coding/build harness lives in the separate **netdust-agent** plugin.
+The always-on **business + ops + content + memory** layer for Claude Code. Stack-agnostic — applies to WordPress, Statamic, Bun/Node, plain HTML alike. Stack-specific plugins (`netdust-wp`, `netdust-statamic`) layer on top, the delivery policy lives in **netdust-gates**, and the branch/deploy flow in **netdust-devops**.
 
-This is **not** a coding harness. For any non-trivial coding work (gates, craft skills, reviewer agents, TDD/threat-model/shake-out, `/integration` + `/shakeout`), load the **netdust-agent** plugin.
+This is **not** a coding harness. Any code change enters through `netdust-gates:policy` (with `/plan-review`, `/feature-review`, `/review-fix`, `/shakeout`); branches and deploys go through **netdust-devops**' `make` verbs.
 
 ## What this plugin provides
 
 | Layer | Contents |
 |---|---|
 | **Identity** | `CLAUDE.md` (default agent context), `SOUL.md` (voice), `RULES.md` (universal non-negotiables) |
-| **Memory + hooks** | Per-project `memory/STATE.md` + `lessons.md` + `tasks/todo.md` convention and memory discipline. The live hooks — SessionStart loader, Stop-hook `DECISION:`/`RISK:`/`LESSON:`/`TODO:` tag scanner, PreToolUse destructive-command guard — live in **netdust-agent** (registration AND scripts). Core ships no hook scripts. |
+| **Memory + hooks** | Per-project `memory/STATE.md` + `lessons.md` + `tasks/todo.md` convention and memory discipline. The live hooks — SessionStart loader, Stop-hook `DECISION:`/`RISK:`/`LESSON:`/`TODO:` tag scanner, PreToolUse destructive-command guard — live in **netdust-gates** (registration AND scripts). Core ships no hook scripts. |
 | **Content + marketing skills** | `brand-voice`, `marketing`, `market-research`, `research` |
 | **Ops + infra skills** | `secure-server` (VPS hardening), `ploi` (server/site lifecycle) |
 | **Slash commands** | `/memory-audit`, `/pattern-miner` — `/deploy` moved to **netdust-devops** |
 | **MCP** | `ploi` MCP server (server + site management via Ploi API) |
 | **Templates** | `project-CLAUDE.md.tmpl`, `site.yml.tmpl` (stack-neutral scaffolds) |
-| **Memory (harness-level)** | `GLOBAL.md` ships in **netdust-agent** (`plugins/netdust-agent/memory/GLOBAL.md`) — its `session-start.sh` is the live injector. The deploy methods now live in **netdust-devops** |
+| **Memory (harness-level)** | `GLOBAL.md` ships in **netdust-gates** (`plugins/netdust-gates/memory/GLOBAL.md`) — its `session-start.sh` is the live injector. The deploy methods now live in **netdust-devops** |
 
 ## Install
 
@@ -34,11 +34,12 @@ Skills, commands, agents, hooks, and the MCP load **directly from the installed 
 
 | Plugin | When to install |
 |---|---|
-| **netdust-agent** | For any non-trivial coding work. Carries the build harness — `harnessed-development` sequencer, the gate skills (threat-modeling, architecture-invariants, feature-acceptance, testing-workflow, test-effectiveness, shake-out, compounding), the reviewer agents, and the harness commands (`/integration`, `/shakeout`, etc.). |
+| **netdust-devops** | Every project with a `site.yml`. The branch flow and `make` verbs (feature, hotfix, promote, ship, deploy…), the vendored Makefile core, site.yml schema, `/deploy` and `/new-project`. |
+| **netdust-gates** | Any code change. `netdust-gates:policy` over superpowers, `/plan-review`, `/feature-review`, `/review-fix`, `/shakeout`, `/session-review`, `/session-learn`, the reviewer agents, and the live memory/guard hooks. Replaces the retiring **netdust-agent**. |
 | **netdust-wp** | When you work on WordPress projects (Bedrock or custom-app). Adds wp-security, wp-database, ntdst-architecture, etc. + WP-specific commands. |
 | **netdust-statamic** | For Statamic + Peak marketing sites. |
 
-All depend on `netdust-core`. Install order: core first, then any stack/agent plugins.
+All depend on `netdust-core`. Install order: core first, then devops, gates and any stack plugins.
 
 ## Per-project usage
 
@@ -90,7 +91,7 @@ In any existing project, you can manually add to its `CLAUDE.md`:
 └── docs/                           ← specs + plans for this plugin's evolution
 ```
 
-The coding/build harness — reviewer agents, gate skills, `harnessed-development`, `/integration` + `/shakeout` — is **not** here; it lives in the **netdust-agent** plugin.
+The delivery policy — reviewer agents, `netdust-gates:policy`, `/shakeout` — is **not** here; it lives in the **netdust-gates** plugin.
 
 The plugin also registers the **`ploi` MCP server** (from `~/mcp/ploi-mcp-server/`) via `plugin.json`'s `mcpServers`. Auto-loaded when this plugin is enabled. Tools: `ploi_list_servers`, `ploi_restart_service`, `ploi_deploy_site`, `ploi_restore_database_backup`, and ~30 more.
 
@@ -106,7 +107,7 @@ The plugin also registers the **`ploi` MCP server** (from `~/mcp/ploi-mcp-server
 └── site.yml           ← operational config (deploy method, SSH, paths)
 ```
 
-netdust-agent's SessionStart hook injects all of these + the harness-level `GLOBAL.md`, which now ships in **netdust-agent** (`plugins/netdust-agent/memory/GLOBAL.md`). netdust-agent's Stop hook captures via tags.
+netdust-gates' SessionStart hook injects all of these + the harness-level `GLOBAL.md`, which ships in **netdust-gates** (`plugins/netdust-gates/memory/GLOBAL.md`). netdust-gates' Stop hook captures via tags.
 
 ## Operations
 
@@ -116,14 +117,14 @@ netdust-agent's SessionStart hook injects all of these + the harness-level `GLOB
 tail -f ~/.claude/logs/memory-hook.log
 ```
 
-Every Claude session start + stop writes one line. The hooks that write this log (SessionStart injector, Stop-hook tag capture, PreToolUse guard) live in **netdust-agent**, not here — they fire only if `netdust-agent` is enabled. If you don't see anything appearing after starting/ending a session:
+Every Claude session start + stop writes one line. The hooks that write this log (SessionStart injector, Stop-hook tag capture, PreToolUse guard) live in **netdust-gates**, not here — they fire only if `netdust-gates` is enabled. If you don't see anything appearing after starting/ending a session:
 
 ```bash
-grep netdust-agent ~/.claude/settings.json
-# Should show: "netdust-agent@netdust-plugins": true
+grep netdust-gates ~/.claude/settings.json
+# Should show: "netdust-gates@netdust-plugins": true
 ```
 
-If missing or false, install/enable `netdust-agent` from the `netdust-plugins` marketplace (`claude plugin install netdust-agent@netdust-plugins`; this plugin has no `install.sh`).
+If missing or false, install/enable `netdust-gates` from the `netdust-plugins` marketplace (`claude plugin install netdust-gates@netdust-plugins`; this plugin has no `install.sh`).
 
 ### Tag conventions in conversation
 
@@ -167,6 +168,6 @@ No install step. Plugin loader picks it up on next session.
 ## Not in scope
 
 - Stack-specific knowledge — that's the role of `netdust-wp`, `netdust-statamic`, etc.
-- The coding/build harness — gates, reviewer agents, TDD/threat-model/shake-out — lives in `netdust-agent`.
+- The delivery policy — reviewer agents, threat-model, shake-out, hooks — lives in `netdust-gates`; branches and deploys in `netdust-devops`.
 - Engineering process — defer to `obra/superpowers`.
 - Cross-harness portability (Cursor / OpenCode / Codex) — Claude Code only.

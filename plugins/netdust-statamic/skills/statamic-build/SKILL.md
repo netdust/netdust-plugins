@@ -287,7 +287,7 @@ If the change affects rendering, open the page in chrome-devtools and look:
 
 ### Step 3.5: Run shake-out-statamic if change is non-trivial
 
-For multi-file changes, new collections, or anything that touches the page builder structure: invoke `Skill("shake-out-statamic")`. The three-phase sweep catches regressions in adjacent areas you didn't think to test.
+For multi-file changes, new collections, or anything that touches the page builder structure: `Skill("shake-out-statamic")` runs at the Close's shake-out step — once, after `make gate`, the review and its fix pass. The three-phase sweep catches regressions in adjacent areas you didn't think to test.
 
 For single-file content edits or one-line fieldset adjustments: skip shake-out, the smoke test + render check is enough.
 
@@ -306,14 +306,14 @@ Pre-commit hook enforces this, but running it manually before staging keeps the 
 **Pipeline position:**
 
 ```
-brainstorm → plan → ntdst-statamic-build → shake-out-statamic → finishing-branch
+brainstorm → plan → statamic-build → gate → review → fix → shake-out-statamic → promote
 ```
 
 | Skill | Relationship |
 |---|---|
 | `superpowers:brainstorming` | **UPSTREAM.** Use before this skill for any non-trivial feature. |
 | `superpowers:writing-plans` | **UPSTREAM.** Multi-step features get a plan before invoking this skill per step. |
-| `shake-out-statamic` | **DOWNSTREAM.** Post-build QA. Invoke after this skill for non-trivial changes. |
+| `shake-out-statamic` | **DOWNSTREAM.** Post-build QA at the Close, after the review's fix pass, for non-trivial changes. |
 | `superpowers:systematic-debugging` | **PARALLEL.** Mid-build bugs go through this, not inline guess-and-fix. |
 | `statamic-mcp` (MCP server) | **REQUIRED for content ops.** Use the routers, not file edits, when creating/updating entries/blueprints/globals. |
 | `laravel-boost` (MCP server) | **REQUIRED for docs lookups.** `search-docs` before guessing at framework APIs. |
@@ -341,8 +341,7 @@ brainstorm → plan → ntdst-statamic-build → shake-out-statamic → finishin
 - `resources/views/page_builder/` — every existing block partial
 - `app/Services/` — service pattern (NavCustomizer is the simplest example)
 - `tests/Feature/BlueprintValidationTest.php` — the YAML guard the pre-commit hook runs
-- `docs/superpowers/specs/` — feature specs go here
-- `docs/superpowers/plans/` — implementation plans go here
+- `specs/<feature>/` — the feature's spec.md, plan.md, review.md and shakeout.md go here
 
 </reference_index>
 
@@ -359,7 +358,7 @@ A build is complete when:
 - [ ] Pint clean
 - [ ] Page renders 200 with the expected content visible
 - [ ] No JS console errors when viewed in chrome-devtools
-- [ ] If non-trivial: shake-out-statamic invoked and manifest empty
-- [ ] If feature added new docs needs: spec/plan files in `docs/superpowers/`
+- [ ] If non-trivial: shake-out-statamic invoked at the Close and manifest empty
+- [ ] Spec/plan files in `specs/<feature>/`
 
 </success_criteria>

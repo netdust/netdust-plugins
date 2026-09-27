@@ -2,21 +2,21 @@
 
 You are working in a Netdust project. The stack varies — WordPress, Statamic, Bun/Node, plain HTML — but the conventions, voice, memory pattern, and operational discipline are shared. This is the always-on layer; stack-specific plugins (netdust-wp, netdust-statamic, etc.) layer on top.
 
-This plugin is **not** a coding/build harness. The coding/build harness (gates, craft skills, reviewer agents, TDD/threat-model/shake-out, `/integration` + `/shakeout`) lives in the **netdust-agent** plugin — load that for any non-trivial coding work.
+This plugin is **not** a coding/build harness. The delivery policy (`netdust-gates:policy`, `/plan-review`, `/feature-review`, `/review-fix`, `/shakeout`, the reviewer agents, the live hooks) lives in **netdust-gates**; the branch flow, `make` verbs and `/deploy` live in **netdust-devops**.
 
 ## What this plugin provides
 
-- **Memory + observability** — the per-project `memory/STATE.md` + `lessons.md` convention and its discipline. The live hooks that load and capture memory (SessionStart injector, Stop-hook `DECISION:`/`RISK:`/`LESSON:`/`TODO:` tag scanner, PreToolUse destructive-command guard) live in **netdust-agent** — core defines the memory convention; agent runs it. Every hook fire logs to `~/.claude/logs/memory-hook.log`.
+- **Memory + observability** — the per-project `memory/STATE.md` + `lessons.md` convention and its discipline. The live hooks that load and capture memory (SessionStart injector, Stop-hook `DECISION:`/`RISK:`/`LESSON:`/`TODO:` tag scanner, PreToolUse destructive-command guard) live in **netdust-gates** — core defines the memory convention; gates runs it. Every hook fire logs to `~/.claude/logs/memory-hook.log`.
 - **Content + marketing** — `brand-voice` (Stefan/Netdust voice as artifact), `marketing` (SEO + copy structure + meta/schema), `market-research` (audiences/competitors/pricing), `research` (technical + business investigation).
 - **Ops + infra** — `secure-server` (harden a fresh Hetzner+Ploi VPS), `ploi` (full server/site lifecycle: MCP + CLI + UI). The `ploi` MCP is auto-loaded.
-- **Deploy + knowledge commands** — `/deploy` (9-method dispatcher), `/memory-audit` (staleness report on STATE/lessons/todo), `/pattern-miner` (mine cross-project memory for promotable patterns).
+- **Knowledge commands** — `/memory-audit` (staleness report on STATE/lessons/todo), `/pattern-miner` (mine cross-project memory for promotable patterns).
 - **MCP** — the `ploi` MCP server (server + site management via the Ploi API).
 
-## Coding work lives in netdust-agent
+## Coding work lives in netdust-gates
 
-For anything beyond a trivial one-file edit — features, refactors, bug fixes, security-boundary changes — load the **netdust-agent** plugin. It owns `harnessed-development` (the full design → plan → execute → shake-out → finish sequencer), the gate skills (threat-modeling, architecture-invariants, feature-acceptance, testing-workflow, test-effectiveness, shake-out, compounding), the reviewer agents, and the harness commands (`/integration`, `/shakeout`, `/test-effectiveness`, etc.). Core no longer carries any of that.
+Any code change enters through `netdust-gates:policy` — superpowers' brainstorm → plan → execute → review loop, plus Netdust's standards, `make gate`, and the stops only Stefan grants. Its Close, by cost: `make gate` → `make review name=<feature>` → one fix pass kept as `specs/<feature>/review.md` → `/shakeout` on user-facing work → push and hand over `make promote name=<feature>`. Branches, deploys and `/deploy` (rsync or git-push, through the Makefile) belong to **netdust-devops**. Core carries none of that.
 
-Engineering discipline itself (brainstorming, planning, TDD, systematic debugging, code review, finishing branches, verification before completion) comes from `obra/superpowers`. **For coding, use netdust-agent + superpowers** — core does not redefine those.
+Engineering discipline itself (brainstorming, planning, TDD, systematic debugging, code review, finishing branches, verification before completion) comes from `obra/superpowers`. **For coding, use netdust-gates + superpowers** — core does not redefine those.
 
 ## Per-project memory
 
@@ -33,9 +33,9 @@ Every Netdust project has:
 
 **Read `site.yml` before any operational command.** It is the single source of truth for hosting, SSH, remote paths, deploy method, domains, project structure.
 
-netdust-agent's SessionStart hook injects `memory/STATE.md`, `memory/lessons.md`, `tasks/todo.md`, the harness-level `GLOBAL.md`, and the site.yml summary into the initial context. It also injects a **"Memory discipline" prompt block** (only when `memory/` exists in the project) that tells Claude exactly when to update STATE, lessons, CLAUDE, and site.yml — and what *not* to write. That prompt is the difference between "Claude reads memory" and "Claude *maintains* memory."
+netdust-gates' SessionStart hook injects `memory/STATE.md`, `memory/lessons.md`, `tasks/todo.md`, the harness-level `GLOBAL.md`, and the site.yml summary into the initial context. It also injects a **"Memory discipline" prompt block** (only when `memory/` exists in the project) that tells Claude exactly when to update STATE, lessons, CLAUDE, and site.yml — and what *not* to write. That prompt is the difference between "Claude reads memory" and "Claude *maintains* memory."
 
-netdust-agent's Stop hook then captures memory (logs to `~/.claude/logs/memory-hook.log` every fire):
+netdust-gates' Stop hook then captures memory (logs to `~/.claude/logs/memory-hook.log` every fire):
 
 **Tagged capture (always on, deterministic, zero cost)**
 When you write any of these tags in your responses during a session, the Stop hook lifts them into memory automatically:
@@ -52,7 +52,7 @@ Use these tags liberally when something important happens. The hook captures the
 
 If you're working on a WordPress project, the `netdust-wp` plugin adds WP-specific skills (wp-security, wp-database, wp-frontend, wp-testing, bedrock-composer, wp-infra) + the `ntdst-*` framework skills (architecture, data, patterns) + WP-specific commands (`/wp-new-project`, `/scaffold-plugin`, `/sync-db`, `/setup-tests`). The `netdust-statamic` plugin adds Statamic + Peak skills and commands.
 
-The `netdust-agent` plugin layers on the coding/build harness (see above). Each layers cleanly — core stays always-on.
+The `netdust-gates` and `netdust-devops` plugins layer on the delivery policy and the branch/deploy flow (see above). Each layers cleanly — core stays always-on.
 
 ## Non-negotiables
 

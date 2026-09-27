@@ -1,14 +1,18 @@
 # Netdust Plugins
 
-Claude Code plugin monorepo. Three plugins published as a single marketplace.
+Claude Code plugin monorepo. Seven plugins published as a single marketplace.
 
 ## Plugins
 
 | Plugin | Role |
 |--------|------|
-| `netdust-core` | Cross-stack discipline (memory conventions, skills, agents, MCP — live hooks in netdust-agent). Stack-agnostic. |
+| `netdust-core` | Cross-stack discipline (memory conventions, content/ops skills, ploi MCP — live hooks in netdust-gates). Stack-agnostic. |
+| `netdust-devops` | The branch flow, `make` verbs, deploy gate and ledger, site.yml schema, `/deploy`. Stack-agnostic. |
+| `netdust-gates` | The delivery policy over superpowers (`netdust-gates:policy`), reviews, `/shakeout`, and the live hooks. |
 | `netdust-wp` | WordPress framework knowledge (NTDST/Bedrock). Layers on core. |
 | `netdust-statamic` | Statamic 6 + Peak. Layers on core. |
+| `netdust-react` | Vite + React + Capacitor. Layers on core. |
+| `netdust-agent` | The previous build harness — retiring, replaced by netdust-gates. |
 
 ## Install
 
@@ -22,6 +26,8 @@ Install the plugins you want:
 
 ```bash
 claude plugin install netdust-core@netdust-plugins
+claude plugin install netdust-devops@netdust-plugins
+claude plugin install netdust-gates@netdust-plugins
 claude plugin install netdust-wp@netdust-plugins     # only on WP machines
 claude plugin install netdust-statamic@netdust-plugins  # only on Statamic machines
 ```

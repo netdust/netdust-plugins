@@ -1,3 +1,5 @@
+> Historical — describes the netdust-agent era; the current flow is in netdust-gates:policy and netdust-devops:devops.
+
 # Harness-Engineering Hardening Plan — netdust-core
 
 **Status:** PARKED — research done, implementation deferred (Stefan: "we do this later")

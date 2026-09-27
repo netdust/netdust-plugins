@@ -1,6 +1,6 @@
 # Netdust Statamic Plugin
 
-You are working on a Netdust **Statamic** project. This plugin layers on top of `netdust-devops` (the branch flow, deploy, site.yml), `netdust-core` (memory conventions, server management, cross-domain skills) and `netdust-agent` (the coding harness — `harnessed-development`, `testing-workflow`, `shake-out`, the reviewer agents, and the live hooks: SessionStart injector, Stop-hook tag capture, PreToolUse guard). Install `netdust-devops` first — `/deploy` and the make verbs won't work otherwise; memory hooks need `netdust-agent`.
+You are working on a Netdust **Statamic** project. This plugin layers on top of `netdust-devops` (the branch flow, deploy, site.yml), `netdust-core` (server management, cross-domain skills) and `netdust-gates` (the delivery policy — `netdust-gates:policy` over superpowers, `/plan-review`, `/feature-review`, `/review-fix`, `/shakeout` — and the live hooks: SessionStart memory injector, Stop-hook tag capture, PreToolUse guard). Install `netdust-devops` first — `/deploy` and the make verbs won't work otherwise; memory hooks need `netdust-gates`.
 
 ## Default assumptions (project `CLAUDE.md` can override)
 
@@ -9,7 +9,7 @@ You are working on a Netdust **Statamic** project. This plugin layers on top of 
 - **Local Dev**: DDEV (always — `ddev exec ...` for everything Laravel/Statamic)
 - **Assets**: Vite 7 + Tailwind 4 + Alpine 3
 - **Image driver**: Imagick (set in `.env`)
-- **Deploy**: Ploi (Hetzner). See core's `/deploy` for the 9 methods + `ploi` skill for ops.
+- **Deploy**: Ploi (Hetzner). Through netdust-devops' make verbs (`/deploy`, method `rsync` or `git-push` from `site.yml`) + `ploi` skill for ops.
 - **Architecture**: Starter ships baseline (layout, header/footer, design tokens, universal page-builder blocks, CP role rules, NTDST tooling). Domain addons add specifics (portfolio-art, studio, etc.) — never inline domain-specific stuff into the starter.
 
 ## What this plugin adds
@@ -19,15 +19,15 @@ You are working on a Netdust **Statamic** project. This plugin layers on top of 
 | **Skills** | `statamic-build` (editor-friendly feature implementation), `shake-out-statamic` (Statamic-flavored post-build QA), `peak-reference` (Peak partials + commands), `statamic-mcp` (router tools guide) |
 | **Commands** | `/new-feature`, `/new-collection`, `/new-block`, `/new-service`, `/cache-bust`, `/sync-content` |
 
-## What lives in netdust-core / netdust-agent (not here)
+## What lives in netdust-core / netdust-devops / netdust-gates (not here)
 
-- Memory + tag conventions (`DECISION:`, `RISK:`, `LESSON:`, `TODO:`, `SKILL-EDGE:`) (netdust-core)
+- Memory + tag capture (`DECISION:`, `RISK:`, `LESSON:`, `TODO:`) (netdust-gates hooks)
 - `devops` skill (DDEV, the branch flow, make verbs, deploy, `.env`) (netdust-devops)
 - `secure-server` + `ploi` skills + ploi MCP (netdust-core)
-- The coding harness — `harnessed-development`, `testing-workflow`, `shake-out` (generic; `shake-out-statamic` here is the Statamic-specific override), `test-effectiveness`, `threat-modeling`, `architecture-invariants`, `feature-acceptance`, `compounding` (netdust-agent)
+- The delivery policy — `netdust-gates:policy`, `threat-modeling`, `/plan-review`, `/feature-review`, `/review-fix`, `/shakeout` (the manifest gate; `shake-out-statamic` here is the Statamic sweep that runs at its step), `/session-review`, `/session-learn` (netdust-gates)
 - `research`, `market-research`, `brand-voice`, `marketing` (netdust-core)
-- The 8 coding reviewer agents (netdust-agent) — code review is done by netdust-agent's `reviewer` agent + the specialist reviewers
-- `/deploy`, `/skill-audit`, `/pattern-miner`, `/red-test` (netdust-core)
+- Code review — superpowers' whole-branch review via `make review name=<feature>`, joined by `security-sentinel` / `invariant-auditor` (netdust-gates)
+- `/deploy`, `/new-project` (netdust-devops); `/pattern-miner` (netdust-core)
 - Voice (`SOUL.md`) and universal rules (`RULES.md`) (netdust-core)
 
 ## The Editor Iron Rules (Statamic-specific)
@@ -52,23 +52,25 @@ The Netdust Statamic starter (`~/Sites/ntdst-starter`) ships the 90% baseline. D
 - `netdust/studio` (future) — design studio cases
 - `netdust/about-site` (future) — marketing sites
 
-Per-project: `ddev composer require netdust/<addon>` then `php please install netdust/<addon>` then `make stache-warm`.
+Per-project: `ddev composer require netdust/<addon>` then `php please install netdust/<addon>` then `ddev exec php please stache:warm`.
 
 **Never inline domain-specific content into the starter.** Build it as an addon.
 
-## How this plugin plugs into `harnessed-development`
+## How this plugin plugs into `netdust-gates:policy`
 
-`netdust-agent:harnessed-development` is the stack-agnostic entry skill that sequences the full harness (design → plan + threat-modeling + architecture-invariants → execute + per-task testing-workflow + Step 2.5 → shake-out → finish). **For any non-trivial Statamic work, that is the entry point** — invoking it engages every gate. The Statamic overrides it defers to:
+`netdust-gates:policy` is the stack-agnostic entry for any code change (brainstorm → plan → execute → review, superpowers' loop, plus Netdust's standards and gates). **For any non-trivial Statamic work, that is the entry point.** The Statamic overrides it defers to:
 
-- **Design (Stage 0)** — `superpowers:brainstorming` (Statamic has no rigid framework-design skill).
-- **Execute (Stage 2)** — `statamic-build` is the executor (PRE-WRITE → WRITE → VERIFY), under the harness's testing-workflow gate.
-- **Shake-out (Stage 3)** — `shake-out-statamic` replaces the generic shake-out.
+- **Design** — `superpowers:brainstorming` (Statamic has no rigid framework-design skill).
+- **Execute** — `statamic-build` is the executor (PRE-WRITE → WRITE → VERIFY).
+- **Shake-out** — `shake-out-statamic` is the Statamic sweep at the Close's shake-out step, before `/shakeout`'s manifest gate.
 
-`/new-feature` is the convenience wrapper that invokes the harness with these overrides pre-wired. Use it for new features; it is no longer a separate pipeline.
+The Close, by cost: `make gate` → `make review name=<feature>` → one fix pass (review kept as `specs/<feature>/review.md`) → `/shakeout` on the fixed code → push and hand over `make promote name=<feature>`.
+
+`/new-feature` is the convenience wrapper that invokes the policy with these overrides pre-wired.
 
 ## Slash commands (Statamic-specific)
 
-- `/new-feature` — invokes `harnessed-development` with Statamic overrides (design → plan + gates → statamic-build → shake-out-statamic → finish)
+- `/new-feature` — invokes `netdust-gates:policy` with Statamic overrides (brainstorm → plan → statamic-build → gate → review → fix → shake-out → promote)
 - `/new-collection` — scaffold a collection by copying from blog/pages (no Peak CLI dep)
 - `/new-block` — scaffold a page-builder block by copying from an existing one
 - `/new-service` — scaffold a Service class (thin-controller / service-layer pattern)

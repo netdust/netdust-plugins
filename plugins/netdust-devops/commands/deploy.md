@@ -60,8 +60,12 @@ not.
 `make ship` — and **only when the user asked for it in this turn.** Not
 because it follows from an earlier plan, not because staging looks right.
 
-It checks for a terminal first, then gates, backs up the data and the payload,
-and prompts for a typed `yes`. That confirmation is the user's:
+It checks for a terminal first, then refuses unless HEAD is `origin/staging`,
+`deployed/staging` names it, staging contains production and — when
+`commands.e2e` is declared — `e2e/staging` names it (`make e2e env=staging`
+stamps it). Then it runs `commands.gate` (red ships nothing), prompts for a
+typed `yes`, and backs up the data and the payload. A `hotfix/*` branch skips
+the staging and e2e checks. That confirmation is the user's:
 **never pipe or redirect input into it.** If you are running without a
 terminal, say so and stop — do not look for a way around it.
 
@@ -74,7 +78,7 @@ The verbs refuse by name and say what to run instead. That message is the
 answer — follow it. **A verb that fails is a finding to file, not permission
 to use raw git.** Reaching around the flow with `git push` or `git merge` is
 what put the branches in the state this tooling exists to fix, and the
-netdust-agent guard will deny it anyway.
+netdust-gates guard will deny it anyway.
 
 If the refusal looks wrong, report it with the exact output. Do not work
 around it.

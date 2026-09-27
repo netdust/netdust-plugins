@@ -1,18 +1,18 @@
 ---
 name: shake-out-statamic
-description: Post-build QA phase for Statamic 6 + Peak projects. Sweeps the built artifact end-to-end (stache, blueprints, page builder, Peak partials, Antlers/Blade rendering), compiles a bug manifest, then fixes systematically. Use after executing-plans or subagent-driven-development completes when unit tests pass but the artifact hasn't been exercised in a real environment. Triggers on "shake it out", "shakeout", "does it work", "QA this", "find the bugs", "what's broken" — local override of the generic shake-out skill for Statamic projects.
+description: Post-build QA phase for Statamic 6 + Peak projects. Sweeps the built artifact end-to-end (stache, blueprints, page builder, Peak partials, Antlers/Blade rendering), compiles a bug manifest, then fixes systematically. Use after executing-plans or subagent-driven-development completes when unit tests pass but the artifact hasn't been exercised in a real environment. Triggers on "shake it out", "shakeout", "does it work", "QA this", "find the bugs", "what's broken" — the Statamic sweep that runs before netdust-gates' /shakeout.
 ---
 
 <objective>
-Statamic-flavoured shake-out. Mirrors the discipline of the global `shake-out` skill (SWEEP → MANIFEST → FIX, three phases, no inline fixing) but adapts the checklist to Statamic 6 + Peak: `please` CLI, the `cboxdk/statamic-mcp` routers, blueprints, stache, Glide, page builder blocks, Peak partials, and Antlers/Blade rendering.
+Statamic-flavoured shake-out. Keeps the SWEEP → MANIFEST → FIX discipline (three phases, no inline fixing) but adapts the checklist to Statamic 6 + Peak: `please` CLI, the `cboxdk/statamic-mcp` routers, blueprints, stache, Glide, page builder blocks, Peak partials, and Antlers/Blade rendering.
 
-Pipeline position is identical:
+Pipeline position:
 
 ```
-brainstorm → plan → execute → SHAKE-OUT → finishing-branch
+brainstorm → plan → execute → gate → review → fix → SHAKE-OUT → promote
 ```
 
-This skill **replaces** `shake-out` for this project. When the global skill is loaded alongside, this one wins.
+This is the Statamic sweep at the `netdust-gates:policy` Close's shake-out step — once, on the reviewed and fixed code. `/shakeout` (netdust-gates) still follows: its flow table `specs/<feature>/shakeout.md` must pass `bin/shakeout-check.py`.
 </objective>
 
 <essential_principles>
@@ -71,9 +71,9 @@ Before starting: read the plan, ensure DDEV is up, warm the stache, then load `r
 
 **Input requirements:**
 - All plan tasks marked complete
-- Code committed on the working branch (`staging` or a feature branch)
+- Code committed on `feature/<feature>` (never on `staging` — it is a rung, rebuilt by promote)
 - Unit tests passing (`php artisan test --compact`)
-- Plan file path known (typically under `docs/superpowers/plans/`)
+- Plan file path known (`specs/<feature>/plan.md`)
 
 **Step 0: Preparation**
 
@@ -141,7 +141,7 @@ After Track A, generate a focused checklist for things Claude can't verify — v
 
 After both tracks complete:
 
-1. Write manifest to `tasks/shake-out-manifest.md` using `templates/manifest.md`
+1. Write manifest to `specs/<feature>/shakeout-bugs.md` using `templates/manifest.md` — beside, not in, `shakeout.md`, whose table `bin/shakeout-check.py` parses
 2. Cluster bugs by suspected root cause — many Statamic bugs share a stache or blueprint origin and look like five different bugs but are one
 3. Assign severity:
 
@@ -189,7 +189,7 @@ For each bug (or cluster):
 
 3. **Check for collateral** — Run the full feature test suite (`ddev exec php artisan test --compact`). Hit related routes with curl. Glance at `storage/logs/laravel.log`.
 
-4. **Update `tasks/shake-out-manifest.md`** — Mark resolved with root-cause notes. If new bugs surfaced, add them.
+4. **Update `specs/<feature>/shakeout-bugs.md`** — Mark resolved with root-cause notes. If new bugs surfaced, add them.
 
 5. **If 3+ fix attempts fail on the same bug:** STOP. Present to human with options:
    - Continue trying (different approach)
@@ -215,7 +215,7 @@ When all bugs are resolved or explicitly deferred:
 4. Update manifest with final status
 5. Present to human: "All [N] resolved. [N] deferred. Here's what changed."
 6. Invoke `superpowers:verification-before-completion`
-7. Invoke `superpowers:finishing-a-development-branch`
+7. Run `/shakeout`, then push and hand over `make promote name=<feature>`
 
 </process>
 
@@ -225,7 +225,7 @@ If shake-out reveals the implementation approach is fundamentally wrong — e.g.
 
 1. **Continue fixing** — bugs are fixable within current architecture
 2. **Defer and ship** — known issues, ship with caveats
-3. **Abort → re-plan** — write `tasks/shake-out-abort-context.md` with: what was built, what failed and why, the architectural insight gained, recommendation for the re-plan. Then invoke `superpowers:brainstorming` (or the stack sub-plugin's design skills if relevant) with that file as context.
+3. **Abort → re-plan** — write `specs/<feature>/shakeout-abort.md` with: what was built, what failed and why, the architectural insight gained, recommendation for the re-plan. Then invoke `superpowers:brainstorming` (or the stack sub-plugin's design skills if relevant) with that file as context.
 
 </abort_and_replan>
 
@@ -233,18 +233,18 @@ If shake-out reveals the implementation approach is fundamentally wrong — e.g.
 
 **Pipeline position:**
 ```
-brainstorm → plan → execute → SHAKE-OUT-STATAMIC → finishing-branch
+brainstorm → plan → execute → gate → review → fix → SHAKE-OUT-STATAMIC → promote
 ```
 
 | Skill | Relationship |
 |-------|-------------|
-| `executing-plans` / `subagent-driven-development` | **UPSTREAM.** This runs after them. |
+| `executing-plans` / `subagent-driven-development`, then `make review` + its fix pass | **UPSTREAM.** This runs after them. |
 | `superpowers:systematic-debugging` | **REQUIRED.** Invoked per bug during Phase 3. |
 | `superpowers:verification-before-completion` | **REQUIRED.** Invoked before declaring done. |
-| `superpowers:finishing-a-development-branch` | **DOWNSTREAM.** After the manifest is closed. |
+| `/shakeout` (netdust-gates), then `make promote name=<feature>` | **DOWNSTREAM.** After the manifest is closed. |
 | `chrome-devtools` MCP | **REQUIRED.** Browser-level verification of rendering and CP. |
 | `statamic-mcp` routers | **REQUIRED.** Content/blueprint state inspection. |
-| Generic `shake-out` | **OVERRIDDEN.** This skill replaces it for Statamic projects. |
+| `shakeout-qa` (netdust-gates) | **COMPLEMENT.** It drives the flows and writes `shakeout.md`; this sweep adds the Statamic checklist. |
 
 **Trigger phrases:**
 - "shake it out" / "shake-out" / "shakeout"
@@ -256,7 +256,7 @@ brainstorm → plan → execute → SHAKE-OUT-STATAMIC → finishing-branch
 - Mid-build debugging (use `systematic-debugging` directly)
 - Writing new features (use TDD)
 - The project hasn't been built yet
-- The project is not Statamic — use the global `shake-out` skill instead
+- The project is not Statamic — `/shakeout` alone
 
 </integration>
 
@@ -279,6 +279,6 @@ Shake-out is complete when:
 - Pint clean
 - Manifest file updated with final status
 - `verification-before-completion` invoked and passing
-- `finishing-a-development-branch` invoked
+- `/shakeout` passed and `make promote name=<feature>` handed over
 
 </success_criteria>

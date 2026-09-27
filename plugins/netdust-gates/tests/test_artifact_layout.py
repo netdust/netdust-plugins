@@ -6,7 +6,7 @@ from pathlib import Path
 PLUGIN = Path(__file__).resolve().parent.parent
 ALLOWED = re.compile(
     r"^specs/(CHECKS\.md|test-prune/<date>\.md"
-    r"|<feature>/(?:spec|plan|plan-review|review|flows|shakeout|session-review)\.md"
+    r"|<feature>/(?:spec|plan|plan-review|review|flows|shakeout|shakeout-bugs|shakeout-abort|session-review)\.md"
     r"|<feature>/shakeout/[^`\s]*"
     r"|<feature>/?)$")
 PATH = re.compile(r"specs/[A-Za-z0-9_<>$./*\\-]+")

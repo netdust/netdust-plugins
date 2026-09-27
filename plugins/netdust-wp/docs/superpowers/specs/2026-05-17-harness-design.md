@@ -1,3 +1,5 @@
+> Historical — describes the netdust-agent era; the current flow is in netdust-gates:policy and netdust-devops:devops.
+
 # netdust-wp harness design
 
 _Spec date: 2026-05-17_

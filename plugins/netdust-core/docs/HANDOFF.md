@@ -1,3 +1,5 @@
+> Historical — describes the netdust-agent era; the current flow is in netdust-gates:policy and netdust-devops:devops.
+
 # Handoff — netdust harness verification
 
 _Created 2026-05-17, end of session that built and split the harness._
