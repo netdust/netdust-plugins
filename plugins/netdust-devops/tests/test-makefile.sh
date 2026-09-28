@@ -1052,6 +1052,28 @@ for tp in bedrock stackwp; do
 done
 [ -z "$scafbad" ] && ok "a scaffolded rsync WordPress site reads wp_path and content_dir under the web root once" \
                   || bad "a scaffolded rsync WordPress site reads wp_path and content_dir under the web root once" "$scafbad"
+
+# git-push pulls into the repo root, so the paths are read from there: a
+# --set DEPLOY_METHOD=git-push (the fleet installer's Bedrock) must carry the
+# webroot, or remote WP-CLI and content paths miss it (laika, 2026-09-28).
+gpbad=""
+for tp in bedrock stackwp; do
+    d="$WORK/scafgp-$tp"
+    "$SCAFF" "scafgp$tp" --stack=wp --template="$tp" --dir="$d" --set DEPLOY_METHOD=git-push >/dev/null 2>&1 || { gpbad="$gpbad $tp(scaffold-failed)"; continue; }
+    w=$("$d/scripts/site" structure.webroot)
+    for k in wp_path content_dir; do
+        v=$("$d/scripts/site" deploy.$k)
+        case "$v" in "$w"/*) ;; *) gpbad="$gpbad $tp($k=$v not under webroot $w)";; esac
+    done
+done
+[ -z "$gpbad" ] && ok "a scaffolded git-push WordPress site reads wp_path and content_dir from the repo root" \
+                || bad "a scaffolded git-push WordPress site reads wp_path and content_dir from the repo root" "$gpbad"
+# An explicit --set still wins over the derivation.
+d="$WORK/scafgp-explicit"
+"$SCAFF" scafgpx --stack=wp --template=bedrock --dir="$d" --set DEPLOY_METHOD=git-push --set WP_PATH=custom/wp >/dev/null 2>&1
+[ "$("$d/scripts/site" deploy.wp_path)" = custom/wp ] \
+    && ok "an explicit --set WP_PATH wins over the git-push derivation" \
+    || bad "an explicit --set WP_PATH wins over the git-push derivation" "$("$d/scripts/site" deploy.wp_path)"
 cd "$P" || exit 1
 
 echo

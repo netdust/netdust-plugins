@@ -13,6 +13,8 @@
 #   content_dir     SERVER wp-content path, relative to the environment path.
 #                   new-project scaffolds rsync, where the environment path IS
 #                   the web root — so both are read under the webroot, once.
+#                   A --set DEPLOY_METHOD=git-push prefixes both with the webroot
+#                   (git-push pulls into the repo root).
 #   ddev_type       ddev config --project-type
 #   source_repo     the skeleton git remote, cloned by the fleet installer.
 #                   "-" means there is nothing to clone: the project layer is

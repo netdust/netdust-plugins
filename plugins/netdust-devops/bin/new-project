@@ -167,6 +167,14 @@ for k in "${!OVERRIDE[@]}"; do
     printf -v "$k" '%s' "${OVERRIDE[$k]}"
 done
 
+# The registry's server paths are relative to the web root (rsync). git-push
+# pulls into the repo root, so there they carry the webroot — unless the caller
+# set them explicitly.
+if [[ "$DEPLOY_METHOD" == "git-push" && -n "$WEBROOT" && "$WEBROOT" != "." ]]; then
+    [[ -z "${OVERRIDE[WP_PATH]+x}" && -n "$WP_PATH" ]] && WP_PATH="$WEBROOT/$WP_PATH"
+    [[ -z "${OVERRIDE[CONTENT_DIR]+x}" && -n "$CONTENT_DIR" ]] && CONTENT_DIR="$WEBROOT/$CONTENT_DIR"
+fi
+
 if [[ $ADOPT -eq 1 && -f site.yml ]]; then
     echo "  keeping the existing site.yml"
 else
