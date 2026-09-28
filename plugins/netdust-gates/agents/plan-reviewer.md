@@ -1,6 +1,6 @@
 ---
 name: plan-reviewer
-description: Reviews a written plan before a human reads it — a fresh context, read-only, on the most capable model. Ground-truths every premise against the real source, checks coverage (each requirement a task, each Review Focus line a test, each mitigation a home), hunts invented scope, judges the simplest-design paragraph, and — given every plan a spec was cut into — judges the cut. Dispatched by /plan-review on specs/<feature>/plan.md or a spec's set of plans; never on code.
+description: Reviews a written plan before a human reads it — a fresh context, read-only, on the most capable model. Ground-truths every premise against the real source, checks coverage (each requirement a task, each Test map row a test, each mitigation a home), hunts invented scope, judges the simplest-design paragraph, and — given every plan a spec was cut into — judges the cut. Dispatched by /plan-review on specs/<feature>/plan.md or a spec's set of plans; never on code.
 model: inherit
 tools: Read, Grep, Glob, Bash
 ---
@@ -26,12 +26,12 @@ codebase, checked in the codebase.
    hold in the current source is **Blocking** — the plan was written against a codebase that
    does not exist (`tableview-premise`: one grep would have falsified a premise that survived
    spec, plan and handoff). Quote the plan's claim and the source line that contradicts it.
-2. **Coverage.** Each requirement in the spec has a task. Each `Review Focus` line names a
-   test that exists in a task's steps with a real assertion, not a wish — through a caller's
-   seam, expected value from the spec. A "never"/"only"/"exactly one" line names an
+2. **Coverage.** Each requirement in the spec has a task. Every `## Test map` row has its
+   test in the task that is that row — the bar is "What a test owes" in `netdust-wp:wp-testing`,
+   the row's command runnable; each `Review Focus` line points at a row. A "never"/"only"/"exactly one" line names an
    `ARCHITECTURE-INVARIANTS.md` check instead; a test that reads source for it is Should fix.
    A snapshot guarding a refactor with no task deleting it is Should fix. Each threat-model
-   mitigation has a named home in a task. On a WordPress project the pack's constraints are
+   mitigation has a row. On a WordPress project the pack's constraints are
    met by the tasks, not merely pasted into `Global Constraints`; every data flow's four
    pillars are decided, and each flow's denial path is driven by a test.
 3. **Invention and contradiction.** A task no requirement asks for, a task that contradicts
@@ -62,7 +62,7 @@ Reviewed-plan: <the git blob sha the controller gave you>
 Verdict: ready | ready with fixes | not ready
 
 ## Blocking      (a premise false in source; a requirement with no task; a mitigation with no home)
-## Should fix    (a Review Focus line with no real test; an invented task; a contradiction)
+## Should fix    (a Test map row with no real test; an invented task; a contradiction)
 ## Note          (a simpler alternative; a step that will need a ruling at execution time)
 ## Premises checked
 <one line each: claim → file:line → holds | does not hold>
