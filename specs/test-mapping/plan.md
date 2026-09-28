@@ -27,7 +27,7 @@
 
 - The policy skill stays under 150 lines (`test_policy_skill.py` pins it); the new skill stays under 50 and cites `netdust-wp:wp-testing` and `edge-classes.md` rather than restating them.
 - No 0.28 plan grammar anywhere in the skills: `gate-check`, `tasks.md`, `Lane:`, `Cluster`, `Stakes:`, `Test-author` (`test_policy_skill.py` scans for them). "tier" is fine; the pack uses it.
-- Nothing under `plugins/netdust-agent/` (retired) and nothing in superpowers is edited (spec R8). The one edit outside netdust-gates is Task 3, in `plugins/netdust-wp/skills/wp-testing/SKILL.md`, and it removes a paragraph.
+- Nothing under `plugins/netdust-agent/` (retired) and nothing in superpowers is edited (spec R8). The edits outside netdust-gates are Task 3, in `plugins/netdust-wp/skills/wp-testing/SKILL.md` (two paragraphs become one), and the marketplace entry in Task 4.
 - `bash plugins/netdust-gates/tests/run.sh` exits 0 after every task; its `All harness tests passed.` line is quoted in the task report. The eval is run by hand once at the end and its result reported, red or green (stochastic: red tightens the skill).
 - Commit by path on `feature/test-mapping`. No merge, no push to `main`, no `git add -A`, no stash.
 - Version 0.10.0 in `plugins/netdust-gates/.claude-plugin/plugin.json` and the matching entry in `.claude-plugin/marketplace.json`, with a description line prepended in the plugin's convention.
@@ -48,11 +48,12 @@ Most likely first. Each line points at a Test map row and names its pin.
 
 | # | Ruling | Costs if wrong |
 |---|---|---|
-| 1 | **Task 3 edits `netdust-wp`.** Spec R6/R7 name `wp-testing` as the home of the bar and the runners; its "Choosing the tier" paragraph is the sixth place that decides tier. Removing it is a four-line deletion in another plugin. | Stefan strikes Task 3; the paragraph stays and disagrees with the map by a sentence. |
+| 1 | **Task 3 edits `netdust-wp`.** Spec R6/R7 name `wp-testing` as the home of the bar and the runners; its "Choosing the tier" paragraph is the sixth place that decides tier. Replacing its two paragraphs with one pointer is the only edit in another plugin. | Stefan strikes Task 3; the paragraph stays and disagrees with the map by a sentence. |
 | 2 | **The skill carries one example row.** An example is text agents copy, which is the point here: the table shape is the contract. The example is a booking, so it matches the eval. | Plans copy "BookingService" into unrelated features; the eval would show it. |
 | 3 | **No e2e for the consumers.** The agents only run dispatched in a live session; the eval drives the planner, not `shakeout-qa`. Their proof is the pin on the prompt text plus the next real shake-out. | A consumer edit reads well and misbehaves live; found on the first feature that runs it. |
 | 4 | **Execution mode: Native.** Four prose units sharing one test run; no security boundary; nothing outlives one context. | None material. |
 | 5 | **`flows.md` stays.** A branch with no plan still has no map; `shakeout-qa` keeps that path unchanged. | None. |
+| 6 | **A plan with no Test map does not block the shake-out.** `shakeout-qa` falls back to one flow per user-facing requirement and says so; the policy already rules that an old or half plan never holds up the work (`skills/policy/SKILL.md`, "Nothing blocks code on a plan's state"). The fallback is the one decision left in a consumer, and it is written here. | A pre-0.10 plan gets a thinner shake-out than a mapped one; the report names it. |
 
 ## For Stefan at review
 
@@ -148,9 +149,9 @@ the unit cut. Name the rule that fired.
   refused, the missing nonce rejected — RED first, named in its Test map row.
 ```
 
-- [ ] **Step 4: Growth rule.** In `plugins/netdust-gates/CLAUDE.md`, replace "Never as a new plan field or a new check on plan grammar." with "Never as a plan section a skill does not own (the threat model and the test map are the two, each owned by its skill) or a new check on plan grammar." Update `tests/test_plugin_manifest.py`: the CLAUDE.md pin asserts `"a skill does not own" in claude_md` in place of `"Never as a new plan field" in claude_md`.
+- [ ] **Step 4: Growth rule.** In `plugins/netdust-gates/CLAUDE.md` (the sentence wraps after "plan"; match the wrapped text, and keep the five words "a skill does not own" on one line for the pin), replace "Never as a new plan field or a new check on plan grammar." with "Never as a plan section a skill does not own (the threat model and the test map are the two, each owned by its skill) or a new check on plan grammar." Update `tests/test_plugin_manifest.py`: the CLAUDE.md pin asserts `"a skill does not own" in claude_md` in place of `"Never as a new plan field" in claude_md`.
 
-- [ ] **Step 5: Pins.** Add `"Test map"` and `"netdust-gates:test-mapping"` to the `ok_tok` tuple in `test_policy_skill.py`. Create `tests/test_test_mapping_skill.py`:
+- [ ] **Step 5: Pins.** Add `"Test map"` and `"netdust-gates:test-mapping"` to the `ok_tok` tuple in `test_policy_skill.py`, and add `SKILLS / "test-mapping" / "SKILL.md"` to the files its `BANNED_GRAMMAR` scan reads. Create `tests/test_test_mapping_skill.py`:
 
 ```python
 """test_test_mapping_skill.py — the Test map has one producer and its consumers read it."""
@@ -203,9 +204,9 @@ fall back to one flow per user-facing requirement and say so in the report.
 
   The `flows.md` paragraph that follows stays as it is.
 
-- [ ] **Step 2: plan-reviewer.** In question 2, replace "Each `Review Focus` line names a test that exists in a task's steps with a real assertion, not a wish — through a caller's seam, expected value from the spec." with "Every `## Test map` row has its test in the task that is that row — a real assertion through the row's seam, expected value from the spec, the row's command runnable; each `Review Focus` line points at a row." Replace "Each threat-model mitigation has a named home in a task." with "Each threat-model mitigation has a row." In the description line, replace "each Review Focus line a test" with "each Test map row a test". In the report template, the Should fix line reads `(a Test map row with no real test; an invented task; a contradiction)`.
+- [ ] **Step 2: plan-reviewer.** In question 2 (the sentence wraps after "names a"; match the wrapped text), replace "Each `Review Focus` line names a test that exists in a task's steps with a real assertion, not a wish — through a caller's seam, expected value from the spec." with "Every `## Test map` row has its test in the task that is that row — the bar is \"What a test owes\" in `netdust-wp:wp-testing`, the row's command runnable; each `Review Focus` line points at a row." Replace "Each threat-model mitigation has a named home in a task." with "Each threat-model mitigation has a row." In the description line, replace "each Review Focus line a test" with "each Test map row a test". In the report template, the Should fix line reads `(a Test map row with no real test; an invented task; a contradiction)`.
 
-- [ ] **Step 3: threat-modeling.** Replace the last paragraph ("Every mitigation becomes a `Review Focus` line pinned as the policy says …") with:
+- [ ] **Step 3: threat-modeling.** In the description line, replace "which becomes its Review Focus lines and the security review's target" with "whose mitigations become Test map rows and the security review's target". Replace the last paragraph ("Every mitigation becomes a `Review Focus` line pinned as the policy says …") with:
 
 ```markdown
 Every mitigation is a `## Test map` row (`netdust-gates:test-mapping`) or, for a "never"/"only"
@@ -224,16 +225,17 @@ proves it and duplicates no nearby test; a behaviour the project does not own (a
 never edits, WordPress core) belongs in that package's suite. Missing evidence for any one is DELETE.
 ```
 
-  Keep "The usual suspects" and everything after.
+  Keep "The usual suspects" and everything after, with two touches: the KEEP disposition reads "looks suspect, passes the bar unchanged", and the report line reads "Each KEEP and REWRITE: each point of the bar and the audit rule, one line each, with evidence".
 
 - [ ] **Step 5: Pins.** Append to the list returned by `run()` in `test_test_mapping_skill.py`:
 
 ```python
         ("Test map" in (AGENTS / "shakeout-qa.md").read_text() and "No plan table lists them" not in (AGENTS / "shakeout-qa.md").read_text(),
          "shakeout-qa reads the Test map's flows and no longer derives them"),
-        ("Test map" in (AGENTS / "plan-reviewer.md").read_text(), "plan-reviewer checks rows"),
+        ("Test map" in (AGENTS / "plan-reviewer.md").read_text() and "What a test owes" in (AGENTS / "plan-reviewer.md").read_text(),
+         "plan-reviewer checks rows and cites the bar"),
         ("Test map" in (PLUGIN / "skills" / "threat-modeling" / "SKILL.md").read_text(), "threat-modeling points mitigations at rows"),
-        ("What a test owes" in (AGENTS / "test-pruner.md").read_text() and "all six hold" not in (AGENTS / "test-pruner.md").read_text(),
+        ("What a test owes" in (AGENTS / "test-pruner.md").read_text() and "all six" not in (AGENTS / "test-pruner.md").read_text(),
          "test-pruner cites the bar instead of carrying it"),
 ```
 
