@@ -17,13 +17,14 @@ def run() -> list[tuple[bool, str]]:
     pack = (SKILLS / "policy" / "wordpress.md").read_text()
     edges = (SKILLS / "policy" / "edge-classes.md").read_text()
     threat = (SKILLS / "threat-modeling" / "SKILL.md").read_text()
+    mapping = (SKILLS / "test-mapping" / "SKILL.md").read_text()
     frontmatter = re.match(r"---\nname: policy\ndescription: .+\n---\n", policy)
 
     ok_up, miss_up = _has_all(policy, ("superpowers:brainstorming", "superpowers:writing-plans",
                                        "superpowers:finishing-a-development-branch",
                                        "superpowers:requesting-code-review"))
     ok_tok, miss_tok = _has_all(policy, (
-        "Global Constraints", "Review Focus", "First working version", "Simplest design",
+        "Global Constraints", "Review Focus", "First working version", "Simplest design", "Test map", "netdust-gates:test-mapping",
         "Source:", "Accepted-by-human:", "Ruling:", "make gate", "shakeout-check.py",
         "security-sentinel", "invariant-auditor", "wordpress.md", "edge-classes.md",
         "netdust-gates:threat-modeling", "Spec:", "make promote name=<feature>", "make review name=<feature>"))
@@ -34,7 +35,7 @@ def run() -> list[tuple[bool, str]]:
     ok_edge, miss_edge = _has_all(edges, (
         "Empty", "Denied actor", "re-entry", "Concurrent", "Boundary", "Mid-flow", "Delivery seam"))
     ok_thr, miss_thr = _has_all(threat, ("Assets", "Attacks", "Mitigations", "Deferrals"))
-    banned = [b for text in (policy, pack, edges, threat) for b in BANNED_GRAMMAR if b in text]
+    banned = [b for text in (policy, pack, edges, threat, mapping) for b in BANNED_GRAMMAR if b in text]
 
     return [
         (frontmatter is not None, "policy: frontmatter is `name: policy` + one-line description"),

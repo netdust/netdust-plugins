@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 EVALS = Path(__file__).resolve().parent.parent / "evals"
-IDS = ["wp-feature-constraints", "security-surface-review-focus", "small-tweak-no-artifacts"]
+IDS = ["wp-feature-constraints", "security-surface-review-focus", "small-tweak-no-artifacts", "unit-cut-plan"]
 
 
 def _compiles(cases: list[dict]) -> bool:

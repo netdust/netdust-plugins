@@ -22,12 +22,12 @@ nothing else. A defect in the code is a manifest row for the fix pass, never an 
 
 ## Which flows
 
-No plan table lists them; you derive them, and your report shows the list so nothing is
-silently absent: one flow per user-facing requirement in `specs/<feature>/spec.md`, plus one per
-`Review Focus` line in `plan.md` that names something a user can see or do. Take each flow's
-edges from `edge-classes.md` beside the `netdust-gates:policy` skill (empty, denied actor,
-re-entry, concurrent, boundary, mid-flow failure, delivery seam). A flow driven on its happy path
-only is `unverified`, not `pass`.
+The plan's `## Test map` lists them: drive every flow named in its `E2E flows` column, and no
+other — your report shows the list so nothing is silently absent. Take each flow's edges from
+`edge-classes.md` beside the `netdust-gates:policy` skill (empty, denied actor, re-entry,
+concurrent, boundary, mid-flow failure, delivery seam). A flow driven on its happy path only is
+`unverified`, not `pass`. A plan with no Test map is a plan-review finding, not yours to repair:
+fall back to one flow per user-facing requirement and say so in the report.
 
 With no plan and no spec, the new flows are the ones in `specs/<feature>/flows.md` that Stefan
 approved, and nothing else — a struck flow gets no test and no row. Registered surfaces the diff

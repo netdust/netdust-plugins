@@ -13,8 +13,8 @@ The spec is `specs/netdust-gates/spec.md`; it is the authority.
 ## The growth rule
 
 An incident lands as **a gate tier in the project**, **a line in a constraints pack or the
-edge-class catalog**, or **an eval case**. Never as a new plan field or a new check on plan
-grammar. netdust-agent went 0.18 → 0.28 in six weeks by doing the opposite.
+edge-class catalog**, or **an eval case**. Never as a plan section a skill does not own (the threat model and the
+test map are the two, each owned by its skill) or a new check on plan grammar. netdust-agent went 0.18 → 0.28 in six weeks by doing the opposite.
 
 ## Boundaries
 
@@ -31,5 +31,5 @@ grammar. netdust-agent went 0.18 → 0.28 in six weeks by doing the opposite.
 ## Tests
 
 `bash tests/run.sh` (all) · `bash tests/run.sh test_<name>.py` (one). Each `tests/test_*.py`
-exposes `run()`. `python3 evals/run-evals.py` runs the three behavioural cases; it needs the
+exposes `run()`. `python3 evals/run-evals.py` runs the behavioural cases; it needs the
 `claude` CLI and is not part of `run.sh`.

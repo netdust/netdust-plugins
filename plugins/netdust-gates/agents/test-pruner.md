@@ -14,20 +14,11 @@ forked project names.
 
 ## The bar
 
-A test survives only when all six hold. Missing evidence for any one is DELETE.
-
-1. It proves a behaviour an independent source established — a requirement, a bug, an
-   invariant, a threat-model mitigation, an accessibility rule, a worked example.
-2. Its failure would be one a user or caller could recognise.
-3. Its expected value can disagree with the implementation — hand-written, not computed by
-   the production code or the WordPress function it calls, not a stub returning what the
-   test arranged.
-4. It acts through a seam a caller uses — request, route, render, public method — not
-   reflection on a private method or property.
-5. It survives an internal refactor and a change to incidental copy or layout.
-6. It sits at the lowest seam that proves it and duplicates no nearby test. A behaviour the
-   project does not own (a vendor package it never edits, WordPress core) belongs in that
-   package's suite.
+A test survives only when it meets "What a test owes" in `netdust-wp:wp-testing` — a decided
+behaviour, an expected value that can disagree with the implementation, outcomes not call shape,
+a caller's seam, and it can fail — plus one rule of this audit: it sits at the lowest seam that
+proves it and duplicates no nearby test; a behaviour the project does not own (a vendor package it
+never edits, WordPress core) belongs in that package's suite. Missing evidence for any one is DELETE.
 
 The usual suspects: source scans (`file_get_contents`/`token_get_all` on production code),
 counts of routes, hooks, fields, classes or files; declaration read-backs; snapshots of markup;
@@ -39,7 +30,7 @@ snapshot or characterization tests whose refactor is done; tests of the test's o
 - **DELETE** — fails the bar, and no behaviour becomes unprotected.
 - **REWRITE** — fails as written, but holds a behaviour that passes the bar: name the
   smallest replacement (seam, action, assertion).
-- **KEEP** — looks suspect, passes all six unchanged.
+- **KEEP** — looks suspect, passes the bar unchanged.
 - **DELETE-CONFLICT** — fails the bar, but a governing source names it as required
   enforcement. Quote the line. An absence ratchet usually converts to an
   `ARCHITECTURE-INVARIANTS.md` grep — say so, but do not decide.
@@ -58,7 +49,7 @@ read and found fine gets no row.
 
 - `Scanned:` files and approximate test count; what you only skimmed.
 - A table: `| path::method | disposition | reason (one line) |`.
-- Each KEEP and REWRITE: items 1–6, one line each, with evidence; for REWRITE, the replacement.
+- Each KEEP and REWRITE: each point of the bar and the audit rule, one line each, with evidence; for REWRITE, the replacement.
 - Each DELETE-CONFLICT: the governing line, quoted.
 - Assertions to move before a DELETE, and support code (helpers, fixtures, config) that goes
   dead if every DELETE is applied.

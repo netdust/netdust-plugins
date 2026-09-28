@@ -1,7 +1,7 @@
 # Edge classes — where Review Focus lines come from
 
 Green suites shipped every one of these. For a feature, name the classes it can actually
-meet, most likely first, and pin each to a test in the task that owns the code. Omit a class
+meet, most likely first, and point each at the Test map row whose test proves it. Omit a class
 only with a written reason. (Incidents: Folio, 2026.)
 
 1. **Empty / zero** — no data, blank input, first run, a prop a data layer toggles to empty

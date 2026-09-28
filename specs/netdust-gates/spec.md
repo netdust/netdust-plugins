@@ -55,6 +55,9 @@ restates them. Spec: a `Source:` line per requirement (a quote, or `invented —
 to a test in the owning task; a `First working version` line; one paragraph naming the
 simplest design that would meet the ask and why it was or was not chosen.
 *Source: "add netdust coding standards and testing into the spec and plan so it would be followed."*
+*Amended 2026-09-28 by `specs/test-mapping/spec.md` R1–R2, R6: the plan also carries a `## Test map`
+(one row per unit) written by `netdust-gates:test-mapping`; a Review Focus line points at a row
+rather than at a test directly, and a task is one row.*
 
 **R2 — Intake is superpowers' three paths plus one netdust rule.** Spike, bounded,
 architectural stand as upstream defines them. The netdust rule: a change to a
