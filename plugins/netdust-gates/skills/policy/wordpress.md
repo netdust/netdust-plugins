@@ -49,8 +49,8 @@ skill, do not paraphrase it here.
 
 ## Plan shape
 
-- Each data flow gets a task whose test drives the **denial** — the unauthorized actor
-  refused, the missing nonce rejected — not only the happy path.
+- Each data flow's unit carries the test that drives the **denial** — the unauthorized actor
+  refused, the missing nonce rejected — RED first, named in its Test map row.
 - A user-facing WP screen is a `browser` flow for the shake-out; its login recipe is
   `netdust-wp:wp-testing`'s. Name the screen in the plan so `/shakeout` finds it;
   `bin/shakeout-check.py` exiting 0 is its evidence.

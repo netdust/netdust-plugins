@@ -22,7 +22,7 @@ def run() -> list[tuple[bool, str]]:
         (entry is not None and entry["source"] == "./plugins/netdust-gates"
          and (REPO / entry["source"]).is_dir() and entry["version"] == manifest["version"],
          "marketplace.json carries a netdust-gates entry whose source exists and whose version matches plugin.json"),
-        ("Never as a new plan field" in claude_md and "gate tier" in claude_md and "eval case" in claude_md,
+        ("a skill does not own" in claude_md and "gate tier" in claude_md and "eval case" in claude_md,
          "CLAUDE.md states the growth rule (R9)"),
         ("netdust-agent" in claude_md and "never both" in claude_md.lower(),
          "CLAUDE.md says never enable netdust-agent beside it"),

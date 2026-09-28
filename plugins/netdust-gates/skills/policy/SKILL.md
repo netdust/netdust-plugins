@@ -69,18 +69,13 @@ Invoke `superpowers:writing-plans`; it owns the format. Netdust fills its slots:
 - **Global Constraints** — on a WordPress project (a `site.yml` with `structure:`, or
   `roots/wordpress` in `composer.json`) copy the Global Constraints of `wordpress.md`, beside
   this file, verbatim — lines and red flags — then the spec's own. Other stacks: the spec's own until a pack exists.
+- **Test map** — invoke `netdust-gates:test-mapping`, after the threat model and before the
+  tasks: one row per unit (seam · tier · file · command · e2e flows); a task is one row.
 - **Review Focus** — one line per mitigation in the threat model, per convergence point of an
   `ARCHITECTURE-INVARIANTS.md` the diff touches, and per class in `edge-classes.md` the feature
-  can actually meet, most likely first. Each line is pinned to one of two checks; a line with
-  neither is a wish:
-  - **a behaviour** — a test in the task that owns the code, acting through the seam a caller
-    uses (request, route, render, public method), its expected value taken from the spec;
-  - **an absence or a count** ("never", "only", "exactly one", "no X anywhere") — a mechanical
-    check added to `ARCHITECTURE-INVARIANTS.md` (the grep, its roots, "must be empty"), which
-    `invariant-auditor` runs at review. Its test is the behaviour the absence protects, never a
-    test that reads source (`source-scan-ratchets`: ~40 in one suite, each a change detector).
-- **Scaffolding** — a snapshot or characterization test that holds output still through a
-  refactor is deleted by the refactor's last task.
+  can actually meet, most likely first. Each line points at a Test map row; an absence or a count
+  ("never", "only", "exactly one") points at an `ARCHITECTURE-INVARIANTS.md` check instead, which
+  `invariant-auditor` runs at review — never a test that reads source (`source-scan-ratchets`).
 - **First working version** — one line under Architecture: the task that produces the first
   thing Stefan can see or run, ordered first. Tests and scaffolding for something nobody can
   yet see come after it.
@@ -100,9 +95,10 @@ blocks code on a plan's state — an old or half plan never holds up the work (S
 
 ## Execution mode
 
-Stefan chooses at the plan handoff; you recommend by rule. **Native** by default. Recommend
-**subagent-driven** when a task encodes a rule this project chose, touches a security-boundary
-path, or the plan is long enough to outlive one context. Give the rule that fired, in a sentence.
+Stefan chooses at the plan handoff; you recommend by rule. **Native** by default: it runs each
+unit as the plan wrote it. Recommend **subagent-driven** only for a security-boundary unit or a
+plan that outlives one context: its implementers follow upstream's per-task TDD, which undoes
+the unit cut. Name the rule that fired.
 
 ## Stops
 
