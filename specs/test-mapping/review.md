@@ -47,3 +47,15 @@ Pin falsifiability: every assertion in `test_test_mapping_skill.py` goes red if 
 `wc -l`: policy 142 (< 150) · pack 59 (≤ 60) · new skill 37 (< 50).
 
 Findings: 0 Blocking · 2 Should fix · 8 Note
+
+## Eval `unit-cut-plan` (Note 7)
+
+First run: `python3 plugins/netdust-gates/evals/run-evals.py unit-cut-plan` → FAIL, "timed out after 900s"
+(the runner's default cap; the `claude` CLI itself answered a probe in seconds). Second run, same case,
+2700 s cap: **PASS**, all four expectations met. The plan the planner wrote carried `## Threat model`,
+a `## Test map` with four rows — three integration rows through their seams and a `booking` CPT row
+reading `none — proven by flow` — denial tests marked RED first inside each row's file, four tasks
+each closing on the row's command then `make gate`, and no "run the test to verify it fails" step;
+it also ran `/plan-review` three rounds on itself and recommended subagent-driven mode for the
+guest-input unit, naming the rule. The case now carries `"timeout": 2700` so the runner's default
+does not cut it off.

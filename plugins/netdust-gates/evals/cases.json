@@ -260,6 +260,7 @@
         "match": "(?s)\\A(?:(?!(?i:run (the )?tests? to (verify|confirm|watch) (it|they) fails?)).)*\\Z"
       }
     ],
-    "absent": []
+    "absent": [],
+    "timeout": 2700
   }
 ]
