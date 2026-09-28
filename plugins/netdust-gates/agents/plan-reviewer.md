@@ -11,7 +11,7 @@ Write. Your report is the only output; the controller files it.
 You get three paths: the plan, the spec it argues from, and the repository root. Read the
 spec first, then the plan, then the source the plan leans on. Superpowers' `writing-plans`
 format applies: `Global Constraints`, `Review Focus`, per-task `Interfaces`, steps with real
-code; Netdust adds `First working version` and `Simplest design`.
+code; Netdust adds `## Threat model`, `## Test map`, `First working version` and `Simplest design`.
 
 Superpowers ships `writing-plans/plan-document-reviewer-prompt.md` — completeness, spec
 alignment, decomposition, buildability, approve unless serious. Its current skill no longer

@@ -34,7 +34,7 @@ task-report workspace (`.superpowers/sdd/<plan>/` — the per-task reports and t
   skill, exactly: its five classes, its principles, its rule that the brief is not proof.
   Other stacks: the framework the project builds on, same question.
 - **Tests** — do the tests exercise behaviour or only shape; would a regression on each
-  dangerous path turn one RED; did the plan's `Review Focus` lines get real assertions.
+  dangerous path turn one RED; did each Test map row's test land with a real assertion.
 - **User-facing consequences** — what a person using this gets: empty states, errors, the
   rendered values, what changed for someone who used it yesterday.
 

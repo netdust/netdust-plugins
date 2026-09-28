@@ -7,7 +7,7 @@ description: Use while writing a plan, after the threat model and before the tas
 
 Produce `## Test map` in the plan BEFORE the tasks. It is the plan's one answer to "where are
 the tests and what do they test"; every consumer (`Review Focus`, `plan-reviewer`,
-`shakeout-qa`, the threat model) reads it, and none re-decides it.
+`shakeout-qa`) reads it and none re-decides it; the threat model's mitigations feed it.
 
 ## The table
 
@@ -34,5 +34,4 @@ the tests and what do they test"; every consumer (`Review Focus`, `plan-reviewer
 A task is one row. It writes the unit and its tests in one pass, runs the row's command, then
 `make gate`, quotes both in its report, and commits. No RED-first step inside a unit except the
 denial test; RED-first also holds for every fix in the Close's fix pass. A row with an empty tests
-cell is the plan saying that unit is unverified: fill it or say so. Order rows by the named ask,
-riskiest first.
+cell is the plan saying that unit is unverified: fill it or say so. Order rows riskiest first.

@@ -40,14 +40,14 @@ approved. Only then Step 2, with `flows.md` as the flow source.
 
 ## Step 2 — Drive the artifact
 
-Dispatch **`shakeout-qa`** on the most capable available model for the flows: it derives the
-flow list from the spec and the plan's `Review Focus`, or `flows.md` on a branch with no spec, drives each through its faithful layer
+Dispatch **`shakeout-qa`** on the most capable available model for the flows: it drives the
+flows the plan's `## Test map` names in its `E2E flows` column — or `flows.md` on a branch with no spec — each through its faithful layer
 (browser for UI, un-mocked wire for backend), commits the flows as tests, and writes
 `specs/<feature>/shakeout.md` with a screenshot under `specs/<feature>/shakeout/` for every
 browser pass — and registers what it leaves in `specs/CHECKS.md`: the driven flows as `@e2e`
 (`make e2e env=staging` re-runs them after every deploy) and a read-only `@smoke` spec per
 surface (`make smoke`, production too). It reports the
-flow list it derived; read it for what is missing.
+flow list it drove; read it for what is missing.
 
 A change with no user-facing surface has nothing to drive: say so and go to Step 4.
 

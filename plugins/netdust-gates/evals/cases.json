@@ -245,7 +245,7 @@
     "expect": [
       {
         "where": "plan",
-        "match": "(?s)## Test map\\n(?:(?!\\n#{1,2} ).)*?\\| Unit \\| Seam \\|"
+        "match": "(?s)## Test map(?:(?!\\n#{1,2} ).)*?\\| Unit \\| Seam \\|"
       },
       {
         "where": "plan",

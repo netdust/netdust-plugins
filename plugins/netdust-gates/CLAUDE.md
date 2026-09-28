@@ -31,5 +31,5 @@ test map are the two, each owned by its skill) or a new check on plan grammar. n
 ## Tests
 
 `bash tests/run.sh` (all) · `bash tests/run.sh test_<name>.py` (one). Each `tests/test_*.py`
-exposes `run()`. `python3 evals/run-evals.py` runs the three behavioural cases; it needs the
+exposes `run()`. `python3 evals/run-evals.py` runs the behavioural cases; it needs the
 `claude` CLI and is not part of `run.sh`.
