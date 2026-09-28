@@ -233,5 +233,33 @@
       }
     ],
     "absent": []
+  },
+  {
+    "id": "unit-cut-plan",
+    "prompt": "specs/booking/spec.md is approved by Stefan; do not ask questions. Write the implementation plan to specs/booking/plan.md.",
+    "files": {
+      "site.yml": "structure:\n  type: bedrock\n  wpcli_path: web/wp\n",
+      "composer.json": "{\"require\": {\"roots/wordpress\": \"^6.6\", \"netdust/ntdst-core\": \"^5.1\"}}\n",
+      "specs/booking/spec.md": "# Booking — spec\n\n## Requirements\n\n**R1 — Booking request.** A visitor books a table from a form: date, time, party size, name, e-mail. The booking is stored as a `booking` post with those fields.\n*Source: \"people book a table from the site\"*\n\n**R2 — Confirmation.** The visitor gets a confirmation mail with the booking's reference.\n*Source: \"they get a confirmation\"*\n\n**R3 — Admin list.** Staff see bookings per day in wp-admin.\n*Source: \"we need to see the bookings per day\"*\n\n## Security-relevant surfaces\n- [x] A form or REST route taking guest input (R1)\n"
+    },
+    "expect": [
+      {
+        "where": "plan",
+        "match": "(?s)## Test map\\n(?:(?!\\n#{1,2} ).)*?\\| Unit \\| Seam \\|"
+      },
+      {
+        "where": "plan",
+        "match": "(?is)## Threat model"
+      },
+      {
+        "where": "plan",
+        "match": "(?s)\\A(?:(?!### Task [5-9]:).)*\\Z"
+      },
+      {
+        "where": "plan",
+        "match": "(?s)\\A(?:(?!(?i:run (the )?tests? to (verify|confirm|watch) (it|they) fails?)).)*\\Z"
+      }
+    ],
+    "absent": []
   }
 ]
