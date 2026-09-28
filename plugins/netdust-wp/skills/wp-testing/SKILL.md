@@ -43,9 +43,11 @@ Every check is a tier of `composer gate` (`bin/gate.sh`: cheapest-first, fail-fa
 
 ### Choosing the tier
 
-Put each behaviour at the lowest tier that can prove it: pure rules at unit, persistence/hooks/capabilities at integration, user-visible flows at e2e. Don't prove the same thing at two tiers.
-
-**A stubbed unit suite proves the code matches the stubs, not that the feature works.** So: every task that claims a user-visible behaviour owes at least one assertion through the real entry point — the route, the REST response, or the rendered page — not only the service behind it. Unit tests cover the rule's cases; the entry-point assertion proves the rule is actually wired in.
+The plan's `## Test map` decides the tier per unit (`netdust-gates:test-mapping`): a rule the
+project chose gets a behavioural test through its seam, integration when it needs WordPress or
+the database; configuration over the framework is proven by the e2e flow that renders it. Never
+prove the same thing at two tiers. A stubbed unit suite proves the code matches the stubs, not
+that the feature works — the flow through the real entry point proves the wiring.
 
 ### Writing a unit test
 

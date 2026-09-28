@@ -23,4 +23,6 @@ def run() -> list[tuple[bool, str]]:
         ("Test map" in (PLUGIN / "skills" / "threat-modeling" / "SKILL.md").read_text(), "threat-modeling points mitigations at rows"),
         ("What a test owes" in (AGENTS / "test-pruner.md").read_text() and "all six" not in (AGENTS / "test-pruner.md").read_text(),
          "test-pruner cites the bar instead of carrying it"),
+        ("netdust-gates:test-mapping" in (PLUGIN.parent / "netdust-wp" / "skills" / "wp-testing" / "SKILL.md").read_text(),
+         "wp-testing points tier choice at the Test map"),
     ]
