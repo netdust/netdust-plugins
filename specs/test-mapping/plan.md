@@ -76,7 +76,7 @@ Most likely first. Each line points at a Test map row and names its pin.
 - Produces: the `## Test map` section shape (four columns) and the `netdust-gates:test-mapping` name every consumer cites.
 - Produces: `tests/test_test_mapping_skill.py` exposing `run() -> list[tuple[bool, str]]`, extended by Task 2 and 3.
 
-- [ ] **Step 1: Write the skill.** `plugins/netdust-gates/skills/test-mapping/SKILL.md`:
+- [x] **Step 1: Write the skill.** `plugins/netdust-gates/skills/test-mapping/SKILL.md`:
 
 ````markdown
 ---
@@ -119,7 +119,7 @@ cell is the plan saying that unit is unverified: fill it or say so. Order rows b
 riskiest first.
 ````
 
-- [ ] **Step 2: Policy — invoke it, point Review Focus at rows, drop what the map now carries.** In `plugins/netdust-gates/skills/policy/SKILL.md`, under `## The plan`, replace the `Review Focus` bullet and its two sub-bullets, and the `Scaffolding` bullet, with:
+- [x] **Step 2: Policy — invoke it, point Review Focus at rows, drop what the map now carries.** In `plugins/netdust-gates/skills/policy/SKILL.md`, under `## The plan`, replace the `Review Focus` bullet and its two sub-bullets, and the `Scaffolding` bullet, with:
 
 ```markdown
 - **Test map** — invoke `netdust-gates:test-mapping`, after the threat model and before the
@@ -142,16 +142,16 @@ the unit cut. Name the rule that fired.
 
   Check: `wc -l plugins/netdust-gates/skills/policy/SKILL.md` prints a number below 150.
 
-- [ ] **Step 3: Pack — the denial lives in the row.** In `wordpress.md`, Plan shape, replace the first bullet with:
+- [x] **Step 3: Pack — the denial lives in the row.** In `wordpress.md`, Plan shape, replace the first bullet with:
 
 ```markdown
 - Each data flow's unit carries the test that drives the **denial** — the unauthorized actor
   refused, the missing nonce rejected — RED first, named in its Test map row.
 ```
 
-- [ ] **Step 4: Growth rule.** In `plugins/netdust-gates/CLAUDE.md` (the sentence wraps after "plan"; match the wrapped text, and keep the five words "a skill does not own" on one line for the pin), replace "Never as a new plan field or a new check on plan grammar." with "Never as a plan section a skill does not own (the threat model and the test map are the two, each owned by its skill) or a new check on plan grammar." Update `tests/test_plugin_manifest.py`: the CLAUDE.md pin asserts `"a skill does not own" in claude_md` in place of `"Never as a new plan field" in claude_md`.
+- [x] **Step 4: Growth rule.** In `plugins/netdust-gates/CLAUDE.md` (the sentence wraps after "plan"; match the wrapped text, and keep the five words "a skill does not own" on one line for the pin), replace "Never as a new plan field or a new check on plan grammar." with "Never as a plan section a skill does not own (the threat model and the test map are the two, each owned by its skill) or a new check on plan grammar." Update `tests/test_plugin_manifest.py`: the CLAUDE.md pin asserts `"a skill does not own" in claude_md` in place of `"Never as a new plan field" in claude_md`.
 
-- [ ] **Step 5: Pins.** Add `"Test map"` and `"netdust-gates:test-mapping"` to the `ok_tok` tuple in `test_policy_skill.py`, and add `SKILLS / "test-mapping" / "SKILL.md"` to the files its `BANNED_GRAMMAR` scan reads. Create `tests/test_test_mapping_skill.py`:
+- [x] **Step 5: Pins.** Add `"Test map"` and `"netdust-gates:test-mapping"` to the `ok_tok` tuple in `test_policy_skill.py`, and add `SKILLS / "test-mapping" / "SKILL.md"` to the files its `BANNED_GRAMMAR` scan reads. Create `tests/test_test_mapping_skill.py`:
 
 ```python
 """test_test_mapping_skill.py — the Test map has one producer and its consumers read it."""
@@ -175,7 +175,7 @@ def run() -> list[tuple[bool, str]]:
     ]
 ```
 
-- [ ] **Step 6: Run and commit.** `bash plugins/netdust-gates/tests/run.sh 2>&1 | tail -3` — expected last line `All harness tests passed.`; quote it. `git add plugins/netdust-gates && git commit -m "feat(gates): the Test map — test-mapping skill, policy invocation, unit cut"`.
+- [x] **Step 6: Run and commit.** `bash plugins/netdust-gates/tests/run.sh 2>&1 | tail -3` — expected last line `All harness tests passed.`; quote it. `git add plugins/netdust-gates && git commit -m "feat(gates): the Test map — test-mapping skill, policy invocation, unit cut"`.
 
 ---
 
@@ -191,7 +191,7 @@ def run() -> list[tuple[bool, str]]:
 **Interfaces:**
 - Consumes: the `## Test map` section and column names from Task 1. Produces nothing new.
 
-- [ ] **Step 1: shakeout-qa.** Replace the first paragraph of `## Which flows` (from "No plan table lists them" through "is `unverified`, not `pass`.") with:
+- [x] **Step 1: shakeout-qa.** Replace the first paragraph of `## Which flows` (from "No plan table lists them" through "is `unverified`, not `pass`.") with:
 
 ```markdown
 The plan's `## Test map` lists them: drive every flow named in its `E2E flows` column, and no
@@ -204,9 +204,9 @@ fall back to one flow per user-facing requirement and say so in the report.
 
   The `flows.md` paragraph that follows stays as it is.
 
-- [ ] **Step 2: plan-reviewer.** In question 2 (the sentence wraps after "names a"; match the wrapped text), replace "Each `Review Focus` line names a test that exists in a task's steps with a real assertion, not a wish — through a caller's seam, expected value from the spec." with "Every `## Test map` row has its test in the task that is that row — the bar is \"What a test owes\" in `netdust-wp:wp-testing`, the row's command runnable; each `Review Focus` line points at a row." Replace "Each threat-model mitigation has a named home in a task." with "Each threat-model mitigation has a row." In the description line, replace "each Review Focus line a test" with "each Test map row a test". In the report template, the Should fix line reads `(a Test map row with no real test; an invented task; a contradiction)`.
+- [x] **Step 2: plan-reviewer.** In question 2 (the sentence wraps after "names a"; match the wrapped text), replace "Each `Review Focus` line names a test that exists in a task's steps with a real assertion, not a wish — through a caller's seam, expected value from the spec." with "Every `## Test map` row has its test in the task that is that row — the bar is \"What a test owes\" in `netdust-wp:wp-testing`, the row's command runnable; each `Review Focus` line points at a row." Replace "Each threat-model mitigation has a named home in a task." with "Each threat-model mitigation has a row." In the description line, replace "each Review Focus line a test" with "each Test map row a test". In the report template, the Should fix line reads `(a Test map row with no real test; an invented task; a contradiction)`.
 
-- [ ] **Step 3: threat-modeling.** In the description line, replace "which becomes its Review Focus lines and the security review's target" with "whose mitigations become Test map rows and the security review's target". Replace the last paragraph ("Every mitigation becomes a `Review Focus` line pinned as the policy says …") with:
+- [x] **Step 3: threat-modeling.** In the description line, replace "which becomes its Review Focus lines and the security review's target" with "whose mitigations become Test map rows and the security review's target". Replace the last paragraph ("Every mitigation becomes a `Review Focus` line pinned as the policy says …") with:
 
 ```markdown
 Every mitigation is a `## Test map` row (`netdust-gates:test-mapping`) or, for a "never"/"only"
@@ -215,7 +215,7 @@ asserted, not only the allowed path (`traverse-clause`: every route had a guard,
 the denial, cross-tenant reads shipped green).
 ```
 
-- [ ] **Step 4: test-pruner.** Replace the six-rule list under `## The bar` (from "A test survives only when all six hold." through rule 6) with:
+- [x] **Step 4: test-pruner.** Replace the six-rule list under `## The bar` (from "A test survives only when all six hold." through rule 6) with:
 
 ```markdown
 A test survives only when it meets "What a test owes" in `netdust-wp:wp-testing` — a decided
@@ -227,7 +227,7 @@ never edits, WordPress core) belongs in that package's suite. Missing evidence f
 
   Keep "The usual suspects" and everything after, with two touches: the KEEP disposition reads "looks suspect, passes the bar unchanged", and the report line reads "Each KEEP and REWRITE: each point of the bar and the audit rule, one line each, with evidence".
 
-- [ ] **Step 5: Pins.** Append to the list returned by `run()` in `test_test_mapping_skill.py`:
+- [x] **Step 5: Pins.** Append to the list returned by `run()` in `test_test_mapping_skill.py`:
 
 ```python
         ("Test map" in (AGENTS / "shakeout-qa.md").read_text() and "No plan table lists them" not in (AGENTS / "shakeout-qa.md").read_text(),
@@ -239,7 +239,7 @@ never edits, WordPress core) belongs in that package's suite. Missing evidence f
          "test-pruner cites the bar instead of carrying it"),
 ```
 
-- [ ] **Step 6: Run and commit.** `bash plugins/netdust-gates/tests/run.sh 2>&1 | tail -3` → `All harness tests passed.`, quoted. `git add plugins/netdust-gates && git commit -m "feat(gates): consumers read the Test map — shakeout-qa, plan-reviewer, threat-modeling, test-pruner"`.
+- [x] **Step 6: Run and commit.** `bash plugins/netdust-gates/tests/run.sh 2>&1 | tail -3` → `All harness tests passed.`, quoted. `git add plugins/netdust-gates && git commit -m "feat(gates): consumers read the Test map — shakeout-qa, plan-reviewer, threat-modeling, test-pruner"`.
 
 ---
 
@@ -249,7 +249,7 @@ never edits, WordPress core) belongs in that package's suite. Missing evidence f
 - Modify: `plugins/netdust-wp/skills/wp-testing/SKILL.md` (`### Choosing the tier`)
 - Modify: `plugins/netdust-gates/tests/test_test_mapping_skill.py`
 
-- [ ] **Step 1:** Replace the two paragraphs under `### Choosing the tier` (from "Put each behaviour at the lowest tier" through "proves the rule is actually wired in.") with:
+- [x] **Step 1:** Replace the two paragraphs under `### Choosing the tier` (from "Put each behaviour at the lowest tier" through "proves the rule is actually wired in.") with:
 
 ```markdown
 The plan's `## Test map` decides the tier per unit (`netdust-gates:test-mapping`): a rule the
@@ -259,9 +259,9 @@ prove the same thing at two tiers. A stubbed unit suite proves the code matches 
 that the feature works — the flow through the real entry point proves the wiring.
 ```
 
-- [ ] **Step 2: Pin.** Append: `("netdust-gates:test-mapping" in (PLUGIN.parent / "netdust-wp" / "skills" / "wp-testing" / "SKILL.md").read_text(), "wp-testing points tier choice at the Test map"),`
+- [x] **Step 2: Pin.** Append: `("netdust-gates:test-mapping" in (PLUGIN.parent / "netdust-wp" / "skills" / "wp-testing" / "SKILL.md").read_text(), "wp-testing points tier choice at the Test map"),`
 
-- [ ] **Step 3: Run and commit.** `bash plugins/netdust-gates/tests/run.sh 2>&1 | tail -3` → quoted. `git add plugins/netdust-wp/skills/wp-testing/SKILL.md plugins/netdust-gates/tests/test_test_mapping_skill.py && git commit -m "docs(wp): wp-testing points tier choice at the Test map"`.
+- [x] **Step 3: Run and commit.** `bash plugins/netdust-gates/tests/run.sh 2>&1 | tail -3` → quoted. `git add plugins/netdust-wp/skills/wp-testing/SKILL.md plugins/netdust-gates/tests/test_test_mapping_skill.py && git commit -m "docs(wp): wp-testing points tier choice at the Test map"`.
 
 ---
 
@@ -271,7 +271,7 @@ that the feature works — the flow through the real entry point proves the wiri
 - Modify: `plugins/netdust-gates/evals/cases.json`
 - Modify: `plugins/netdust-gates/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`
 
-- [ ] **Step 1: Eval case.** Append to `cases.json`:
+- [x] **Step 1: Eval case.** Append to `cases.json`:
 
 ```json
 {
@@ -292,6 +292,6 @@ that the feature works — the flow through the real entry point proves the wiri
 }
 ```
 
-- [ ] **Step 2: Version.** Set `"version": "0.10.0"` in both manifests and prepend to both descriptions: `0.10.0: the Test map — netdust-gates:test-mapping writes a plan section with one row per unit (seam · tier · file · command · e2e flows) and cuts the tasks to those units; RED-first stays for the denial test and the Close fix pass; shakeout-qa, plan-reviewer, threat-modeling and test-pruner read it instead of deciding; the growth rule reads "never a plan section a skill does not own". Eval case unit-cut-plan. `
+- [x] **Step 2: Version.** Set `"version": "0.10.0"` in both manifests and prepend to both descriptions: `0.10.0: the Test map — netdust-gates:test-mapping writes a plan section with one row per unit (seam · tier · file · command · e2e flows) and cuts the tasks to those units; RED-first stays for the denial test and the Close fix pass; shakeout-qa, plan-reviewer, threat-modeling and test-pruner read it instead of deciding; the growth rule reads "never a plan section a skill does not own". Eval case unit-cut-plan. `
 
-- [ ] **Step 3: Run, eval, commit.** `bash plugins/netdust-gates/tests/run.sh 2>&1 | tail -3` → quoted. `python3 plugins/netdust-gates/evals/run-evals.py unit-cut-plan` → report its verdict as it comes, red or green. `git add plugins/netdust-gates .claude-plugin/marketplace.json && git commit -m "feat(gates): 0.10.0 — eval unit-cut-plan, version"`. Push the branch; the Close is `make review`-less here (no `site.yml`): one whole-branch review by a fresh reviewer, then Stefan merges.
+- [x] **Step 3: Run, eval, commit.** `bash plugins/netdust-gates/tests/run.sh 2>&1 | tail -3` → quoted. `python3 plugins/netdust-gates/evals/run-evals.py unit-cut-plan` → report its verdict as it comes, red or green. `git add plugins/netdust-gates .claude-plugin/marketplace.json && git commit -m "feat(gates): 0.10.0 — eval unit-cut-plan, version"`. Push the branch; the Close is `make review`-less here (no `site.yml`): one whole-branch review by a fresh reviewer, then Stefan merges.
