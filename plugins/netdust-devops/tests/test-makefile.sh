@@ -1077,5 +1077,27 @@ d="$WORK/scafgp-explicit"
 cd "$P" || exit 1
 
 echo
+echo "── health: disk ──"
+# A server shared by many sites filled to 89% with nobody told (booming-compass,
+# 2026-09-29). The fixture's two environments share one host: it is asked once.
+DK="$WORK/disk"; mkdir -p "$DK/bin"
+cat > "$DK/bin/ssh" <<SH
+#!/bin/sh
+exec < /dev/null
+echo "\$*" >> "$DK/ssh.log"
+echo "/dev/sda1 39845888 33554432 6291456 \$(cat "$DK/pct")% /"
+SH
+chmod +x "$DK/bin/ssh"
+disk() { echo "$1" > "$DK/pct"; : > "$DK/ssh.log"; env PATH="$DK/bin:$PATH" make --no-print-directory _health-disk < /dev/null 2>&1 | strip; }
+out=$(disk 89)
+printf '%s' "$out" | grep -q "nobody@example.invalid.*89%.*FULL" && [ "$(grep -c 'df -P' "$DK/ssh.log")" = 1 ] \
+    && ok "health warns on a server at 89% and asks a shared host once" \
+    || bad "health warns on a server at 89% and asks a shared host once" "$out | ssh calls: $(wc -l < "$DK/ssh.log")"
+out=$(disk 42)
+printf '%s' "$out" | grep -q "nobody@example.invalid.*42%" && ! printf '%s' "$out" | grep -q FULL \
+    && ok "health reports a server at 42% as fine" \
+    || bad "health reports a server at 42% as fine" "$out"
+
+echo
 printf '%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

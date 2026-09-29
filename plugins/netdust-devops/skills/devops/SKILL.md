@@ -222,8 +222,12 @@ The order that works:
 ```
 
 - **Mail block before the database** — the import brings its source mail settings with it.
-- **`composer install --prefer-source` for private repos** — the dist zipball needs an
-  API token an SSH deploy key cannot give it.
+- **Private repos clone, everything else downloads** — the dist zipball needs an API token
+  an SSH deploy key cannot give, so set `"preferred-install": {"netdust/*": "source", "*": "dist"}`
+  in `composer.json` and run `composer install --no-dev` with no `--prefer-*` flag: a flag
+  overrides the map, and `--prefer-source` clones WordPress core and every dev tool too.
+- **`make health` reports each server's disk** — sites share it, and the composer cache,
+  the journal and old backups fill it silently.
 - **`wp rewrite flush --hard` is mandatory** — search-replace empties `rewrite_rules`.
 - **Licensed assets are gitignored, not missing** — look in `content/themes/` and
   `content/plugins/` before asking for a zip; no verb carries them.
