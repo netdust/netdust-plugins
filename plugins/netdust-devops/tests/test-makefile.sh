@@ -1085,7 +1085,8 @@ cat > "$DK/bin/ssh" <<SH
 #!/bin/sh
 exec < /dev/null
 echo "\$*" >> "$DK/ssh.log"
-echo "/dev/sda1 39845888 33554432 6291456 \$(cat "$DK/pct")% /"
+pct=\$(cat "$DK/pct"); [ -n "\$pct" ] || exit 255
+echo "/dev/sda1 39845888 33554432 6291456 \$pct% /"
 SH
 chmod +x "$DK/bin/ssh"
 disk() { echo "$1" > "$DK/pct"; : > "$DK/ssh.log"; env PATH="$DK/bin:$PATH" make --no-print-directory _health-disk < /dev/null 2>&1 | strip; }
@@ -1097,6 +1098,23 @@ out=$(disk 42)
 printf '%s' "$out" | grep -q "nobody@example.invalid.*42%" && ! printf '%s' "$out" | grep -q FULL \
     && ok "health reports a server at 42% as fine" \
     || bad "health reports a server at 42% as fine" "$out"
+# The sites' filesystem, not /: a Hetzner volume or a Combell quota is another disk.
+# A dead host must answer "unreachable", never hang health or prompt for a password.
+disk 50 >/dev/null
+grep -q -- "-o BatchMode=yes -o ConnectTimeout=5 nobody@example.invalid df -P '/srv/staging'" "$DK/ssh.log" \
+    && ok "health measures the first environment's path, non-interactively and with a timeout" \
+    || bad "health measures the first environment's path, non-interactively and with a timeout" "$(cat "$DK/ssh.log")"
+out=$(disk "") 
+printf '%s' "$out" | grep -q "nobody@example.invalid.*unreachable" \
+    && ok "health names a host that does not answer as unreachable" \
+    || bad "health names a host that does not answer as unreachable" "$out"
+D2="$WORK/disk-2hosts"; rm -rf "$D2"; cp -r "$P" "$D2"
+sed -i 's|production: {url: "https://example.invalid", path: /srv/prod,|production: {url: "https://example.invalid", ssh_host: other@example.invalid, path: /srv/prod,|' "$D2/site.yml"
+out=$(echo 30 > "$DK/pct"; : > "$DK/ssh.log"; cd "$D2" && env PATH="$DK/bin:$PATH" make --no-print-directory _health-disk < /dev/null 2>&1 | strip)
+printf '%s' "$out" | grep -q "nobody@example.invalid.*30%" && printf '%s' "$out" | grep -q "other@example.invalid.*30%" \
+    && grep -q "other@example.invalid df -P '/srv/prod'" "$DK/ssh.log" \
+    && ok "health reports two servers separately, each at its own environment's path" \
+    || bad "health reports two servers separately, each at its own environment's path" "$out | $(cat "$DK/ssh.log")"
 
 echo
 printf '%s passed, %s failed\n' "$PASS" "$FAIL"
