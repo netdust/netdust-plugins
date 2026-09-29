@@ -162,6 +162,12 @@ _backup-data:
 		echo "$(YELLOW)  no WordPress at $$REMOTE/$(WP_CORE) yet — first bring-up, nothing to back up$(RESET)"; \
 		rm -f "$$OUT"; exit 0; \
 	fi; \
+	: "composer brings WordPress's files before its database exists (the bring-up"; \
+	: "order), so an empty database is a first bring-up too — not a failed backup."; \
+	if ! ssh -qn "$$HOST" "cd $$REMOTE && wp core is-installed --path=$(WP_CORE)"; then \
+		echo "$(YELLOW)  WordPress at $$REMOTE is not installed yet — first bring-up, nothing to back up$(RESET)"; \
+		rm -f "$$OUT"; exit 0; \
+	fi; \
 	echo "$(YELLOW)Backing up the $$ENV database...$(RESET)"; \
 	if ! ssh -qn "$$HOST" "cd $$REMOTE && wp db export --path=$(WP_CORE) - | gzip" > "$$OUT"; then \
 		echo "$(RED)❌ Failed to back up the $$ENV database$(RESET)"; rm -f "$$OUT"; exit 1; \

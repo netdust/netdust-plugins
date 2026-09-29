@@ -1077,5 +1077,34 @@ d="$WORK/scafgp-explicit"
 cd "$P" || exit 1
 
 echo
+echo "── first bring-up: files before the database ──"
+# The bring-up order is .env → core → composer → mail block → db import, so
+# WordPress's FILES exist before its database does. _backup-data used to call
+# only a files-less server a first bring-up; an installed-files-but-empty
+# database then backed up to a few hundred bytes and blocked the very first
+# `make push` (laika, 2026-09-29).
+cd "$P" || exit 1
+FB="$WORK/firstbringup"; mkdir -p "$FB/bin"
+cat > "$FB/bin/ssh" <<SH
+#!/bin/sh
+case "\$*" in
+  *"test -f"*) exit 0;;
+  *"core is-installed"*) [ -f "$FB/installed" ] && exit 0 || exit 1;;
+  *"db export"*) printf 'tiny';;
+esac
+SH
+chmod +x "$FB/bin/ssh"
+out=$(env PATH="$FB/bin:$PATH" make --no-print-directory _backup-data env=staging < /dev/null 2>&1 | strip); rc=$?
+printf '%s' "$out" | grep -q "first bring-up" \
+    && ok "an installed-files-but-empty database is a first bring-up, not a failed backup" \
+    || bad "an installed-files-but-empty database is a first bring-up, not a failed backup" "$out"
+touch "$FB/installed"
+out=$(env PATH="$FB/bin:$PATH" make --no-print-directory _backup-data env=staging < /dev/null 2>&1 | strip)
+printf '%s' "$out" | grep -q "not deploying" \
+    && ok "an installed WordPress with a near-empty backup still refuses" \
+    || bad "an installed WordPress with a near-empty backup still refuses" "$out"
+rm -f backups/staging-*.sql.gz
+
+echo
 printf '%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
