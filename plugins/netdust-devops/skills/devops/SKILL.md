@@ -226,6 +226,9 @@ The order that works:
   an SSH deploy key cannot give, so set `"preferred-install": {"netdust/*": "source", "*": "dist"}`
   in `composer.json` and run `composer install --no-dev` with no `--prefer-*` flag: a flag
   overrides the map, and `--prefer-source` clones WordPress core and every dev tool too.
+  The map only governs fresh installs — composer keeps a package's previous source — so a
+  server already cloned needs `vendor/` and WP core removed, `composer install --no-dev` re-run
+  and `composer clear-cache` once.
 - **`make health` reports each server's disk** — sites share it, and the composer cache,
   the journal and old backups fill it silently.
 - **`wp rewrite flush --hard` is mandatory** — search-replace empties `rewrite_rules`.

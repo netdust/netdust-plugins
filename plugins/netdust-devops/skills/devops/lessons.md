@@ -56,7 +56,10 @@ authenticate (404), while a source install clones over SSH and works. Scope it
 per package (`"preferred-install": {"netdust/*": "source", "*": "dist"}`), never
 the global `--prefer-source` flag: on booming-compass (2026-09-29) that flag had
 cloned WordPress core (713M of `.git` per site), pint and phpunit into every
-webroot, and filled the shared composer cache to 4.2G — the server hit 89%. And **`wp rewrite flush --hard` is
+webroot, and filled the shared composer cache to 4.2G — the server hit 89%.
+The map does not heal such a server: composer keeps each package's previous
+install source, so it took `rm -rf vendor web/wp`, `composer install --no-dev`
+and `composer clear-cache` per site. And **`wp rewrite flush --hard` is
 mandatory** after the import, because search-replace empties `rewrite_rules`
 and every permalink 404s until it runs.
 

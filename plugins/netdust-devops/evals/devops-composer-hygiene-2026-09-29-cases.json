@@ -12,5 +12,12 @@
   "skill_path": "skills/devops/SKILL.md",
   "query": "Is there a quick way to see whether one of our servers is running out of disk?",
   "signature": "answers `make health` — its Disk section reports each server's use once per host and flags FULL at 80% — and names the usual suspects (the composer cache, /var/log/journal, old backups) rather than proposing an ad-hoc monitoring script"
+ },
+ {
+  "id": "map-does-not-heal-a-cloned-server",
+  "skill": "devops",
+  "skill_path": "skills/devops/SKILL.md",
+  "query": "I added the preferred-install map and removed --prefer-source from the deploy hook, deployed twice, but web/wp/.git and vendor/*/.git are still on the server. Why?",
+  "signature": "explains that composer keeps a package's previous install source on update, so the map only governs fresh installs; the one-time cure is removing vendor/ and the composer-installed WP core directory, re-running `composer install --no-dev` (a brief outage — pick a quiet moment), then `composer clear-cache` once on that server"
  }
 ]
