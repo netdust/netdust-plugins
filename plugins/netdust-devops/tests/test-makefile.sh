@@ -1077,6 +1077,46 @@ d="$WORK/scafgp-explicit"
 cd "$P" || exit 1
 
 echo
+echo "── health: disk ──"
+# A server shared by many sites filled to 89% with nobody told (booming-compass,
+# 2026-09-29). The fixture's two environments share one host: it is asked once.
+DK="$WORK/disk"; mkdir -p "$DK/bin"
+cat > "$DK/bin/ssh" <<SH
+#!/bin/sh
+exec < /dev/null
+echo "\$*" >> "$DK/ssh.log"
+pct=\$(cat "$DK/pct"); [ -n "\$pct" ] || exit 255
+echo "/dev/sda1 39845888 33554432 6291456 \$pct% /"
+SH
+chmod +x "$DK/bin/ssh"
+disk() { echo "$1" > "$DK/pct"; : > "$DK/ssh.log"; env PATH="$DK/bin:$PATH" make --no-print-directory _health-disk < /dev/null 2>&1 | strip; }
+out=$(disk 89)
+printf '%s' "$out" | grep -q "nobody@example.invalid.*89%.*FULL" && [ "$(grep -c 'df -P' "$DK/ssh.log")" = 1 ] \
+    && ok "health warns on a server at 89% and asks a shared host once" \
+    || bad "health warns on a server at 89% and asks a shared host once" "$out | ssh calls: $(wc -l < "$DK/ssh.log")"
+out=$(disk 42)
+printf '%s' "$out" | grep -q "nobody@example.invalid.*42%" && ! printf '%s' "$out" | grep -q FULL \
+    && ok "health reports a server at 42% as fine" \
+    || bad "health reports a server at 42% as fine" "$out"
+# The sites' filesystem, not /: a Hetzner volume or a Combell quota is another disk.
+# A dead host must answer "unreachable", never hang health or prompt for a password.
+disk 50 >/dev/null
+grep -q -- "-o BatchMode=yes -o ConnectTimeout=5 nobody@example.invalid df -P '/srv/staging'" "$DK/ssh.log" \
+    && ok "health measures the first environment's path, non-interactively and with a timeout" \
+    || bad "health measures the first environment's path, non-interactively and with a timeout" "$(cat "$DK/ssh.log")"
+out=$(disk "") 
+printf '%s' "$out" | grep -q "nobody@example.invalid.*unreachable" \
+    && ok "health names a host that does not answer as unreachable" \
+    || bad "health names a host that does not answer as unreachable" "$out"
+D2="$WORK/disk-2hosts"; rm -rf "$D2"; cp -r "$P" "$D2"
+sed -i 's|production: {url: "https://example.invalid", path: /srv/prod,|production: {url: "https://example.invalid", ssh_host: other@example.invalid, path: /srv/prod,|' "$D2/site.yml"
+out=$(echo 30 > "$DK/pct"; : > "$DK/ssh.log"; cd "$D2" && env PATH="$DK/bin:$PATH" make --no-print-directory _health-disk < /dev/null 2>&1 | strip)
+printf '%s' "$out" | grep -q "nobody@example.invalid.*30%" && printf '%s' "$out" | grep -q "other@example.invalid.*30%" \
+    && grep -q "other@example.invalid df -P '/srv/prod'" "$DK/ssh.log" \
+    && ok "health reports two servers separately, each at its own environment's path" \
+    || bad "health reports two servers separately, each at its own environment's path" "$out | $(cat "$DK/ssh.log")"
+
+echo
 echo "── first bring-up: files before the database ──"
 # The bring-up order is .env → core → composer → mail block → db import, so
 # WordPress's FILES exist before its database does. _backup-data used to call

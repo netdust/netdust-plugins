@@ -649,6 +649,26 @@ health: ## Ledger, server drift, deploy guards, branch topology, patched files
 	else \
 		echo "  (none declared — add health.markers to site.yml for third-party files you patch)"; \
 	fi
+	@echo ""
+	@$(MAKE) --no-print-directory _health-disk
+
+# A server hosts many sites; one site's health is the first place anyone looks.
+# Measured at the site's path: a mounted volume or a hosting quota is its own disk.
+.PHONY: _health-disk
+_health-disk:
+	@echo "$(BLUE)Disk — free space on each server$(RESET)"
+	@for e in $$($(SITE) environments); do \
+		H=$$($(SITE) environments.$$e.ssh_host 2>/dev/null || $(SITE) deploy.ssh_host); \
+		[ -n "$$H" ] && echo "$$H $$($(SITE) environments.$$e.path 2>/dev/null || echo /)"; \
+	done | awk '!seen[$$1]++' | while read -r H R; do \
+		P=$$(ssh -qn -o BatchMode=yes -o ConnectTimeout=5 "$$H" "df -P '$$R' 2>/dev/null || df -P /" 2>/dev/null \
+			| awk 'END{sub("%","",$$5); print $$5}'); \
+		case "$$P" in \
+			''|*[!0-9]*) printf "  $(YELLOW)%-28s unreachable$(RESET)\n" "$$H";; \
+			*) if [ "$$P" -ge 80 ]; then printf "  $(RED)%-28s %s%% FULL$(RESET) — usual suspects: ~/.cache/composer, /var/log/journal, old backups\n" "$$H" "$$P"; \
+			   else printf "  $(GREEN)%-28s %s%%$(RESET)\n" "$$H" "$$P"; fi;; \
+		esac; \
+	done
 
 # ═════════════════════════════════════════════════════════════════════════════
 # INTERNAL HELPERS — never call these directly

@@ -50,10 +50,16 @@ The order that works (josworld → Combell, 2026-09-05):
 `.env` → `wp core download` → bootstrap files → `composer install` →
 **mail block** → database import → `search-replace` → `wp rewrite flush --hard`
 → payload deploy → licensed assets by hand → uploads.
-Two traps inside it: **`composer install` needs `--prefer-source`** when any
-package is a private repo — composer's dist path fetches a GitHub API zipball
-over HTTPS, which an SSH deploy key cannot authenticate (404), while
-`--prefer-source` clones over SSH and works. And **`wp rewrite flush --hard` is
+Two traps inside it: **a private package must clone** — composer's dist path
+fetches a GitHub API zipball over HTTPS, which an SSH deploy key cannot
+authenticate (404), while a source install clones over SSH and works. Scope it
+per package (`"preferred-install": {"netdust/*": "source", "*": "dist"}`), never
+the global `--prefer-source` flag: on booming-compass (2026-09-29) that flag had
+cloned WordPress core (713M of `.git` per site), pint and phpunit into every
+webroot, and filled the shared composer cache to 4.2G — the server hit 89%.
+The map does not heal such a server: composer keeps each package's previous
+install source, so it took `rm -rf vendor web/wp`, `composer install --no-dev`
+and `composer clear-cache` per site. And **`wp rewrite flush --hard` is
 mandatory** after the import, because search-replace empties `rewrite_rules`
 and every permalink 404s until it runs.
 

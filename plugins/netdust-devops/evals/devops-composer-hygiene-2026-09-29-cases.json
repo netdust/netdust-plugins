@@ -1,0 +1,23 @@
+[
+ {
+  "id": "private-repo-does-not-clone-everything",
+  "skill": "devops",
+  "skill_path": "skills/devops/SKILL.md",
+  "query": "The deploy's composer install 404s on our private netdust/ntdst-core package over the SSH deploy key. Should I add --prefer-source to the post_deploy_hooks?",
+  "signature": "says no to the global flag — it clones EVERY package (WordPress core, dev tools) and fills the server; answers with a per-package map in composer.json, \"preferred-install\": {\"netdust/*\": \"source\", \"*\": \"dist\"}, and a hook of `composer install --no-dev` carrying no --prefer-* flag, because a command-line flag overrides the map"
+ },
+ {
+  "id": "health-names-a-full-disk",
+  "skill": "devops",
+  "skill_path": "skills/devops/SKILL.md",
+  "query": "Is there a quick way to see whether one of our servers is running out of disk?",
+  "signature": "answers `make health` — its Disk section reports each server's use once per host and flags FULL at 80% — and names the usual suspects (the composer cache, /var/log/journal, old backups) rather than proposing an ad-hoc monitoring script"
+ },
+ {
+  "id": "map-does-not-heal-a-cloned-server",
+  "skill": "devops",
+  "skill_path": "skills/devops/SKILL.md",
+  "query": "I added the preferred-install map and removed --prefer-source from the deploy hook, deployed twice, but web/wp/.git and vendor/*/.git are still on the server. Why?",
+  "signature": "explains that composer keeps a package's previous install source on update, so the map only governs fresh installs; the one-time cure is removing vendor/ and the composer-installed WP core directory, re-running `composer install --no-dev` (a brief outage — pick a quiet moment), then `composer clear-cache` once on that server"
+ }
+]

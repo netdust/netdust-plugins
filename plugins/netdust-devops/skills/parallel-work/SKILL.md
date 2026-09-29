@@ -54,8 +54,8 @@ unblock a hotfix is the mistake it prevents.
 
 ### A bug in an imported package
 
-Netdust projects install `ntdst-core`, `ntdst-baseline` and `netdust-flow` with
-`--prefer-source`, so those are **real git checkouts inside `vendor/`**. Fixing
+Netdust projects install `ntdst-core`, `ntdst-baseline` and `netdust-flow` from
+source (`preferred-install` maps `netdust/*` to it), so those are **real git checkouts inside `vendor/`**. Fixing
 one there is committing to a different repository from inside this one.
 
 Do not edit it in place and hope. Open that repository in its own checkout, fix

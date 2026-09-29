@@ -126,6 +126,8 @@ that carry a decision:
 
 **Run `make health` after ANY third-party plugin update** — it is the check a
 deploy cannot do.
+It also reports each server's disk, measured at the site's path and FULL at 80% —
+sites share a server, and the composer cache, the journal and old backups fill it silently.
 
 **After a staging deploy or a plugin update: `make e2e env=staging`, then
 `make smoke`.** e2e is the proof — the flows each feature's shake-out drove, re-run on the
@@ -222,8 +224,14 @@ The order that works:
 ```
 
 - **Mail block before the database** — the import brings its source mail settings with it.
-- **`composer install --prefer-source` for private repos** — the dist zipball needs an
-  API token an SSH deploy key cannot give it.
+- **Private repos clone, everything else downloads** — the dist zipball needs an API token
+  an SSH deploy key cannot give, so set `"preferred-install": {"netdust/*": "source", "*": "dist"}`
+  in `composer.json` — every private vendor listed before `"*"`, since the first match wins
+  and an unlisted one falls back to the 404ing dist — and run `composer install --no-dev` with no `--prefer-*` flag: a flag
+  overrides the map, and `--prefer-source` clones WordPress core and every dev tool too.
+  The map only governs fresh installs — composer keeps a package's previous source — so a
+  server already cloned needs `vendor/` and WP core removed, `composer install --no-dev` re-run
+  and `composer clear-cache` once.
 - **`wp rewrite flush --hard` is mandatory** — search-replace empties `rewrite_rules`.
 - **Licensed assets are gitignored, not missing** — look in `content/themes/` and
   `content/plugins/` before asking for a zip; no verb carries them.
