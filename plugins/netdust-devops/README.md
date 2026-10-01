@@ -56,8 +56,8 @@ This plugin has no opinion about what invokes it — a person, an agent, or a
 fleet tool reporting across many repos. It exposes verbs and refuses by name
 when a precondition fails; who called is not its concern. Read-only verbs
 (`deployed`, `status`, `health`, `doctor`, `audit`) are safe for anything to
-run; the ones that write are gated on a clean tree, the right branch, a pushed
-HEAD, and — for production — `make ship`'s checks (`deployed/staging` and, when
+run; the ones that write are gated on a clean tree, the right branch (`deploy`
+checks it out itself, and returns you after), a pushed HEAD, and — for production — `make ship`'s checks (`deployed/staging` and, when
 `commands.e2e` is declared, `e2e/staging` name the commit), a green
 `commands.gate`, and a confirmation typed by a human at a terminal.
 

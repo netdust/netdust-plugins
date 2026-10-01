@@ -174,7 +174,12 @@ git checkout <commit before the update> -- Makefile.netdust mk scripts .netdust-
 
 1. **The deploy guards.** A deploy refuses unless the tree is clean, the branch
    matches `environments.<env>.branch`, and `HEAD` **is** `origin`'s tip — a checkout
-   that is behind would deploy an older commit and stamp it. They are git state only:
+   that is behind would deploy an older commit and stamp it. From a clean tree on
+   another branch, `make deploy env=X` checks out X's branch itself at origin's tip
+   and returns you to your branch afterwards, a failed deploy included; a behind-only
+   checkout of the rung is brought to the tip the same way. A dirty tree still
+   refuses, and a rung holding a commit origin lacks is refused — that commit is
+   work, never discarded. They are git state only:
    `commands.gate` runs in `make gate` and inside `ship`, never in a deploy, so
    `✓ deploy guards passed` never means a suite ran.
 2. **The ledger.** Each deploy stamps `<state_dir>/<env>.json` on the server
