@@ -272,11 +272,6 @@ printf '%s' "$out" | grep -q "needs a terminal" \
     && ok "promote refuses without a terminal" \
     || bad "promote refuses without a terminal" "$(printf '%s' "$out" | head -2)"
 
-out=$(timeout 20 make deploy env=staging < /dev/null 2>&1 | strip)
-printf '%s' "$out" | grep -q "staging deploys from 'staging'" \
-    && ok "deploy refuses from the wrong branch" \
-    || bad "deploy refuses from the wrong branch" "$(printf '%s' "$out" | head -2)"
-
 out=$(timeout 20 make save < /dev/null 2>&1 | strip)
 printf '%s' "$out" | grep -q "deploy-only, never worked on" \
     && ok "save refuses on a rung branch" \
@@ -813,6 +808,107 @@ else
     bad "rollback over git-push refuses by name: no server contact, no ledger, the tag unmoved" \
         "exit $rc: ssh=$(wc -l < "$CLI/ssh.log") tag=$(git ls-remote origin refs/tags/deployed/staging | cut -f1) — $(printf '%s' "$out" | tail -1)"
 fi
+
+echo
+echo "── deploy checks the environment's branch out itself ──"
+# A rung checkout never carries local work, so deploy makes it origin's and
+# returns you to the branch you were on, a failed step included. A dirty tree
+# and a local commit origin lacks are the two things it will not move past.
+git checkout -q staging && git reset -q --hard origin/staging
+git checkout -q -b feature/dc
+here() { git branch --show-current; }
+tip() { git ls-remote origin "refs/heads/$1" | cut -f1; }
+stamp() { git ls-remote origin refs/tags/deployed/staging | cut -f1; }
+git branch -q -f staging staging~1
+: > "$CLI/rsync.log"
+out=$(M deploy env=staging); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && [ "$(here)" = feature/dc ] && [ "$(git rev-parse staging)" = "$(tip staging)" ] \
+   && [ "$(stamp)" = "$(tip staging)" ] && [ -s "$CLI/rsync.log" ] \
+   && printf '%s' "$out" | grep -q "checked out staging" && printf '%s' "$out" | grep -q "back on feature/dc"; then
+    ok "deploy from a feature branch checks out staging at origin's tip, deploys it, and returns you"
+else
+    bad "deploy from a feature branch checks out staging at origin's tip, deploys it, and returns you" \
+        "exit $rc on $(here): $(printf '%s' "$out" | head -3 | tr '\n' ' ')"
+fi
+
+# A tag already on the deployed commit pushes nothing, so origin moves first.
+git push -q origin "$(git commit-tree "staging^{tree}" -p staging -m moved):refs/heads/staging" 2>/dev/null
+printf '%s\n' "$NOTAG" > "$HOOK"; chmod +x "$HOOK"
+out=$(M deploy env=staging); rc=$?; rm -f "$HOOK"; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && [ "$(here)" = feature/dc ] && printf '%s' "$out" | grep -q "deploy tag not pushed"; then
+    ok "…and a deploy that fails after the checkout still returns you to your branch"
+else
+    bad "…and a deploy that fails after the checkout still returns you to your branch" "exit $rc on $(here): $(printf '%s' "$out" | tail -2 | tr '\n' ' ')"
+fi
+
+echo dirt > dirt.txt; : > "$CLI/rsync.log"; : > "$CLI/ssh.log"
+out=$(M deploy env=staging); rc=$?; rm -f dirt.txt; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && [ "$(here)" = feature/dc ] && printf '%s' "$out" | grep -q "Uncommitted changes" \
+   && [ ! -s "$CLI/rsync.log" ] && [ ! -s "$CLI/ssh.log" ]; then
+    ok "a dirty tree still refuses, and nothing is checked out"
+else
+    bad "a dirty tree still refuses, and nothing is checked out" "exit $rc on $(here): $(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+fi
+
+git branch -q -D staging
+out=$(M deploy env=staging); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && [ "$(here)" = feature/dc ] && [ "$(git rev-parse staging)" = "$(tip staging)" ] \
+   && [ "$(git rev-parse --abbrev-ref 'staging@{upstream}' 2>/dev/null)" = origin/staging ]; then
+    ok "…with no local staging, deploy creates it tracking origin"
+else
+    bad "…with no local staging, deploy creates it tracking origin" "exit $rc on $(here): $(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+fi
+
+git checkout -q staging
+AHEAD=$(git commit-tree "HEAD^{tree}" -p HEAD -m ahead)
+git push -q origin "$AHEAD:refs/heads/staging" 2>/dev/null
+out=$(M deploy env=staging); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && [ "$(here)" = staging ] && [ "$(git rev-parse HEAD)" = "$AHEAD" ] && [ "$(stamp)" = "$AHEAD" ] \
+   && printf '%s' "$out" | grep -q "brought to origin's tip"; then
+    ok "a staging checkout that is only behind origin is brought to its tip and deployed"
+else
+    bad "a staging checkout that is only behind origin is brought to its tip and deployed" "exit $rc at $(git rev-parse --short HEAD): $(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+fi
+
+out=$(M deploy env=staging); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && [ "$(here)" = staging ] && ! printf '%s' "$out" | grep -qE "checked out|back on|brought to"; then
+    ok "already on a current staging: no checkout, the deploy proceeds"
+else
+    bad "already on a current staging: no checkout, the deploy proceeds" "exit $rc on $(here): $(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+fi
+
+git -c user.email=t@t -c user.name=T commit -q --allow-empty -m "local only"
+MINE=$(git rev-parse HEAD)
+out=$(M deploy env=staging); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && [ "$(git rev-parse HEAD)" = "$MINE" ] && printf '%s' "$out" | grep -q "HEAD is not on origin/staging"; then
+    ok "a staging with a commit origin lacks is refused, and the commit is kept"
+else
+    bad "a staging with a commit origin lacks is refused, and the commit is kept" "exit $rc at $(git rev-parse --short HEAD): $(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+fi
+git checkout -q feature/dc
+out=$(M deploy env=staging); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && [ "$(here)" = feature/dc ] && [ "$(git rev-parse staging)" = "$MINE" ] \
+   && printf '%s' "$out" | grep -q "staging has commits origin/staging lacks"; then
+    ok "…and from another branch too: no checkout, the commit kept"
+else
+    bad "…and from another branch too: no checkout, the commit kept" "exit $rc on $(here): $(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+fi
+git branch -q -f staging "$AHEAD"
+
+out=$(M _deploy-guard env=staging | strip)
+printf '%s' "$out" | grep -q "staging deploys from 'staging'" \
+    && ok "_deploy-guard itself still refuses the wrong branch — ship's path checks out nothing" \
+    || bad "_deploy-guard itself still refuses the wrong branch — ship's path checks out nothing" "$(printf '%s' "$out" | head -2)"
+
+: > "$CLI/ssh.log"
+out=$(M deploy env=production); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && [ "$(here)" = feature/dc ] && printf '%s' "$out" | grep -q "was not put there by make ship" \
+   && [ ! -s "$CLI/ssh.log" ]; then
+    ok "production: the branch is checked out, the ship-stamp guard still refuses, and you are returned"
+else
+    bad "production: the branch is checked out, the ship-stamp guard still refuses, and you are returned" "exit $rc on $(here): $(printf '%s' "$out" | head -3 | tr '\n' ' ')"
+fi
+git checkout -q staging && git branch -q -D feature/dc
 
 echo
 echo "── the rebuild: unpromote tells the truth, and local staging follows ──"
