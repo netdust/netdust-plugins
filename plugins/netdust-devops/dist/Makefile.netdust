@@ -254,8 +254,21 @@ unpromote: ## Take a feature off the staging branch (make unpromote name=my-feat
 
 # ── DEPLOY ───────────────────────────────────────────────────────────────────
 
+# deploy checks the environment's branch out itself and returns you to yours
+# afterwards — on a failed or interrupted step too, so a red deploy never
+# strands you on a rung.
 .PHONY: deploy
 deploy: ## Deploy the payload to an environment (make deploy env=staging)
+	@FROM=$$(git branch --show-current); [ -n "$$FROM" ] || FROM=$$(git rev-parse HEAD); \
+	back() { [ "$$(git branch --show-current)" = "$$FROM" ] && return 0; \
+		git checkout --quiet "$$FROM" && echo "$(GREEN)↩ back on $$FROM$(RESET)" \
+		|| echo "$(RED)✗ could not return to $$FROM — git checkout $$FROM$(RESET)"; }; \
+	$(MAKE) --no-print-directory _deploy-checkout env=$(env) || exit 1; \
+	trap 'back; exit 130' INT TERM; \
+	RC=0; $(MAKE) --no-print-directory _deploy-run env=$(env) dryrun="$(dryrun)" || RC=$$?; \
+	back; exit $$RC
+
+_deploy-run:
 	@$(MAKE) --no-print-directory _deploy-guard env=$(env)
 	@$(MAKE) --no-print-directory _deploy-confirm env=$(env)
 	@[ "$(env)" != "production" ] || [ -n "$(dryrun)" ] || { $(MAKE) --no-print-directory _backup-data env=production \
@@ -776,6 +789,39 @@ _deploy-guard:
 			exit 1; }; \
 	fi; \
 	echo "$(GREEN)✓ deploy guards passed: $$ENV ← $$WANT @ $$(git rev-parse --short HEAD)$(RESET)"
+
+# Puts a clean checkout on the environment's branch at origin's tip. A rung
+# never carries local work (promote rebuilds staging), so the local branch is
+# simply made origin's — unless it holds a commit origin lacks, which is real
+# work and never discarded. Anything else it leaves for _deploy-guard to name.
+_deploy-checkout:
+	@ENV="$(env)"; \
+	WANT=$$($(SITE) environments.$$ENV.branch 2>/dev/null); \
+	[ -n "$$WANT" ] && git remote get-url origin >/dev/null 2>&1 || exit 0; \
+	if [ -n "$$(git status --porcelain)" ]; then \
+		echo "$(RED)✗ Uncommitted changes — nothing uncommitted reaches a server$(RESET)"; \
+		git status --short; \
+		exit 1; \
+	fi; \
+	git fetch --quiet origin "$$WANT" 2>/dev/null || { echo "$(RED)✗ origin is unreachable — the gate cannot verify that HEAD is pushed$(RESET)"; exit 1; }; \
+	git rev-parse --verify --quiet "origin/$$WANT" >/dev/null || exit 0; \
+	HAVE=$$(git branch --show-current); \
+	if [ "$$HAVE" = "$$WANT" ]; then \
+		: "behind only: brought up; diverged: left for the guard to refuse"; \
+		[ "$$(git rev-parse HEAD)" != "$$(git rev-parse "origin/$$WANT")" ] || exit 0; \
+		git merge-base --is-ancestor HEAD "origin/$$WANT" || exit 0; \
+		git merge --quiet --ff-only "origin/$$WANT" || exit 1; \
+		echo "$(GREEN)↻ $$WANT brought to origin's tip @ $$(git rev-parse --short HEAD)$(RESET)"; \
+		exit 0; \
+	fi; \
+	if git rev-parse --verify --quiet "refs/heads/$$WANT" >/dev/null \
+		&& ! git merge-base --is-ancestor "refs/heads/$$WANT" "origin/$$WANT"; then \
+		echo "$(RED)✗ local $$WANT has commits origin/$$WANT lacks — push or drop them before deploying$(RESET)"; \
+		exit 1; \
+	fi; \
+	$(MAKE) --no-print-directory _worktree-guard rung="$$WANT" verb="deploy env=$$ENV" || exit 1; \
+	git checkout --quiet -B "$$WANT" --track "origin/$$WANT" || exit 1; \
+	echo "$(GREEN)↪ checked out $$WANT @ $$(git rev-parse --short HEAD) (origin's tip) for this deploy$(RESET)"
 
 # WHETHER to ask for make deploy. ship always asks, so it calls _ask-confirm.
 _deploy-confirm:
