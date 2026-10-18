@@ -22,8 +22,9 @@ what it would collide with shows before it lands: base production, head
 `<name>:origin/feature/<name>` (replacing its old pin if it is already on staging). For the new
 feature's files there is no merged version yet, so the reviewer compares the pins' diffs.
 
-**Feature.** When `specs/<name>/plan.md` exists, give the reviewers its requirements,
-`Review Focus` and threat model; otherwise the diff and the commit messages — a feature without
+**Feature.** The plan is the head's: `git show <head>:specs/<name>/plan.md`, else the working
+tree's, so a reviewer in another checkout still has it. When it exists, give the reviewers its
+requirements, `Review Focus` and threat model; otherwise the diff and the commit messages — a feature without
 a plan is reviewed, never refused. Pass each reviewer the diff itself (`git diff <base>..<head>`) with the range: a headless
 subagent may not be allowed to run git. Dispatch in parallel, on the most capable model:
 - superpowers' reviewer: a `general-purpose` subagent filling `requesting-code-review/code-reviewer.md` for the range;

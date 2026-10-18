@@ -69,6 +69,8 @@ work takes the prototype-first path; nothing in the skill delays a visible first
 Native by default. Subagent-driven when a task encodes a rule this project chose, touches
 a security-boundary path, or the plan is long enough to outlive one context.
 *Source: invented — approved 2026-09-21 (the proposal Stefan answered "go ahead").*
+*Amended 2026-10-18 by `specs/two-session/spec.md` R1, R4, R8: a planned feature runs as two sessions;
+the mode is chosen inside the coder by the same rule, and is no longer Stefan's choice at the handoff.*
 
 **R4 — The WordPress constraints pack.** One file the skill reads on a WP project. It
 names, by reference to the `netdust-wp` skills that own them: ntdst-core as the base and
@@ -84,6 +86,9 @@ belongs to the operator (`promote`, `ship`). Everything else is a ledgered rulin
 in the final message. The human's accepted exception in a shake-out manifest is spelled
 `Accepted-by-human:`, never `Ruling:`.
 *Source: invented — approved 2026-09-21 (report item 1–2, "go ahead").*
+*Amended 2026-10-18 by `specs/two-session/spec.md` R5, R8: the stops also include `unpromote`, deploy,
+pushing a package's `main`, a review finding that is an intent decision and the coder's permission
+prompts; the execution-mode choice is no longer one, and a coder asks its reviewer, never Stefan.*
 
 **R6 — Close.** `make gate` exits 0. On a user-facing change, `/shakeout`: `shakeout-qa`
 drives the flows through the real browser or wire, commits them as tests, writes the

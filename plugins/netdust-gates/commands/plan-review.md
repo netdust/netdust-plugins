@@ -39,5 +39,6 @@ path — check it before writing.
 - **Note**: stays in the report.
 
 Then hand the plan and the review to Stefan together, as `superpowers:writing-plans` says:
-he reviews the saved plan and chooses the execution mode. The review travels with the plan;
+he reviews the saved plan, and once he approves it a coder session executes it (the policy's
+`## Execution mode`). The review travels with the plan;
 he reads a plan that has already been checked.

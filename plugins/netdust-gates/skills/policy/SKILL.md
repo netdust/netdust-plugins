@@ -45,9 +45,8 @@ defined there. Netdust adds:
 
 - **Security boundary.** A change to a security-boundary file — auth, session, capability or
   permission checks, nonces, input parsing, outbound fetches of user-supplied URLs, stored
-  credentials, tenancy — owes a threat model on the diff first, whatever its size
-  (`class-d-gap`: a one-line SSRF-guard edit shipped without one). Use
-  `netdust-gates:threat-modeling`.
+  credentials, tenancy — owes a threat model on the diff first, whatever its size (`class-d-gap`: a
+  one-line SSRF-guard edit shipped without one). Use `netdust-gates:threat-modeling`.
 - **Design work is prototype-first.** A page or UI request builds the visible first version,
   then decides the next thing with Stefan looking at it. Nothing here delays that.
 - **A small change writes no artifact.** One file, or one declarative edit, with no open
@@ -76,14 +75,12 @@ Invoke `superpowers:writing-plans`; it owns the format. Netdust fills its slots:
   can actually meet, most likely first. Each line points at a Test map row; an absence or a count
   ("never", "only", "exactly one") points at an `ARCHITECTURE-INVARIANTS.md` check instead, which
   `invariant-auditor` runs at review — never a test that reads source (`source-scan-ratchets`).
-- **First working version** — one line under Architecture: the task that produces the first
-  thing Stefan can see or run, ordered first. Tests and scaffolding for something nobody can
-  yet see come after it.
+- **First working version** — one line under Architecture: the task that produces the first thing Stefan
+  can see or run, ordered first. Tests and scaffolding for something nobody can yet see come after it.
 - **Simplest design** — one paragraph: the simplest design that would meet the ask, and why
   the plan does or does not use it.
 
-Nothing else is added. A plan field is not how an incident is remembered (see the plugin's
-`CLAUDE.md`).
+Nothing else is added. A plan field is not how an incident is remembered (see the plugin's `CLAUDE.md`).
 
 **Then `/plan-review`, before Stefan reads it.** A fresh `plan-reviewer` subagent ground-truths
 every premise against the source, checks coverage and invention, and judges the simplest
@@ -95,42 +92,52 @@ blocks code on a plan's state — an old or half plan never holds up the work (S
 
 ## Execution mode
 
-Stefan chooses at the plan handoff; you recommend by rule. **Native** by default: it runs each
-unit as the plan wrote it. Recommend **subagent-driven** only for a security-boundary unit or a
-plan that outlives one context: its implementers follow upstream's per-task TDD, which undoes
-the unit cut. Name the rule that fired.
+A planned feature runs as two sessions; a change with no plan file stays in one. After the plan
+approval this session turns reviewer and a coder executes in its own worktree, cut from production's
+branch with spec, plan and plan review as the first commits of `feature/<feature>` (on DDEV its own
+project, `netdust-devops:parallel-work`); only the coder writes that tree. In herdr the pair recipe
+in `netdust-core:herdr-orchestration` starts it with `herdr agent start`; outside herdr it is one
+background subagent there, continued over SendMessage; both in one permission mode. The brief opens
+`Role: coder`, the plan path and `netdust-gates:policy`: a coder skips Intake and the plan, never
+starts a coder, sends its pre-flight scan for rulings before Task 1, runs every step that writes the
+tree, `/shakeout` and the push included, and ledgers each exchange, so a restart of either session
+reads branch, plan and ledger. The reviewer reads only the first working version, a block and the
+Close, where it runs `make review name=<feature>` from its own checkout and brings Stefan the
+screenshot yield and `make promote`; a finding is one fix request, closed by its test. The mode is
+no longer a stop: **Native** by default, **subagent-driven** only for a security-boundary unit or a
+plan that outlives one context (its per-task TDD undoes the unit cut). Name the rule that fired.
 
 ## Stops
 
-Upstream's four stops stand. Netdust names the ones that occur: the plan approval and the
-execution-mode choice; the shake-out screenshot yield (Close, step 4); the flow list a shake-out proposes for a branch with no spec; and every devops verb
-that belongs to the operator — `promote`, `unpromote`, `ship`, deploy — which Stefan runs or
-confirms by typing. Everything else you decide and ledger as
-`Ruling: <what> — <why> — <cost if wrong>`, and list in the final message. A shake-out exception
-Stefan accepts is `Accepted-by-human:` in the manifest, never `Ruling:`; only he writes it.
+Upstream's four stops stand, and Netdust's: the plan approval; the shake-out screenshot yield
+(Close, step 4); the flow list a shake-out proposes for a branch with no spec; every operator verb —
+`promote`, `unpromote`, `ship`, deploy, pushing a package's `main` — which Stefan runs or confirms
+by typing; a review finding that is an intent decision; the coder's permission prompts, which nobody
+answers for him. A coder asks its reviewer, never Stefan: the reviewer rules a technical question,
+sparring with a fresh agent for a second view, and takes intent to Stefan. Everything else you decide,
+ledger as `Ruling: <what> — <why> — <cost if wrong>` and list in the final message. A shake-out
+exception Stefan accepts is `Accepted-by-human:` in the manifest, never `Ruling:`; only he writes it.
 
 ## Close
 
 1. `make gate` exits 0 — the project's own suite (`commands.gate` in `site.yml`). A project with
    no declared gate declares one as the first task of the work; that is not a reason to skip.
-2. The feature review, plan or no plan:
-   `make review name=<feature>` (`/feature-review <feature>` without devops) — superpowers'
-   whole-branch review (`superpowers:requesting-code-review`, a fresh reviewer; the author never
-   reviews its own diff) on the most capable model, joined by `security-sentinel` when the plan carries a `## Threat model`
-   or the diff touches a security-boundary path, and `invariant-auditor` when the project carries
-   `ARCHITECTURE-INVARIANTS.md`.
+2. The feature review, plan or no plan: `make review name=<feature>` (`/feature-review <feature>`
+   without devops) — superpowers' whole-branch review (`superpowers:requesting-code-review`, a fresh
+   reviewer; the author never reviews its own diff) on the most capable model, joined by
+   `security-sentinel` when the plan carries a `## Threat model` or the diff touches a security-boundary
+   path, and `invariant-auditor` when the project carries `ARCHITECTURE-INVARIANTS.md`.
 3. One fix pass on every Blocking and Should fix finding (a finding that is a decision goes to
    Stefan), each fix RED→GREEN through the seam where the finding showed — the request, route or
    render — not reflection on the private method the fix touched; the review is kept as
    `specs/<feature>/review.md` (copied from `make review`'s saved report, or the
    `/feature-review` summary without devops) and committed with it. No re-review — named checks and the suites close it.
-4. A user-facing change runs `/shakeout`, once, on the fixed code: `shakeout-qa` drives the flows through the real
-   browser or wire, commits them as tests and writes `specs/<feature>/shakeout.md`; it
-   registers them in `specs/CHECKS.md` as `@e2e` (`make e2e env=staging`, the proof after a
-   deploy or a plugin update) beside a read-only `@smoke` check (`make smoke`, production too);
-   `bin/shakeout-check.py` exits 0; Stefan sees one screenshot per surface. This shake-out
-   writes the checks; `make e2e env=staging` re-runs all of them on the composition, and
-   `ship` waits for it.
+4. A user-facing change runs `/shakeout`, once, on the fixed code: `shakeout-qa` drives the flows
+   through the real browser or wire, commits them as tests and writes `specs/<feature>/shakeout.md`; it
+   registers them in `specs/CHECKS.md` as `@e2e` (`make e2e env=staging`, the proof after a deploy or a
+   plugin update) beside a read-only `@smoke` check (`make smoke`, production too);
+   `bin/shakeout-check.py` exits 0; Stefan sees one screenshot per surface. This shake-out writes the
+   checks; `make e2e env=staging` re-runs all of them on the composition, and `ship` waits for it.
 5. Every change: `superpowers:finishing-a-development-branch` — on a project with `site.yml`,
    in place of its menu: the branch pushed and `make promote name=<feature>` handed to Stefan
    (it finds the saved review and skips it); a feature never merges into production by hand.
