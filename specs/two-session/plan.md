@@ -5,11 +5,12 @@
 **Goal:** A planned netdust-gates feature runs as two sessions. The session Stefan talked to thinks and reviews; a coder session executes in its own worktree. Stefan is asked only at the stops.
 
 **Architecture:**
-- **The rule** lives in the policy skill's Execution mode and Stops sections: about 11 lines, under the 150-line cap.
-- **The mechanics** (spawn, brief, watch, review, restart, close, fallback) live in `netdust-core:herdr-orchestration` as a pair recipe.
+- **The rule** lives in the policy skill's Execution mode and Stops sections, together with the fallback outside herdr.
+- **The mechanics** inside herdr (spawn, brief, watch, review, restart, close) live in `netdust-core:herdr-orchestration` as **the pair recipe**. That is the one name both skills use.
 - **The DDEV-per-worktree rule** lives in `netdust-devops:parallel-work`.
-- **The eval runner** stops inheriting `HERDR_*`, so the new cases cannot drive the live herdr server.
-- **First working version:** Task 1 (the policy rule and its pinned test). After it, a session entering `netdust-gates:policy` on any project reads the two-session rule.
+- **The eval runner** builds every child environment itself: no inherited `HERDR_*`, a dead sandbox socket, and an optional stub `herdr` that really shadows the binary. So no eval can reach the live herdr server.
+- **`/feature-review`** reads the plan from the reviewed branch, so a reviewer in another checkout still reviews against the plan.
+- **First working version:** Task 1, the policy rule and its pinned test. After it, a session entering `netdust-gates:policy` reads the two-session rule. No eval runs before Task 2 has made the runner safe.
 
 **Tech Stack:** Markdown skills, Python 3 tests (`tests/run.sh`), the `claude` CLI evals (`evals/run-evals.py`), bash tests for netdust-devops.
 
@@ -17,36 +18,51 @@
 
 ## Global Constraints
 
-- The policy skill stays under 150 lines (`plugins/netdust-gates/tests/test_policy_skill.py:42`). The Execution mode body is at most 11 lines; mechanics go to herdr-orchestration.
-- The growth rule (`plugins/netdust-gates/CLAUDE.md`): this is a spec amendment plus eval cases. It adds no plan section and no check on plan grammar.
-- A netdust skill restating superpowers is a defect. The coder runs upstream's executor unchanged, and gates ships no implementer prompt, no reviewer rubric and no review rounds (spec R10).
-- A lesson that changes a skill's behaviour ships with an eval case (the global `CLAUDE.md` §8).
-- Edit the source repo only, never the plugin cache (`~/.claude/plugins/cache/`).
-- `main` of `/home/ntdst/Projects/netdust-plugins` carries another session's uncommitted files, among them `plugins/netdust-core/.claude-plugin/plugin.json`. This branch is cut from `origin/main` in its own worktree. Never touch the main checkout; name the merge conflict on netdust-core's `plugin.json` in the report.
-- Bump the version once per plugin: gates `0.11.0`, core `0.5.4`, devops `0.9.6`. Each `plugin.json` description gains its version's one-line summary in front, in the existing style.
-- Every requirement's wording comes from `specs/two-session/spec.md`; quote its R-numbers in commit messages.
+- **The policy's size.** The policy skill stays at most 149 lines (`plugins/netdust-gates/tests/test_policy_skill.py:42` requires `< 150`). It is 142 today, so Execution mode and Stops together grow by at most 7 lines. To fit R5 and R8 completely, tighten other wording in the policy, never remove a rule. The mechanics go to the pair recipe.
+- **The growth rule** (`plugins/netdust-gates/CLAUDE.md`). This is a spec amendment plus eval cases: no plan section, no check on plan grammar.
+- **No restating superpowers.** A netdust skill restating superpowers is a defect. The coder runs upstream's executor unchanged, and gates ships no implementer prompt, no reviewer rubric and no review rounds (spec R10).
+- **An eval case per behaviour change.** A lesson that changes a skill's behaviour ships with an eval case (global `CLAUDE.md` §8).
+- **The source repo only.** Edit it, never the plugin cache (`~/.claude/plugins/cache/`).
+- **Version bumps.** Bump each plugin once, and bump `.claude-plugin/marketplace.json` in the same commit as its `plugin.json`: `test_plugin_manifest.py:22-24` and `test-marketplace.sh:33-42` fail on any drift between the two.
+  - **gates:** `0.11.0`.
+  - **devops:** `0.9.6`.
+  - **core:** `0.5.4`. The main checkout's uncommitted netdust-core `plugin.json` already claims `0.5.4` for discovery-briefing, so the report names the collision: whichever merges second takes `0.5.5`.
+  - **Descriptions:** each description gains its version's one-line summary in front, in the existing style.
+- **Hands off the main checkout.** `main` of `/home/ntdst/Projects/netdust-plugins` carries another session's uncommitted files. This branch is cut from `origin/main` in its own worktree, and the main checkout is never touched.
+- **Requirement numbers.** Every requirement's wording comes from `specs/two-session/spec.md`. Quote its R-numbers in commit messages.
+- **No eval before the safe runner.** No eval (`run-evals.py`) runs before Task 2's runner changes are committed.
 
 ## Review Focus
 
-1. **A coder starting a coder** (spec R4): the brief's `Role: coder` must stop recursion. → Test map row 2, eval `coder-brief-no-recursion`.
-2. **An eval run inside herdr spawning real panes** (spec R11): the runner must strip `HERDR_*`. → Test map row 2, `test_evals_shape.py`, plus eval `two-session-handoff` run with a stub `herdr`.
-3. **The policy outgrowing its cap, or restating upstream:** → Test map row 1, `test_policy_skill.py`.
-4. **Stale cross-references:** another skill, command or agent of the three plugins still offers "the execution-mode choice" or "Native by default" as Stefan's choice at the plan handoff. → Task 1 step 3's grep, its output quoted in the report.
-5. **A coder's `make gate` testing the main checkout's DDEV container** (spec R3): → Test map row 4. It is a documentation unit, proven by the first WordPress pair, which this plan does not run.
+1. **An eval run inside herdr reaching the live herdr server** (spec R11): the runner must give every child its own environment. Specifically: no inherited `HERDR_*`; `HERDR_SOCKET_PATH` inside the sandbox; with a stub, a `herdr` that resolves to the stub in the session's own login-shell Bash. → Test map row 2: `test_evals_shape.py` through `child_env`, plus a one-off probe quoted in the report.
+2. **A coder starting a coder** (spec R4): the brief's `Role: coder` must stop recursion. → Test map row 2, eval `coder-brief-no-recursion`.
+3. **A reviewer in another checkout reviewing with no plan** (spec R7): `/feature-review` must read the plan at the reviewed head. → Test map row 1, the command test.
+4. **The policy outgrowing its cap, or restating upstream.** → Test map row 1, `test_policy_skill.py`.
+5. **Stale offers of the execution-mode choice** in the three plugins. This is an absence; the repo has no `ARCHITECTURE-INVARIANTS.md`, so Task 1 Step 3's grep is the check, its output quoted.
+6. **A coder's `make gate` testing the main checkout's DDEV container** (spec R3). → Test map row 4, a documentation unit proven by the first WordPress pair, which this plan does not run.
 
 ## Simplest design
 
 - **The simplest version:** one paragraph in the policy telling the session to start a coder through herdr.
-- **Why it alone is not enough:** it would let an eval started inside herdr spawn panes on the live server (R11), and let a coder start its own coder (R4). On a WordPress project it would report `make gate` results from the main checkout's container (R3).
-- **What this plan adds:** that paragraph plus the three pieces that close those holes: the role line, the runner's environment fix, and the DDEV rule. It stops there. There is no new skill, no `make feature worktree=` verb and no `flock` (follow-ups, spec "Out of scope").
+- **What it would break:**
+  - An eval started inside herdr could drive panes on the live server (R11).
+  - A coder could start its own coder (R4).
+  - The reviewer's `/feature-review` would run without the plan (R7).
+  - On a WordPress project, `make gate` would test the main checkout's container (R3).
+- **What this plan adds:** that paragraph, the pair recipe and its scenario (R4 requires the mechanics somewhere), and the pieces that close those four holes:
+  - the role line;
+  - the runner's environment;
+  - one clause in `feature-review.md`;
+  - the DDEV section.
+- **Where it stops:** no new skill, no `make feature worktree=`, no `flock` (spec "Out of scope").
 
 ## Test map
 
 | Unit | Seam | Tests: tier · file · command | E2E flows |
 |---|---|---|---|
-| 1. The policy rule (Execution mode, Stops, boundary, spec amendment, gates version) | `plugins/netdust-gates/skills/policy/SKILL.md` as a session reads it | unit · `plugins/netdust-gates/tests/test_policy_skill.py` (pins `Role: coder`, `netdust-core:herdr-orchestration`, no "execution mode" stop, under 150 lines) · `bash plugins/netdust-gates/tests/run.sh test_policy_skill.py` | — |
-| 2. The eval runner and the two cases | `python3 plugins/netdust-gates/evals/run-evals.py` | unit · `plugins/netdust-gates/tests/test_evals_shape.py` (the case keys `env`, `stub_bin`, `commit`; the runner strips `HERDR_*`) · `bash plugins/netdust-gates/tests/run.sh`; behavioural · cases `two-session-handoff`, `coder-brief-no-recursion` · `python3 plugins/netdust-gates/evals/run-evals.py` (filter flag per the runner's own `--help`) | — |
-| 3. The pair recipe | `plugins/netdust-core/skills/herdr-orchestration/SKILL.md` | judged paper scenario · `plugins/netdust-core/skills/herdr-orchestration/evals/scenario-6-{baseline,skill-on,judge.template}.md` · run as scenarios 1–5 are run (read one first) | — |
+| 1. The policy rule: Execution mode, Stops, fallback, boundary, spec amendment, `/feature-review` reading the plan at head, gates version | `plugins/netdust-gates/skills/policy/SKILL.md` and `commands/feature-review.md` as a session reads them | unit · `plugins/netdust-gates/tests/test_policy_skill.py` and `tests/test_session_commands.py` (or the command test that already reads `feature-review.md`) · `bash plugins/netdust-gates/tests/run.sh` | — |
+| 2. The eval runner and the two cases | `child_env(case, base, root) -> dict` and `prepare_sandbox(case, root) -> None` in `plugins/netdust-gates/evals/run-evals.py`; the CLI `python3 plugins/netdust-gates/evals/run-evals.py <case-id> ...` | unit · `plugins/netdust-gates/tests/test_evals_shape.py`, loading `run-evals.py` through `importlib` · `bash plugins/netdust-gates/tests/run.sh`; behavioural · `python3 plugins/netdust-gates/evals/run-evals.py two-session-handoff coder-brief-no-recursion`. A `0/0 cases passed` line means a wrong invocation, never a pass. | — |
+| 3. The pair recipe | `plugins/netdust-core/skills/herdr-orchestration/SKILL.md` | judged paper scenario · `plugins/netdust-core/skills/herdr-orchestration/evals/scenario-6-{baseline,skill-on,judge.template}.md` · dispatch the baseline and skill-on legs as two general-purpose subagents, inline both outputs into the judge template and dispatch a judge. It passes when the skill-on leg passes rules the baseline fails (the procedure of `plugins/netdust-core/evals/RUNBOOK.md:17-38`). | — |
 | 4. DDEV project per coder worktree | `plugins/netdust-devops/skills/parallel-work/SKILL.md` | none — documentation; proven by the first WordPress pair · `bash plugins/netdust-devops/tests/run.sh` stays green | — |
 
 ## Tasks
@@ -54,75 +70,130 @@
 ### Task 1: The policy rule (first working version)
 
 **Files:**
-- Modify: `plugins/netdust-gates/skills/policy/SKILL.md` (sections `## Execution mode`, `## Stops`)
-- Modify: `plugins/netdust-gates/CLAUDE.md` (Boundaries)
-- Modify: `specs/netdust-gates/spec.md` (amendment lines under R3 and R5, pointing at `specs/two-session/spec.md`, as test-mapping's amendment under R1 did, commit `5c01115`)
-- Modify: `plugins/netdust-gates/.claude-plugin/plugin.json` (0.11.0)
-- Create: `specs/two-session/claude-md-section-2.md`, the replacement text for Stefan's `~/.claude/CLAUDE.md` §2 (spec R12)
-- Test: `plugins/netdust-gates/tests/test_policy_skill.py`
+- Modify: `plugins/netdust-gates/skills/policy/SKILL.md` (`## Execution mode`, `## Stops`)
+- Modify: `plugins/netdust-gates/commands/feature-review.md` (`:25`, the plan is read at `<head>`: `git show <head>:specs/<name>/plan.md`, falling back to the working tree)
+- Modify: `plugins/netdust-gates/CLAUDE.md` (Boundaries, the R10 sentence)
+- Modify: `specs/netdust-gates/spec.md` (amendment lines under R3 `:68` and R5 `:81`, pointing at `specs/two-session/spec.md`, as test-mapping's amendment under R1 did, commit `5c01115`)
+- Modify: `plugins/netdust-gates/.claude-plugin/plugin.json` (0.11.0) and `.claude-plugin/marketplace.json` (gates entry)
+- Test: `plugins/netdust-gates/tests/test_policy_skill.py`, and the command test that reads `feature-review.md`
 
-- [ ] **Step 1:** in `test_policy_skill.py`, add the assertions: the policy contains `Role: coder` and `netdust-core:herdr-orchestration`; it does not contain "chooses at the plan handoff" or "execution-mode choice" as a stop; it stays under 150 lines. Run `bash plugins/netdust-gates/tests/run.sh test_policy_skill.py`; it fails on the first two.
-- [ ] **Step 2:** rewrite `## Execution mode` and `## Stops` to spec R1–R8, at most 11 lines for the Execution mode body. The sparring draft at the laika session's `scratchpad/two-session/spar-1.md` §7 is a starting point, not the text. Add the R10 boundary sentence to `CLAUDE.md` and the amendment lines to the spec. Bump `plugin.json`. Write `claude-md-section-2.md`.
-- [ ] **Step 3:** grep for stale offers across the three plugins: `grep -rn -i "execution mode\|native by default\|which approach would you prefer" plugins/netdust-gates plugins/netdust-core plugins/netdust-devops`. Fix each hit that still offers Stefan the choice, and quote the grep before and after in the report.
-- [ ] **Step 4:** `bash plugins/netdust-gates/tests/run.sh` all green; commit (`feat(gates): two sessions — spec R1–R8, R10, R12`).
+**Interfaces:**
+- Produces: the policy names "the pair recipe" in `netdust-core:herdr-orchestration` (Task 3 creates it under that name). It also states the fallback outside herdr: one background subagent coder, Native, in the worktree, continued over SendMessage.
+
+- [ ] **Step 1:** add assertions to `test_policy_skill.py`:
+  - the policy contains `Role: coder`, `netdust-core:herdr-orchestration` and "the pair recipe";
+  - the text between `## Stops` and `## Close` names no execution-mode choice;
+  - "chooses at the plan handoff" is gone;
+  - the file is at most 149 lines.
+
+  Add an assertion to the command test: `feature-review.md` reads the plan at `<head>`.
+
+  Run `bash plugins/netdust-gates/tests/run.sh`. Expected red: the four policy content assertions fail (`SKILL.md:98` says "Stefan chooses at the plan handoff", `:106` names the "execution-mode choice"), and so does the command one.
+- [ ] **Step 2:** rewrite `## Execution mode` and `## Stops` to spec R1–R8, within the size constraint, including "A coder asks its reviewer, never Stefan" and R8's full list. The sparring draft at the laika session's `scratchpad/two-session/spar-1.md` §7 is a starting point, not the text.
+
+  Then make the remaining Task 1 edits:
+  - the `feature-review.md` clause;
+  - the R10 sentence in `CLAUDE.md`;
+  - the amendment lines in the spec;
+  - both version files.
+- [ ] **Step 3:** grep for stale offers across the three plugins:
+  `grep -rn -i -e 'execution.mode' -e 'native by default' -e 'Native\*\* by default' -e 'plan handoff' -e 'which approach would you prefer' plugins/netdust-gates plugins/netdust-core plugins/netdust-devops`.
+  Fix each hit that still offers Stefan the choice, and quote the grep before and after in the report.
+- [ ] **Step 4:** `bash plugins/netdust-gates/tests/run.sh` all green; commit (`feat(gates): two sessions — spec R1–R8, R10`).
 
 ### Task 2: The eval runner and the two cases
 
 **Files:**
 - Modify: `plugins/netdust-gates/evals/run-evals.py`
 - Modify: `plugins/netdust-gates/evals/cases.json`
-- Create: `plugins/netdust-gates/evals/stubs/herdr` (an executable shell stub that appends its arguments, and the prompt text when there is one, to `.herdr/calls.log` in the case directory, and on `agent start` touches `.herdr/agent-start`; it contacts no server)
+- Create: `plugins/netdust-gates/evals/stubs/herdr`, committed executable (mode 100755)
 - Test: `plugins/netdust-gates/tests/test_evals_shape.py`
 
-- [ ] **Step 1:** in `test_evals_shape.py`, assert:
-  - every case's optional keys are within `{env, stub_bin, commit}` plus the existing ones;
-  - `run-evals.py` removes every `HERDR_`-prefixed variable before it starts `claude`, read through the function that builds the child environment, not by grepping the source;
+**Interfaces:**
+- Produces:
+  - `child_env(case: dict, base: dict, root: Path) -> dict`:
+    - removes every `HERDR_`-prefixed key from `base`;
+    - sets `HERDR_SOCKET_PATH` to a path under `root` where nothing listens;
+    - sets `EVAL_ROOT` to `root`;
+    - applies the case's `env`;
+    - with `stub_bin`, makes the stub the `herdr` the session's Bash resolves, and sets `HERDR_BIN_PATH` to it.
+  - `prepare_sandbox(case: dict, root: Path) -> None`: writes the case's files; with `commit: true`, makes one commit.
+  - New optional case keys:
+    - `env` (object);
+    - `stub_bin` (path relative to `evals/`);
+    - `commit` (bool);
+    - `allow` (list of tool rules, passed as `--allowedTools`; under `-p --permission-mode acceptEdits` an unlisted Bash command is denied, not prompted);
+    - `timeout` (seconds).
+
+- [ ] **Step 1:** in `test_evals_shape.py`, load `run-evals.py` with `importlib` and assert:
+  - `child_env` leaves no inherited `HERDR_` value;
+  - it puts `HERDR_SOCKET_PATH` under `root`;
+  - it applies the case's `env`;
+  - it makes the stub resolvable with `stub_bin`;
+  - `prepare_sandbox` with `commit: true` leaves a valid `HEAD`;
+  - every case's keys are within the known set;
   - the two new case ids exist.
 
-  The test fails.
-- [ ] **Step 2:** implement the runner changes:
-  - build the environment by stripping `HERDR_*`, then apply the case's `env`;
-  - put `stub_bin` first on `PATH`;
-  - with `commit: true`, make one commit in the sandbox.
+  Run `bash plugins/netdust-gates/tests/run.sh`; it fails (no such functions yet).
+- [ ] **Step 2:** implement the runner functions and the stub. The stub:
+  - appends its argument vector (and, for `agent prompt`, the text) to `$EVAL_ROOT/.herdr/calls.log`;
+  - on `worktree create` or `api snapshot`, prints a minimal JSON with one workspace and one root pane id;
+  - on `agent start`, touches `$EVAL_ROOT/.herdr/agent-start`;
+  - contacts no server.
 
-  Add both cases with their assertions, per spec R11:
-  - **`two-session-handoff`:** the log holds `agent start`, and a prompt with `Role: coder`, the plan path and `netdust-gates:policy`; the target file is unchanged; the reply asks no execution-mode question.
-  - **`coder-brief-no-recursion`:** the target is changed, and there is no `.herdr/agent-start`.
-- [ ] **Step 3:** `bash plugins/netdust-gates/tests/run.sh` green. Run the two cases with the runner's own filter, once each, and quote the result lines. A case that fails on behaviour is a finding for the reviewer, not something to loosen. Commit (`test(gates): evals for two sessions — spec R11`).
+  herdr 0.9.5's shape is `agent start <NAME> --kind <KIND> --pane <ID> [-- AGENT_ARG…]`, and the prompt is a separate `agent prompt <TARGET> <TEXT>`.
+
+  **Prove the shadowing:** one probe, quoted in the report, showing that under `child_env(...)` a login-shell `bash -lc 'command -v herdr'` resolves to the stub. `~/.profile:25-26` prepends `~/.local/bin` in a login shell, so a plain `PATH` prefix is not enough. Choose a mechanism that survives it, and say which.
+
+  **Confirm** from `herdr --skill` or the binary that with `HERDR_SOCKET_PATH` pointing at nothing, the real client fails rather than starting or reaching a server.
+
+  **Add both cases** with `allow: ["Bash(herdr *)", "Bash(git *)"]`, a `timeout` (`unit-cut-plan` needed 2700 s), and checked `--max-turns` headroom:
+  - **`two-session-handoff`** (`commit: true`, `env: {"HERDR_ENV": "1"}`, the stub): an approved one-task plan. Expect `calls.log` to show `agent start` and an `agent prompt` with `Role: coder`, the plan path and `netdust-gates:policy`. Expect the target file unchanged, and the reply with no execution-mode question.
+  - **`coder-brief-no-recursion`**: a prompt opening `Role: coder`. Expect the target changed, and no `.herdr/agent-start`.
+- [ ] **Step 3:** `bash plugins/netdust-gates/tests/run.sh` green. Run `python3 plugins/netdust-gates/evals/run-evals.py two-session-handoff coder-brief-no-recursion` once and quote the result lines.
+
+  Reading a failure: this eval loads netdust-core from the cache (0.5.3, which has no pair recipe yet) and runs under Stefan's global `CLAUDE.md` §2, which still offers the execution-mode choice until R12 is applied. Upstream `writing-plans` asks the question unless a method was already supplied, so the policy's text must read as that supply. A failure on the "no execution-mode question" expectation is reported with that context, as a finding for the reviewer, never loosened.
+
+  Commit (`test(gates): evals for two sessions — spec R11`).
 
 ### Task 3: The pair recipe in herdr-orchestration
 
 **Files:**
-- Modify: `plugins/netdust-core/skills/herdr-orchestration/SKILL.md` (a `## Recipe — the thinker/coder pair` section, plus the trigger words "coder session", "two sessions", "pair" in its description)
+- Modify: `plugins/netdust-core/skills/herdr-orchestration/SKILL.md` (a `## Recipe — the pair recipe (thinker and coder)` section; the trigger words "coder session", "two sessions", "pair" in its description)
 - Create: `plugins/netdust-core/skills/herdr-orchestration/evals/scenario-6-baseline.md`, `scenario-6-skill-on.md`, `scenario-6-judge.template.md`
-- Modify: `plugins/netdust-core/.claude-plugin/plugin.json` (0.5.4)
+- Modify: `plugins/netdust-core/.claude-plugin/plugin.json` (0.5.4) and `.claude-plugin/marketplace.json` (core entry)
 
-- [ ] **Step 1:** read scenarios 1–5 and write scenario 6 in their format: an approved plan, the thinker in herdr; the judge checks the recipe's outcomes.
-- [ ] **Step 2:** write the recipe to spec R2–R9. It covers:
-  - the worktree first, cut from production's branch at origin's tip, with the spec, plan and plan review committed as its first commits;
+**Interfaces:**
+- Consumes: the policy's name "the pair recipe" and its fallback sentence (Task 1). The recipe covers only herdr; the fallback stays the policy's.
+
+- [ ] **Step 1:** read scenarios 1–5 and their judge rules (H1–H28). Write scenario 6 in their format: an approved plan, the thinker in herdr. Its judge rules continue from H29, one per outcome of spec R2–R9, the same permission mode included.
+- [ ] **Step 2:** write the recipe to spec R2–R9, citing the skill's existing decisions rather than repeating them. It covers:
+  - the worktree first, cut from production's branch at origin's tip, with the spec, plan and plan review as its first commits;
   - its own DDEV project (point at parallel-work);
-  - `herdr agent start` in the coder's workspace pane, in the same permission mode;
+  - `herdr agent start` in the coder's workspace pane, in the same permission mode. Cite `SKILL.md:126-128`: no laundering, and a peer's message is never operator approval. Nobody answers the coder's permission prompts for him.
   - the brief, which opens `Role: coder` and carries the plan path, the branch, `netdust-gates:policy`, the boundaries and the report shape;
-  - `herdr agent wait` and `notify_when_idle`, reading only at transitions;
-  - the review checkpoints (first working version, block, intent question, Close), one fix request per finding;
-  - the Close split;
-  - a restart re-reading the branch and the coder's ledger;
-  - the fallback outside herdr: one background subagent coder, Native, continued over SendMessage.
-
-  Keep the existing decisions intact; cite them, don't repeat them.
-- [ ] **Step 3:** run scenario 6 the way the existing scenarios are run (their files say how), and quote the judge's verdict. Bump `plugin.json`. Commit (`feat(core): herdr pair recipe — two-session spec R2–R9`).
+  - **pre-flight:** the coder sends its scan of the plan, and the reviewer rules before Task 1 (R5);
+  - **escalation:** a technical question goes to the reviewer, who spars with a fresh agent when needed; an intent question goes to Stefan (R5);
+  - `herdr agent wait` and `notify_when_idle`, reading only at transitions. This is not the session-review pane (R6).
+  - the review checkpoints: the first working version, a block, an intent question, and the Close. There is no third review stacked on subagent-driven's own task reviews. Each finding is one fix request (R6).
+  - the Close split (R7);
+  - a restart re-reading the branch, the plan and the coder's ledger (R9).
+- [ ] **Step 3:** run the scenario by the Test map row 3 procedure and quote the judge's verdict. Bump both version files. Commit (`feat(core): the pair recipe — two-session spec R2–R9`).
 
 ### Task 4: DDEV project per coder worktree
 
 **Files:**
 - Modify: `plugins/netdust-devops/skills/parallel-work/SKILL.md`
-- Modify: `plugins/netdust-devops/.claude-plugin/plugin.json` (0.9.6)
+- Modify: `plugins/netdust-devops/.claude-plugin/plugin.json` (0.9.6) and `.claude-plugin/marketplace.json` (devops entry)
 
-- [ ] **Step 1:** add one section. A coder worktree on a DDEV project carries `.ddev/config.local.yaml` with its own `name:` (for example `<project>-<feature>`), so `make gate`, `make e2e` and `ddev` commands run against its own container. The proven form is laika-planning-model's `name: laika-planning`. The section also covers how the worktree's DDEV project is started, seeded from the main project's database by the project's own verb when one exists, and removed when the feature lands.
-- [ ] **Step 2:** `bash plugins/netdust-devops/tests/run.sh` green; bump `plugin.json`; commit (`docs(devops): a DDEV project per coder worktree — two-session spec R3`).
+- [ ] **Step 1:** add one section. A coder worktree on a DDEV project carries `.ddev/config.local.yaml` with its own `name:` (for example `<project>-<feature>`), so `make gate`, `make e2e` and `ddev` commands run against its own container. The proven form is laika-planning-model's `name: laika-planning`. The section also says:
+  - how the worktree's project is started;
+  - how it is seeded from the main project's database, through the project's own verb when one exists (record as a `Ruling:` that seeding goes beyond R3's wording, because it is what makes `make e2e` meaningful);
+  - that removing it when the feature lands deletes its database, so it asks first.
+- [ ] **Step 2:** `bash plugins/netdust-devops/tests/run.sh` green; bump both version files; commit (`docs(devops): a DDEV project per coder worktree — two-session spec R3`).
 
 ## Close
 
-1. All three plugins' test runs are green: `bash plugins/netdust-gates/tests/run.sh` and `bash plugins/netdust-devops/tests/run.sh`.
-2. The reviewer session runs the feature review (`/feature-review two-session`) from its own checkout. The coder makes one fix pass, each fix RED→GREEN, and keeps the review as `specs/two-session/review.md`.
-3. The coder pushes `feature/two-session`. Opening the PR and the merge are Stefan's. The reviewer hands him the global `CLAUDE.md` §2 text and the netdust-core `plugin.json` merge-conflict note.
+1. Both test runs are green: `bash plugins/netdust-gates/tests/run.sh` and `bash plugins/netdust-devops/tests/run.sh`. The latter also checks netdust-core's manifest through `test-marketplace.sh`; netdust-core has no `tests/`.
+2. The reviewer session runs `/feature-review two-session` from its own checkout; with Task 1's clause, it reads the plan at the branch head. The coder makes one fix pass, each fix RED→GREEN, and keeps the review as `specs/two-session/review.md`.
+3. The coder pushes `feature/two-session`. The PR and the merge are Stefan's. The reviewer hands him the global `CLAUDE.md` §2 replacement text (spec R12) and the netdust-core version-collision note.
