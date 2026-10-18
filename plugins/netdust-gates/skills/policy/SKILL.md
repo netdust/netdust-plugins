@@ -95,17 +95,17 @@ blocks code on a plan's state — an old or half plan never holds up the work (S
 A planned feature runs as two sessions; a change with no plan file stays in one. After the plan
 approval this session turns reviewer and a coder executes in its own worktree, cut from production's
 branch with spec, plan and plan review as the first commits of `feature/<feature>` (on DDEV its own
-project, `netdust-devops:parallel-work`); only the coder writes that tree. In herdr the pair recipe
-in `netdust-core:herdr-orchestration` starts it with `herdr agent start`; outside herdr it is one
-background subagent there, continued over SendMessage; both in one permission mode. The brief opens
-`Role: coder`, the plan path and `netdust-gates:policy`: a coder skips Intake and the plan, never
-starts a coder, sends its pre-flight scan for rulings before Task 1, runs every step that writes the
-tree, `/shakeout` and the push included, and ledgers each exchange, so a restart of either session
-reads branch, plan and ledger. The reviewer reads only the first working version, a block and the
-Close, where it runs `make review name=<feature>` from its own checkout and brings Stefan the
-screenshot yield and `make promote`; a finding is one fix request, closed by its test. The mode is
-no longer a stop: **Native** by default, **subagent-driven** only for a security-boundary unit or a
-plan that outlives one context (its per-task TDD undoes the unit cut). Name the rule that fired.
+project, `netdust-devops:parallel-work`); only the coder writes that tree. Inside herdr
+(`HERDR_ENV=1`) the pair recipe in `netdust-core:herdr-orchestration` starts it with
+`herdr agent start`; outside it, one background subagent there, over SendMessage; both in one
+permission mode. The brief opens `Role: coder`, the plan path and `netdust-gates:policy`: a coder
+skips Intake and the plan, never starts a coder, sends its pre-flight scan for rulings before
+Task 1, runs every step that writes the tree, `/shakeout` and the push included, and ledgers each
+exchange, so a restart of either reads branch, plan and ledger. The reviewer reads only the first
+working version, a block and the Close, where it runs `make review name=<feature>` from its own
+checkout and brings Stefan the screenshot yield and `make promote`; a finding is one fix request,
+closed by its test. The mode is no longer a stop: **Native** by default, **subagent-driven** only
+for a security-boundary unit or a plan that outlives one context. Name the rule that fired.
 
 ## Stops
 
