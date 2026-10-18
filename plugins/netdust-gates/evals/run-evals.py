@@ -80,6 +80,18 @@ def prepare_sandbox(case: dict, root: Path) -> None:
                        cwd=root, check=True)
 
 
+# A session may cut a worktree beside the sandbox, which would outlive the run.
+def remove_worktrees(root: Path) -> list[str]:
+    listed = subprocess.run(["git", "-C", str(root), "worktree", "list", "--porcelain"],
+                            capture_output=True, text=True).stdout
+    paths = [line.split(" ", 1)[1] for line in listed.splitlines() if line.startswith("worktree ")]
+    extra = [path for path in paths if Path(path).resolve() != root.resolve()]
+    for path in extra:
+        subprocess.run(["git", "-C", str(root), "worktree", "remove", "--force", "--force", path],
+                       capture_output=True)
+    return extra
+
+
 def _claude(case: dict) -> list[str]:
     cmd = ["claude", "-p", case["prompt"], "--plugin-dir", str(PLUGIN), "--permission-mode", "acceptEdits",
            "--max-turns", str(case.get("max_turns", 25)), "--disallowedTools", *DISALLOWED]
@@ -90,28 +102,35 @@ def run_case(case: dict) -> tuple[bool, list[str]]:
     with tempfile.TemporaryDirectory(prefix="gates-eval-") as tmp:
         root = Path(tmp)
         prepare_sandbox(case, root)
-        env = child_env(case, dict(os.environ), root)
-        if "stub_bin" in case:
-            resolved = subprocess.run(["bash", "-lc", "command -v herdr"], cwd=root, env=env,
-                                      capture_output=True, text=True).stdout.strip()
-            if resolved != env["HERDR_BIN_PATH"]:
-                return False, [f"refused to start: herdr resolves to {resolved!r}, not the stub"]
-        timeout = case.get("timeout", 900)
         try:
-            proc = subprocess.run(_claude(case), cwd=root, env=env, capture_output=True, text=True,
-                                  timeout=timeout)
-        except subprocess.TimeoutExpired:
-            return False, [f"timed out after {timeout}s"]
-        reply = proc.stdout
-        failures = []
-        for e in case["expect"]:
-            if not re.search(e["match"], _subject(root, reply, e["where"])):
-                failures.append(f"missing in {e['where']}: /{e['match']}/")
-        for glob in case["absent"]:
-            found = [str(p.relative_to(root)) for p in root.glob(glob)]
-            if found:
-                failures.append(f"must not exist: {glob} (found {found})")
-        return not failures, failures
+            return _run_in(case, root)
+        finally:
+            remove_worktrees(root)
+
+
+def _run_in(case: dict, root: Path) -> tuple[bool, list[str]]:
+    env = child_env(case, dict(os.environ), root)
+    if "stub_bin" in case:
+        resolved = subprocess.run(["bash", "-lc", "command -v herdr"], cwd=root, env=env,
+                                  capture_output=True, text=True).stdout.strip()
+        if resolved != env["HERDR_BIN_PATH"]:
+            return False, [f"refused to start: herdr resolves to {resolved!r}, not the stub"]
+    timeout = case.get("timeout", 900)
+    try:
+        proc = subprocess.run(_claude(case), cwd=root, env=env, capture_output=True, text=True,
+                              timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return False, [f"timed out after {timeout}s"]
+    reply = proc.stdout
+    failures = []
+    for e in case["expect"]:
+        if not re.search(e["match"], _subject(root, reply, e["where"])):
+            failures.append(f"missing in {e['where']}: /{e['match']}/")
+    for glob in case["absent"]:
+        found = [str(p.relative_to(root)) for p in root.glob(glob)]
+        if found:
+            failures.append(f"must not exist: {glob} (found {found})")
+    return not failures, failures
 
 
 def main(argv: list[str]) -> int:

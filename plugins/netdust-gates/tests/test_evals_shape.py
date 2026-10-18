@@ -68,6 +68,10 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
         other = Path(tmp) / "other"
         other.mkdir()
         prepare_sandbox({"id": "o", "files": {"a.txt": "a\n"}, "commit": True, "branch": "feature/elsewhere"}, other)
+        sibling = Path(tmp) / "other-sibling"
+        _git(other, "worktree", "add", "-q", "-b", "feature/sibling", str(sibling))
+        remove_worktrees = getattr(runner, "remove_worktrees", None)
+        removed = remove_worktrees(other) if remove_worktrees else []
         return [
             (set(herdr_keys) == {"HERDR_SOCKET_PATH"} and Path(herdr_keys["HERDR_SOCKET_PATH"]).is_relative_to(root),
              f"child_env strips every inherited HERDR_ value and points the socket under the sandbox (got {herdr_keys})"),
@@ -83,6 +87,8 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
             (_git(wt, "rev-parse", "--is-inside-work-tree") == "true" and str(wt) in out
              and "worktree create" in calls,
              f"the stub's worktree create lands at $EVAL_ROOT/.herdr/wt, prints it and logs the call (got {out!r})"),
+            (not sibling.exists() and str(sibling) in removed and _git(other, "worktree", "list").count("\n") == 0,
+             f"remove_worktrees removes every worktree the sandbox registered, even one outside it (got {removed})"),
         ]
 
 

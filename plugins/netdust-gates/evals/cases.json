@@ -85,7 +85,9 @@
     "stub_bin": "stubs/herdr",
     "allow": [
       "Bash(herdr *)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(printenv *)",
+      "Bash(test *)"
     ]
   },
   {
@@ -319,7 +321,9 @@
     "stub_bin": "stubs/herdr",
     "allow": [
       "Bash(herdr *)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(printenv *)",
+      "Bash(test *)"
     ],
     "max_turns": 40,
     "timeout": 1800
@@ -349,7 +353,9 @@
     "stub_bin": "stubs/herdr",
     "allow": [
       "Bash(herdr *)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(printenv *)",
+      "Bash(test *)"
     ],
     "max_turns": 40,
     "timeout": 1800
