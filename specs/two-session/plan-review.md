@@ -1,144 +1,163 @@
 # Plan review — two-session
-Reviewed-plan: 484fbd690e75d6fee56d23f0318dcf391bbc9841
+Reviewed-plan: fa51a1c52deaa58a0573a30066f11d353396de02
 Verdict: not ready
 
-The revision closes all four round-1 Blocking findings and six of the seven Should fix. One new Blocking finding is a one-line fix. The gates suite is red today in every Claude session on this box, so no "all green" step can be reached as written. There are three new Should fix findings. Two are about eval isolation, which is what R11 and Review Focus 1–2 exist for: one eval case cannot fail, and named herdr sessions get past the dead socket. The third is that the pilot's own feature review runs the installed command, which still reads no plan.
+All of round 2's Blocking and Should fix items are closed. I ran the gates suite with `env -u NETDUST_GUARD_ASK`: 20/20 modules green. Without it: 19/20, with 22 FAIL lines. The devops suite is green.
+
+One new Blocking finding, confined to Task 4. The seeding it documents goes through a verb that writes the main checkout's URL into the worktree's database. That brings back the defect R3 exists to prevent. Tasks 1–3 are ready as written.
+
+Two new Should fix findings:
+- The pilot's Close reads `origin/feature/two-session` one step before anything pushes it.
+- `coder-brief-no-recursion` runs its coder on `master`, where upstream stops before it implements.
 
 ## Blocking
 
-**B1. The gates suite is red before any change, so no "all green" step can be reached.**
-- Plan: Task 1 Step 1 ("Expected red: the four policy content assertions fail … and so does the command one"); Task 1 Step 4 and Task 2 Step 3 ("`bash plugins/netdust-gates/tests/run.sh` … green"); Close step 1; Test map rows 1–2.
+**B1. Task 4 seeds the worktree through a verb that points it back at the main checkout.**
+- Plan:
+  - Task 4 Step 1: "so `make gate`, `make e2e` and `ddev` commands run against its own container".
+  - Also Task 4 Step 1: "seeded from the main project's database, through the project's own verb when one exists … because it is what makes `make e2e` meaningful".
+  - Review Focus 6.
+  - Test map row 4: "none — documentation".
 - Source:
-  - `~/.claude/settings.json:6` sets `"NETDUST_GUARD_ASK": "off"` in the `env` of every session. That covers the coder and every eval child too.
-  - `plugins/netdust-gates/tests/test_pretooluse_guard.py:66` runs the hook with `{**os.environ, **(env or {})}`. The hook's `ask_tier_waived()` (`hooks/pretooluse-guard.py:431-436`) then waives the ask tier, and 22 assertions get passthrough.
-  - I ran it from this worktree: `Modules passed: 19 · Modules failed: 1 (test_pretooluse_guard)`. With `env -u NETDUST_GUARD_ASK` the module passes. The devops suite is green (115 + 14).
-- Effect: at Task 1 Step 1 the coder hits a red the plan did not predict. It either escalates, or it "fixes" a security hook's test that no task names.
-- Change:
-  - Write the command as `env -u NETDUST_GUARD_ASK bash plugins/netdust-gates/tests/run.sh` everywhere it appears: Test map rows 1–2, Task 1 Steps 1 and 4, Task 2 Steps 1 and 3, Close step 1.
-  - Add a one-line Global Constraint saying why.
-  - The env leak in the test is a separate bounded fix, outside this plan.
+  - **The seeding verb.** The only one is `make pull` (`plugins/netdust-devops/dist/mk/wp.mk:70-77`). It pulls from a remote environment, production by default (`:72`), not from the main project's database.
+  - **The URL it writes.** Its `_pull-db` rewrites every URL to `site.yml`'s `local.url` (`wp.mk:186`, `:200`). `site.yml` is tracked, so a worktree reads the main project's value. In laika that is `site.yml:135-136`: `ddev_project: laika`, `url: https://laika.ddev.site`. A worktree named `laika-planning` is served at `https://laika-planning.ddev.site`, but its database then names `laika.ddev.site`.
+  - **Where the browser tier gets its URLs.** It asks WordPress. Laika's `bin/e2e.sh` takes the base URL from `ddev exec printenv DDEV_PRIMARY_URL` (`:17-21`), but the fixture URL from `wp post list … --field=url` (`:55`).
+  - **When that URL is the main host.**
+    - On a site whose home URL lives in the database, that fixture URL is the main checkout's host. The run then tests the main checkout's code.
+    - On Bedrock, `WP_HOME` and `WP_SITEURL` come from `.env` (laika `config/application.php:51`, `:76-77`), and a `.env` copied from the main checkout names the main host too.
+    - I could not read `.env`, so I don't know whether it derives the value from `DDEV_PRIMARY_URL`.
+  - **`make e2e`.** It never runs against a local container. It refuses without `env=` and drives `environments.<env>.url` (`plugins/netdust-devops/dist/Makefile.netdust:491-496`). So "`make e2e` … against its own container" is false, and so is the ruling's "what makes `make e2e` meaningful". The local browser tier is `make gate`'s `test:e2e` (laika `bin/gate.sh:15`).
+  - **The devops skill.** devops `SKILL.md:368` says the URL is `https://<ddev-project>.ddev.site`, with the name taken from `local.ddev_project`. In a renamed worktree that is no longer true.
+- Effect: the first WordPress pair follows the doc and gets a green gate that ran against the main checkout. That is the defect spec R3 names, and row 4 has no test that would see it.
+- Change (Task 4 Step 1 and Review Focus 6, a few lines):
+  - Say "the gate's tiers" (`test:int` and the e2e tier), not `make e2e`.
+  - Say that the worktree's URL is `https://<name>.ddev.site`, and that three things still name the main one:
+    - `site.yml`'s `local.url`, which `make pull` rewrites to;
+    - the database, after a copy;
+    - a Bedrock `.env`'s `WP_HOME`/`WP_SITEURL`.
+  - The section then says:
+    - set `.env` to the worktree's URL;
+    - seed from the main project: `ddev export-db` there, `ddev import-db` here (or `make pull env=staging`);
+    - then `ddev wp search-replace <main url> <worktree url>`;
+    - never run `make pull` in a worktree without that rewrite.
+  - Correct the ruling's rationale to match.
+  - Review Focus 6 names its proof for the first pair: in the worktree, `ddev wp option get home` prints the worktree's URL.
 
 ## Should fix
 
-**S1. `coder-brief-no-recursion` cannot fail.**
-- Plan: Task 2 Step 2, the second case ("a prompt opening `Role: coder`. Expect the target changed, and no `.herdr/agent-start`"); Review Focus 2.
+**S1. The pilot's Close reads a remote branch one step before anything pushes it.**
+- Plan:
+  - Close step 2: `git show origin/feature/two-session:plugins/netdust-gates/commands/feature-review.md`.
+  - Close step 3: "The coder pushes `feature/two-session`".
+  - Task 3 Step 2: "the Close split (R7)".
 - Source:
-  - Only the stub touches `.herdr/agent-start`, and this case names neither `stub_bin` nor `env`.
-  - `child_env` strips `HERDR_*` for every case. So the session runs outside herdr, the policy sends it down the fallback path, and `agent start` never comes up.
-  - The `absent` glob (`run-evals.py:65-68`) therefore passes whatever the session does.
-- Change: give the case `env: {"HERDR_ENV": "1"}` and the stub, the same as `two-session-handoff`. Then a coder that starts a coder writes `agent-start`, and the absence check means something.
-
-**S2. A named herdr session gets past the dead socket.**
-- Plan: Interfaces `child_env` ("sets `HERDR_SOCKET_PATH` to a path under `root` where nothing listens"); Task 2 Step 2 ("Confirm from `herdr --skill` or the binary …"); Review Focus 1.
-- Source:
-  - Every named session has its own socket at `~/.config/herdr/sessions/<name>/herdr.sock`. Ten are present now (folio, cargo, hack, wpm, vad, …).
-  - The cached herdr-orchestration that a case loads (0.5.2, `SKILL.md:107-110`) tells a session to start with `herdr session list` and to pass `--session <name>` on every call. `allow: ["Bash(herdr *)"]` permits that call.
-  - `herdr --skill` never mentions `HERDR_SOCKET_PATH` (I grepped it). So the "Confirm from `herdr --skill`" branch cannot succeed; only an experiment can confirm it.
-- Effect: suppose the stub does not shadow inside the Bash tool. The plan's probe uses `bash -lc` as a stand-in for that tool, which is a proxy, not the tool itself. In that case a real `herdr --session folio agent start …` reaches a live server, whatever `HERDR_SOCKET_PATH` says.
+  - `git branch -a` shows no `origin/feature/two-session`, so step 2 fails with an invalid-object error.
+  - `/feature-review` (`commands/feature-review.md:12`) and `make review` (`Makefile.netdust:534`) both try `origin/feature/<name>` first, then the local branch.
+  - The local branch is shared by every worktree of this repo (`git rev-parse --git-common-dir` is `/home/ntdst/Projects/netdust-plugins/.git`).
+  - R7 says the reviewer "resolves `origin/feature/<feature>`", which assumes the coder has pushed. The spar's recipe outline (§7, step 6) has the same order: "The coder pushes. The reviewer runs `make review`."
+  - Once one push has happened, a later review without a fresh push reviews a stale head.
 - Change:
-  - Move the probe into `run_case`. Before spawning `claude`, a case with `stub_bin` runs `bash -lc 'command -v herdr'` under `child_env` and fails unless the output is the stub. That makes it a permanent guard instead of a one-off quote.
-  - Pass `--disallowedTools` for `Bash(herdr --session*)`, `Bash(herdr --machine*)` and `Bash(herdr --remote*)`.
-  - Name the named-session path in Review Focus 1.
-  - Run the dead-socket experiment on a throwaway path, as herdr-orchestration `SKILL.md:102-103` requires for experiments.
+  - Close: the coder pushes before step 2, and again after the fix pass. Or step 2 names `feature/two-session`.
+  - Task 3 Step 2's Close-split bullet: the coder pushes and signals, then the reviewer reviews.
 
-**S3. The pilot's own feature review still runs without the plan.**
-- Plan: Close step 2 ("from its own checkout; with Task 1's clause, it reads the plan at the branch head"); Review Focus 3.
+**S2. `coder-brief-no-recursion` can fail for a reason unrelated to recursion.**
+- Plan:
+  - Task 2 Step 2, the second case: "`commit: true` … Expect the target changed".
+  - Interfaces: `prepare_sandbox`.
+  - Review Focus 2.
 - Source:
-  - A session loads `/feature-review` from the plugin cache. `~/.claude/plugins/installed_plugins.json` has netdust-gates 0.10.0 at `5915dca`, without Task 1's clause.
-  - The source edit reaches no session until a release.
-  - The reviewer's checkout (main at `5915dca`) has no `specs/two-session/`. So the installed `feature-review.md:25` finds no plan.
-  - This is round 1's S2 again, in this pilot's own Close.
+  - `run-evals.py:51` runs `git init`, and `git config --global init.defaultBranch` is unset. So the one commit lands on `master`.
+  - The coder follows the policy into `superpowers:executing-plans`. Its Setup says "Never start implementation on a main/master branch without your human partner's explicit consent" (`executing-plans/SKILL.md:112-113`).
+  - `using-git-worktrees/SKILL.md:41` asks for consent before creating a worktree in a normal checkout. If a worktree is created anyway, the edit lands under `.worktrees/`.
+- Effect: either way the root target is unchanged and the case fails. That loses the only behavioural evidence for Review Focus 2.
 - Change:
-  - Close step 2 runs the branch's text of the command. Either follow `git show feature/two-session:plugins/netdust-gates/commands/feature-review.md`, or use a session started with `--plugin-dir <worktree>/plugins/netdust-gates`.
-  - Then check that the summary's "what was reviewed (range; plan or none)" line (`feature-review.md:38`) names `specs/two-session/plan.md`.
-  - That line is the only behavioural evidence for Review Focus 3. The row-1 string pin proves the text, not the behaviour.
+  - With `commit: true`, `prepare_sandbox` commits on a `feature/<case-id>` branch (from a `branch` key, or from the case id).
+  - The prompt names that branch and says this checkout is the coder's worktree: work in place.
 
 ## Note
 
-- **N1. The stub mechanism is unnamed, so Task 2 Step 1's "makes the stub resolvable" cannot be written red-first.**
-  - Write the assertion as the probe itself: `subprocess.run(["bash", "-lc", "command -v herdr"], env=child_env(...))` prints the stub. This holds whatever mechanism is chosen.
-  - Facts: `~/.profile:25-26` prepends `~/.local/bin` unconditionally, and there is no `~/.bash_profile` or `~/.bash_login`.
-  - Candidate mechanisms:
-    - `BASH_ENV`: unverified. My probe was denied in this sandbox.
-    - `CLAUDE_ENV_FILE`: it would reach the tool, but it fails this probe.
-    - A `HOME` override: this breaks claude's own config.
-- **N2. The stub's fidelity.**
-  - A `worktree create` that makes no directory leaves the session's next `git -C <path>` failing.
-  - The sandbox has no `origin`, so "production's branch at origin's tip" cannot resolve. The spec's Out of scope says "the brief names the base".
-  - Changes:
-    - Let the stub's `worktree create` run a real `git worktree add` under `$EVAL_ROOT` and print the path.
-    - Name the base in the case prompt.
-    - Answer `agent wait` and `agent get` with a settled state, so the session does not spend its 25 turns waiting.
-    - Match `Role: coder` anywhere in `calls.log`. A session may put the brief after `--` on `agent start` instead of in `agent prompt` (`herdr agent start --help`).
-- **N3. Two case-key details.**
-  - `timeout` is not a new key: `run-evals.py:52` reads it, and `spec-splits-into-plans` (1800 s) and `unit-cut-plan` (2700 s) carry it. Keep it in the whitelist, but drop "new".
-  - `--max-turns 25` is hardcoded (`:56`), so "checked headroom" has nothing to adjust. Add a `max_turns` key or state the number.
-- **N4. The eval loads netdust-core 0.5.2, not 0.5.3.** Evidence: the `installed_plugins.json` installPath, and the `~/.claude/plugins/netdust-core` → `0.5.2` symlink. Neither version has the recipe, so Task 2 Step 3's reading of a failure stands.
-- **N5. Test map row 1 hedges with "or".**
-  - `test_session_commands.py:7` says "The prose itself is not string-tested".
-  - `test_close_wiring.py:55-58` already pins `feature-review.md`'s tokens.
-  - Name `test_close_wiring.py` and drop the "or".
-- **N6. The Stops rewrite carries pins owned by other tests.** `test_close_wiring.py:60` pins "flow list" and `:70` pins "(Close, step 4)". `test_policy_skill.py:28` pins `Ruling:` and `Accepted-by-human:`. Name them in Task 1 Step 2, because they use part of the 7-line budget.
-- **N7. Task 1's Files list omits `commands/plan-review.md`.** Step 3's grep hits `:42` today ("he reviews the saved plan and chooses the execution mode").
-- **N8. Two problems in Task 1 Step 1.**
-  - The ≤149-line assertion already exists (`test_policy_skill.py:42`).
-  - "The four policy content assertions" does not match the list: three checks fail today and the size check passes. Name the failing assertions instead of giving a count.
-- **N9. R9's ledger is stated only for herdr.**
-  - The rule that the coder's ledger records every exchange appears only in the herdr-only recipe, and Task 3 Step 2's bullets cover only the restart.
-  - Add that line to the recipe.
-  - For the fallback, either add one clause to the policy, or make it a `Ruling:` that upstream's "Record every decision in the ledger" (`executing-plans/SKILL.md:34`) is R9 there.
-- **N10. Round 1 N3's second half still stands.** After Task 1 alone, a herdr session follows the policy to herdr-orchestration and finds no pair recipe until Task 3. This is harmless on one branch.
-- **N11. The simplest design is stated honestly.** Its four holes hold against the source: `run-evals.py:54-57`, `feature-review.md:25`, laika `bin/gate.sh:19-20`, and recursion by construction. I found no simpler design. `allow`, `EVAL_ROOT` and the socket path are mechanism that R11 did not list but needs.
+- **N1. Stub fidelity.** Round 2's N2 is half open: `agent wait` now settles, but the rest stands.
+  - `worktree create` prints JSON with no path. A session that falls back to `git worktree add`, which `Bash(git *)` allows, may create a worktree outside the `TemporaryDirectory`. That worktree outlives the run.
+  - Let the stub run a real `git worktree add` under `$EVAL_ROOT` and print the path.
+  - Match `Role: coder` anywhere in `calls.log`. A brief can travel as `-- AGENT_ARG` on `agent start` (`herdr agent start --help`), not only through `agent prompt`.
+- **N2. The shadow probe is a proxy.** `run_case`'s `bash -lc` probe stands in for the Bash tool's shell; it is not that shell. The real proof that the stub shadows is `two-session-handoff`'s `calls.log`.
+  - Count the pair as passed only when that log shows the stub in the same run.
+  - Otherwise no-recursion's absence check can pass vacuously.
+- **N3. Routes `child_env` leaves open.**
+  - The 0.9.5 client also reads `HERDR_SESSION` and `HERDR_CLIENT_SOCKET_PATH` (binary strings). Both are stripped from the inherited environment, but an inline `HERDR_SESSION=<name> herdr …` is a fourth route beside the three flags.
+  - Children also inherit `CLAUDE_CODE_MESSAGING_SOCKET` and `CLAUDE_CODE_MESSAGING_TOKEN`. The CLI carries cross-session messaging (`notify_when_idle`, `cross_session_notify_idle` in the binary), and herdr-orchestration `SKILL.md:18-20` sends task briefs over SendMessage.
+  - I did not verify whether a `claude -p` child can reach a live session that way.
+  - Cheap insurance: drop `CLAUDE_CODE_MESSAGING_*` in `child_env`, and disallow `SendMessage` and `ListAgents` in the two herdr cases.
+- **N4. Two pins to keep clear of.**
+  - Task 1 Step 1's Stops assertion ("names no execution-mode choice") trips if R8's own sentence, "The execution-mode choice is no longer a stop", lands in Stops. Put that sentence in Execution mode, or pin the offer rather than the noun.
+  - `commands/plan-review.md` is checked against `test_close_wiring.py:8-9`'s STALE list, so the `:42` rewrite must not say "implementer".
+- **N5. Test map row 3.**
+  - "Passes rules the baseline fails" is the existing format's bar, but it lets skill-on fail an R-rule. State the bar: skill-on passes every rule from H29 on, and the baseline fails at least one.
+  - `RUNBOOK.md:28-30` saves outputs to `~/.claude/plugins/netdust-core/evals/outputs/`, which is a symlink into the 0.5.2 cache. Writing there contradicts "never the plugin cache". Keep the outputs in the scratchpad or the report.
+- **N6. R9's ledger in the recipe.** Round 2's N9 is half closed. The fallback now keeps "the same ledger of every exchange", but Task 3 Step 2 still names the ledger only for the restart. Add a bullet: the ledger holds the brief, the rulings, the fix requests and their closing tests.
+- **N7. Reading an eval failure.** If `--plugin-dir` does not shadow the installed gates 0.10.0 (`installed_plugins.json`), the old Execution mode text also competes in the eval. I did not verify which one takes precedence. Name it beside core 0.5.2 and §2.
+- **N8. The sparring draft lives in /tmp.** Task 1 Step 2 points at `spar-1.md` §7, which sits in a `/tmp` session scratchpad that a reboot loses. Copy §7 into `specs/two-session/`, or drop the pointer.
+- **N9. Trigger words.** herdr-orchestration's description is already 1,412 characters. Put "coder session", "two sessions" and "pair" early, not at the tail.
+- **N10. R1's bounded exception has no eval under herdr.** Optional: give `small-tweak-no-artifacts` `env: {"HERDR_ENV": "1"}`, the stub, and `absent: [".herdr/agent-start"]`.
+- **N11. Simplest design.** It is stated honestly, and its four holes hold against source: `run-evals.py:54-57`, `feature-review.md:25`, laika `bin/gate.sh:19-20`, and recursion by construction. I found no simpler design.
 
-## Round 1, closed or not
+## Round 2, closed or not
 
-- B1 (marketplace drift): closed. See Global Constraints, and each bumping task's Files.
-- B2 (stub and socket): closed for the default socket. Named sessions are still open (S2).
-- B3 (`--help`): closed. The command is written out, with the `0/0` warning.
-- B4 (permissions): closed. `allow` is passed as `--allowedTools`. I did not re-run the `claude` CLI flags here.
-- S1 (fallback in a herdr-only skill): closed. The fallback now lives in the policy, and Task 3 Interfaces says "The recipe covers only herdr".
-- S2 (plan at head): closed in the source. Not closed for the pilot's own Close (S3).
-- S3 (recipe bullets, H29 onward): closed.
-- S4 (row 3 command): closed.
-- S5 (named functions, importlib, `EVAL_ROOT`, 100755): closed, except the "resolvable" assertion (N1).
-- S6: the scoping is closed. The expected red is still wrong (B1, N8).
-- S7 (budget): closed.
+- **B1 (red suite):** closed.
+  - `env -u NETDUST_GUARD_ASK` is in Test map rows 1–2, Task 1 Steps 1 and 4, Task 2 Steps 1 and 3, and Close 1, and there is a Global Constraint for it.
+  - My run: 20/20 green with it; without it, 19/20 with 22 FAIL lines.
+- **S1 (no-recursion cannot fail):** closed. The case has the env and the stub, and only the stub writes `agent-start`. A new defect in the same case is this round's S2.
+- **S2 (named sessions):** closed.
+  - `run_case` runs the probe.
+  - `--disallowedTools` covers the three flags.
+  - Review Focus 1 names the socket path.
+  - The dead socket is confirmed by probe.
+  - The proxy caveat is N2 here; the remaining routes are N3.
+- **S3 (pilot review without the plan):** closed in substance. The review runs the branch's text and checks the "plan or none" line. The ref it names does not exist yet (this round's S1).
+- **Notes:**
+  - N1 and N3–N8: closed.
+  - N2 and N9: half closed (N1 and N6 here).
+  - N10: acknowledged in Task 1 Interfaces.
+  - N11: still stands.
 
 ## Premises checked
-- The policy is 142 lines and the cap is `< 150` → `skills/policy/SKILL.md` (wc), `tests/test_policy_skill.py:42` → holds
-- "Stefan chooses at the plan handoff" and "execution-mode choice" → `SKILL.md:98`, `:106` → holds
-- The Stops tokens pinned by other tests → `test_close_wiring.py:60`, `:70`; `test_policy_skill.py:28` → holds (the plan does not name them; N6)
-- `/feature-review` resolves the head from any checkout and reads the plan from the working tree → `commands/feature-review.md:12-13`, `:25` → holds
-- A command test already reads `feature-review.md` → `test_close_wiring.py:55-58` → holds; `test_session_commands.py:7` → no prose pins there
-- The reviewer's `/feature-review` carries Task 1's clause in this pilot → `installed_plugins.json` (gates 0.10.0 @ 5915dca) → does not hold (S3)
-- The gates boundary bans implementer / test-author / reviewer agents → `plugins/netdust-gates/CLAUDE.md:22-24` → holds
-- Gates spec R3 is at `:68` and R5 at `:81`; the precedent `5c01115` is under R1 → `specs/netdust-gates/spec.md`, `git show 5c01115` → holds
-- Versions are gates 0.10.0, core 0.5.3 and devops 0.9.5, in `plugin.json` and the marketplace → the manifests, `.claude-plugin/marketplace.json` → holds
-- Version drift fails both suites → `test_plugin_manifest.py:22-24`, `test-marketplace.sh:33-42` → holds
-- The main checkout's uncommitted core `plugin.json` claims 0.5.4 → `git diff` in `/home/ntdst/Projects/netdust-plugins` → holds
-- The main checkout at `5915dca` has no `specs/two-session/`; this branch is ahead of `origin/main` by 2 → `git worktree list`, `git status` → holds
-- The gates suite is green before the change → `run.sh`: 19/20, `test_pretooluse_guard` red under `~/.claude/settings.json:6`; green with `env -u` → does not hold (B1)
+- The gates suite is green with `env -u NETDUST_GUARD_ASK` and red without → `run.sh` (20/20; 19/20 with 22 FAIL), `tests/test_pretooluse_guard.py:66`, `hooks/pretooluse-guard.py:431-436`, session env `NETDUST_GUARD_ASK=off` → holds
 - The devops suite is green → `plugins/netdust-devops/tests/run.sh` → holds
-- The runner inherits the caller's env; case ids are positional; `0/0` on a wrong argument → `run-evals.py:54-57`, `:73`, `:81-82` → holds
-- `timeout` is a new key → `run-evals.py:52`, two existing cases → does not hold (harmless; N3)
-- `--max-turns` is fixed at 25 → `run-evals.py:56` → holds
-- `run-evals.py` loads through importlib without running → `__main__` guard at `:85` → holds
-- `calls.log` and `agent-start` checks fit the existing `where:` / `absent` keys → `run-evals.py:35-41`, `:65-68` → holds
-- A plain PATH prefix loses to `~/.profile` → `~/.profile:25-26` (unconditional), no `.bash_profile` or `.bash_login` → holds
-- This pane: `HERDR_SOCKET_PATH=~/.config/herdr/herdr.sock`, `HERDR_BIN_PATH=~/.local/bin/herdr` → environment → holds
-- Sessions call `herdr` from PATH → `herdr --skill` ("the `herdr` binary in `PATH` talks to the current session") → holds
-- `herdr --skill` documents `HERDR_SOCKET_PATH` → grep of `herdr --skill` → does not hold (S2)
-- A dead default socket isolates every herdr call → `~/.config/herdr/sessions/<name>/herdr.sock` (10 present); cached herdr-orchestration `SKILL.md:107-110` (`--session`) → does not hold (S2)
-- herdr 0.9.5 syntax: `agent start <NAME> --kind --pane [-- AGENT_ARG…]` and `agent prompt <TARGET> <TEXT>` → `herdr agent start --help`, `herdr agent prompt --help` → holds
-- "Outside herdr, none of this applies"; no laundering, and a peer's message is not approval → `herdr-orchestration/SKILL.md:13`, `:126-128` → holds
-- The scenario format, rules H1–H28, and skill-on reading the repo-relative `SKILL.md` → `herdr-orchestration/evals/scenario-1..5-*` → holds
-- The leg and judge procedure → `plugins/netdust-core/evals/RUNBOOK.md:17-38` → holds
-- parallel-work has no DDEV-per-worktree section → `parallel-work/SKILL.md` (127 lines, `:26-28`) → holds
-- laika-planning-model's `.ddev/config.local.yaml` is `name: laika-planning` → the file, `git worktree list` in laika → holds
-- laika's gate runs `test:int` in the container → `~/Sites/laika/bin/gate.sh:19-20` → holds
-- The eval loads netdust-core 0.5.3 from the cache → `installed_plugins.json` installPath 0.5.2 → does not hold (N4; no effect on the reading)
-- Upstream `writing-plans` asks the execution question unless a method was already supplied → superpowers 7.0.0 `writing-plans/SKILL.md:179-189` → holds
-- Upstream's ledger lives in the coder's worktree and survives until the final review → `executing-plans/SKILL.md:83-87`, `:125-131` → holds
-- The stale-offer grep's hits today → `SKILL.md:96`, `:98`, `:106`; `commands/plan-review.md:42` → holds (`plan-review.md` is not in Task 1's Files; N7)
-- Stefan's global `CLAUDE.md` §2 carries the execution-mode line → `~/.claude/CLAUDE.md` §2 → holds
-- No `ARCHITECTURE-INVARIANTS.md` in the repo; netdust-core has no `tests/` → `find`, `ls` → holds
+- The policy is 142 lines and the cap is `< 150` → wc, `tests/test_policy_skill.py:42` → holds
+- "Stefan chooses at the plan handoff" and "execution-mode choice" → `skills/policy/SKILL.md:98`, `:106` → holds
+- Other tests pin Stops tokens → `test_close_wiring.py:60`, `:70`; `test_policy_skill.py:28` → holds
+- A command test reads `feature-review.md`, and no test pins prose → `test_close_wiring.py:55-58`; `test_session_commands.py:7` → holds
+- `/feature-review` takes the head from origin, else the local branch; the plan comes from the working tree; the summary has a "plan or none" line → `commands/feature-review.md:12-13`, `:25`, `:38` → holds
+- `plan-review.md` offers the execution mode → `commands/plan-review.md:42` → holds
+- The stale-offer grep's hits today → `SKILL.md:96`, `:98`, `:106`; `plan-review.md:42`; none in core or devops → holds
+- The gates boundary bans implementer / test-author / reviewer agents → `plugins/netdust-gates/CLAUDE.md:22-24` → holds
+- Gates spec R3 is at `:68` and R5 at `:81`; the precedent `5c01115` sits under R1 → `specs/netdust-gates/spec.md`, `git show 5c01115` → holds
+- Versions are gates 0.10.0, core 0.5.3, devops 0.9.5, in both manifests; drift fails both suites → `plugin.json`, `.claude-plugin/marketplace.json`, `test_plugin_manifest.py:22-24`, `test-marketplace.sh:33-42` → holds
+- The main checkout's uncommitted core `plugin.json` claims 0.5.4 → `git diff` there → holds
+- The branch is cut from `origin/main`, and the main checkout has no `specs/two-session/` → merge-base `1c2c402`, `ls` → holds
+- The cache holds gates 0.10.0 @ `5915dca` and core 0.5.2 → `installed_plugins.json`, `~/.claude/plugins/*` symlinks → holds
+- `origin/feature/two-session` exists for Close step 2 → `git branch -a` → does not hold (S1)
+- Every worktree of this repo shares its refs → `git rev-parse --git-common-dir` → holds
+- The runner inherits the caller's environment, runs only `git init`, hardcodes `--max-turns 25`, and `timeout` is an existing key → `run-evals.py:51-57`, `cases.json` (two cases carry `timeout`) → holds
+- `run-evals.py` imports without running → `__main__` guard at `:85` → holds
+- The existing keys can express negative checks → `run-evals.py:35-41`, `:65-68`; negative lookaheads in `review-fix-no-report` and `unit-cut-plan` → holds
+- The coder in `coder-brief-no-recursion` edits the target in place → `init.defaultBranch` unset, `executing-plans/SKILL.md:112-113`, `using-git-worktrees/SKILL.md:41` → does not hold (S2)
+- herdr 0.9.5 syntax: `agent start <NAME> --kind --pane [-- AGENT_ARG…]`, `agent prompt <TARGET> <TEXT>`, `agent wait <TARGET>` → `--help` → holds
+- `--session`, `--machine` and `--remote` are global flags; 20 named sessions exist → `herdr --help`, `~/.config/herdr/sessions/` → holds
+- `herdr --skill` does not document `HERDR_SOCKET_PATH`; the binary reads it, along with `HERDR_SESSION` and `HERDR_CLIENT_SOCKET_PATH` → grep of `--skill`, binary strings → holds (N3)
+- `notify_when_idle` is a real mechanism → Claude CLI binary (uds-messaging), not herdr → holds
+- `~/.profile:25-26` prepends `~/.local/bin` → not re-read (the sandbox denied it); carried from round 2
+- herdr-orchestration's detection, experiments-on-own-session and no-laundering rules → `SKILL.md:13`, `:102-103`, `:126-128` → holds
+- The scenario format, rules H1–H28, and skill-on reading the repo-relative `SKILL.md` → `evals/scenario-1..5-*` → holds
+- The leg and judge procedure → `plugins/netdust-core/evals/RUNBOOK.md:17-38` → holds; its outputs path resolves into the cache (N5)
+- parallel-work has no DDEV section → `parallel-work/SKILL.md` (127 lines) → holds
+- laika-planning-model's `.ddev/config.local.yaml` is `name: laika-planning`, and git ignores it → the file, `.ddev/.gitignore:17` → holds
+- laika's gate runs `test:int` in the container → `bin/gate.sh:19-20` → holds
+- The DDEV name alone sends the gate's browser tier to the worktree → `bin/e2e.sh:17-21`, `:55`; `config/application.php:51`, `:76-77` → holds for `test:int`; for e2e, only if the URLs are rewritten (B1)
+- Seeding "through the project's own verb" gives the worktree a database of its own → `wp.mk:70-77`, `:186`, `:200`; laika `site.yml:135-136` → does not hold (B1)
+- `make e2e` runs against a local container → `Makefile.netdust:491-496` → does not hold (B1)
+- Upstream `writing-plans` asks the execution question unless a method was supplied → superpowers 7.0.0 `writing-plans/SKILL.md:181-186` → holds
+- Upstream's ledger lives in the worktree and is deleted after the final review → `executing-plans/SKILL.md:103-104`, `:121-131` → holds
+- Stefan's global `CLAUDE.md` §2 carries the execution-mode line → holds
+- The repo has no `ARCHITECTURE-INVARIANTS.md`, and netdust-core has no `tests/` → `find`, `ls` → holds
+- The sparring draft exists → session scratchpad `two-session/spar-1.md` §7 → holds, but it is ephemeral (N8)
