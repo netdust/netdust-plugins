@@ -1,128 +1,144 @@
 # Plan review — two-session
-Reviewed-plan: e3c2f5dc926b395b909facff9bb68e771dbe9aab
+Reviewed-plan: 484fbd690e75d6fee56d23f0318dcf391bbc9841
 Verdict: not ready
 
-The plan gives each of R1–R12 a task. Four premises do not hold in the source or in the environment the evals run in. Each one needs a single line in the plan to fix. B2 matters most: the stub does not isolate the live herdr server, which is the exact failure R11 and Review Focus 2 exist to prevent.
+The revision closes all four round-1 Blocking findings and six of the seven Should fix. One new Blocking finding is a one-line fix. The gates suite is red today in every Claude session on this box, so no "all green" step can be reached as written. There are three new Should fix findings. Two are about eval isolation, which is what R11 and Review Focus 1–2 exist for: one eval case cannot fail, and named herdr sessions get past the dead socket. The third is that the pilot's own feature review runs the installed command, which still reads no plan.
 
 ## Blocking
 
-**B1. The version bumps leave `marketplace.json` behind, so the "green" steps cannot be reached.**
-- Plan: Global Constraints ("Bump the version once per plugin…"), Task 1 Files and Step 4 ("all green"), Task 3 Files and Step 3, Task 4 Files and Step 2.
-- Source: `plugins/netdust-gates/tests/test_plugin_manifest.py:22-24` requires the marketplace entry's version to equal `plugin.json`. `plugins/netdust-devops/tests/test-marketplace.sh:33-42` fails on DRIFT for every plugin. `.claude-plugin/marketplace.json` still says gates 0.10.0, core 0.5.3, devops 0.9.5. Both suites are green today only because the two files agree.
-- Change: add `.claude-plugin/marketplace.json` to the Files of each bumping task, bumped in the same commit as its `plugin.json`.
-
-**B2. `stub_bin` first on PATH does not shadow the real herdr, and stripping `HERDR_*` points the real binary at the live server.**
-- Plan: Task 2 Step 2 ("put `stub_bin` first on `PATH`"), Review Focus 2.
-- Source, PATH: `~/.profile:25-26` prepends `~/.local/bin` in a login shell. Claude Code's Bash snapshot is a login-shell capture: the newest file in `~/.claude/shell-snapshots/` carries `/etc/profile.d`'s gawk functions and an `export PATH=` line (line 147), and no `.bashrc` interactive section. I ran `env PATH=<stub>:$PATH bash -lc 'echo $PATH'`: `~/.local/bin` came 1st, the stub 2nd.
-- Source, binary and socket: `~/.local/bin/herdr` is the real 0.9.5 binary (`$HERDR_BIN_PATH`). This pane's `$HERDR_SOCKET_PATH` is `~/.config/herdr/herdr.sock`, the default path. Stripping it leaves the real client on that same live socket.
-- Effect: in `two-session-handoff` (`HERDR_ENV=1` re-added), the session's `herdr agent start` can reach the live server.
-- Change: after stripping, the runner sets `HERDR_SOCKET_PATH` to a path inside the sandbox for every case (no server listens there). When `stub_bin` is set it also sets `HERDR_BIN_PATH` to the stub. Task 2 Step 1 asserts both on the child environment. Confirm from `herdr --skill` that API helpers fail, and do not start a server, when nothing listens on the socket.
-
-**B3. The runner has no `--help` and no filter flag.**
-- Plan: Test map row 2 ("filter flag per the runner's own `--help`"), Task 2 Step 3.
-- Source: `plugins/netdust-gates/evals/run-evals.py:4` (`run-evals.py [case-id ...]`) and `:73`: the filter is positional case ids. `--help` (or `--filter x`) selects no case, prints `0/0 cases passed` and exits 0 (`:81-82`). That looks like a green run.
-- Change: write the command, `python3 plugins/netdust-gates/evals/run-evals.py two-session-handoff coder-brief-no-recursion`, and say a `0/0` line means a wrong invocation.
-
-**B4. Both new cases need Bash calls that `claude -p --permission-mode acceptEdits` denies.**
-- Plan: Task 2 Step 2 (the two cases) and Step 3 ("a case that fails on behaviour is a finding… not something to loosen").
-- Source: `run-evals.py:55-56` runs `claude -p` with `--permission-mode acceptEdits`. `SETTINGS` (`:23`) carries no permissions. `~/.claude/settings.json` and `settings.local.json` allow no `git` or `herdr` command.
-- Effect: acceptEdits approves file edits, not `herdr …`, `git worktree add` or `git commit`. In print mode an unapproved call is denied, not prompted. None of the 12 existing cases runs Bash, so none has hit this. `two-session-handoff`'s core expectation (an `agent start` in `calls.log`) cannot appear. Step 3 would then report a permission denial as a behaviour failure.
-- Change: give both cases' `files` a `.claude/settings.local.json` that allows `Bash(herdr *)` and `Bash(git *)`; this does not overwrite the runner's `settings.json`. The alternative is a per-case `allow` key passed as `--allowedTools`, added to Step 1's key whitelist.
+**B1. The gates suite is red before any change, so no "all green" step can be reached.**
+- Plan: Task 1 Step 1 ("Expected red: the four policy content assertions fail … and so does the command one"); Task 1 Step 4 and Task 2 Step 3 ("`bash plugins/netdust-gates/tests/run.sh` … green"); Close step 1; Test map rows 1–2.
+- Source:
+  - `~/.claude/settings.json:6` sets `"NETDUST_GUARD_ASK": "off"` in the `env` of every session. That covers the coder and every eval child too.
+  - `plugins/netdust-gates/tests/test_pretooluse_guard.py:66` runs the hook with `{**os.environ, **(env or {})}`. The hook's `ask_tier_waived()` (`hooks/pretooluse-guard.py:431-436`) then waives the ask tier, and 22 assertions get passthrough.
+  - I ran it from this worktree: `Modules passed: 19 · Modules failed: 1 (test_pretooluse_guard)`. With `env -u NETDUST_GUARD_ASK` the module passes. The devops suite is green (115 + 14).
+- Effect: at Task 1 Step 1 the coder hits a red the plan did not predict. It either escalates, or it "fixes" a security hook's test that no task names.
+- Change:
+  - Write the command as `env -u NETDUST_GUARD_ASK bash plugins/netdust-gates/tests/run.sh` everywhere it appears: Test map rows 1–2, Task 1 Steps 1 and 4, Task 2 Steps 1 and 3, Close step 1.
+  - Add a one-line Global Constraint saying why.
+  - The env leak in the test is a separate bounded fix, outside this plan.
 
 ## Should fix
 
-**S1. The fallback outside herdr is homed in a skill that says it does not apply outside herdr.**
-- Plan: Architecture bullet 2 ("…close, fallback) live in `netdust-core:herdr-orchestration`") and Task 3 Step 2's last bullet.
-- Source: `plugins/netdust-core/skills/herdr-orchestration/SKILL.md:13` says "Outside herdr, none of this applies", and the description (`:3`) triggers on `HERDR_ENV=1`.
-- Change: the policy (Task 1) carries the fallback's operative sentence. The sparring draft in `spar-1.md` §7 already has "else as one background subagent there". Task 3 either drops the bullet or amends `:13` to carve out the pair recipe's fallback.
+**S1. `coder-brief-no-recursion` cannot fail.**
+- Plan: Task 2 Step 2, the second case ("a prompt opening `Role: coder`. Expect the target changed, and no `.herdr/agent-start`"); Review Focus 2.
+- Source:
+  - Only the stub touches `.herdr/agent-start`, and this case names neither `stub_bin` nor `env`.
+  - `child_env` strips `HERDR_*` for every case. So the session runs outside herdr, the policy sends it down the fallback path, and `agent start` never comes up.
+  - The `absent` glob (`run-evals.py:65-68`) therefore passes whatever the session does.
+- Change: give the case `env: {"HERDR_ENV": "1"}` and the stub, the same as `two-session-handoff`. Then a coder that starts a coder writes `agent-start`, and the absence check means something.
 
-**S2. The reviewer's review, run from its own checkout, silently loses the plan.**
-- Plan: Close step 2 (`/feature-review two-session` "from its own checkout"), Task 3 Step 2 ("the Close split").
-- Source: `plugins/netdust-gates/commands/feature-review.md:12-13` resolves head to `origin/feature/<name>`, else the local branch, which works from any checkout. But `:25` ("When `specs/<name>/plan.md` exists…") reads the working tree. Under R2 the plan exists only on `feature/<f>`; the main checkout at 5915dca has no `specs/two-session/`. So R7's review runs as a review with no plan: no requirements, no Review Focus, no threat model. It does this in this very pilot.
-- Change: Task 1 adds one clause to `feature-review.md:25` (read the plan at `<head>`, i.e. `git show <head>:specs/<name>/plan.md`) and pins it in an existing command test.
-
-**S3. Task 3's recipe list and scenario 6 skip parts of R5 and R6.**
-- Plan: Task 3 Step 2's bullets; Step 1 says only "the judge checks the recipe's outcomes".
-- Missing from the bullets:
-  - R5's pre-flight ruling before Task 1;
-  - R5's escalation split: technical questions go to the reviewer, who spars with a fresh agent; intent questions go to Stefan;
-  - R6's "not the session-review pane";
-  - R6's "no third review on top of SDD's task reviews".
-- Change: add those bullets. In Step 1, name the judge rules (continuing from H29, since scenarios 1–5 use H1–H28), one per R2–R9 outcome, including the same permission mode.
-
-**S4. Test map row 3 has no runnable command.**
-- Plan: row 3 says "run as scenarios 1–5 are run"; Task 3 Step 3 says "their files say how".
-- Source: `herdr-orchestration/evals/scenario-1-judge.template.md:3-5` says only "Inline both legs' outputs before dispatching the judge". The procedure for running the legs is in `plugins/netdust-core/evals/RUNBOOK.md:17-38`, written for a different scenario set.
-- Change: write the procedure in the row:
-  1. Dispatch `scenario-6-baseline.md` and `scenario-6-skill-on.md` as two general-purpose subagents.
-  2. Inline both outputs into `scenario-6-judge.template.md` and dispatch a judge.
-  3. Pass means the skill-on leg passes rules the baseline fails.
-
-**S5. Task 2's unit test covers only the strip; the function is unnamed and the stub's log location is undefined.**
-- Plan: Task 2 Step 1 ("read through the function that builds the child environment"); Files ("…to `.herdr/calls.log` in the case directory").
-- Untested: `env`, `stub_bin` and `commit: true` are exercised only by the paid evals. No such function exists yet, and the plan gives no Interfaces block.
-- The log: the stub's working directory is wherever the Bash tool runs. A session that `cd`s into a worktree logs somewhere else, while the expectation reads `root/.herdr/calls.log` (`run-evals.py:40-41`).
+**S2. A named herdr session gets past the dead socket.**
+- Plan: Interfaces `child_env` ("sets `HERDR_SOCKET_PATH` to a path under `root` where nothing listens"); Task 2 Step 2 ("Confirm from `herdr --skill` or the binary …"); Review Focus 1.
+- Source:
+  - Every named session has its own socket at `~/.config/herdr/sessions/<name>/herdr.sock`. Ten are present now (folio, cargo, hack, wpm, vad, …).
+  - The cached herdr-orchestration that a case loads (0.5.2, `SKILL.md:107-110`) tells a session to start with `herdr session list` and to pass `--session <name>` on every call. `allow: ["Bash(herdr *)"]` permits that call.
+  - `herdr --skill` never mentions `HERDR_SOCKET_PATH` (I grepped it). So the "Confirm from `herdr --skill`" branch cannot succeed; only an experiment can confirm it.
+- Effect: suppose the stub does not shadow inside the Bash tool. The plan's probe uses `bash -lc` as a stand-in for that tool, which is a proxy, not the tool itself. In that case a real `herdr --session folio agent start …` reaches a live server, whatever `HERDR_SOCKET_PATH` says.
 - Change:
-  - Name the function, e.g. `child_env(case: dict, base: dict, root: Path) -> dict`, plus a sandbox-prep function. The test loads `run-evals.py` through importlib, because the file name has a hyphen.
-  - Assert: no inherited `HERDR_` value, `HERDR_SOCKET_PATH` under `root` (B2), the case's `env` applied, the stub directory first in `PATH`, and a valid `HEAD` after `commit: true`.
-  - The runner exports the sandbox root (e.g. `EVAL_ROOT`), and the stub logs to `$EVAL_ROOT/.herdr/`. Commit the stub with mode 100755.
+  - Move the probe into `run_case`. Before spawning `claude`, a case with `stub_bin` runs `bash -lc 'command -v herdr'` under `child_env` and fails unless the output is the stub. That makes it a permanent guard instead of a one-off quote.
+  - Pass `--disallowedTools` for `Bash(herdr --session*)`, `Bash(herdr --machine*)` and `Bash(herdr --remote*)`.
+  - Name the named-session path in Review Focus 1.
+  - Run the dead-socket experiment on a throwaway path, as herdr-orchestration `SKILL.md:102-103` requires for experiments.
 
-**S6. Task 1 Step 1's negative assertion is undefined, and its expected red is wrong.**
-- "does not contain … 'execution-mode choice' as a stop": scope it to the text between `## Stops` and `## Close`. Otherwise a sentence saying "the execution-mode choice is no longer a stop" fails it.
-- "it fails on the first two": four assertions fail today, because `skills/policy/SKILL.md:98` has "Stefan chooses at the plan handoff" and `:106` has "execution-mode choice". State the expected red as four.
-
-**S7. The 11-line budget for Execution mode uses the whole file's headroom.**
-- Plan: Global Constraints line 1, Architecture line 1.
-- Source: the policy is 142 lines and the test requires fewer than 150 (`test_policy_skill.py:42`), so the whole file can grow by 7. Growing the Execution mode body from 4 lines (`SKILL.md:98-101`) to 11 uses all 7. That leaves Stops (`:105-110`) no room for R8's three additions (pushing a package's `main`, a finding that is an intent decision, the coder's permission prompts) or R5's "A coder asks its reviewer, never Stefan".
-- The sparring draft (`spar-1.md` §7) reaches 148 lines only with a 10-line body and a 6-line Stops that leaves out those three stops.
-- Change: state the budget as "file ≤ 149 lines; Execution mode and Stops together grow by at most 7".
+**S3. The pilot's own feature review still runs without the plan.**
+- Plan: Close step 2 ("from its own checkout; with Task 1's clause, it reads the plan at the branch head"); Review Focus 3.
+- Source:
+  - A session loads `/feature-review` from the plugin cache. `~/.claude/plugins/installed_plugins.json` has netdust-gates 0.10.0 at `5915dca`, without Task 1's clause.
+  - The source edit reaches no session until a release.
+  - The reviewer's checkout (main at `5915dca`) has no `specs/two-session/`. So the installed `feature-review.md:25` finds no plan.
+  - This is round 1's S2 again, in this pilot's own Close.
+- Change:
+  - Close step 2 runs the branch's text of the command. Either follow `git show feature/two-session:plugins/netdust-gates/commands/feature-review.md`, or use a session started with `--plugin-dir <worktree>/plugins/netdust-gates`.
+  - Then check that the summary's "what was reviewed (range; plan or none)" line (`feature-review.md:38`) names `specs/two-session/plan.md`.
+  - That line is the only behavioural evidence for Review Focus 3. The row-1 string pin proves the text, not the behaviour.
 
 ## Note
 
-- **N1. Core 0.5.4 is already taken.** The main checkout's uncommitted `plugins/netdust-core/.claude-plugin/plugin.json` claims `0.5.4` ("0.5.4: discovery-briefing…"). The two versions collide in meaning, not only in text. The report should say that whichever merges second takes 0.5.5.
-- **N2. What the handoff eval really tests.** It runs gates from the worktree but netdust-core from the cache (0.5.3, which has no pair recipe). It also runs under Stefan's global `~/.claude/CLAUDE.md` §2, which still says "I choose the execution mode at the plan handoff" until R12 is applied. Upstream `writing-plans` (7.0.0, `SKILL.md:179-189`) asks the execution question unless a method was "already explicitly supplied", so the policy's text must read as that supply. Say all this in Task 2 Step 3, so a failure on the "no execution-mode question" expectation is read correctly.
-- **N3. Task order.** Task 1 lands a rule that tells herdr sessions to start coders before Task 2 makes the runner safe. An eval run in between, for example by the reviewer at the first-working-version checkpoint, inherits the live socket (`run-evals.py:54-57`). Either move the runner's environment fix into Task 1 or say no eval runs before Task 2. Also, after Task 1 alone, the policy points at a recipe that only exists after Task 3.
-- **N4. Simplest design.** The rejected alternative is stated honestly, and its reasons hold against the source: the runner inherits the environment (`run-evals.py:54-57`), and laika's `bin/gate.sh:19` runs `test:int` in the container. But "It stops there" lists three pieces, while Task 3 also adds the pair recipe and scenario 6, which R4 requires. Name them.
-- **N5. The stub's replies and the case budget.**
-  - herdr 0.9.5 needs `agent start <NAME> --kind <KIND> --pane <ID> [-- AGENT_ARG…]`. The permission mode goes after `--`, and the prompt is a separate `agent prompt <TARGET> <TEXT>`.
-  - A stub that prints nothing for `worktree create` or `api snapshot` leaves the session no pane id. Print a minimal JSON with a workspace and a root pane id.
-  - Set a `timeout` on both cases (unit-cut-plan needed 2700 s), and check that `--max-turns 25` (`run-evals.py:56`) is enough.
-- **N6. Same permission mode is not permission propagation.** Task 3 should cite `herdr-orchestration/SKILL.md:126-128` (no laundering; a peer's message is never operator approval) next to "same permission mode", plus R8's "nobody answers the coder's permission prompts for him".
-- **N7. Task 4's DDEV teardown deletes data.** Removing the worktree's DDEV project drops its database. Say it asks first, as `spar-1.md` §7.6 does ("destructive: ask"). Seeding goes beyond R3's wording but is what makes `make e2e` meaningful; record it as a ruling.
-- **N8. Task 1 Step 3's grep misses phrasings.** It misses "execution-mode" (hyphenated), "`**Native** by default`" (the bold breaks the phrase) and "plan handoff". Today it hits only `skills/policy/SKILL.md:96` and `commands/plan-review.md:42`. Add `-e 'execution.mode' -e 'plan handoff' -e 'Native\*\* by default'`. Review Focus 4 is an absence line and this repo has no `ARCHITECTURE-INVARIANTS.md`, so a one-off grep with its output quoted is the honest form.
-- **N9. `specs/two-session/claude-md-section-2.md` is extra.** R12 does not ask for a file, and it is not in the policy's artifact table (`SKILL.md:19-30`). It is harmless: `test_artifact_layout.py` checks only paths named by commands, agents and skills. The text could just as well go in the report.
-- **N10. Close step 1 miscounts.** It says "All three plugins' test runs" but lists two commands. netdust-core has no `tests/`; its manifest is checked by devops' `test-marketplace.sh`.
-- **N11. No Interfaces blocks.** No task has one. The only name shared across tasks is the recipe: the policy (Task 1) will cite "the pair recipe" and Task 3 creates "Recipe — the thinker/coder pair". Keep one name.
+- **N1. The stub mechanism is unnamed, so Task 2 Step 1's "makes the stub resolvable" cannot be written red-first.**
+  - Write the assertion as the probe itself: `subprocess.run(["bash", "-lc", "command -v herdr"], env=child_env(...))` prints the stub. This holds whatever mechanism is chosen.
+  - Facts: `~/.profile:25-26` prepends `~/.local/bin` unconditionally, and there is no `~/.bash_profile` or `~/.bash_login`.
+  - Candidate mechanisms:
+    - `BASH_ENV`: unverified. My probe was denied in this sandbox.
+    - `CLAUDE_ENV_FILE`: it would reach the tool, but it fails this probe.
+    - A `HOME` override: this breaks claude's own config.
+- **N2. The stub's fidelity.**
+  - A `worktree create` that makes no directory leaves the session's next `git -C <path>` failing.
+  - The sandbox has no `origin`, so "production's branch at origin's tip" cannot resolve. The spec's Out of scope says "the brief names the base".
+  - Changes:
+    - Let the stub's `worktree create` run a real `git worktree add` under `$EVAL_ROOT` and print the path.
+    - Name the base in the case prompt.
+    - Answer `agent wait` and `agent get` with a settled state, so the session does not spend its 25 turns waiting.
+    - Match `Role: coder` anywhere in `calls.log`. A session may put the brief after `--` on `agent start` instead of in `agent prompt` (`herdr agent start --help`).
+- **N3. Two case-key details.**
+  - `timeout` is not a new key: `run-evals.py:52` reads it, and `spec-splits-into-plans` (1800 s) and `unit-cut-plan` (2700 s) carry it. Keep it in the whitelist, but drop "new".
+  - `--max-turns 25` is hardcoded (`:56`), so "checked headroom" has nothing to adjust. Add a `max_turns` key or state the number.
+- **N4. The eval loads netdust-core 0.5.2, not 0.5.3.** Evidence: the `installed_plugins.json` installPath, and the `~/.claude/plugins/netdust-core` → `0.5.2` symlink. Neither version has the recipe, so Task 2 Step 3's reading of a failure stands.
+- **N5. Test map row 1 hedges with "or".**
+  - `test_session_commands.py:7` says "The prose itself is not string-tested".
+  - `test_close_wiring.py:55-58` already pins `feature-review.md`'s tokens.
+  - Name `test_close_wiring.py` and drop the "or".
+- **N6. The Stops rewrite carries pins owned by other tests.** `test_close_wiring.py:60` pins "flow list" and `:70` pins "(Close, step 4)". `test_policy_skill.py:28` pins `Ruling:` and `Accepted-by-human:`. Name them in Task 1 Step 2, because they use part of the 7-line budget.
+- **N7. Task 1's Files list omits `commands/plan-review.md`.** Step 3's grep hits `:42` today ("he reviews the saved plan and chooses the execution mode").
+- **N8. Two problems in Task 1 Step 1.**
+  - The ≤149-line assertion already exists (`test_policy_skill.py:42`).
+  - "The four policy content assertions" does not match the list: three checks fail today and the size check passes. Name the failing assertions instead of giving a count.
+- **N9. R9's ledger is stated only for herdr.**
+  - The rule that the coder's ledger records every exchange appears only in the herdr-only recipe, and Task 3 Step 2's bullets cover only the restart.
+  - Add that line to the recipe.
+  - For the fallback, either add one clause to the policy, or make it a `Ruling:` that upstream's "Record every decision in the ledger" (`executing-plans/SKILL.md:34`) is R9 there.
+- **N10. Round 1 N3's second half still stands.** After Task 1 alone, a herdr session follows the policy to herdr-orchestration and finds no pair recipe until Task 3. This is harmless on one branch.
+- **N11. The simplest design is stated honestly.** Its four holes hold against the source: `run-evals.py:54-57`, `feature-review.md:25`, laika `bin/gate.sh:19-20`, and recursion by construction. I found no simpler design. `allow`, `EVAL_ROOT` and the socket path are mechanism that R11 did not list but needs.
+
+## Round 1, closed or not
+
+- B1 (marketplace drift): closed. See Global Constraints, and each bumping task's Files.
+- B2 (stub and socket): closed for the default socket. Named sessions are still open (S2).
+- B3 (`--help`): closed. The command is written out, with the `0/0` warning.
+- B4 (permissions): closed. `allow` is passed as `--allowedTools`. I did not re-run the `claude` CLI flags here.
+- S1 (fallback in a herdr-only skill): closed. The fallback now lives in the policy, and Task 3 Interfaces says "The recipe covers only herdr".
+- S2 (plan at head): closed in the source. Not closed for the pilot's own Close (S3).
+- S3 (recipe bullets, H29 onward): closed.
+- S4 (row 3 command): closed.
+- S5 (named functions, importlib, `EVAL_ROOT`, 100755): closed, except the "resolvable" assertion (N1).
+- S6: the scoping is closed. The expected red is still wrong (B1, N8).
+- S7 (budget): closed.
 
 ## Premises checked
-- Policy is 142 lines, the cap is `< 150` → `skills/policy/SKILL.md` (wc), `tests/test_policy_skill.py:42` → holds
-- Execution mode body is 4 lines → `SKILL.md:98-101` → holds; but the whole file can grow by only 7 (S7)
-- Policy text contains "chooses at the plan handoff" and "execution-mode choice" → `SKILL.md:98`, `:106` → holds
-- The runner inherits the caller's environment → `evals/run-evals.py:54-57` (no `env=`) → holds
-- The runner has a `--help` / filter flag → `run-evals.py:4`, `:73`, `:81-82` → does not hold
-- `test_evals_shape.py` checks ids, required keys, regexes and that the runner parses; nothing rejects extra keys → `tests/test_evals_shape.py:8`, `:26-30` → holds (the key whitelist is a new check)
-- "Unchanged" and "no question" are expressible without a new key → `cases.json` `review-fix-no-report` (anchored regex), `unit-cut-plan` (negative lookahead) → holds
-- A stub on PATH shadows the real herdr in the session's Bash → `~/.profile:25-26`, snapshot `export PATH` (line 147), `bash -lc` check → does not hold
-- Stripping `HERDR_*` keeps the real client off the live server → `$HERDR_SOCKET_PATH` = `~/.config/herdr/herdr.sock`, the default → does not hold
-- A case can run `herdr` or `git` in Bash under `-p --permission-mode acceptEdits` → `run-evals.py:23`, `:55-56`; `~/.claude/settings.json` allow list → does not hold
-- herdr syntax: `agent start` needs `--pane`, extra agent args go after `--`, the prompt is `agent prompt` → `herdr agent start --help` (0.9.5) → holds
-- herdr scenario format is baseline / skill-on / judge.template, rules H1–H28 → `herdr-orchestration/evals/scenario-1..5-*` → holds
-- The scenario files say how they are run → `scenario-1-judge.template.md:3-5` (judge only); legs in `netdust-core/evals/RUNBOOK.md:17-38` → partly holds
-- herdr-orchestration can host the outside-herdr fallback → `herdr-orchestration/SKILL.md:3`, `:13` → does not hold as written
-- The existing dispatch brief already carries entry, boundaries, report shape, watcher and `agent wait` → `herdr-orchestration/SKILL.md:130-151` → holds ("cite, don't repeat" is right)
-- parallel-work has no DDEV-per-worktree section and says a second checkout costs a second container → `parallel-work/SKILL.md:26-28` → holds
-- laika-planning-model is a laika worktree with `.ddev/config.local.yaml` `name: laika-planning` → `git worktree list` in laika, the file → holds
-- laika's gate runs `test:int` in the container → `~/Sites/laika/bin/gate.sh:19` → holds
-- Current versions gates 0.10.0, core 0.5.3, devops 0.9.5 → the three `plugin.json` files → holds
-- A version bump touches only `plugin.json` → `test_plugin_manifest.py:22-24`, `test-marketplace.sh:33-42`, `.claude-plugin/marketplace.json` → does not hold
-- Main carries another session's uncommitted core `plugin.json` → `git status` in `/home/ntdst/Projects/netdust-plugins` → holds; it already claims 0.5.4 (N1)
-- The branch is cut from `origin/main` 1c2c402 → `git log` → holds
-- Amendment precedent `5c01115` is under R1; gates spec R3 (`:68`) and R5 (`:81`) are the right targets → `specs/netdust-gates/spec.md` → holds
-- The CLAUDE.md boundary bans implementer / test-author / reviewer agents → `plugins/netdust-gates/CLAUDE.md:22-24` → holds
-- Task 1 Step 3's grep finds the stale offers → hits only `SKILL.md:96` and `commands/plan-review.md:42`; misses hyphenated and bold forms → partly holds
-- `/feature-review` from another checkout reviews the branch → `commands/feature-review.md:12-13` → holds; it finds the plan → `:25` reads the working tree → does not hold
-- netdust-plugins has no Makefile, so `/feature-review` is the Close verb → repo root; `SKILL.md:117` → holds
-- Upstream `writing-plans` asks the execution question unless a method was supplied → superpowers 7.0.0 `writing-plans/SKILL.md:179-189` → holds (the policy must supply it)
-- Upstream executing-plans keeps a ledger and a pre-flight scan, and deletes its workspace at the end → `executing-plans/SKILL.md:83`, `:103`, `:115-119` → holds (R9's ledger exists while the plan runs)
-- The eval loads gates from source and core from the cache → `run-evals.py:55`; `~/.claude/plugins/cache/netdust-plugins/netdust-core/0.5.3` → holds
-- No `ARCHITECTURE-INVARIANTS.md` in this repo; netdust-core has no `tests/` → `find`, `ls` → holds
+- The policy is 142 lines and the cap is `< 150` → `skills/policy/SKILL.md` (wc), `tests/test_policy_skill.py:42` → holds
+- "Stefan chooses at the plan handoff" and "execution-mode choice" → `SKILL.md:98`, `:106` → holds
+- The Stops tokens pinned by other tests → `test_close_wiring.py:60`, `:70`; `test_policy_skill.py:28` → holds (the plan does not name them; N6)
+- `/feature-review` resolves the head from any checkout and reads the plan from the working tree → `commands/feature-review.md:12-13`, `:25` → holds
+- A command test already reads `feature-review.md` → `test_close_wiring.py:55-58` → holds; `test_session_commands.py:7` → no prose pins there
+- The reviewer's `/feature-review` carries Task 1's clause in this pilot → `installed_plugins.json` (gates 0.10.0 @ 5915dca) → does not hold (S3)
+- The gates boundary bans implementer / test-author / reviewer agents → `plugins/netdust-gates/CLAUDE.md:22-24` → holds
+- Gates spec R3 is at `:68` and R5 at `:81`; the precedent `5c01115` is under R1 → `specs/netdust-gates/spec.md`, `git show 5c01115` → holds
+- Versions are gates 0.10.0, core 0.5.3 and devops 0.9.5, in `plugin.json` and the marketplace → the manifests, `.claude-plugin/marketplace.json` → holds
+- Version drift fails both suites → `test_plugin_manifest.py:22-24`, `test-marketplace.sh:33-42` → holds
+- The main checkout's uncommitted core `plugin.json` claims 0.5.4 → `git diff` in `/home/ntdst/Projects/netdust-plugins` → holds
+- The main checkout at `5915dca` has no `specs/two-session/`; this branch is ahead of `origin/main` by 2 → `git worktree list`, `git status` → holds
+- The gates suite is green before the change → `run.sh`: 19/20, `test_pretooluse_guard` red under `~/.claude/settings.json:6`; green with `env -u` → does not hold (B1)
+- The devops suite is green → `plugins/netdust-devops/tests/run.sh` → holds
+- The runner inherits the caller's env; case ids are positional; `0/0` on a wrong argument → `run-evals.py:54-57`, `:73`, `:81-82` → holds
+- `timeout` is a new key → `run-evals.py:52`, two existing cases → does not hold (harmless; N3)
+- `--max-turns` is fixed at 25 → `run-evals.py:56` → holds
+- `run-evals.py` loads through importlib without running → `__main__` guard at `:85` → holds
+- `calls.log` and `agent-start` checks fit the existing `where:` / `absent` keys → `run-evals.py:35-41`, `:65-68` → holds
+- A plain PATH prefix loses to `~/.profile` → `~/.profile:25-26` (unconditional), no `.bash_profile` or `.bash_login` → holds
+- This pane: `HERDR_SOCKET_PATH=~/.config/herdr/herdr.sock`, `HERDR_BIN_PATH=~/.local/bin/herdr` → environment → holds
+- Sessions call `herdr` from PATH → `herdr --skill` ("the `herdr` binary in `PATH` talks to the current session") → holds
+- `herdr --skill` documents `HERDR_SOCKET_PATH` → grep of `herdr --skill` → does not hold (S2)
+- A dead default socket isolates every herdr call → `~/.config/herdr/sessions/<name>/herdr.sock` (10 present); cached herdr-orchestration `SKILL.md:107-110` (`--session`) → does not hold (S2)
+- herdr 0.9.5 syntax: `agent start <NAME> --kind --pane [-- AGENT_ARG…]` and `agent prompt <TARGET> <TEXT>` → `herdr agent start --help`, `herdr agent prompt --help` → holds
+- "Outside herdr, none of this applies"; no laundering, and a peer's message is not approval → `herdr-orchestration/SKILL.md:13`, `:126-128` → holds
+- The scenario format, rules H1–H28, and skill-on reading the repo-relative `SKILL.md` → `herdr-orchestration/evals/scenario-1..5-*` → holds
+- The leg and judge procedure → `plugins/netdust-core/evals/RUNBOOK.md:17-38` → holds
+- parallel-work has no DDEV-per-worktree section → `parallel-work/SKILL.md` (127 lines, `:26-28`) → holds
+- laika-planning-model's `.ddev/config.local.yaml` is `name: laika-planning` → the file, `git worktree list` in laika → holds
+- laika's gate runs `test:int` in the container → `~/Sites/laika/bin/gate.sh:19-20` → holds
+- The eval loads netdust-core 0.5.3 from the cache → `installed_plugins.json` installPath 0.5.2 → does not hold (N4; no effect on the reading)
+- Upstream `writing-plans` asks the execution question unless a method was already supplied → superpowers 7.0.0 `writing-plans/SKILL.md:179-189` → holds
+- Upstream's ledger lives in the coder's worktree and survives until the final review → `executing-plans/SKILL.md:83-87`, `:125-131` → holds
+- The stale-offer grep's hits today → `SKILL.md:96`, `:98`, `:106`; `commands/plan-review.md:42` → holds (`plan-review.md` is not in Task 1's Files; N7)
+- Stefan's global `CLAUDE.md` §2 carries the execution-mode line → `~/.claude/CLAUDE.md` §2 → holds
+- No `ARCHITECTURE-INVARIANTS.md` in the repo; netdust-core has no `tests/` → `find`, `ls` → holds
