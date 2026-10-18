@@ -78,6 +78,48 @@ Reads only — a reviewer, a test runner, a log watcher → **pane**.
 Edits anything → **worktree**, always. Two agents in one directory will
 silently overwrite each other, and neither will report it.
 
+### A coder's worktree on a DDEV project
+
+A planned feature runs as two sessions (`netdust-gates:policy`), and the coder works in
+its own worktree. On a DDEV project that worktree must be its own DDEV project, or its
+`make gate` tests the wrong code: the gate's integration tier runs `ddev composer`, and a
+worktree carries the tracked `.ddev/config.yaml` — the main project's name, so the
+main checkout's container. Give it its own name in `.ddev/config.local.yaml`, which
+DDEV's own `.ddev/.gitignore` keeps out of git:
+
+```yaml
+name: <project>-<feature>      # laika-planning-model runs as name: laika-planning
+```
+
+Its container then serves `https://<name>.ddev.site`, and `test:int`, the local e2e tier
+inside `make gate` and every `ddev` command run against the worktree's own code.
+`make e2e env=<env>` is not one of them: it always drives a deployed environment,
+never a local container.
+
+Three things still name the main project's URL: `site.yml`'s `local.url` (tracked —
+`make pull` rewrites the database to it), the database once it is copied, and a Bedrock
+`.env`'s `WP_HOME` / `WP_SITEURL`. So start the worktree's project in this order:
+
+1. **Its own `.env`**, with `WP_HOME` and `WP_SITEURL` at `https://<name>.ddev.site`. A
+   fresh worktree has none (`.env` is ignored), and Bedrock refuses to boot without
+   `WP_HOME`.
+2. `ddev start`, then `ddev composer install`.
+3. **Seed the database** from the main project — `ddev export-db --file=<dump>.sql.gz`
+   there, `ddev import-db --file=<dump>.sql.gz` here — then rewrite its URLs:
+   `ddev wp search-replace <main url> <worktree url> --all-tables --precise --skip-columns=guid`
+   (the flags `make pull` uses). The e2e tier creates its user and fixture through
+   wp-cli, so it needs an installed WordPress, and it reads its URLs from WordPress, so
+   the rewrite follows the import. Never run `make pull` in a worktree without it.
+4. **The host tiers' dependencies** on the host: `composer install` and `npm ci` (and
+   Playwright's browsers). The gate runs every tier but `test:int` on the host.
+
+Prove it before the first gate: in the worktree, `ddev wp option get home` prints the
+worktree's URL (on Bedrock it reads `WP_HOME` from `.env`), and
+`ddev wp db search '<main host>' --all-tables` prints nothing.
+
+When the feature lands, `ddev delete <name>` removes the project and its database —
+ask first.
+
 ---
 
 ## How the make verbs behave across checkouts
