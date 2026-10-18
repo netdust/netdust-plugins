@@ -40,7 +40,7 @@
 3. **A reviewer in another checkout reviewing with no plan** (spec R7): `/feature-review` must read the plan at the reviewed head. → Test map row 1, the command test.
 4. **The policy outgrowing its cap, or restating upstream.** → Test map row 1, `test_policy_skill.py`.
 5. **Stale offers of the execution-mode choice** in the three plugins. This is an absence; the repo has no `ARCHITECTURE-INVARIANTS.md`, so Task 1 Step 3's grep is the check, its output quoted.
-6. **A coder's `make gate` testing the main checkout** (spec R3): the main checkout's DDEV container, or main URLs left in the worktree's database or `.env`. → Test map row 4, a documentation unit. Its proof for the first WordPress pair, which this plan does not run: `ddev wp option get home` in the worktree prints the worktree's URL.
+6. **A coder's `make gate` testing the main checkout** (spec R3): the main checkout's DDEV container, or main URLs left in the worktree's database or `.env`. → Test map row 4, a documentation unit. Its proof for the first WordPress pair, which this plan does not run: `ddev wp option get home` in the worktree prints the worktree's URL, and `ddev wp db search '<main host>' --all-tables` prints nothing.
 
 ## Simplest design
 
@@ -56,6 +56,7 @@
   - one clause in `feature-review.md`;
   - the DDEV section.
 - **Where it stops:** no new skill, no `make feature worktree=`, no `flock` (spec "Out of scope").
+- **An alternative weighed and not taken:** `_pull-db` and `make push` could take the URL from the container's `DDEV_PRIMARY_URL` before `local.url` (`wp.mk:127`, `:147`, `:186`), making `make pull` right in a worktree. That is a code change plus a devops test, against R3's "documented once"; it stays a follow-up beside `make feature worktree=`.
 
 ## Test map
 
@@ -134,14 +135,16 @@
   - it puts `HERDR_SOCKET_PATH` under `root`;
   - it applies the case's `env`;
   - under `child_env(...)` with `stub_bin`, a login-shell `bash -lc 'command -v herdr'` prints the stub's path (the probe itself, not a statement about `PATH`);
-  - `prepare_sandbox` with `commit: true` leaves a valid `HEAD`;
+  - `prepare_sandbox` with `commit: true` leaves the sandbox on `feature/<case-id>` (or the case's `branch`) with a valid `HEAD`;
+  - `child_env` leaves no `CLAUDE_CODE_MESSAGING_` value;
+  - the stub's `worktree create` lands under `$EVAL_ROOT` and prints that path;
   - every case's keys are within the known set;
   - the two new case ids exist.
 
   Run `env -u NETDUST_GUARD_ASK bash plugins/netdust-gates/tests/run.sh`; it fails (no such functions yet).
 - [ ] **Step 2:** implement the runner functions and the stub. The stub:
   - appends its argument vector (and, for `agent prompt`, the text) to `$EVAL_ROOT/.herdr/calls.log`;
-  - on `worktree create`, runs a real `git worktree add` under `$EVAL_ROOT` and prints a minimal JSON with that path, one workspace and one root pane id; on `api snapshot`, prints the same workspace and pane;
+  - on `worktree create`, runs a real `git worktree add` at the fixed path `$EVAL_ROOT/.herdr/wt` (ignoring `--path`; a `--branch` equal to the sandbox's checked-out branch is refused by git, so the stub creates the worktree on a new branch and records the ruling in its log), and prints a minimal JSON with that path, one workspace and one root pane id; on `api snapshot`, prints the same workspace and pane;
   - on `agent start`, touches `$EVAL_ROOT/.herdr/agent-start`;
   - contacts no server.
 
@@ -152,8 +155,9 @@
   **Make the guard permanent:** `run_case` runs the same probe before every case that sets `stub_bin`, and refuses to start the case when it fails. Every case passes `--disallowedTools` for `Bash(herdr --session*)`, `Bash(herdr --machine*)`, `Bash(herdr --remote*)` (and their forms with the flag after a subcommand), `Bash(HERDR_*)` (an inline `HERDR_SESSION=<name> herdr …`), `SendMessage` and `ListAgents`, because a named session has its own socket and `Bash(herdr *)` would allow it. **Confirm by probe**, quoted in the report, that the real client with `HERDR_SOCKET_PATH` pointing at nothing fails rather than starting or reaching a server (`herdr --skill` does not document the variable). The stub also answers `agent wait` with a settled state.
 
   **Add both cases** with `allow: ["Bash(herdr *)", "Bash(git *)"]`, a `timeout` (`unit-cut-plan` needed 2700 s), and checked `--max-turns` headroom:
-  - **`two-session-handoff`** (`commit: true`, `env: {"HERDR_ENV": "1"}`, the stub): an approved one-task plan. Expect `calls.log` to show `agent start`, and `Role: coder`, the plan path and `netdust-gates:policy` anywhere in it (a brief may travel as `-- AGENT_ARG` on `agent start` or through `agent prompt`). Expect the target file unchanged, and the reply with no execution-mode question.
-  - **`coder-brief-no-recursion`** (`commit: true`, `env: {"HERDR_ENV": "1"}`, the stub, the same `allow`): a prompt opening `Role: coder` with a one-task plan. Expect the target changed, and no `.herdr/agent-start`. Only the stub writes that file, so the case can fail.
+  - **`two-session-handoff`** (`commit: true`, `env: {"HERDR_ENV": "1"}`, the stub): an approved one-task plan. Expect `calls.log` to show `agent start`, and `Role: coder`, the plan path and `netdust-gates:policy` anywhere in it (a brief may travel as `-- AGENT_ARG` on `agent start` or through `agent prompt`). Expect the target file unchanged at the root and in `.herdr/wt/<target>` (an `expect` with a negative lookahead for the new value that also passes when the file is absent, in `unit-cut-plan`'s `\A(?:(?!…).)*\Z` style), so a thinker that implements in the worktree itself fails (R2). Expect the reply with no execution-mode question.
+  - **`small-tweak-no-artifacts`** (existing) also runs under `env: {"HERDR_ENV": "1"}` with the stub and `absent: [".herdr/agent-start"]`: R1's bounded exception stays in one session inside herdr.
+  - **`coder-brief-no-recursion`** (`commit: true`, `env: {"HERDR_ENV": "1"}`, the stub, the same `allow`): a prompt opening `Role: coder` with a one-task plan, which says "This checkout is your worktree, on `feature/coder-brief-no-recursion`; work in place" (the declared preference `using-git-worktrees/SKILL.md:45` honours), with `EnterWorktree` disallowed. Expect the target changed, and no `.herdr/agent-start`. Only the stub writes that file, so the case can fail.
 - [ ] **Step 3:** `env -u NETDUST_GUARD_ASK bash plugins/netdust-gates/tests/run.sh` green. Run `python3 plugins/netdust-gates/evals/run-evals.py two-session-handoff coder-brief-no-recursion` once and quote the result lines. The pair counts as passed only when `two-session-handoff`'s `calls.log` shows the stub was called in the same run. The `bash -lc` probe is a proxy for the Bash tool's shell, and without that log the no-recursion absence check could pass vacuously.
 
   Reading a failure: this eval loads netdust-core from the cache (0.5.2, which has no pair recipe), may see the installed gates 0.10.0 beside `--plugin-dir` (unverified which one takes precedence), and runs under Stefan's global `CLAUDE.md` §2, which still offers the execution-mode choice until R12 is applied. Upstream `writing-plans` asks the question unless a method was already supplied, so the policy's text must read as that supply. A failure on the "no execution-mode question" expectation is reported with that context, as a finding for the reviewer, never loosened.
@@ -180,7 +184,7 @@
   - **escalation:** a technical question goes to the reviewer, who spars with a fresh agent when needed; an intent question goes to Stefan (R5);
   - `herdr agent wait` and `notify_when_idle`, reading only at transitions. This is not the session-review pane (R6).
   - the review checkpoints: the first working version, a block, an intent question, and the Close. There is no third review stacked on subagent-driven's own task reviews. Each finding is one fix request (R6).
-  - the Close split (R7): the coder pushes and signals, then the reviewer reviews; the coder pushes again after the fix pass;
+  - the Close split (R7): the coder pushes and signals, then the reviewer reviews; the coder makes the fix pass and runs `/shakeout`, and pushes again as its last step (policy Close step 5); the reviewer carries the screenshot yield to Stefan and hands him `make promote`;
   - the coder's ledger holds the brief, every ruling, every fix request and its closing test (R9);
   - a restart re-reading the branch, the plan and that ledger (R9).
 - [ ] **Step 3:** run the scenario by the Test map row 3 procedure and quote the judge's verdict. Bump both version files. Commit (`feat(core): the pair recipe — two-session spec R2–R9`).
@@ -189,12 +193,13 @@
 
 **Files:**
 - Modify: `plugins/netdust-devops/skills/parallel-work/SKILL.md`
+- Modify: `plugins/netdust-devops/skills/devops/SKILL.md` (`:368`, one pointer to the new section: in a coder worktree the URL comes from its own DDEV name, not `local.ddev_project`)
 - Modify: `plugins/netdust-devops/.claude-plugin/plugin.json` (0.9.6) and `.claude-plugin/marketplace.json` (devops entry)
 
 - [ ] **Step 1:** add one section. A coder worktree on a DDEV project carries `.ddev/config.local.yaml` with its own `name:` (for example `<project>-<feature>`), so the gate's tiers (`test:int` and the local e2e tier inside `make gate`) and `ddev` commands run against its own container. `make e2e env=<env>` always drives a deployed environment, never a local container. The proven form is laika-planning-model's `name: laika-planning`. The section also says:
-  - The worktree is served at `https://<name>.ddev.site`, but three things still name the main project's URL: `site.yml`'s `local.url` (tracked, and `make pull` rewrites to it, `wp.mk:186`, `:200`), the database after a copy, and a Bedrock `.env`'s `WP_HOME`/`WP_SITEURL`. So: set the worktree's `.env` to its own URL. Seed from the main project with `ddev export-db` there and `ddev import-db` here, then `ddev wp search-replace <main url> <worktree url>`. Never run `make pull` in a worktree without that rewrite. Record as a `Ruling:` that seeding goes beyond R3's wording, because the gate's browser tier reads its URLs from WordPress (laika `bin/e2e.sh:55`).
-  - The proof for the first pair: in the worktree, `ddev wp option get home` prints the worktree's URL.
-  - How the worktree's project is started.
+  - The worktree is served at `https://<name>.ddev.site`, but three things still name the main project's URL: `site.yml`'s `local.url` (tracked, and `make pull` rewrites to it, `wp.mk:186`, `:200`), the database after a copy, and a Bedrock `.env`'s `WP_HOME`/`WP_SITEURL`. So: set the worktree's `.env` to its own URL. Seed from the main project with `ddev export-db` there and `ddev import-db` here, then `ddev wp search-replace <main url> <worktree url> --all-tables --precise --skip-columns=guid` (the flags `_pull-db` uses, `wp.mk:201`). Never run `make pull` in a worktree without that rewrite. Record as a `Ruling:` that seeding goes beyond R3's wording: the e2e tier creates its user and fixture through wp-cli (laika `bin/e2e.sh:45-52`), so it needs an installed WordPress, and it reads its URLs from WordPress (`:55`), which is why the rewrite follows. The same ruling records that R3's "`make e2e`" never runs locally (`Makefile.netdust:491-496`).
+  - The proof for the first pair: in the worktree, `ddev wp option get home` prints the worktree's URL (on Bedrock that reads `WP_HOME` from `.env`), and `ddev wp db search '<main host>' --all-tables` prints nothing (the database).
+  - How the worktree's project is started, in order: the worktree's own `.env` first (a fresh worktree has none, `.gitignore:21`, and Bedrock refuses to boot without `WP_HOME`); `ddev start`; `ddev composer install`; and on the host the `vendor/` and `node_modules` the gate's host tiers need (laika `bin/gate.sh:6-9`, `:23`).
   - Removing it when the feature lands deletes its database, so it asks first.
 - [ ] **Step 2:** `bash plugins/netdust-devops/tests/run.sh` green; bump both version files; commit (`docs(devops): a DDEV project per coder worktree — two-session spec R3`).
 
