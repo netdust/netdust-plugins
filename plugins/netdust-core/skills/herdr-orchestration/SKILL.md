@@ -1,6 +1,6 @@
 ---
 name: herdr-orchestration
-description: "Use when running inside the herdr terminal multiplexer (HERDR_ENV=1 in the environment) and work involves other panes or sessions — coordinating with an agent in a neighboring pane, dispatching a framework fix to its own workspace while a feature is mid-flight, arming a notification watcher on a long or unattended run, spawning an independent reviewer, or porting a fix across the fleet. Triggers on keywords herdr, pane, panes, other pane, cross-pane, neighbor session, watcher, doorbell, blocked notification, dispatch, fix workspace, sub worktree, server restart, agent resume, herdr update, new herdr version, remote box, machine, saved machine, api snapshot, agent_prompt_stalled, workspace_group_close_required, trust-repository, watch the other session, watch the other pane, keep an eye on the main agent, review the session. Symptoms include a framework bug surfacing while the feature branch is dirty, the operator asking two panes to work together, an unattended run that needs the human only at approval gates, a server restart or update proposed while a dispatch is running, an operator asking a fresh pane to watch or review another session, or a reviewer that must not share the author's context. Complements herdr's built-in skill (run `herdr --skill` — that output is the syntax authority); this skill carries only the netdust decisions on top: which channel, which topology, which protocol."
+description: "Use when running inside the herdr terminal multiplexer (HERDR_ENV=1 in the environment) and work involves other panes or sessions — running a planned feature as two sessions (the pair: a thinker and a coder session), coordinating with an agent in a neighboring pane, dispatching a framework fix to its own workspace while a feature is mid-flight, arming a notification watcher on a long or unattended run, spawning an independent reviewer, or porting a fix across the fleet. Triggers on keywords herdr, pane, panes, other pane, cross-pane, neighbor session, watcher, doorbell, blocked notification, dispatch, fix workspace, sub worktree, server restart, agent resume, herdr update, new herdr version, remote box, machine, saved machine, api snapshot, agent_prompt_stalled, workspace_group_close_required, trust-repository, watch the other session, watch the other pane, keep an eye on the main agent, review the session. Symptoms include a framework bug surfacing while the feature branch is dirty, the operator asking two panes to work together, an unattended run that needs the human only at approval gates, a server restart or update proposed while a dispatch is running, an operator asking a fresh pane to watch or review another session, or a reviewer that must not share the author's context. Complements herdr's built-in skill (run `herdr --skill` — that output is the syntax authority); this skill carries only the netdust decisions on top: which channel, which topology, which protocol."
 ---
 
 # herdr orchestration — the netdust decisions
@@ -153,6 +153,65 @@ included — never add it to make the error go away.
 The watcher polls on a timer. A `herdr-plugin.toml` plugin can react to blocked and done
 as events instead — not built. A plugin runs local commands with your permissions, so
 read one before you install it.
+
+## Recipe — the pair recipe (thinker and coder)
+
+`netdust-gates:policy` runs a planned feature as two sessions (its Execution mode owns the
+rule; `specs/two-session/spec.md` R2–R9 is the source). This is the herdr half. You, the
+session Stefan planned with, turn reviewer at his plan approval; a fresh claude in the
+feature's own worktree workspace is the coder.
+
+1. **The tree first.** `git fetch`, then cut the worktree from production's branch at
+   origin's tip (`scripts/site environments.production.branch`, else `main`) with the
+   topology decision above: `--base origin/<production> --branch feature/<f>`. Commit
+   the spec, plan and plan review there as the branch's first commits. From the
+   handoff only the coder writes that tree; you read it with git and write only in your
+   own checkout — even the fix you could make faster yourself goes back as a request.
+   On DDEV the worktree is its own DDEV project (`.ddev/config.local.yaml` with its own
+   `name:`) before anything runs in it, so its `make gate` never lands in the main
+   checkout's container: `netdust-devops:parallel-work`.
+2. **Start the coder** at the approval: `herdr agent start <f>-coder --kind claude
+   --pane <worktree root pane> -- --permission-mode <yours>`. Same mode, so no message
+   between you waits on Stefan. `agent get` does not report the argv: confirm the mode on
+   the coder's first screen (`agent read --source visible`). Nobody answers the coder's
+   permission prompts but Stefan (first contact, above: no laundering).
+3. **The brief** is the dispatch brief above, in one `agent prompt`, with these on top:
+   the first line `Role: coder`; the plan path and branch; the entry
+   `netdust-gates:policy`, Native unless its rule fires; this tree only (no
+   `EnterWorktree`, no Agent `isolation: "worktree"`), push only at Close, no merge, no
+   operator verb; the ledger — executing-plans' own, recording every exchange with you;
+   and you, named by session id and cwd (`herdr agent get`), never only by a SendMessage
+   name, which a restart changes — the coder resolves it with `ListAgents` before each
+   message. A coder skips Intake and the plan and never starts a coder.
+4. **Pre-flight and escalation.** The coder sends its pre-flight scan; you rule before
+   Task 1. A technical question you rule on yourself, sparring with a fresh agent when
+   you want a second view; an intent question goes to Stefan, because a `Source:` line
+   needs his words. A coder asks you, never Stefan.
+5. **Watch at transitions.** The doorbell plus a background `herdr agent wait
+   <f>-coder` (or `SendMessage` with `notify_when_idle`); read its screen only at a
+   transition (traps below). This is not the session-review pane, which stays a
+   separate, on-demand observer.
+6. **Review at checkpoints, not tasks:** the first working version, a block or an
+   intent question, and the Close — never after every task, and never a third review on
+   subagent-driven's own task reviews. Each finding is one fix request, closed by its
+   RED→GREEN test. No rounds.
+7. **The Close split.** The coder runs `make gate`, pushes and tells you. You run `make
+   review name=<f>` from your own checkout (it reviews `origin/feature/<f>`) and send the
+   findings as fix requests. The coder makes the fix pass, keeps
+   `specs/<f>/review.md`, runs `/shakeout` on user-facing work and pushes again as its
+   last step (policy Close step 5). You carry the screenshot yield to Stefan and hand
+   him `make promote name=<f>`. Stefan's moments are the policy's stops; the execution
+   mode is not one of them.
+8. **Restart from disk.** The durable artifact is the branch (above). Either session
+   restarts by re-reading three things, never a pane's scrollback: the plan, the branch
+   (`git log`, `git status` in the worktree) and the coder's ledger
+   (`.superpowers/sdd/<plan>/progress.md` there). Re-start the coder with a brief that
+   points at the plan and that ledger, and find a restarted peer again by session id
+   and cwd.
+
+After the feature lands (verify with git): `herdr worktree remove --workspace <ws>` as
+above, and on DDEV remove the worktree's project — that deletes its database, so ask
+first. Outside herdr the policy's fallback applies: one background subagent coder.
 
 ## Role — the session-review pane
 
