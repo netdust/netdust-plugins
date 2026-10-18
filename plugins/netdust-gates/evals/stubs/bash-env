@@ -1,0 +1,3 @@
+# Sourced through BASH_ENV by every non-interactive bash an eval starts, after ~/.profile,
+# so the stub dir stays first on PATH (run-evals.py child_env).
+[ -n "${EVAL_STUB_DIR:-}" ] && PATH="$EVAL_STUB_DIR:$PATH"

@@ -8,10 +8,15 @@ disabled, a project CLAUDE.md naming netdust-gates:policy first — with this pl
 then checks the plan, the reply and the files it left against the case's regexes. Needs the
 `claude` CLI and a network; it is not part of tests/run.sh. Stochastic: a red case is a
 signal to tighten the skill, not proof of a regression.
+
+No case can reach a live herdr server or Claude session: every child gets its own environment
+(`child_env`) with a socket path nobody listens on, and a case's `stub_bin` shadows `herdr`
+even in a login shell, checked before the case starts.
 """
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -19,11 +24,17 @@ import tempfile
 from pathlib import Path
 
 PLUGIN = Path(__file__).resolve().parent.parent
+EVALS = Path(__file__).resolve().parent
 CASES = json.loads((Path(__file__).parent / "cases.json").read_text())
 SETTINGS = {"enabledPlugins": {"netdust-agent@netdust-plugins": False}}
 PROJECT_CLAUDE_MD = (
     "The first action on code-changing work is the `netdust-gates:policy` skill.\n"
     "Specs and plans live in `specs/<feature>/`.\n")
+# A named herdr session has its own socket, so `Bash(herdr *)` alone would let a case reach it.
+DISALLOWED = ["Bash(herdr --session*)", "Bash(herdr --machine*)", "Bash(herdr --remote*)",
+              "Bash(herdr * --session*)", "Bash(herdr * --machine*)", "Bash(herdr * --remote*)",
+              "Bash(HERDR_*)", "SendMessage", "ListAgents", "EnterWorktree"]
+GIT = ["git", "-c", "user.name=eval", "-c", "user.email=eval@localhost", "-c", "commit.gpgsign=false"]
 
 
 def _write(root: Path, rel: str, content: str) -> None:
@@ -41,20 +52,54 @@ def _subject(root: Path, reply: str, where: str) -> str:
     return target.read_text() if target.is_file() else ""
 
 
+def child_env(case: dict, base: dict, root: Path) -> dict:
+    env = {k: v for k, v in base.items() if not k.startswith(("HERDR_", "CLAUDE_CODE_MESSAGING_"))}
+    env.update(case.get("env", {}))
+    env["HERDR_SOCKET_PATH"] = str(root / ".herdr" / "none.sock")
+    env["EVAL_ROOT"] = str(root)
+    if "stub_bin" in case:
+        stub = (EVALS / case["stub_bin"]).resolve()
+        # ~/.profile prepends ~/.local/bin in a login shell; BASH_ENV is sourced after it.
+        env.update(EVAL_STUB_DIR=str(stub.parent), BASH_ENV=str(EVALS / "stubs" / "bash-env"),
+                   HERDR_BIN_PATH=str(stub), PATH=f"{stub.parent}:{env.get('PATH', '')}")
+    return env
+
+
+def prepare_sandbox(case: dict, root: Path) -> None:
+    _write(root, "CLAUDE.md", PROJECT_CLAUDE_MD)
+    _write(root, ".claude/settings.json", json.dumps(SETTINGS))
+    for rel, content in case["files"].items():
+        _write(root, rel, content)
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
+    if "stub_bin" in case:
+        _write(root, ".git/info/exclude", ".herdr/\n")
+    if case.get("commit"):
+        subprocess.run([*GIT, "add", "-A"], cwd=root, check=True)
+        subprocess.run([*GIT, "commit", "-q", "-m", "eval sandbox"], cwd=root, check=True)
+        subprocess.run(["git", "checkout", "-q", "-b", case.get("branch", f"feature/{case['id']}")],
+                       cwd=root, check=True)
+
+
+def _claude(case: dict) -> list[str]:
+    cmd = ["claude", "-p", case["prompt"], "--plugin-dir", str(PLUGIN), "--permission-mode", "acceptEdits",
+           "--max-turns", str(case.get("max_turns", 25)), "--disallowedTools", *DISALLOWED]
+    return cmd + (["--allowedTools", *case["allow"]] if case.get("allow") else [])
+
+
 def run_case(case: dict) -> tuple[bool, list[str]]:
     with tempfile.TemporaryDirectory(prefix="gates-eval-") as tmp:
         root = Path(tmp)
-        _write(root, "CLAUDE.md", PROJECT_CLAUDE_MD)
-        _write(root, ".claude/settings.json", json.dumps(SETTINGS))
-        for rel, content in case["files"].items():
-            _write(root, rel, content)
-        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        prepare_sandbox(case, root)
+        env = child_env(case, dict(os.environ), root)
+        if "stub_bin" in case:
+            resolved = subprocess.run(["bash", "-lc", "command -v herdr"], cwd=root, env=env,
+                                      capture_output=True, text=True).stdout.strip()
+            if resolved != env["HERDR_BIN_PATH"]:
+                return False, [f"refused to start: herdr resolves to {resolved!r}, not the stub"]
         timeout = case.get("timeout", 900)
         try:
-            proc = subprocess.run(
-                ["claude", "-p", case["prompt"], "--plugin-dir", str(PLUGIN),
-                 "--permission-mode", "acceptEdits", "--max-turns", "25"],
-                cwd=root, capture_output=True, text=True, timeout=timeout)
+            proc = subprocess.run(_claude(case), cwd=root, env=env, capture_output=True, text=True,
+                                  timeout=timeout)
         except subprocess.TimeoutExpired:
             return False, [f"timed out after {timeout}s"]
         reply = proc.stdout
