@@ -75,11 +75,19 @@ def _subject(root: Path, reply: str, where: str) -> str:
 
 
 # Claude Code's Bash sandbox needs both on Linux; a case that may run Bash never runs without it.
-def sandbox_refusal(case: dict, which=shutil.which) -> str | None:
+# Its bridge sockets live in $TMPDIR (srt-mux-<pid>-<n>.sock), and a socket path holds 108 bytes.
+SOCKET_NAME = "/srt-mux-4194304-999.sock"
+
+
+def sandbox_refusal(case: dict, root: Path, which=shutil.which) -> str | None:
     if not any(rule.startswith("Bash(") for rule in case.get("allow", [])):
         return None
     missing = [tool for tool in ("bwrap", "socat") if not which(tool)]
-    return f"refused to start: the Bash sandbox needs {missing}" if missing else None
+    if missing:
+        return f"refused to start: the Bash sandbox needs {missing}"
+    if len(str(root / ".tmp") + SOCKET_NAME) >= 108:
+        return f"refused to start: {root / '.tmp'} leaves no room for the sandbox's sockets (108-byte path limit)"
+    return None
 
 
 def stub_for(case: dict) -> Path:
@@ -204,7 +212,7 @@ def run_case(case: dict) -> tuple[bool, list[str]]:
 
 
 def _run_in(case: dict, root: Path) -> tuple[bool, list[str]]:
-    refusal = sandbox_refusal(case)
+    refusal = sandbox_refusal(case, root)
     if refusal:
         return False, [refusal]
     env = child_env(case, dict(os.environ), root)

@@ -166,10 +166,14 @@ def _sandbox_refusal(sandbox_refusal) -> bool:
     if sandbox_refusal is None:
         return False
     bash_case, plain_case = {"allow": ["Bash(git status*)"]}, {"allow": []}
-    missing = sandbox_refusal(bash_case, which=lambda name: None if name == "socat" else f"/usr/bin/{name}")
+    short, long = Path("/tmp/gates-eval-abcdefgh"), Path("/tmp/" + "x" * 120)
+    have = lambda name: f"/usr/bin/{name}"
+    missing = sandbox_refusal(bash_case, short, which=lambda name: None if name == "socat" else f"/usr/bin/{name}")
+    too_long = sandbox_refusal(bash_case, long, which=have)
     return (missing is not None and "socat" in missing
-            and sandbox_refusal(plain_case, which=lambda name: None) is None
-            and sandbox_refusal(bash_case, which=lambda name: f"/usr/bin/{name}") is None)
+            and too_long is not None and "108" in too_long
+            and sandbox_refusal(plain_case, long, which=lambda name: None) is None
+            and sandbox_refusal(bash_case, short, which=have) is None)
 
 
 def _refuses(stub_for) -> bool:
@@ -217,7 +221,7 @@ def _isolation_checks(runner) -> list[tuple[bool, str]]:
                                      "autoAllowBashIfSandboxed": False},
          f"every case's Bash runs in Claude Code's sandbox: never unsandboxed, never auto-allowed (got {settings.get('sandbox')})"),
         (_sandbox_refusal(getattr(runner, "sandbox_refusal", None)),
-         "a case that may run Bash is refused while bwrap or socat is missing, so it never runs unsandboxed"),
+         "a case that may run Bash is refused while bwrap or socat is missing, or its .tmp is too long for the sandbox's sockets"),
         (_refuses(getattr(runner, "stub_for", None)),
          "a stub_bin outside evals/stubs/ is refused, so a case cannot shadow herdr with any file"),
         (set(getattr(runner, "stub_digests", dict)()) == {"herdr", "bash-env"},
