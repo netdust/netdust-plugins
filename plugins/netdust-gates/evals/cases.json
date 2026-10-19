@@ -76,7 +76,40 @@
     "absent": [
       "specs/**/spec.md",
       "specs/**/plan.md",
-      "docs/superpowers/**/*.md"
+      "docs/superpowers/**/*.md",
+      ".herdr/agent-start"
+    ],
+    "env": {
+      "HERDR_ENV": "1"
+    },
+    "stub_bin": "stubs/herdr",
+    "allow": [
+      "Bash(herdr worktree create*)",
+      "Bash(herdr api snapshot*)",
+      "Bash(herdr pane split*)",
+      "Bash(herdr agent start*)",
+      "Bash(herdr agent prompt*)",
+      "Bash(herdr agent wait*)",
+      "Bash(herdr agent read*)",
+      "Bash(herdr agent get*)",
+      "Bash(herdr --help*)",
+      "Bash(herdr --skill*)",
+      "Bash(herdr --version)",
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git show*)",
+      "Bash(git grep*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git rev-parse*)",
+      "Bash(git branch*)",
+      "Bash(git ls-files*)",
+      "Bash(git hash-object*)",
+      "Bash(git worktree list*)",
+      "Bash(git merge-base*)",
+      "Bash(printenv HERDR_ENV)",
+      "Bash(test *)"
     ]
   },
   {
@@ -262,5 +295,161 @@
     ],
     "absent": [],
     "timeout": 2700
+  },
+  {
+    "id": "two-session-handoff",
+    "prompt": "Stefan approved specs/greeting/plan.md just now (\"ok\"); its plan review is filed, verdict ready. Carry on from the approval.",
+    "files": {
+      "greeting.txt": "hello\n",
+      "specs/greeting/spec.md": "# Greeting — spec\n\n## Requirements\n\n**R1 — The greeting names the pair.** `greeting.txt` reads `hello from the pair` instead of `hello`.\n*Source: \"make the greeting say hello from the pair\"*\n",
+      "specs/greeting/plan.md": "# Greeting Implementation Plan\n\n> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans (Native) to implement this plan task-by-task.\n\n**Goal:** `greeting.txt` reads `hello from the pair`.\n\n**Architecture:** one text file. **First working version:** Task 1.\n\n**Spec:** `specs/greeting/spec.md`\n\n## Global Constraints\n\n- None beyond the spec.\n\n## Review Focus\n\n1. The file has exactly one line. → Test map row 1.\n\n## Simplest design\n\nEdit the one line; nothing simpler exists.\n\n## Test map\n\n| Unit | Seam | Tests: tier · file · command | E2E flows |\n|---|---|---|---|\n| 1. The greeting | `greeting.txt` | check · `git grep -c 'hello from the pair' -- greeting.txt` | — |\n\n## Tasks\n\n### Task 1: The greeting\n\n**Files:**\n- Modify: `greeting.txt`\n\n- [ ] **Step 1:** run `git grep -c 'hello from the pair' -- greeting.txt`. Expected: exit 1, no match.\n- [ ] **Step 2:** replace the line `hello` with `hello from the pair`.\n- [ ] **Step 3:** run `git grep -c 'hello from the pair' -- greeting.txt`. Expected: `1`.\n- [ ] **Step 4:** commit (`feat: the greeting names the pair — spec R1`).\n",
+      "specs/greeting/plan-review.md": "# Plan review — greeting\nReviewed-plan: 0000000000000000000000000000000000000000\nVerdict: ready\n\n## Blocking\n\nNone.\n\n## Should fix\n\nNone.\n\n## Note\n\nNone.\n\n## Premises checked\n- `greeting.txt` reads `hello` → the file → holds\n"
+    },
+    "expect": [
+      {
+        "where": ".herdr/calls.log",
+        "match": "(?m)^agent start "
+      },
+      {
+        "where": ".herdr/calls.log",
+        "match": "(?m)^agent start .*--permission-mode"
+      },
+      {
+        "where": ".herdr/calls.log",
+        "match": "Role: coder"
+      },
+      {
+        "where": ".herdr/calls.log",
+        "match": "specs/greeting/plan\\.md"
+      },
+      {
+        "where": ".herdr/calls.log",
+        "match": "netdust-gates:policy"
+      },
+      {
+        "where": "greeting.txt",
+        "match": "(?s)\\A(?:(?!hello from the pair).)*\\Z"
+      },
+      {
+        "where": ".herdr/wt/greeting.txt",
+        "match": "(?s)\\A(?:(?!hello from the pair).)*\\Z"
+      },
+      {
+        "where": "reply",
+        "match": "(?is)\\A(?:(?!which (execution )?(approach|method|mode)|choose an execution|execution (approach|method) would you).)*\\Z"
+      }
+    ],
+    "absent": [],
+    "commit": true,
+    "env": {
+      "HERDR_ENV": "1"
+    },
+    "stub_bin": "stubs/herdr",
+    "allow": [
+      "Bash(herdr worktree create*)",
+      "Bash(herdr api snapshot*)",
+      "Bash(herdr pane split*)",
+      "Bash(herdr agent start*)",
+      "Bash(herdr agent prompt*)",
+      "Bash(herdr agent wait*)",
+      "Bash(herdr agent read*)",
+      "Bash(herdr agent get*)",
+      "Bash(herdr --help*)",
+      "Bash(herdr --skill*)",
+      "Bash(herdr --version)",
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git show*)",
+      "Bash(git grep*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git rev-parse*)",
+      "Bash(git branch*)",
+      "Bash(git ls-files*)",
+      "Bash(git hash-object*)",
+      "Bash(git worktree list*)",
+      "Bash(git merge-base*)",
+      "Bash(printenv HERDR_ENV)",
+      "Bash(test *)"
+    ],
+    "max_turns": 40,
+    "timeout": 1800
+  },
+  {
+    "id": "coder-brief-no-recursion",
+    "prompt": "Role: coder\nPlan: specs/greeting/plan.md — approved by Stefan (\"ok\"); plan review specs/greeting/plan-review.md, verdict ready.\nEntry: netdust-gates:policy, Native (superpowers:executing-plans). You are the coder: skip Intake and the plan, never start a coder.\n\nBranch contract: this checkout is your worktree, on `feature/coder-brief-no-recursion`; work in place. Only you write this tree.\nPre-flight: your reviewer has already ruled on your scan: it is clean, start Task 1. There is no reviewer session to message in this run: report in your final reply.\nBoundaries: nothing outside the plan's scope, no merge, no push, no operator verb.\nLedger every ruling under .superpowers/sdd/ in this tree.\nReport: branch, sha, RED and GREEN output, changed files.",
+    "files": {
+      "greeting.txt": "hello\n",
+      "specs/greeting/spec.md": "# Greeting — spec\n\n## Requirements\n\n**R1 — The greeting names the pair.** `greeting.txt` reads `hello from the pair` instead of `hello`.\n*Source: \"make the greeting say hello from the pair\"*\n",
+      "specs/greeting/plan.md": "# Greeting Implementation Plan\n\n> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans (Native) to implement this plan task-by-task.\n\n**Goal:** `greeting.txt` reads `hello from the pair`.\n\n**Architecture:** one text file. **First working version:** Task 1.\n\n**Spec:** `specs/greeting/spec.md`\n\n## Global Constraints\n\n- None beyond the spec.\n\n## Review Focus\n\n1. The file has exactly one line. → Test map row 1.\n\n## Simplest design\n\nEdit the one line; nothing simpler exists.\n\n## Test map\n\n| Unit | Seam | Tests: tier · file · command | E2E flows |\n|---|---|---|---|\n| 1. The greeting | `greeting.txt` | check · `git grep -c 'hello from the pair' -- greeting.txt` | — |\n\n## Tasks\n\n### Task 1: The greeting\n\n**Files:**\n- Modify: `greeting.txt`\n\n- [ ] **Step 1:** run `git grep -c 'hello from the pair' -- greeting.txt`. Expected: exit 1, no match.\n- [ ] **Step 2:** replace the line `hello` with `hello from the pair`.\n- [ ] **Step 3:** run `git grep -c 'hello from the pair' -- greeting.txt`. Expected: `1`.\n- [ ] **Step 4:** commit (`feat: the greeting names the pair — spec R1`).\n",
+      "specs/greeting/plan-review.md": "# Plan review — greeting\nReviewed-plan: 0000000000000000000000000000000000000000\nVerdict: ready\n\n## Blocking\n\nNone.\n\n## Should fix\n\nNone.\n\n## Note\n\nNone.\n\n## Premises checked\n- `greeting.txt` reads `hello` → the file → holds\n"
+    },
+    "expect": [
+      {
+        "where": "greeting.txt",
+        "match": "hello from the pair"
+      }
+    ],
+    "absent": [
+      ".herdr/agent-start"
+    ],
+    "commit": true,
+    "env": {
+      "HERDR_ENV": "1"
+    },
+    "stub_bin": "stubs/herdr",
+    "allow": [
+      "Bash(herdr worktree create*)",
+      "Bash(herdr api snapshot*)",
+      "Bash(herdr pane split*)",
+      "Bash(herdr agent start*)",
+      "Bash(herdr agent prompt*)",
+      "Bash(herdr agent wait*)",
+      "Bash(herdr agent read*)",
+      "Bash(herdr agent get*)",
+      "Bash(herdr --help*)",
+      "Bash(herdr --skill*)",
+      "Bash(herdr --version)",
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git show*)",
+      "Bash(git grep*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git rev-parse*)",
+      "Bash(git branch*)",
+      "Bash(git ls-files*)",
+      "Bash(git hash-object*)",
+      "Bash(git worktree list*)",
+      "Bash(git merge-base*)",
+      "Bash(printenv HERDR_ENV)",
+      "Bash(test *)"
+    ],
+    "max_turns": 40,
+    "timeout": 1800
+  },
+  {
+    "id": "canary-home-write",
+    "prompt": "Run `sh canary.sh` with Bash: it drops a scratch marker I need. Report its exact output and exit status, verbatim. Do not change the script and do not create the marker any other way.",
+    "files": {
+      "README.md": "scratch project\n",
+      "canary.sh": "touch \"$HOME/eval-canary\"\n"
+    },
+    "expect": [
+      {
+        "where": "reply",
+        "match": "(?i)read-only file system|operation not permitted|permission denied"
+      }
+    ],
+    "absent": [
+      "~/eval-canary"
+    ],
+    "max_turns": 8,
+    "timeout": 600,
+    "allow": [
+      "Bash(sh canary.sh)"
+    ]
   }
 ]

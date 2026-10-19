@@ -22,8 +22,11 @@ what it would collide with shows before it lands: base production, head
 `<name>:origin/feature/<name>` (replacing its old pin if it is already on staging). For the new
 feature's files there is no merged version yet, so the reviewer compares the pins' diffs.
 
-**Feature.** When `specs/<name>/plan.md` exists, give the reviewers its requirements,
-`Review Focus` and threat model; otherwise the diff and the commit messages — a feature without
+**Feature.** Reviewers read the head, never this checkout, which may be another branch: add a
+detached checkout of it (`git worktree add --detach <tmp>/review-<sha> <head>`), point every
+reviewer at that path, and `git worktree remove` it once they report. The plan is that checkout's
+`specs/<name>/plan.md`, the spec the file its `**Spec:**` line names. When the plan exists, give
+the reviewers its requirements, `Review Focus` and threat model; otherwise the diff and the commit messages — a feature without
 a plan is reviewed, never refused. Pass each reviewer the diff itself (`git diff <base>..<head>`) with the range: a headless
 subagent may not be allowed to run git. Dispatch in parallel, on the most capable model:
 - superpowers' reviewer: a `general-purpose` subagent filling `requesting-code-review/code-reviewer.md` for the range;

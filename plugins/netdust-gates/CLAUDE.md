@@ -24,6 +24,9 @@ test map are the two, each owned by its skill) or a new check on plan grammar. n
   run-score / run-trace / verify-budget. Compounding came back in the one shape the growth
   rule allows: `/session-learn` proposes a lesson plus its eval case, cited `path:line` from a
   transcript, and nothing lands until Stefan approves it.
+- A coder session is not the implementer / reviewer agents above: it is a topology. It runs
+  upstream's executor, whose Final Review is the reviewer's `make review`, and this plugin ships
+  no implementer prompt, no reviewer rubric and no review rounds (`specs/two-session/spec.md` R10).
 - `/session-review`, `/session-learn` and `/prune-tests` run on demand, never as a gate. Their agents are
   read-only; every change after them is Stefan's approval first.
 - The policy skill stays under 150 lines; past that it is restating superpowers.

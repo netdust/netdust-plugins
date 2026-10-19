@@ -366,7 +366,8 @@ ddev exec 'DRY=1 wp eval-file x.php'   # an env var in front of `ddev wp` never 
 ```
 
 URLs follow `https://<ddev-project>.ddev.site`; the name is `local.ddev_project`
-in `site.yml`.
+in `site.yml`. A coder's worktree runs as its own DDEV project, under the name in its
+`.ddev/config.local.yaml`: see `netdust-devops:parallel-work`.
 
 ---
 

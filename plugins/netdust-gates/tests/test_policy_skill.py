@@ -36,6 +36,7 @@ def run() -> list[tuple[bool, str]]:
         "Empty", "Denied actor", "re-entry", "Concurrent", "Boundary", "Mid-flow", "Delivery seam"))
     ok_thr, miss_thr = _has_all(threat, ("Assets", "Attacks", "Mitigations", "Deferrals"))
     banned = [b for text in (policy, pack, edges, threat, mapping) for b in BANNED_GRAMMAR if b in text]
+    stops = " ".join(policy.split("## Stops", 1)[-1].split("## Close", 1)[0].lower().split())
 
     return [
         (frontmatter is not None, "policy: frontmatter is `name: policy` + one-line description"),
@@ -48,4 +49,13 @@ def run() -> list[tuple[bool, str]]:
         (ok_edge, f"catalog: the edge classes are present (missing {miss_edge})"),
         (ok_thr, f"threat-modeling: the four lists are named (missing {miss_thr})"),
         (not banned, f"no 0.28 plan grammar anywhere in the skills (found {sorted(set(banned))})"),
+        (all(t in policy for t in ("Role: coder", "netdust-core:herdr-orchestration", "the pair recipe", "herdr agent start",
+                                   "HERDR_ENV=1")),
+         "policy: a planned feature runs as two sessions, the coder started by the pair recipe (two-session R1, R4)"),
+        ("execution-mode" not in stops and "execution mode" not in stops and "chooses at the plan handoff" not in policy,
+         "policy: the execution mode is no longer a stop for Stefan (two-session R8)"),
+        ("upstream's four stops to stefan" in stops,
+         "policy: a coder's reviewer rules on technical questions only; upstream's four stops go to Stefan (review S5)"),
+        ("deferred minors" in stops and "its reviewer" in stops and "hand-over" in stops,
+         "policy: a coder's rulings and deferred minors reach Stefan through its reviewer's hand-over (review S6)"),
     ]
