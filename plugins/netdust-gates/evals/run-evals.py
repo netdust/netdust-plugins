@@ -20,6 +20,7 @@ import hashlib
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import tempfile
@@ -52,7 +53,9 @@ GIT = ["git", "-c", "user.name=eval", "-c", "user.email=eval@localhost", "-c", "
 
 
 def _write(root: Path, rel: str, content: str) -> None:
-    path = root / rel
+    path = (root / rel).resolve()
+    if not path.is_relative_to(root.resolve()):
+        raise ValueError(f"case file {rel} lands outside the sandbox")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content)
 
@@ -78,6 +81,9 @@ def stub_digests() -> dict:
 
 
 def child_env(case: dict, base: dict, root: Path) -> dict:
+    reserved = [k for k in case.get("env", {}) if k.startswith("CLAUDE") or (k.startswith("HERDR_") and k != "HERDR_ENV")]
+    if reserved:
+        raise ValueError(f"a case's env may not set {reserved}")
     env = {k: base[k] for k in PASSED_ENV if k in base}
     env.update(case.get("env", {}))
     env["HERDR_SOCKET_PATH"] = str(root / ".herdr" / "none.sock")
@@ -105,16 +111,34 @@ def prepare_sandbox(case: dict, root: Path) -> None:
                        cwd=root, check=True)
 
 
-# A session may cut a worktree beside the sandbox, which would outlive the run.
-def remove_worktrees(root: Path) -> list[str]:
+# A session may cut a worktree beside the sandbox, which would outlive the run. Only one
+# under the sandbox's temp parent is deleted; any other is reported, never touched.
+def remove_worktrees(root: Path) -> tuple[list[str], list[str]]:
     listed = subprocess.run(["git", "-C", str(root), "worktree", "list", "--porcelain"],
                             capture_output=True, text=True).stdout
     paths = [line.split(" ", 1)[1] for line in listed.splitlines() if line.startswith("worktree ")]
-    extra = [path for path in paths if Path(path).resolve() != root.resolve()]
-    for path in extra:
-        subprocess.run(["git", "-C", str(root), "worktree", "remove", "--force", "--force", path],
-                       capture_output=True)
-    return extra
+    removed, kept = [], []
+    for path in (p for p in paths if Path(p).resolve() != root.resolve()):
+        if not Path(path).resolve().is_relative_to(root.resolve().parent):
+            kept.append(path)
+            continue
+        done = subprocess.run(["git", "-C", str(root), "worktree", "remove", "--force", "--force", path],
+                              capture_output=True)
+        (removed if done.returncode == 0 else kept).append(path)
+    subprocess.run(["git", "-C", str(root), "worktree", "prune"], capture_output=True)
+    return removed, kept
+
+
+def spawn(args: list[str], root: Path, env: dict, timeout: int) -> subprocess.CompletedProcess | None:
+    proc = subprocess.Popen(args, cwd=root, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True, start_new_session=True)
+    try:
+        out, err = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.communicate()
+        return None
+    return subprocess.CompletedProcess(args, proc.returncode, out, err)
 
 
 def claude_args(case: dict) -> list[str]:
@@ -144,7 +168,11 @@ def run_case(case: dict) -> tuple[bool, list[str]]:
         try:
             ok, failures = _run_in(case, root)
         finally:
-            remove_worktrees(root)
+            removed, kept = remove_worktrees(root)
+            for path in removed:
+                print(f"      removed worktree {path}")
+            for path in kept:
+                print(f"      LEFT worktree {path}: outside {root.parent} or its removal failed")
         changed = [name for name, digest in stub_digests().items() if before.get(name) != digest]
         if changed:
             return False, failures + [f"evals/stubs/ changed during the case: {changed}"]
@@ -162,10 +190,8 @@ def _run_in(case: dict, root: Path) -> tuple[bool, list[str]]:
     if outside:
         return False, [f"refused to start: {outside} already exist"]
     timeout = case.get("timeout", 900)
-    try:
-        proc = subprocess.run(claude_args(case), cwd=root, env=env, capture_output=True, text=True,
-                              timeout=timeout)
-    except subprocess.TimeoutExpired:
+    proc = spawn(claude_args(case), root, env, timeout)
+    if proc is None:
         return False, [f"timed out after {timeout}s"]
     reply = proc.stdout
     failures = []

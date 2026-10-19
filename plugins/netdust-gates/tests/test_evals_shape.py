@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 EVALS = Path(__file__).resolve().parent.parent / "evals"
@@ -81,8 +82,12 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
         prepare_sandbox({"id": "o", "files": {"a.txt": "a\n"}, "commit": True, "branch": "feature/elsewhere"}, other)
         sibling = Path(tmp) / "other-sibling"
         _git(other, "worktree", "add", "-q", "-b", "feature/sibling", str(sibling))
-        remove_worktrees = getattr(runner, "remove_worktrees", None)
-        removed = remove_worktrees(other) if remove_worktrees else []
+        with tempfile.TemporaryDirectory(prefix="gates-shape-far-") as far_tmp:
+            far = Path(far_tmp) / "far"
+            _git(other, "worktree", "add", "-q", "-b", "feature/far", str(far))
+            remove_worktrees = getattr(runner, "remove_worktrees", None)
+            removed, kept = remove_worktrees(other) if remove_worktrees else ([], [])
+            far_kept = far.exists() and str(far) in kept
         return [
             (set(herdr_keys) == {"HERDR_SOCKET_PATH"} and Path(herdr_keys["HERDR_SOCKET_PATH"]).is_relative_to(root),
              f"child_env strips every inherited HERDR_ value and points the socket under the sandbox (got {herdr_keys})"),
@@ -100,9 +105,49 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
             (_git(wt, "rev-parse", "--is-inside-work-tree") == "true" and str(wt) in out
              and "worktree create" in calls,
              f"the stub's worktree create lands at $EVAL_ROOT/.herdr/wt, prints it and logs the call (got {out!r})"),
-            (not sibling.exists() and str(sibling) in removed and _git(other, "worktree", "list").count("\n") == 0,
-             f"remove_worktrees removes every worktree the sandbox registered, even one outside it (got {removed})"),
+            (not sibling.exists() and str(sibling) in removed,
+             f"remove_worktrees removes a worktree the sandbox cut beside itself (got {removed})"),
+            (far_kept, f"remove_worktrees deletes nothing outside the sandbox's temp parent and reports it (kept {kept})"),
+            (_escape_refused(prepare_sandbox, Path(tmp)), "a case's file cannot land outside its sandbox"),
+            (_env_refused(child_env, root), "a case's env cannot set HERDR_* (but HERDR_ENV) or CLAUDE_*"),
+            (_group_killed(getattr(runner, "spawn", None), root),
+             "a case that times out has its whole process group killed, grandchildren included"),
         ]
+
+
+def _escape_refused(prepare_sandbox, tmp: Path) -> bool:
+    root = tmp / "escape"
+    root.mkdir()
+    try:
+        prepare_sandbox({"id": "e", "files": {"../escaped.txt": "x"}}, root)
+    except ValueError:
+        return not (tmp / "escaped.txt").exists()
+    return False
+
+
+def _env_refused(child_env, root: Path) -> bool:
+    for env in ({"HERDR_SOCKET_PATH": "/live.sock"}, {"CLAUDE_CODE_MESSAGING_TOKEN": "t"}):
+        try:
+            child_env({"id": "e", "env": env}, dict(LIVE), root)
+            return False
+        except ValueError:
+            pass
+    return child_env({"id": "e", "env": {"HERDR_ENV": "1"}}, dict(LIVE), root).get("HERDR_ENV") == "1"
+
+
+def _group_killed(spawn, root: Path) -> bool:
+    if spawn is None:
+        return False
+    pidfile = root / "grandchild.pid"
+    proc = spawn(["bash", "-c", f"sleep 60 & echo $! > {pidfile}; wait"], root, dict(os.environ), 1)
+    grandchild = int(pidfile.read_text())
+    for _ in range(20):
+        try:
+            os.kill(grandchild, 0)
+        except ProcessLookupError:
+            return proc is None
+        time.sleep(0.1)
+    return False
 
 
 def _refuses(stub_for) -> bool:
