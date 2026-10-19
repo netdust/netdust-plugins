@@ -20,6 +20,8 @@ STUB = (EVALS / "stubs" / "herdr").resolve()
 GIT_DENY = ["Bash(git -C *)", "Bash(git -c *)", "Bash(git --*)", "Bash(git push*)", "Bash(git config*)",
             "Bash(git worktree add*)", "Bash(git grep* -O*)", "Bash(git grep* --open-files-in-pager*)",
             "Bash(git * --output*)"]
+HERDR_DENY = ["Bash(herdr session*)", "Bash(herdr plugin*)", "Bash(herdr update*)", "Bash(herdr server*)",
+              "Bash(herdr machine*)", "Bash(herdr config*)", "Bash(herdr integration*)"]
 LIVE = {"HERDR_ENV": "1", "HERDR_SOCKET_PATH": "/live/herdr.sock", "HERDR_PANE_ID": "w1:p1",
         "CLAUDE_CODE_MESSAGING_SOCKET": "/live/cc.sock", "CLAUDE_CODE_MESSAGING_TOKEN": "t",
         "PLOI_API_TOKEN": "t", "SSH_AUTH_SOCK": "/live/ssh.sock", "XDG_RUNTIME_DIR": "/run/user/1000",
@@ -103,6 +105,16 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
         ]
 
 
+def _refuses(stub_for) -> bool:
+    if stub_for is None:
+        return False
+    try:
+        stub_for({"stub_bin": "../run-evals.py"})
+    except ValueError:
+        return stub_for({"stub_bin": "stubs/herdr"}) == STUB
+    return False
+
+
 def _flag(args: list[str], name: str) -> list[str]:
     return [args[i + 1] for i, a in enumerate(args[:-1]) if a == name]
 
@@ -133,6 +145,11 @@ def _isolation_checks(runner) -> list[tuple[bool, str]]:
          "every --add-dir (the skills' companion files) is read-only: Edit(path) denies every file-editing tool"),
         (all(rule in settings.get("permissions", {}).get("deny", []) for rule in GIT_DENY),
          f"every case denies git's escape routes {GIT_DENY}"),
+        (all(rule in deny for rule in HERDR_DENY), f"every case denies herdr's state verbs {HERDR_DENY}"),
+        (_refuses(getattr(runner, "stub_for", None)),
+         "a stub_bin outside evals/stubs/ is refused, so a case cannot shadow herdr with any file"),
+        (set(getattr(runner, "stub_digests", dict)()) == {"herdr", "bash-env"},
+         "both stub files are hashed around each case, so a case that rewrites them fails"),
     ]
 
 
@@ -151,6 +168,8 @@ def run() -> list[tuple[bool, str]]:
         (not any(rule.startswith("Bash(printenv") and rule != "Bash(printenv HERDR_ENV)"
                  for c in cases for rule in c.get("allow", [])),
          "a case may read HERDR_ENV, never the whole environment (`Bash(printenv *)` matches a bare printenv)"),
+        (not any(rule == "Bash(herdr *)" for c in cases for rule in c.get("allow", [])),
+         "no case allows every herdr verb, only the ones the stub serves"),
         (not any("Bash(git *)" in c.get("allow", []) for c in cases),
          "no case allows every git command: `git -c alias.x='!sh'` is arbitrary execution"),
         (_compiles(cases), "every expect regex compiles and names where it looks"),

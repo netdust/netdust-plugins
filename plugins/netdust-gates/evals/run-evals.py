@@ -16,6 +16,7 @@ even in a login shell, checked before the case starts. No case loads the user's 
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -41,7 +42,8 @@ PROJECT_CLAUDE_MD = (
 # anywhere through --output or a grep pager; only the stub cuts worktrees.
 DISALLOWED = ["Bash(herdr --session*)", "Bash(herdr --machine*)", "Bash(herdr --remote*)",
               "Bash(herdr * --session*)", "Bash(herdr * --machine*)", "Bash(herdr * --remote*)",
-              "Bash(HERDR_*)",
+              "Bash(HERDR_*)", "Bash(herdr session*)", "Bash(herdr plugin*)", "Bash(herdr update*)",
+              "Bash(herdr server*)", "Bash(herdr machine*)", "Bash(herdr config*)", "Bash(herdr integration*)",
               "Bash(git -C *)", "Bash(git -c *)", "Bash(git --*)", "Bash(git push*)", "Bash(git config*)",
               "Bash(git worktree add*)", "Bash(git grep* -O*)", "Bash(git grep* --open-files-in-pager*)",
               "Bash(git * --output*)"]
@@ -64,6 +66,17 @@ def _subject(root: Path, reply: str, where: str) -> str:
     return target.read_text() if target.is_file() else ""
 
 
+def stub_for(case: dict) -> Path:
+    stub = (EVALS / case["stub_bin"]).resolve()
+    if stub.parent != EVALS / "stubs":
+        raise ValueError(f"stub_bin must be a file in evals/stubs/, got {case['stub_bin']}")
+    return stub
+
+
+def stub_digests() -> dict:
+    return {f.name: hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted((EVALS / "stubs").iterdir())}
+
+
 def child_env(case: dict, base: dict, root: Path) -> dict:
     env = {k: base[k] for k in PASSED_ENV if k in base}
     env.update(case.get("env", {}))
@@ -71,7 +84,7 @@ def child_env(case: dict, base: dict, root: Path) -> dict:
     env["EVAL_ROOT"] = str(root)
     env["XDG_RUNTIME_DIR"] = str(root / ".xdg")
     if "stub_bin" in case:
-        stub = (EVALS / case["stub_bin"]).resolve()
+        stub = stub_for(case)
         # ~/.profile prepends ~/.local/bin in a login shell; BASH_ENV is sourced after it.
         env.update(EVAL_STUB_DIR=str(stub.parent), BASH_ENV=str(EVALS / "stubs" / "bash-env"),
                    HERDR_BIN_PATH=str(stub), PATH=f"{stub.parent}:{env.get('PATH', '')}")
@@ -127,10 +140,15 @@ def run_case(case: dict) -> tuple[bool, list[str]]:
     with tempfile.TemporaryDirectory(prefix="gates-eval-") as tmp:
         root = Path(tmp)
         prepare_sandbox(case, root)
+        before = stub_digests()
         try:
-            return _run_in(case, root)
+            ok, failures = _run_in(case, root)
         finally:
             remove_worktrees(root)
+        changed = [name for name, digest in stub_digests().items() if before.get(name) != digest]
+        if changed:
+            return False, failures + [f"evals/stubs/ changed during the case: {changed}"]
+        return ok, failures
 
 
 def _run_in(case: dict, root: Path) -> tuple[bool, list[str]]:
