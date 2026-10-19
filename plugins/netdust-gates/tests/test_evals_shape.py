@@ -213,6 +213,9 @@ def run() -> list[tuple[bool, str]]:
         (not any(rule.startswith("Bash(printenv") and rule != "Bash(printenv HERDR_ENV)"
                  for c in cases for rule in c.get("allow", [])),
          "a case may read HERDR_ENV, never the whole environment (`Bash(printenv *)` matches a bare printenv)"),
+        (any(e["where"] == ".herdr/calls.log" and "--permission-mode" in e["match"]
+             for c in cases if c["id"] == "two-session-handoff" for e in c["expect"]),
+         "two-session-handoff expects the coder started in the thinker's permission mode (R4)"),
         (not any(rule == "Bash(herdr *)" for c in cases for rule in c.get("allow", [])),
          "no case allows every herdr verb, only the ones the stub serves"),
         (not any("Bash(git *)" in c.get("allow", []) for c in cases),

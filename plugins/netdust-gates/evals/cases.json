@@ -312,6 +312,10 @@
       },
       {
         "where": ".herdr/calls.log",
+        "match": "(?m)^agent start .*--permission-mode"
+      },
+      {
+        "where": ".herdr/calls.log",
         "match": "Role: coder"
       },
       {
