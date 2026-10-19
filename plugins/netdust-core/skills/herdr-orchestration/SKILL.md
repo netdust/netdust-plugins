@@ -159,12 +159,14 @@ read one before you install it.
 `netdust-gates:policy` runs a planned feature as two sessions (its Execution mode owns the
 rule; `specs/two-session/spec.md` R2–R9 is the source). This is the herdr half. You, the
 session Stefan planned with, turn reviewer at his plan approval; a fresh claude in the
-feature's own worktree workspace is the coder.
+feature's own worktree workspace is the coder. A feature already running in one session
+finishes as it runs.
 
 1. **The tree first.** `git fetch`, then cut the worktree from production's branch at
    origin's tip (`scripts/site environments.production.branch`, else `main`) with the
-   topology decision above: `--base origin/<production> --branch feature/<f>`. Commit
-   the spec, plan and plan review there as the branch's first commits. From the
+   topology decision above: `--base origin/<production> --branch feature/<f>`. Move
+   the spec, plan and plan review there, leaving no untracked originals in your
+   checkout, and commit them as the branch's first commits. From the
    handoff only the coder writes that tree; you read it with git and write only in your
    own checkout — even the fix you could make faster yourself goes back as a request.
    On DDEV the worktree is its own DDEV project (`.ddev/config.local.yaml` with its own
@@ -177,18 +179,23 @@ feature's own worktree workspace is the coder.
    permission prompts but Stefan (first contact, above: no laundering).
 3. **The brief** is the dispatch brief above, in one `agent prompt`, with these on top:
    the first line `Role: coder`; the plan path and branch; the entry
-   `netdust-gates:policy`, Native unless its rule fires; this tree only (no
+   `netdust-gates:policy`, Native unless its rule fires (subagent-driven's per-task TDD
+   undoes the plan's unit cut); this tree only (no
    `EnterWorktree`, no Agent `isolation: "worktree"`), push only at Close, no merge, no
    operator verb; the ledger — executing-plans' own, recording every exchange with you;
    and you, named by session id and cwd (`herdr agent get`), never only by a SendMessage
    name, which a restart changes — the coder resolves it with `ListAgents` before each
-   message. A coder skips Intake and the plan and never starts a coder.
+   message. A coder skips Intake and the plan and never starts a coder. A long brief is
+   a file in your own scratchpad, outside the coder's tree, and the prompt points at it:
+   a file left in its tree is one it may not be allowed to remove.
 4. **Pre-flight and escalation.** The coder sends its pre-flight scan; you rule before
    Task 1. A technical question you rule on yourself, sparring with a fresh agent when
    you want a second view. An intent question goes to Stefan, because a `Source:` line
    needs his words, and so do upstream's four stops — a destructive or security-sensitive
    action, a side effect outside the worktree, a plan broken past guessing: ruling on one
    of those for him is laundering (first contact, above). A coder asks you, never Stefan.
+   Your `DECISION:` and `LESSON:` tags land in your own checkout's `memory/`; one about
+   the feature goes to the coder as a ruling, so its ledger keeps it on the branch.
 5. **Watch at transitions.** The doorbell plus a background `herdr agent wait
    <f>-coder` (or `SendMessage` with `notify_when_idle`); read its screen only at a
    transition (traps below). This is not the session-review pane, which stays a
@@ -197,14 +204,14 @@ feature's own worktree workspace is the coder.
    intent question, and the Close — never after every task, and never a third review on
    subagent-driven's own task reviews. Each finding is one fix request, closed by its
    RED→GREEN test. No rounds.
-7. **The Close split.** The coder runs `make gate`, pushes and tells you. You run `make
-   review name=<f>` from your own checkout (it reviews `origin/feature/<f>`) and send the
-   findings as fix requests. The coder makes the fix pass, keeps
-   `specs/<f>/review.md`, runs `/shakeout` on user-facing work and pushes again as its
-   last step (policy Close step 5), and sends you its final list — every `Ruling:` and
-   its deferred minors. You carry the screenshot yield and that list to Stefan and hand
-   him `make promote name=<f>`. Stefan's moments are the policy's stops; the execution
-   mode is not one of them.
+7. **The Close split.** Upstream's Final Review is your `make review`: the coder skips
+   it, runs `make gate`, pushes and tells you. You run `make review name=<f>` from your
+   own checkout (it reviews `origin/feature/<f>`) and send the findings as fix requests.
+   The coder makes the fix pass, keeps `specs/<f>/review.md`, runs `/shakeout` on
+   user-facing work and pushes again as its last step (policy Close step 5), and sends
+   you its final list — every `Ruling:` and its deferred minors. You carry the
+   screenshot yield and that list to Stefan and hand him `make promote name=<f>`.
+   Stefan's moments are the policy's stops; the execution mode is not one of them.
 8. **Restart from disk.** The durable artifact is the branch (above). Either session
    restarts by re-reading three things, never a pane's scrollback: the plan, the branch
    (`git log`, `git status` in the worktree) and the coder's ledger
