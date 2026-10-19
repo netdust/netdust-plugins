@@ -378,7 +378,7 @@
   },
   {
     "id": "coder-brief-no-recursion",
-    "prompt": "Role: coder\n\nYou are the coder of a two-session pair. Execute specs/greeting/plan.md with netdust-gates:policy as your entry, Native (superpowers:executing-plans). Stefan approved the plan, and your reviewer has already ruled on your pre-flight: it is clean, start Task 1. This checkout is your worktree, on `feature/coder-brief-no-recursion`; work in place. There is no reviewer session to message in this run: report in your final reply.",
+    "prompt": "Role: coder\nPlan: specs/greeting/plan.md — approved by Stefan (\"ok\"); plan review specs/greeting/plan-review.md, verdict ready.\nEntry: netdust-gates:policy, Native (superpowers:executing-plans). You are the coder: skip Intake and the plan, never start a coder.\n\nBranch contract: this checkout is your worktree, on `feature/coder-brief-no-recursion`; work in place. Only you write this tree.\nPre-flight: your reviewer has already ruled on your scan: it is clean, start Task 1. There is no reviewer session to message in this run: report in your final reply.\nBoundaries: nothing outside the plan's scope, no merge, no push, no operator verb.\nLedger every ruling under .superpowers/sdd/ in this tree.\nReport: branch, sha, RED and GREEN output, changed files.",
     "files": {
       "greeting.txt": "hello\n",
       "specs/greeting/spec.md": "# Greeting — spec\n\n## Requirements\n\n**R1 — The greeting names the pair.** `greeting.txt` reads `hello from the pair` instead of `hello`.\n*Source: \"make the greeting say hello from the pair\"*\n",

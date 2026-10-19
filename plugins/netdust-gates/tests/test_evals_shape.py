@@ -73,7 +73,7 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
         prepare_sandbox(case, root)
         stubbed = child_env(case, dict(LIVE), root)
         resolved = _sh("command -v herdr", stubbed, root)
-        out = _sh("herdr worktree create --branch feature/stubbed", stubbed, root)
+        out = _sh(f"{STUB} worktree create --branch feature/stubbed", stubbed, root)
         wt = root / ".herdr" / "wt"
         calls = (root / ".herdr" / "calls.log").read_text() if (root / ".herdr" / "calls.log").is_file() else ""
 
@@ -108,11 +108,21 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
             (not sibling.exists() and str(sibling) in removed,
              f"remove_worktrees removes a worktree the sandbox cut beside itself (got {removed})"),
             (far_kept, f"remove_worktrees deletes nothing outside the sandbox's temp parent and reports it (kept {kept})"),
+            (_strays_flagged(getattr(runner, "stray_worktrees", None), root),
+             "a stubbed case fails on any worktree but the stub's .herdr/wt (spec R2: only the coder writes its tree)"),
             (_escape_refused(prepare_sandbox, Path(tmp)), "a case's file cannot land outside its sandbox"),
             (_env_refused(child_env, root), "a case's env cannot set HERDR_* (but HERDR_ENV) or CLAUDE_*"),
             (_group_killed(getattr(runner, "spawn", None), root),
              "a case that times out has its whole process group killed, grandchildren included"),
         ]
+
+
+def _strays_flagged(stray_worktrees, root: Path) -> bool:
+    if stray_worktrees is None:
+        return False
+    own, other = str(root / ".herdr" / "wt"), str(root / ".claude" / "worktrees" / "agent-x")
+    return (stray_worktrees({"stub_bin": "stubs/herdr"}, root, [own, other]) == [other]
+            and stray_worktrees({}, root, [other]) == [])
 
 
 def _escape_refused(prepare_sandbox, tmp: Path) -> bool:
@@ -216,6 +226,9 @@ def run() -> list[tuple[bool, str]]:
         (any(e["where"] == ".herdr/calls.log" and "--permission-mode" in e["match"]
              for c in cases if c["id"] == "two-session-handoff" for e in c["expect"]),
          "two-session-handoff expects the coder started in the thinker's permission mode (R4)"),
+        (all(c["prompt"].startswith("Role: coder\n") and "Plan: specs/greeting/plan.md" in c["prompt"]
+             and "Entry: netdust-gates:policy" in c["prompt"] for c in cases if c["id"] == "coder-brief-no-recursion"),
+         "coder-brief-no-recursion's prompt is shaped like the real brief, so it tests the exemption"),
         (not any(rule == "Bash(herdr *)" for c in cases for rule in c.get("allow", [])),
          "no case allows every herdr verb, only the ones the stub serves"),
         (not any("Bash(git *)" in c.get("allow", []) for c in cases),

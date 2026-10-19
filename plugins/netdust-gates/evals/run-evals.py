@@ -129,6 +129,12 @@ def remove_worktrees(root: Path) -> tuple[list[str], list[str]]:
     return removed, kept
 
 
+def stray_worktrees(case: dict, root: Path, paths: list[str]) -> list[str]:
+    if "stub_bin" not in case:
+        return []
+    return [path for path in paths if Path(path).resolve() != (root / ".herdr" / "wt").resolve()]
+
+
 def spawn(args: list[str], root: Path, env: dict, timeout: int) -> subprocess.CompletedProcess | None:
     proc = subprocess.Popen(args, cwd=root, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, text=True, start_new_session=True)
@@ -175,7 +181,10 @@ def run_case(case: dict) -> tuple[bool, list[str]]:
                 print(f"      LEFT worktree {path}: outside {root.parent} or its removal failed")
         changed = [name for name, digest in stub_digests().items() if before.get(name) != digest]
         if changed:
-            return False, failures + [f"evals/stubs/ changed during the case: {changed}"]
+            ok, failures = False, failures + [f"evals/stubs/ changed during the case: {changed}"]
+        strays = stray_worktrees(case, root, removed + kept)
+        if strays:
+            ok, failures = False, failures + [f"a worktree other than .herdr/wt: {strays}"]
         return ok, failures
 
 
