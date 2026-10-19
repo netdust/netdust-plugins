@@ -17,6 +17,9 @@ IDS = ["wp-feature-constraints", "security-surface-review-focus", "small-tweak-n
 KEYS = {"id", "prompt", "files", "expect", "absent", "timeout", "env", "stub_bin", "commit", "allow", "max_turns",
         "branch"}
 STUB = (EVALS / "stubs" / "herdr").resolve()
+GIT_DENY = ["Bash(git -C *)", "Bash(git -c *)", "Bash(git --*)", "Bash(git push*)", "Bash(git config*)",
+            "Bash(git worktree add*)", "Bash(git grep* -O*)", "Bash(git grep* --open-files-in-pager*)",
+            "Bash(git * --output*)"]
 LIVE = {"HERDR_ENV": "1", "HERDR_SOCKET_PATH": "/live/herdr.sock", "HERDR_PANE_ID": "w1:p1",
         "CLAUDE_CODE_MESSAGING_SOCKET": "/live/cc.sock", "CLAUDE_CODE_MESSAGING_TOKEN": "t",
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ.get("HOME", "/")}
@@ -120,6 +123,8 @@ def _isolation_checks(runner) -> list[tuple[bool, str]]:
         (_flag(args, "--add-dir") and all(f"Edit(/{d}/**)" in deny for d in _flag(args, "--add-dir"))
          and not any(rule.startswith("Write(") for rule in deny),
          "every --add-dir (the skills' companion files) is read-only: Edit(path) denies every file-editing tool"),
+        (all(rule in settings.get("permissions", {}).get("deny", []) for rule in GIT_DENY),
+         f"every case denies git's escape routes {GIT_DENY}"),
     ]
 
 
@@ -135,6 +140,8 @@ def run() -> list[tuple[bool, str]]:
         (all({"id", "prompt", "files", "expect", "absent"} <= set(c) for c in cases),
          "every case carries id, prompt, files, expect, absent"),
         (all(set(c) <= KEYS for c in cases), f"every case key is one the runner reads ({sorted(KEYS)})"),
+        (not any("Bash(git *)" in c.get("allow", []) for c in cases),
+         "no case allows every git command: `git -c alias.x='!sh'` is arbitrary execution"),
         (_compiles(cases), "every expect regex compiles and names where it looks"),
         (parses, "run-evals.py parses"),
         *(_sandbox_checks(_runner()) if parses else [(False, "run-evals.py loads")]),

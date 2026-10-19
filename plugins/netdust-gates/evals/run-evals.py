@@ -37,9 +37,14 @@ PROJECT_CLAUDE_MD = (
     "The first action on code-changing work is the `netdust-gates:policy` skill.\n"
     "Specs and plans live in `specs/<feature>/`.\n")
 # A named herdr session has its own socket, so `Bash(herdr *)` alone would let a case reach it.
+# git runs anything through -c alias.x='!sh', reaches other repos through -C, and writes files
+# anywhere through --output or a grep pager; only the stub cuts worktrees.
 DISALLOWED = ["Bash(herdr --session*)", "Bash(herdr --machine*)", "Bash(herdr --remote*)",
               "Bash(herdr * --session*)", "Bash(herdr * --machine*)", "Bash(herdr * --remote*)",
-              "Bash(HERDR_*)"]
+              "Bash(HERDR_*)",
+              "Bash(git -C *)", "Bash(git -c *)", "Bash(git --*)", "Bash(git push*)", "Bash(git config*)",
+              "Bash(git worktree add*)", "Bash(git grep* -O*)", "Bash(git grep* --open-files-in-pager*)",
+              "Bash(git * --output*)"]
 GIT = ["git", "-c", "user.name=eval", "-c", "user.email=eval@localhost", "-c", "commit.gpgsign=false"]
 
 
