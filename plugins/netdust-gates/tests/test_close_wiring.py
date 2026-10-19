@@ -56,8 +56,9 @@ def run() -> list[tuple[bool, str]]:
             "printenv REVIEW_NAME", "most capable", "ntdst-drift-reviewer", "Pass each reviewer the diff",
             "environments.staging.branch", "REVIEW_LEVEL", "ultra", "Findings: <b> Blocking")),
          "/feature-review reads make's env, hands reviewers the diff, keeps the model and the WP join"),
-        ("git show <head>:specs/<name>/plan.md" in _read("commands/feature-review.md"),
-         "/feature-review reads the plan at the reviewed head, so a reviewer in another checkout has it (two-session R7)"),
+        (all(t in _read("commands/feature-review.md") for t in (
+            "git worktree add --detach", "git worktree remove", "**Spec:**")),
+         "/feature-review's reviewers read a detached checkout of the head — code, plan and spec — not this checkout (two-session R7)"),
         ("flows.md" in command and "no spec" in command and "flows.md" in qa
          and "flow list" in policy and "no `plan.md`" in command and "**Stop.**" in command
          and "new flows" in qa and "Write" in command.split("---")[1] and "or `flows.md`" in command,
