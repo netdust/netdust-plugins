@@ -73,3 +73,32 @@ No `invariant-auditor` (the repo has no `ARCHITECTURE-INVARIANTS.md`); not WordP
   - the netdust-core 0.5.4 collision with discovery-briefing.
 
 Findings: 2 Blocking · 8 Should fix · 11 Note
+
+## Fix pass
+
+Run by the coder session on `feature/two-session`, `1e3247a..2c68e15`. Each item is one fix, RED→GREEN.
+
+| Finding | Commit | RED → GREEN |
+|---|---|---|
+| Blocking 1, settings | `a4e6136` | `claude_args` missing; the canary missing; `--add-dir` not read-only → each case runs `--restricted --strict-mcp-config`, `--tools Agent,Bash,Edit,Glob,Grep,Read,Skill,Write`, a runner-built `--settings` (superpowers, netdust-wp, netdust-devops enabled; gates and core from source; the case's allow; `NETDUST_GUARD_ASK=on`), the plugin tree and cache read-only through `Edit(//…/**)` denies |
+| Blocking 2, git | `3ca3b89` | a case allowed `Bash(git *)`; no git escape denied → the exact git list; `-C`, `-c`, `--*`, `push`, `config`, `worktree add`, grep's pager and `--output` denied |
+| Should fix 8, env | `b02293b` | the parent's tokens and session ids passed → an allowlist (HOME USER LOGNAME SHELL LANG TERM PATH TMPDIR); `XDG_RUNTIME_DIR` in the sandbox; `printenv HERDR_ENV` only |
+| Should fix 9, herdr | `75c499a` | `Bash(herdr *)`; no state verb denied; any `stub_bin`; no hash check → the stub's verbs only; state verbs denied; `stub_for`; `stub_digests` before and after |
+| Should fix 10 | `d54c6f2` | a far worktree deleted; a file escape; reserved env keys; a surviving grandchild → cleanup under the temp parent only, `spawn` kills the process group, files and env confined |
+| Should fix 3 | `e45805c` | → a detached checkout of the head for every reviewer, plan and spec from it |
+| Should fix 4 | `9232e97` | the wp template grep: 1 hit → none; netdust-wp 1.3.2 |
+| Should fix 5, 6 | `7d4ca4e` | the policy pins fail → upstream's four stops to Stefan; the coder's rulings and deferred minors through the reviewer's hand-over (policy Stops, recipe steps 4 and 7) |
+| Should fix 7 | `6c41028` | → the handoff case expects `agent start … --permission-mode`; core loads from source |
+| Notes | `7b82dce`, `f30d73a` | the stub by path; a stray worktree fails a stubbed case; a brief-shaped coder prompt; the recipe's rollout, move, TDD reason, brief-as-file, tags and Final Review lines |
+| Stefan's sandbox | `4ae3711`, `6b7f900`, `2c68e15` | → `sandbox {enabled, failIfUnavailable: true, allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: false}`; `TMPDIR` in the sandbox; a Bash case refused while bwrap or socat is missing, or when its `.tmp` leaves no room for the sandbox's 108-byte socket paths; the canary reaches the sandbox through `canary.sh` |
+
+Not taken: "Policy readability" (no fix freed a line; the policy is at 149) and "Decisions for Stefan" (his).
+
+**Final eval run** (`2c68e15`, one run, the runner's own `/tmp/gates-eval-*` roots):
+- `canary-home-write` PASS — `touch: cannot touch '/home/ntdst/eval-canary': Read-only file system`, exit 1. The sandbox applies under `claude -p`.
+- `coder-brief-no-recursion` PASS — Task 1 committed, RED and GREEN shown, no `agent start`.
+- `two-session-handoff` FAIL — **not proven under the hardened runner.** The thinker named the path (inside herdr, `herdr agent start`, same permission mode, a `Role: coder` brief), then stopped: "You denied `git remote -v`, `herdr session list` and `herdr --skill`". The case now contradicts the recipe it tests: recipe step 1 starts with `git fetch`, and the first-contact protocol with `herdr session list`, and the case allows neither. `herdr --skill` is allowed; its denial is unexplained (most likely piped through an unallowed command). The thinker would not route around a denial, which R8 asks of it. The handoff did pass under the earlier runner (`1e3247a`): `calls.log` showed `agent start`, a `Role: coder` brief naming the plan and `netdust-gates:policy`, and `agent wait`.
+
+**For Stefan:**
+- the handoff case's allow list against the recipe: `git fetch` and `git remote` (the sandbox has no network anyway) and `herdr session list` (the stub can serve it);
+- on Linux the sandbox blocks Unix sockets only with the optional seccomp filter (`@anthropic-ai/sandbox-runtime`); without it, per the docs, "the sandbox doesn't block Unix-socket calls".
