@@ -3,15 +3,16 @@
 
     run-evals.py [case-id ...]
 
-Each case runs `claude -p` in a scratch project that mirrors the pilot — netdust-agent
-disabled, a project CLAUDE.md naming netdust-gates:policy first — with this plugin loaded,
+Each case runs `claude -p` in a scratch project that mirrors the pilot — a project CLAUDE.md
+naming netdust-gates:policy first — with this plugin and netdust-core loaded from source,
 then checks the plan, the reply and the files it left against the case's regexes. Needs the
 `claude` CLI and a network; it is not part of tests/run.sh. Stochastic: a red case is a
 signal to tighten the skill, not proof of a regression.
 
 No case can reach a live herdr server or Claude session: every child gets its own environment
 (`child_env`) with a socket path nobody listens on, and a case's `stub_bin` shadows `herdr`
-even in a login shell, checked before the case starts.
+even in a login shell, checked before the case starts. No case loads the user's settings:
+`claude_args` runs it --restricted, with the plugins, permissions and env it builds itself.
 """
 from __future__ import annotations
 
@@ -24,16 +25,21 @@ import tempfile
 from pathlib import Path
 
 PLUGIN = Path(__file__).resolve().parent.parent
+CORE = PLUGIN.parent / "netdust-core"
 EVALS = Path(__file__).resolve().parent
 CASES = json.loads((Path(__file__).parent / "cases.json").read_text())
-SETTINGS = {"enabledPlugins": {"netdust-agent@netdust-plugins": False}}
+# Gates and core load from source (--plugin-dir); the cache's copies stay off.
+PLUGINS = ["superpowers@superpowers-marketplace", "netdust-wp@netdust-plugins", "netdust-devops@netdust-plugins"]
+TOOLS = "Agent,Bash,Edit,Glob,Grep,Read,Skill,Write"
+# --restricted confines the file tools to the sandbox; skills read their companion files here.
+READ_ONLY = [PLUGIN.parent, Path.home() / ".claude" / "plugins" / "cache"]
 PROJECT_CLAUDE_MD = (
     "The first action on code-changing work is the `netdust-gates:policy` skill.\n"
     "Specs and plans live in `specs/<feature>/`.\n")
 # A named herdr session has its own socket, so `Bash(herdr *)` alone would let a case reach it.
 DISALLOWED = ["Bash(herdr --session*)", "Bash(herdr --machine*)", "Bash(herdr --remote*)",
               "Bash(herdr * --session*)", "Bash(herdr * --machine*)", "Bash(herdr * --remote*)",
-              "Bash(HERDR_*)", "SendMessage", "ListAgents", "EnterWorktree"]
+              "Bash(HERDR_*)"]
 GIT = ["git", "-c", "user.name=eval", "-c", "user.email=eval@localhost", "-c", "commit.gpgsign=false"]
 
 
@@ -67,7 +73,6 @@ def child_env(case: dict, base: dict, root: Path) -> dict:
 
 def prepare_sandbox(case: dict, root: Path) -> None:
     _write(root, "CLAUDE.md", PROJECT_CLAUDE_MD)
-    _write(root, ".claude/settings.json", json.dumps(SETTINGS))
     for rel, content in case["files"].items():
         _write(root, rel, content)
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
@@ -92,10 +97,23 @@ def remove_worktrees(root: Path) -> list[str]:
     return extra
 
 
-def _claude(case: dict) -> list[str]:
-    cmd = ["claude", "-p", case["prompt"], "--plugin-dir", str(PLUGIN), "--permission-mode", "acceptEdits",
-           "--max-turns", str(case.get("max_turns", 25)), "--disallowedTools", *DISALLOWED]
-    return cmd + (["--allowedTools", *case["allow"]] if case.get("allow") else [])
+def claude_args(case: dict) -> list[str]:
+    read_only = [f"Edit(/{d}/**)" for d in READ_ONLY]
+    settings = {"enabledPlugins": dict.fromkeys(PLUGINS, True),
+                "permissions": {"allow": case.get("allow", []), "deny": DISALLOWED + read_only},
+                "env": {"NETDUST_GUARD_ASK": "on"}}
+    add_dirs = [arg for d in READ_ONLY for arg in ("--add-dir", str(d))]
+    return ["claude", "-p", case["prompt"], "--restricted", "--strict-mcp-config", "--tools", TOOLS,
+            "--settings", json.dumps(settings), "--plugin-dir", str(PLUGIN), "--plugin-dir", str(CORE),
+            *add_dirs, "--permission-mode", "acceptEdits", "--max-turns", str(case.get("max_turns", 25))]
+
+
+# An `absent` entry under ~/ names a path outside the sandbox: the canary for an escape.
+def found(root: Path, pattern: str) -> list[str]:
+    if pattern.startswith("~/"):
+        path = Path(pattern).expanduser()
+        return [str(path)] if path.exists() else []
+    return [str(p.relative_to(root)) for p in root.glob(pattern)]
 
 
 def run_case(case: dict) -> tuple[bool, list[str]]:
@@ -115,9 +133,12 @@ def _run_in(case: dict, root: Path) -> tuple[bool, list[str]]:
                                   capture_output=True, text=True).stdout.strip()
         if resolved != env["HERDR_BIN_PATH"]:
             return False, [f"refused to start: herdr resolves to {resolved!r}, not the stub"]
+    outside = [hit for glob in case["absent"] if glob.startswith("~/") for hit in found(root, glob)]
+    if outside:
+        return False, [f"refused to start: {outside} already exist"]
     timeout = case.get("timeout", 900)
     try:
-        proc = subprocess.run(_claude(case), cwd=root, env=env, capture_output=True, text=True,
+        proc = subprocess.run(claude_args(case), cwd=root, env=env, capture_output=True, text=True,
                               timeout=timeout)
     except subprocess.TimeoutExpired:
         return False, [f"timed out after {timeout}s"]
@@ -127,9 +148,9 @@ def _run_in(case: dict, root: Path) -> tuple[bool, list[str]]:
         if not re.search(e["match"], _subject(root, reply, e["where"])):
             failures.append(f"missing in {e['where']}: /{e['match']}/")
     for glob in case["absent"]:
-        found = [str(p.relative_to(root)) for p in root.glob(glob)]
-        if found:
-            failures.append(f"must not exist: {glob} (found {found})")
+        hits = found(root, glob)
+        if hits:
+            failures.append(f"must not exist: {glob} (found {hits})")
     return not failures, failures
 
 

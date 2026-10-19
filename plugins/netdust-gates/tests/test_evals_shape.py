@@ -13,7 +13,7 @@ from pathlib import Path
 
 EVALS = Path(__file__).resolve().parent.parent / "evals"
 IDS = ["wp-feature-constraints", "security-surface-review-focus", "small-tweak-no-artifacts", "unit-cut-plan",
-       "two-session-handoff", "coder-brief-no-recursion"]
+       "two-session-handoff", "coder-brief-no-recursion", "canary-home-write"]
 KEYS = {"id", "prompt", "files", "expect", "absent", "timeout", "env", "stub_bin", "commit", "allow", "max_turns",
         "branch"}
 STUB = (EVALS / "stubs" / "herdr").resolve()
@@ -92,6 +92,37 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
         ]
 
 
+def _flag(args: list[str], name: str) -> list[str]:
+    return [args[i + 1] for i, a in enumerate(args[:-1]) if a == name]
+
+
+def _isolation_checks(runner) -> list[tuple[bool, str]]:
+    claude_args = getattr(runner, "claude_args", None)
+    if claude_args is None:
+        return [(False, "run-evals.py exposes claude_args, the argv every case runs with")]
+    case = {"id": "x", "prompt": "p", "allow": ["Bash(herdr agent start*)"]}
+    args = claude_args(case)
+    settings = json.loads((_flag(args, "--settings") or ["{}"])[0])
+    enabled = {k for k, v in settings.get("enabledPlugins", {}).items() if v}
+    plugin_dirs = {Path(d).name for d in _flag(args, "--plugin-dir")}
+    deny = settings.get("permissions", {}).get("deny", [])
+    return [
+        ("--restricted" in args and "--strict-mcp-config" in args and _flag(args, "--tools"),
+         "every case runs --restricted --strict-mcp-config with a --tools allowlist, so user settings never load"),
+        (plugin_dirs == {"netdust-gates", "netdust-core"} and "superpowers@superpowers-marketplace" in enabled
+         and not any(k.startswith(("netdust-gates@", "netdust-core@", "netdust-agent@")) for k in enabled),
+         f"gates and core load from source only; --settings enables the rest (got {sorted(plugin_dirs)}, {sorted(enabled)})"),
+        (settings.get("permissions", {}).get("allow") == case["allow"]
+         and settings.get("env", {}).get("NETDUST_GUARD_ASK") == "on",
+         "the runner's --settings carries the case's allow and keeps the destructive-command guard on"),
+        ("Bash" in _flag(args, "--tools")[0].split(",") and "ToolSearch" not in _flag(args, "--tools")[0].split(","),
+         "--tools names Bash (--restricted drops it otherwise) and not ToolSearch, so no deferred tool loads"),
+        (_flag(args, "--add-dir") and all(f"Edit(/{d}/**)" in deny for d in _flag(args, "--add-dir"))
+         and not any(rule.startswith("Write(") for rule in deny),
+         "every --add-dir (the skills' companion files) is read-only: Edit(path) denies every file-editing tool"),
+    ]
+
+
 def run() -> list[tuple[bool, str]]:
     cases = json.loads((EVALS / "cases.json").read_text())
     try:
@@ -107,4 +138,5 @@ def run() -> list[tuple[bool, str]]:
         (_compiles(cases), "every expect regex compiles and names where it looks"),
         (parses, "run-evals.py parses"),
         *(_sandbox_checks(_runner()) if parses else [(False, "run-evals.py loads")]),
+        *(_isolation_checks(_runner()) if parses else []),
     ]
