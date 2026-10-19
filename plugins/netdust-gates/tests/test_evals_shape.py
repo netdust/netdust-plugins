@@ -31,7 +31,7 @@ LIVE = {"HERDR_ENV": "1", "HERDR_SOCKET_PATH": "/live/herdr.sock", "HERDR_PANE_I
         "CLAUDE_PID": "1", "CLAUDECODE": "1", "AI_AGENT": "claude",
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ.get("HOME", "/")}
 PASSED = {"HOME", "USER", "LOGNAME", "SHELL", "LANG", "TERM", "PATH", "TMPDIR"}
-SET = {"HERDR_SOCKET_PATH", "EVAL_ROOT", "XDG_RUNTIME_DIR"}
+SET = {"HERDR_SOCKET_PATH", "EVAL_ROOT", "XDG_RUNTIME_DIR", "TMPDIR"}
 
 
 def _compiles(cases: list[dict]) -> bool:
@@ -93,6 +93,8 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
              f"child_env strips every inherited HERDR_ value and points the socket under the sandbox (got {herdr_keys})"),
             (not any(k.startswith("CLAUDE_CODE_MESSAGING_") for k in bare),
              "child_env strips CLAUDE_CODE_MESSAGING_*, so no child reaches a live Claude session"),
+            (Path(bare.get("TMPDIR", "/")).is_relative_to(root),
+             "TMPDIR is inside the sandbox, the one temp dir Claude Code's sandbox lets Bash write"),
             (set(bare) <= PASSED | SET and Path(bare.get("XDG_RUNTIME_DIR", "/")).is_relative_to(root),
              f"child_env passes only an allowlist and keeps XDG_RUNTIME_DIR in the sandbox (got {sorted(set(bare) - PASSED)})"),
             (with_env.get("HERDR_ENV") == "1" and with_env.get("EVAL_ROOT") == str(root),
@@ -160,6 +162,16 @@ def _group_killed(spawn, root: Path) -> bool:
     return False
 
 
+def _sandbox_refusal(sandbox_refusal) -> bool:
+    if sandbox_refusal is None:
+        return False
+    bash_case, plain_case = {"allow": ["Bash(git status*)"]}, {"allow": []}
+    missing = sandbox_refusal(bash_case, which=lambda name: None if name == "socat" else f"/usr/bin/{name}")
+    return (missing is not None and "socat" in missing
+            and sandbox_refusal(plain_case, which=lambda name: None) is None
+            and sandbox_refusal(bash_case, which=lambda name: f"/usr/bin/{name}") is None)
+
+
 def _refuses(stub_for) -> bool:
     if stub_for is None:
         return False
@@ -201,6 +213,11 @@ def _isolation_checks(runner) -> list[tuple[bool, str]]:
         (all(rule in settings.get("permissions", {}).get("deny", []) for rule in GIT_DENY),
          f"every case denies git's escape routes {GIT_DENY}"),
         (all(rule in deny for rule in HERDR_DENY), f"every case denies herdr's state verbs {HERDR_DENY}"),
+        (settings.get("sandbox") == {"enabled": True, "failIfUnavailable": True, "allowUnsandboxedCommands": False,
+                                     "autoAllowBashIfSandboxed": False},
+         f"every case's Bash runs in Claude Code's sandbox: never unsandboxed, never auto-allowed (got {settings.get('sandbox')})"),
+        (_sandbox_refusal(getattr(runner, "sandbox_refusal", None)),
+         "a case that may run Bash is refused while bwrap or socat is missing, so it never runs unsandboxed"),
         (_refuses(getattr(runner, "stub_for", None)),
          "a stub_bin outside evals/stubs/ is refused, so a case cannot shadow herdr with any file"),
         (set(getattr(runner, "stub_digests", dict)()) == {"herdr", "bash-env"},
@@ -229,6 +246,9 @@ def run() -> list[tuple[bool, str]]:
         (all(c["prompt"].startswith("Role: coder\n") and "Plan: specs/greeting/plan.md" in c["prompt"]
              and "Entry: netdust-gates:policy" in c["prompt"] for c in cases if c["id"] == "coder-brief-no-recursion"),
          "coder-brief-no-recursion's prompt is shaped like the real brief, so it tests the exemption"),
+        (any(c["id"] == "canary-home-write" and "Bash(touch *)" in c.get("allow", []) and "~/eval-canary" in c["absent"]
+             for c in cases),
+         "the canary lets Bash try ~/eval-canary, so only the sandbox stands between it and $HOME"),
         (not any(rule == "Bash(herdr *)" for c in cases for rule in c.get("allow", [])),
          "no case allows every herdr verb, only the ones the stub serves"),
         (not any("Bash(git *)" in c.get("allow", []) for c in cases),

@@ -20,6 +20,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -33,6 +34,10 @@ CASES = json.loads((Path(__file__).parent / "cases.json").read_text())
 # Gates and core load from source (--plugin-dir); the cache's copies stay off.
 PLUGINS = ["superpowers@superpowers-marketplace", "netdust-wp@netdust-plugins", "netdust-devops@netdust-plugins"]
 TOOLS = "Agent,Bash,Edit,Glob,Grep,Read,Skill,Write"
+# Bash runs in Claude Code's own sandbox (bubblewrap): writes only in the working dir, $TMPDIR and the
+# --add-dirs, which the Edit denies below close; no unsandboxed retry, and nothing auto-allowed past `allow`.
+SANDBOX = {"enabled": True, "failIfUnavailable": True, "allowUnsandboxedCommands": False,
+           "autoAllowBashIfSandboxed": False}
 # --restricted confines the file tools to the sandbox; skills read their companion files here.
 READ_ONLY = [PLUGIN.parent, Path.home() / ".claude" / "plugins" / "cache"]
 PROJECT_CLAUDE_MD = (
@@ -69,6 +74,14 @@ def _subject(root: Path, reply: str, where: str) -> str:
     return target.read_text() if target.is_file() else ""
 
 
+# Claude Code's Bash sandbox needs both on Linux; a case that may run Bash never runs without it.
+def sandbox_refusal(case: dict, which=shutil.which) -> str | None:
+    if not any(rule.startswith("Bash(") for rule in case.get("allow", [])):
+        return None
+    missing = [tool for tool in ("bwrap", "socat") if not which(tool)]
+    return f"refused to start: the Bash sandbox needs {missing}" if missing else None
+
+
 def stub_for(case: dict) -> Path:
     stub = (EVALS / case["stub_bin"]).resolve()
     if stub.parent != EVALS / "stubs":
@@ -89,6 +102,7 @@ def child_env(case: dict, base: dict, root: Path) -> dict:
     env["HERDR_SOCKET_PATH"] = str(root / ".herdr" / "none.sock")
     env["EVAL_ROOT"] = str(root)
     env["XDG_RUNTIME_DIR"] = str(root / ".xdg")
+    env["TMPDIR"] = str(root / ".tmp")
     if "stub_bin" in case:
         stub = stub_for(case)
         # ~/.profile prepends ~/.local/bin in a login shell; BASH_ENV is sourced after it.
@@ -103,7 +117,8 @@ def prepare_sandbox(case: dict, root: Path) -> None:
         _write(root, rel, content)
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
     (root / ".xdg").mkdir(mode=0o700)
-    _write(root, ".git/info/exclude", ".herdr/\n.xdg/\n")
+    (root / ".tmp").mkdir()
+    _write(root, ".git/info/exclude", ".herdr/\n.xdg/\n.tmp/\n")
     if case.get("commit"):
         subprocess.run([*GIT, "add", "-A"], cwd=root, check=True)
         subprocess.run([*GIT, "commit", "-q", "-m", "eval sandbox"], cwd=root, check=True)
@@ -151,7 +166,7 @@ def claude_args(case: dict) -> list[str]:
     read_only = [f"Edit(/{d}/**)" for d in READ_ONLY]
     settings = {"enabledPlugins": dict.fromkeys(PLUGINS, True),
                 "permissions": {"allow": case.get("allow", []), "deny": DISALLOWED + read_only},
-                "env": {"NETDUST_GUARD_ASK": "on"}}
+                "env": {"NETDUST_GUARD_ASK": "on"}, "sandbox": SANDBOX}
     add_dirs = [arg for d in READ_ONLY for arg in ("--add-dir", str(d))]
     return ["claude", "-p", case["prompt"], "--restricted", "--strict-mcp-config", "--tools", TOOLS,
             "--settings", json.dumps(settings), "--plugin-dir", str(PLUGIN), "--plugin-dir", str(CORE),
@@ -189,6 +204,9 @@ def run_case(case: dict) -> tuple[bool, list[str]]:
 
 
 def _run_in(case: dict, root: Path) -> tuple[bool, list[str]]:
+    refusal = sandbox_refusal(case)
+    if refusal:
+        return False, [refusal]
     env = child_env(case, dict(os.environ), root)
     if "stub_bin" in case:
         resolved = subprocess.run(["bash", "-lc", "command -v herdr"], cwd=root, env=env,
