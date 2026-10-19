@@ -45,6 +45,7 @@ DISALLOWED = ["Bash(herdr --session*)", "Bash(herdr --machine*)", "Bash(herdr --
               "Bash(git -C *)", "Bash(git -c *)", "Bash(git --*)", "Bash(git push*)", "Bash(git config*)",
               "Bash(git worktree add*)", "Bash(git grep* -O*)", "Bash(git grep* --open-files-in-pager*)",
               "Bash(git * --output*)"]
+PASSED_ENV = ("HOME", "USER", "LOGNAME", "SHELL", "LANG", "TERM", "PATH", "TMPDIR")
 GIT = ["git", "-c", "user.name=eval", "-c", "user.email=eval@localhost", "-c", "commit.gpgsign=false"]
 
 
@@ -64,10 +65,11 @@ def _subject(root: Path, reply: str, where: str) -> str:
 
 
 def child_env(case: dict, base: dict, root: Path) -> dict:
-    env = {k: v for k, v in base.items() if not k.startswith(("HERDR_", "CLAUDE_CODE_MESSAGING_"))}
+    env = {k: base[k] for k in PASSED_ENV if k in base}
     env.update(case.get("env", {}))
     env["HERDR_SOCKET_PATH"] = str(root / ".herdr" / "none.sock")
     env["EVAL_ROOT"] = str(root)
+    env["XDG_RUNTIME_DIR"] = str(root / ".xdg")
     if "stub_bin" in case:
         stub = (EVALS / case["stub_bin"]).resolve()
         # ~/.profile prepends ~/.local/bin in a login shell; BASH_ENV is sourced after it.
@@ -81,8 +83,8 @@ def prepare_sandbox(case: dict, root: Path) -> None:
     for rel, content in case["files"].items():
         _write(root, rel, content)
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
-    if "stub_bin" in case:
-        _write(root, ".git/info/exclude", ".herdr/\n")
+    (root / ".xdg").mkdir(mode=0o700)
+    _write(root, ".git/info/exclude", ".herdr/\n.xdg/\n")
     if case.get("commit"):
         subprocess.run([*GIT, "add", "-A"], cwd=root, check=True)
         subprocess.run([*GIT, "commit", "-q", "-m", "eval sandbox"], cwd=root, check=True)

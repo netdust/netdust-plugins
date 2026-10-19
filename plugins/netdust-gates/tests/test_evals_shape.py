@@ -22,7 +22,13 @@ GIT_DENY = ["Bash(git -C *)", "Bash(git -c *)", "Bash(git --*)", "Bash(git push*
             "Bash(git * --output*)"]
 LIVE = {"HERDR_ENV": "1", "HERDR_SOCKET_PATH": "/live/herdr.sock", "HERDR_PANE_ID": "w1:p1",
         "CLAUDE_CODE_MESSAGING_SOCKET": "/live/cc.sock", "CLAUDE_CODE_MESSAGING_TOKEN": "t",
+        "PLOI_API_TOKEN": "t", "SSH_AUTH_SOCK": "/live/ssh.sock", "XDG_RUNTIME_DIR": "/run/user/1000",
+        "DBUS_SESSION_BUS_ADDRESS": "unix:path=/live/bus", "NETDUST_GUARD_ASK": "off",
+        "CLAUDE_CODE_SESSION_ID": "s", "CLAUDE_CODE_CHILD_SESSION": "1", "CLAUDE_CODE_SESSION_ATTENDED": "1",
+        "CLAUDE_PID": "1", "CLAUDECODE": "1", "AI_AGENT": "claude",
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ.get("HOME", "/")}
+PASSED = {"HOME", "USER", "LOGNAME", "SHELL", "LANG", "TERM", "PATH", "TMPDIR"}
+SET = {"HERDR_SOCKET_PATH", "EVAL_ROOT", "XDG_RUNTIME_DIR"}
 
 
 def _compiles(cases: list[dict]) -> bool:
@@ -80,6 +86,8 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
              f"child_env strips every inherited HERDR_ value and points the socket under the sandbox (got {herdr_keys})"),
             (not any(k.startswith("CLAUDE_CODE_MESSAGING_") for k in bare),
              "child_env strips CLAUDE_CODE_MESSAGING_*, so no child reaches a live Claude session"),
+            (set(bare) <= PASSED | SET and Path(bare.get("XDG_RUNTIME_DIR", "/")).is_relative_to(root),
+             f"child_env passes only an allowlist and keeps XDG_RUNTIME_DIR in the sandbox (got {sorted(set(bare) - PASSED)})"),
             (with_env.get("HERDR_ENV") == "1" and with_env.get("EVAL_ROOT") == str(root),
              "child_env applies the case's env and names the sandbox as EVAL_ROOT"),
             (resolved == str(STUB) and stubbed.get("HERDR_BIN_PATH") == str(STUB),
@@ -140,6 +148,9 @@ def run() -> list[tuple[bool, str]]:
         (all({"id", "prompt", "files", "expect", "absent"} <= set(c) for c in cases),
          "every case carries id, prompt, files, expect, absent"),
         (all(set(c) <= KEYS for c in cases), f"every case key is one the runner reads ({sorted(KEYS)})"),
+        (not any(rule.startswith("Bash(printenv") and rule != "Bash(printenv HERDR_ENV)"
+                 for c in cases for rule in c.get("allow", [])),
+         "a case may read HERDR_ENV, never the whole environment (`Bash(printenv *)` matches a bare printenv)"),
         (not any("Bash(git *)" in c.get("allow", []) for c in cases),
          "no case allows every git command: `git -c alias.x='!sh'` is arbitrary execution"),
         (_compiles(cases), "every expect regex compiles and names where it looks"),

@@ -98,7 +98,7 @@
       "Bash(git hash-object*)",
       "Bash(git worktree list*)",
       "Bash(git merge-base*)",
-      "Bash(printenv *)",
+      "Bash(printenv HERDR_ENV)",
       "Bash(test *)"
     ]
   },
@@ -346,7 +346,7 @@
       "Bash(git hash-object*)",
       "Bash(git worktree list*)",
       "Bash(git merge-base*)",
-      "Bash(printenv *)",
+      "Bash(printenv HERDR_ENV)",
       "Bash(test *)"
     ],
     "max_turns": 40,
@@ -390,7 +390,7 @@
       "Bash(git hash-object*)",
       "Bash(git worktree list*)",
       "Bash(git merge-base*)",
-      "Bash(printenv *)",
+      "Bash(printenv HERDR_ENV)",
       "Bash(test *)"
     ],
     "max_turns": 40,
