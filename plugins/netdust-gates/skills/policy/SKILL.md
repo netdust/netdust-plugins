@@ -110,13 +110,13 @@ for a security-boundary unit or a plan that outlives one context. Name the rule 
 ## Stops
 
 Upstream's four stops stand, and Netdust's: the plan approval; the shake-out screenshot yield
-(Close, step 4); the flow list a shake-out proposes for a branch with no spec; every operator verb —
-`promote`, `unpromote`, `ship`, deploy, pushing a package's `main` — which Stefan runs or confirms
-by typing; a review finding that is an intent decision; the coder's permission prompts, which nobody
-answers for him. A coder asks its reviewer, never Stefan: the reviewer rules a technical question,
-sparring with a fresh agent for a second view, and takes intent to Stefan. Everything else you decide,
-ledger as `Ruling: <what> — <why> — <cost if wrong>` and list in the final message. A shake-out
-exception Stefan accepts is `Accepted-by-human:` in the manifest, never `Ruling:`; only he writes it.
+(Close, step 4); a spec-less branch's flow list; every operator verb (`promote`, `unpromote`, `ship`,
+deploy, pushing a package's `main`), his to run or confirm by typing; a review finding about intent;
+the coder's permission prompts, his alone to answer. A coder asks its reviewer, never Stefan; the
+reviewer rules technical ones, sparring with a fresh agent at need, and takes intent and upstream's
+four stops to Stefan. A shake-out exception he accepts is `Accepted-by-human:`, never `Ruling:`; only
+he writes it. Everything else you decide, ledger as `Ruling: <what> — <why> — <cost if wrong>` and
+list in the final message, a coder's with its deferred minors via its reviewer's hand-over.
 
 ## Close
 

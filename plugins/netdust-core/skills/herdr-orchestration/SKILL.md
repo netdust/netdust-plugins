@@ -185,8 +185,10 @@ feature's own worktree workspace is the coder.
    message. A coder skips Intake and the plan and never starts a coder.
 4. **Pre-flight and escalation.** The coder sends its pre-flight scan; you rule before
    Task 1. A technical question you rule on yourself, sparring with a fresh agent when
-   you want a second view; an intent question goes to Stefan, because a `Source:` line
-   needs his words. A coder asks you, never Stefan.
+   you want a second view. An intent question goes to Stefan, because a `Source:` line
+   needs his words, and so do upstream's four stops — a destructive or security-sensitive
+   action, a side effect outside the worktree, a plan broken past guessing: ruling on one
+   of those for him is laundering (first contact, above). A coder asks you, never Stefan.
 5. **Watch at transitions.** The doorbell plus a background `herdr agent wait
    <f>-coder` (or `SendMessage` with `notify_when_idle`); read its screen only at a
    transition (traps below). This is not the session-review pane, which stays a
@@ -199,7 +201,8 @@ feature's own worktree workspace is the coder.
    review name=<f>` from your own checkout (it reviews `origin/feature/<f>`) and send the
    findings as fix requests. The coder makes the fix pass, keeps
    `specs/<f>/review.md`, runs `/shakeout` on user-facing work and pushes again as its
-   last step (policy Close step 5). You carry the screenshot yield to Stefan and hand
+   last step (policy Close step 5), and sends you its final list — every `Ruling:` and
+   its deferred minors. You carry the screenshot yield and that list to Stefan and hand
    him `make promote name=<f>`. Stefan's moments are the policy's stops; the execution
    mode is not one of them.
 8. **Restart from disk.** The durable artifact is the branch (above). Either session
