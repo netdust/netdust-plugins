@@ -23,6 +23,7 @@ PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 1200
 MANIFEST = (
     "# Shake-out — feat\n\n| # | Flow | Layer | Verdict | Evidence |\n|---|---|---|---|---|\n"
     "| AF-1 | Agenda lists events | browser | pass | Browser: https://x.ddev.site/agenda/ · shakeout/af-1.png |\n"
+    "\nHunt: 3 charters · 0 confirmed · 0 not ours · 0 rejected\n"
 )
 HEAD = "# Checks\n\n| surface | tier | entry | test | first feature | verified |\n|---|---|---|---|---|---|\n"
 SMOKE_ROW = "| /agenda/ | smoke | GET /agenda/ | tests/e2e/smoke/agenda.spec.ts | feat | a1b2c3d 2026-09-22 |\n"

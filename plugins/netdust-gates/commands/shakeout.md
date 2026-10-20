@@ -47,8 +47,8 @@ flows the plan's `## Test map` names in its `E2E flows` column — or `flows.md`
 browser pass — and registers what it leaves in `specs/CHECKS.md`: the driven flows as `@e2e`
 (`make e2e env=staging` re-runs them after every deploy) and a read-only `@smoke` spec per
 surface (`make smoke`, production too). It reports the
-flow list it drove; read it for what is missing. On a project carrying `e2e.config.ts` it also
-runs the hunt — exploratory charters whose confirmed bugs arrive as `fail` rows like any other.
+flow list it drove; read it for what is missing. With a browser flow it also runs the hunt,
+once — exploratory charters whose confirmed bugs arrive as `fail` rows like any other.
 
 A change with no user-facing surface has nothing to drive: say so and go to Step 4.
 
@@ -66,8 +66,9 @@ flows; re-run the check until it exits 0. Nothing after this runs while it fails
 Show Stefan one screenshot per surface — the PNGs the manifest's browser rows name, never a
 per-flow slideshow. Beside them list every `✓ [shakeout-accepted]` row the check printed:
 `Accepted-by-human:` is agent-writable, so one Stefan did not write is reverted and its row
-re-driven. Then the hunt's rejected findings under the table, so he can overrule a rejection:
-an overruled one gets its repro and a `fail` row, back to Step 3. This is a stop; wait for him.
+re-driven. Then the hunt's `not ours:` and `rejected:` lines under the table: a `not ours:` bug is
+his to schedule, and he can overrule a rejection — an overruled one gets its repro and a `fail`
+row, back to Step 3. This is a stop; wait for him.
 
 The review and its fix pass came before this shake-out (the `netdust-gates:policy` Close); what
 remains is `superpowers:finishing-a-development-branch` — on a project with `site.yml`, push

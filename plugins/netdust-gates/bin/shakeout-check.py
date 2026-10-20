@@ -5,8 +5,9 @@
 
 Reads <feature dir>/shakeout.md and exits 0 only when every row passes on evidence a file can
 prove, never on the verdict word: a `browser` row needs `Browser: <http url> · <png>` with a
-real 1 KB–2 MB PNG under the feature dir; the whole file is scanned for credentials with no
-override; only the human's `Accepted-by-human:` excuses a row. Bare python3.
+real 1 KB–2 MB PNG under the feature dir; a manifest with a browser row records its hunt
+(`Hunt: <n> charters …`); the whole file is scanned for credentials with no override; only the
+human's `Accepted-by-human:` excuses a row. Bare python3.
 """
 from __future__ import annotations
 
@@ -39,6 +40,7 @@ TABLE_ROW = re.compile(r"^\s*\|(?P<cells>.*\|)\s*$")
 TABLE_SEPARATOR = re.compile(r"^\s*\|[\s:|-]+\|\s*$")
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 SCREENSHOT_BYTES = (1024, 2 * 1024 * 1024)
+HUNT = re.compile(r"^Hunt:\s*\d+ charters?\b")
 
 Finding = tuple[str, str, str]  # (status, check, detail)
 
@@ -190,6 +192,17 @@ def check_registry(spec_dir: Path, driven: int) -> list[Finding]:
                          f"{len(rows)} row{'s' if len(rows) != 1 else ''}, every test present and tagged for its tier"))
     return findings
 
+def _hunt_finding(text: str, rows: list[dict]) -> Finding | None:
+    """A manifest with a browser row records its hunt, even one that found nothing."""
+    if not any(row["layer"].lower() == "browser" for row in rows):
+        return None
+    tally = next((ln.strip() for ln in _unfenced(text) if HUNT.match(ln.strip())), None)
+    if tally is None:
+        return ("fail", "shakeout-hunt", "browser rows but no `Hunt: <n> charters · …` line under the table — "
+                                         "the hunt is recorded even when it found nothing")
+    return ("pass", "shakeout-hunt", "Hunt line recorded" if CREDENTIAL.search(tally) else tally)
+
+
 def check(spec_dir: Path) -> list[Finding]:
     if not spec_dir.is_dir():
         return [("fail", "shakeout-manifest", f"{spec_dir} is not a directory")]
@@ -222,6 +235,9 @@ def check(spec_dir: Path) -> list[Finding]:
             findings.append(("fail", "shakeout-manifest", f"{row['n'] or '?'}: {problem}"))
         driven += row["layer"].lower() == "browser" and problem is None
     findings.append(("pass", "shakeout-manifest", f"shakeout: {len(rows)} rows, {driven} browser rows driven"))
+    hunt = _hunt_finding(text, rows)
+    if hunt:
+        findings.append(hunt)
     passed = sum(1 for row in rows if _row_problem(row, spec_dir) is None)
     findings += check_registry(spec_dir, passed)
     return findings

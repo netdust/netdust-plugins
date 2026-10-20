@@ -14,10 +14,11 @@ HEAD = "# Shake-out — audit screen\n\n| # | Flow | Layer | Verdict | Evidence 
 WIRE_PASS = "| AF-2 | REST list returns the rows | wire | pass | curl -s https://x.ddev.site/wp-json/audit/v1/rows → 200, 3 items |\n"
 EVIDENCE = "Browser: https://x.ddev.site/wp/wp-admin/admin.php?page=audit · shakeout/af-1.png"
 BROWSER = "| AF-1 | Audit page lists the rows | browser | pass | {} |\n"
-DRIVEN = HEAD + BROWSER.format(EVIDENCE) + WIRE_PASS
-ACCEPTED = HEAD + BROWSER.format("Accepted-by-human: no browser on this box, driven by Stefan 09-06") + WIRE_PASS
-HUNT_LINES = ("\nHunt — 6 charters:\n- charter: the audit page as a first-time visitor\n"
-              "- rejected: rows sort by id | seed data has no dates\n")
+HUNT = ("\nHunt: 3 charters · 0 confirmed · 0 not ours · 1 rejected\n- charter: the audit page as a first-time visitor\n"
+        "- rejected: rows sort by id | seed data has no dates\n")
+UNHUNTED = HEAD + BROWSER.format(EVIDENCE) + WIRE_PASS
+DRIVEN = UNHUNTED + HUNT
+ACCEPTED = HEAD + BROWSER.format("Accepted-by-human: no browser on this box, driven by Stefan 09-06") + WIRE_PASS + HUNT
 HUNT_TABLE = "\n## Hunt\n\n| charter | outcome |\n|---|---|\n| the audit page, first-time visitor | rejected: seed data |\n"
 
 
@@ -123,9 +124,13 @@ def run() -> list[tuple[bool, str]]:
               PNG, has=("outside the table",)),
         _case("a row with a blank # cell is not dropped → FAIL", HEAD + WIRE_PASS + "|  | nameless | wire | pass | curl → 200 |\n",
               has=("row without a # cell",)),
-        # the hunt's record sits under the table as plain lines, never as a second table
-        _case("the hunt's charters and rejected findings as plain lines → PASS", DRIVEN + HUNT_LINES, PNG, rc=0,
-              has=("2 rows",)),
+        # the hunt is recorded under the table as plain lines, even when it found nothing
+        _case("a browser manifest with no `Hunt:` line → FAIL", UNHUNTED, PNG, has=("✗ [shakeout-hunt]",)),
+        _case("a fenced `Hunt:` line is not read → FAIL", UNHUNTED + "```\n" + HUNT + "```\n", PNG,
+              has=("✗ [shakeout-hunt]",)),
+        _case("the hunt's tally is echoed → PASS", DRIVEN, PNG, rc=0,
+              has=("✓ [shakeout-hunt] Hunt: 3 charters · 0 confirmed",)),
+        _case("a wire-only manifest owes no hunt → PASS", HEAD + WIRE_PASS, rc=0, lacks=("shakeout-hunt",)),
         _case("the hunt's record as a table → FAIL", DRIVEN + HUNT_TABLE, PNG, has=("outside the table",)),
         # Review Focus 3 — only the human's token excuses a row
         _case("`Accepted-by-human:` excuses the row → PASS", ACCEPTED, rc=0,
@@ -137,7 +142,7 @@ def run() -> list[tuple[bool, str]]:
               has=("[shakeout-accepted] AF-1: accepted by the human", "✗ [shakeout-credential]"), lacks=("3f9a1c2b",)),
         _case("a fenced curl transcript below the table fails naming its line",
               DRIVEN + "\n## How I logged in\n\n```\ncurl -u shakeout:s3cr3tPw https://x.ddev.site/wp-json/\n```\n",
-              PNG, has=("✗ [shakeout-credential] line 11:",)),
+              PNG, has=("✗ [shakeout-credential] line 15:",)),
     ]
     r += [_case(f"credential `{label}` → FAIL shakeout-credential", m, PNG, has=("✗ [shakeout-credential]",))
           for label, m in CREDENTIALS.items()]
