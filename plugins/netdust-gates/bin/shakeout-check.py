@@ -40,7 +40,7 @@ TABLE_ROW = re.compile(r"^\s*\|(?P<cells>.*\|)\s*$")
 TABLE_SEPARATOR = re.compile(r"^\s*\|[\s:|-]+\|\s*$")
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 SCREENSHOT_BYTES = (1024, 2 * 1024 * 1024)
-HUNT = re.compile(r"^Hunt:\s*\d+ charters?\b")
+HUNT = re.compile(r"^Hunt: (?:0 charters [—-] \S|[1-9]\d* charters? · \d+ confirmed · \d+ not ours · \d+ rejected\b)")
 
 Finding = tuple[str, str, str]  # (status, check, detail)
 
@@ -120,6 +120,18 @@ def _row_problem(row: dict, spec_dir: Path) -> str | None:
     return _screenshot_problem(m.group("path"), spec_dir)
 
 
+def _hunt_finding(text: str, rows: list[dict]) -> Finding | None:
+    """A manifest with a browser row records its hunt: the tally, or why it could not run."""
+    if not any(row["layer"].lower() == "browser" for row in rows):
+        return None
+    tally = next((ln.rstrip() for ln in _unfenced(text) if HUNT.match(ln)), None)
+    if tally is None:
+        return ("fail", "shakeout-hunt", "browser rows but no hunt line at the start of a line under the table — "
+                                         "`Hunt: <n> charters · <c> confirmed · <x> not ours · <r> rejected`, "
+                                         "or `Hunt: 0 charters — <why>`")
+    return ("pass", "shakeout-hunt", "Hunt line recorded" if CREDENTIAL.search(tally) else tally)
+
+
 # ── the checks registry ───────────────────────────────────────────────────────
 # `specs/CHECKS.md` indexes what the shake-outs left to run on a deployed site:
 # `| surface | tier | entry | test | first feature | verified |`. Tier `e2e` is a
@@ -191,17 +203,6 @@ def check_registry(spec_dir: Path, driven: int) -> list[Finding]:
         findings.append(("pass", "checks-registry",
                          f"{len(rows)} row{'s' if len(rows) != 1 else ''}, every test present and tagged for its tier"))
     return findings
-
-def _hunt_finding(text: str, rows: list[dict]) -> Finding | None:
-    """A manifest with a browser row records its hunt, even one that found nothing."""
-    if not any(row["layer"].lower() == "browser" for row in rows):
-        return None
-    tally = next((ln.strip() for ln in _unfenced(text) if HUNT.match(ln.strip())), None)
-    if tally is None:
-        return ("fail", "shakeout-hunt", "browser rows but no `Hunt: <n> charters · …` line under the table — "
-                                         "the hunt is recorded even when it found nothing")
-    return ("pass", "shakeout-hunt", "Hunt line recorded" if CREDENTIAL.search(tally) else tally)
-
 
 def check(spec_dir: Path) -> list[Finding]:
     if not spec_dir.is_dir():

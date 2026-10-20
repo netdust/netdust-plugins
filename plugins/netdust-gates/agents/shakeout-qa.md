@@ -38,7 +38,9 @@ touches are still re-driven, as below.
 
 The Test map holds the flows someone thought of; the hunt looks for the ones nobody did. Every
 shake-out with a browser flow runs it once, in the Sweep — a re-dispatch re-drives its flows and
-never hunts again — in the browser you drive with, on the dev site only.
+never hunts again — in the browser you drive with, on the dev site only. When it cannot run — no
+browser, shake-out access other than the dev site, a manifest from before the hunt — the record is
+`Hunt: 0 charters — <why>`; a re-dispatch keeps the record as it is.
 
 - **Charters.** Three to five, one sentence each: one surface the feature touches, from one
   posture — first-time visitor, numbers and copy, odd input, state after reload, error paths —
@@ -48,17 +50,20 @@ never hunts again — in the browser you drive with, on the dev site only.
   never a timeout, an unmatched locator or a setup error. The repro is a Playwright spec in the
   feature's spec for that surface, asserting what should happen. Each confirmed bug is a `fail`
   row naming it; after the fix pass it stays as an `@e2e` test under that surface's registry row.
-- **Not ours.** A confirmed bug on a surface the branch's diff does not touch gets no row and no
-  committed test: a `not ours:` line with its steps, for Stefan. It never blocks this close.
+- **Not ours.** A confirmed bug is not ours only when no file its surface renders through is in
+  `git diff --name-only $(git merge-base origin/<production> HEAD)..HEAD` — in doubt, it is ours.
+  It gets no row and no committed test: a `not ours:` line with steps as exact as a `fail` row's,
+  for Stefan. It never blocks this close.
 - **Rejected.** A finding with a known cause — seed data, the local environment, behaviour the
   spec intends — is a `rejected:` line naming the cause.
-- **The record** sits under the table as plain lines, in words — no URL with a query, no
-  `name: value`, since the checker counts every table row as a flow and scans the whole file for
-  credentials. It opens with `Hunt: <n> charters · <c> confirmed · <x> not ours · <r> rejected`,
-  which the checker requires beside any browser row, then a line per charter, `not ours:` and
-  `rejected:`.
+- **The record** sits under the table as plain lines, in words — no URL with a query, nothing
+  credential-shaped beyond these labels — since the checker counts every table row as a flow and
+  scans the whole file for credentials. At the start of its line it opens with
+  `Hunt: <n> charters · <c> confirmed · <x> not ours · <r> rejected`, which the checker requires
+  beside any browser row, then a line per charter, `not ours:` and `rejected:`.
 
-Re-seed through the project's recipe before you drive: the hunt writes.
+Re-seed through the project's recipe before you drive: the hunt writes. Your report says how many
+actions it spent.
 
 ## The manifest
 

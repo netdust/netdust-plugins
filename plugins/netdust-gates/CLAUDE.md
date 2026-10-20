@@ -16,8 +16,9 @@ An incident lands as **a gate tier in the project**, **a line in a constraints p
 edge-class catalog**, or **an eval case**. Never as a plan section a skill does not own (the threat model and the
 test map are the two, each owned by its skill) or a new check on plan grammar. netdust-agent went 0.18 → 0.28 in six weeks by doing the opposite.
 
-The shake-out's hunt (0.13.0) is on trial: when the last five hunts confirmed nothing, it comes
-out again — `ls -t ~/Sites/*/specs/*/shakeout.md | head -5 | xargs grep -h '^Hunt:'`.
+The shake-out's hunt (0.13.0) is on trial: when the last five hunts that ran all found nothing
+(`0 confirmed · 0 not ours`), it comes out again. A feature in two sibling checkouts counts once:
+`grep -sl '^Hunt: [1-9]' ~/Sites/*/specs/*/shakeout.md | xargs -r -d '\n' ls -t | head -5 | xargs -r -d '\n' grep -H '^Hunt:'`.
 
 ## Boundaries
 

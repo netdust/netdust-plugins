@@ -65,13 +65,15 @@ def run() -> list[tuple[bool, str]]:
          "/shakeout on a branch with no spec proposes flows.md and stops; shakeout-qa drives only the approved list"),
         (all(s in qa for s in ("never hunts again", "dev site only", "first-time visitor", "goes RED on its assertion",
                                "never a timeout", "not ours:", "never blocks this close", "rejected:",
-                               "Hunt: <n> charters", "the one addition", "Re-seed"))
+                               "Hunt: <n> charters", "the one addition", "Re-seed", "Hunt: 0 charters — <why>",
+                               "keeps the record", "in doubt, it is ours", "git diff --name-only", "actions it spent"))
          and "hunt" in qa.split("**Sweep.**")[1].split("**Drive.**")[0]
          and "hunt" in qa.split("Done when:")[1]
-         and all(s in command for s in ("hunt", "not ours:", "overrule", "back to Step 3"))
+         and all(s in command for s in ("hunt", "not ours:", "overrule", "back to Step 3", "✗ [shakeout-hunt]",
+                                        "the hunt's tally"))
          and not any(s in t for s in ("e2e.config.ts", "npx e2e", ".e2e/") for t in (qa, command))
-         and "on trial" in _read("CLAUDE.md") and "^Hunt:" in _read("CLAUDE.md"),
-         "every browser shake-out hunts once on the dev site with no tool of its own; a bug is a failed assertion, one the branch did not cause never blocks; the hunt is on trial"),
+         and all(s in _read("CLAUDE.md") for s in ("on trial", "^Hunt: [1-9]", "0 confirmed · 0 not ours")),
+         "every browser shake-out hunts once on the dev site with no tool of its own, or says why not; a bug is a failed assertion; not-ours only when the diff provably misses the surface; the hunt is on trial"),
         ((PLUGIN / "commands" / "review-fix.md").is_file()
          and all(t in _read("commands/review-fix.md") for t in (
             "git-common-dir", "Close's fix pass", "make promote name=", "which findings", "never stash",

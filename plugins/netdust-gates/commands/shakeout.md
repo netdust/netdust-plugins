@@ -59,16 +59,17 @@ python3 "${CLAUDE_PLUGIN_ROOT}/bin/shakeout-check.py" specs/<feature>
 ```
 
 On exit 1: each `fail` row is one fix, RED→GREEN; re-dispatch `shakeout-qa` for the affected
-flows; re-run the check until it exits 0. Nothing after this runs while it fails.
+flows; re-run the check until it exits 0. `✗ [shakeout-hunt]` is not a row: re-dispatch
+`shakeout-qa` to record the hunt, or why it could not run. Nothing after this runs while it fails.
 
 ## Step 4 — The screenshot yield
 
 Show Stefan one screenshot per surface — the PNGs the manifest's browser rows name, never a
 per-flow slideshow. Beside them list every `✓ [shakeout-accepted]` row the check printed:
 `Accepted-by-human:` is agent-writable, so one Stefan did not write is reverted and its row
-re-driven. Then the hunt's `not ours:` and `rejected:` lines under the table: a `not ours:` bug is
-his to schedule, and he can overrule a rejection — an overruled one gets its repro and a `fail`
-row, back to Step 3. This is a stop; wait for him.
+re-driven. Then the hunt's tally the check printed, and its `not ours:` and `rejected:` lines: he
+can overrule either — it gets its repro and a `fail` row, back to Step 3 — and a `not ours:` bug
+he leaves is his to schedule. This is a stop; wait for him.
 
 The review and its fix pass came before this shake-out (the `netdust-gates:policy` Close); what
 remains is `superpowers:finishing-a-development-branch` — on a project with `site.yml`, push
