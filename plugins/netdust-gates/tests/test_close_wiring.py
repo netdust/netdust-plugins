@@ -63,11 +63,13 @@ def run() -> list[tuple[bool, str]]:
          and "flow list" in policy and "no `plan.md`" in command and "**Stop.**" in command
          and "new flows" in qa and "Write" in command.split("---")[1] and "or `flows.md`" in command,
          "/shakeout on a branch with no spec proposes flows.md and stops; shakeout-qa drives only the approved list"),
-        (all(s in qa for s in ("e2e.config.ts", "npx e2e guide bug-bash", "never a deployed host", "goes RED",
-                               "never an `.e2e.ts`", "rejected"))
+        (all(s in qa for s in ("only on a project carrying `e2e.config.ts`", "npx e2e guide bug-bash", "never hunts again",
+                               "never a deployed host", "--target", "never committed", "goes RED on its assertion",
+                               "never a timeout", "never an `.e2e.ts`", "rejected", "the one addition"))
          and "hunt" in qa.split("**Sweep.**")[1].split("**Drive.**")[0]
-         and "e2e.config.ts" in command and "rejected" in command,
-         "shakeout-qa hunts with e2e explore only where e2e.config.ts exists; a finding is a bug when its Playwright repro goes RED; Stefan sees the rejected ones"),
+         and "hunt" in qa.split("Done when:")[1]
+         and "e2e.config.ts" in command and "overrule" in command and "back to Step 3" in command,
+         "shakeout-qa hunts once, locally, only where e2e.config.ts exists; a finding is a bug when its Playwright repro fails on its assertion; Stefan can overrule a rejection"),
         ((PLUGIN / "commands" / "review-fix.md").is_file()
          and all(t in _read("commands/review-fix.md") for t in (
             "git-common-dir", "Close's fix pass", "make promote name=", "which findings", "never stash",

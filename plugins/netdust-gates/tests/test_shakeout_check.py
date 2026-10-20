@@ -16,6 +16,9 @@ EVIDENCE = "Browser: https://x.ddev.site/wp/wp-admin/admin.php?page=audit · sha
 BROWSER = "| AF-1 | Audit page lists the rows | browser | pass | {} |\n"
 DRIVEN = HEAD + BROWSER.format(EVIDENCE) + WIRE_PASS
 ACCEPTED = HEAD + BROWSER.format("Accepted-by-human: no browser on this box, driven by Stefan 09-06") + WIRE_PASS
+HUNT_LINES = ("\nHunt — 6 charters:\n- charter: the audit page as a first-time visitor\n"
+              "- rejected: rows sort by id | seed data has no dates\n")
+HUNT_TABLE = "\n## Hunt\n\n| charter | outcome |\n|---|---|\n| the audit page, first-time visitor | rejected: seed data |\n"
 
 
 def _drive(manifest, binaries=None, target="feat") -> tuple[int, str]:
@@ -120,6 +123,10 @@ def run() -> list[tuple[bool, str]]:
               PNG, has=("outside the table",)),
         _case("a row with a blank # cell is not dropped → FAIL", HEAD + WIRE_PASS + "|  | nameless | wire | pass | curl → 200 |\n",
               has=("row without a # cell",)),
+        # the hunt's record sits under the table as plain lines, never as a second table
+        _case("the hunt's charters and rejected findings as plain lines → PASS", DRIVEN + HUNT_LINES, PNG, rc=0,
+              has=("2 rows",)),
+        _case("the hunt's record as a table → FAIL", DRIVEN + HUNT_TABLE, PNG, has=("outside the table",)),
         # Review Focus 3 — only the human's token excuses a row
         _case("`Accepted-by-human:` excuses the row → PASS", ACCEPTED, rc=0,
               has=("[shakeout-accepted] AF-1: accepted by the human", "no browser on this box")),

@@ -25,7 +25,8 @@ nothing else. A defect in the code is a manifest row for the fix pass, never an 
 The plan's `## Test map` lists them: drive every flow named in its `E2E flows` column, and no
 other — your report shows the list so nothing is silently absent. Take each flow's edges from
 `edge-classes.md` beside the `netdust-gates:policy` skill (empty, denied actor, re-entry,
-concurrent, boundary, mid-flow failure, delivery seam). A flow driven on its happy path only is
+concurrent, boundary, mid-flow failure, delivery seam). The hunt's confirmed bugs are
+the one addition (below). A flow driven on its happy path only is
 `unverified`, not `pass`. A plan with no Test map is a plan-review finding, not yours to repair:
 fall back to one flow per user-facing requirement and say so in the report.
 
@@ -36,20 +37,27 @@ touches are still re-driven, as below.
 ## The hunt
 
 The Test map holds the flows someone thought of; the hunt looks for the ones nobody did. It runs
-only on a project carrying `e2e.config.ts` (tester.army's `e2e`), and `npx e2e guide bug-bash` is
-the procedure. Four things differ here:
+only on a project carrying `e2e.config.ts` (tester.army's `e2e`), once per shake-out — a
+re-dispatch re-drives its flows and never hunts again — and `npx e2e guide bug-bash` is the
+procedure. Four things differ here:
 
-- **Charters** come from the flows you are about to drive, the edge classes they can meet and the
-  surfaces the diff touches — five to ten, one area and one edge class each.
-- **Local only.** Explorers act and write, so the target is the dev site, never a deployed host.
-- **A finding is a bug only when its repro goes RED** — a Playwright spec beside the feature's
-  others, asserting what should happen, never an `.e2e.ts`. Each confirmed bug is a `fail` row
-  naming that spec; after the fix pass it stays as a regression test, tagged `@e2e` like the rest.
+- **Charters** cover the surfaces the feature touches — its Test map flows and the diff; with no
+  spec, only the approved flows' surfaces — with upstream's postures: Drive already takes the edge
+  classes.
+- **Local only.** Explorers act and write, so the target is the dev site, never a deployed host:
+  pass `--target` for the one whose `app.url` is the dev site, and with none, report BLOCKED. Each
+  explorer's `--output` sits under `.e2e/` and is never committed — it holds sessions and unmasked
+  video. Re-seed through the project's recipe before you drive.
+- **A finding is a bug only when its repro goes RED on its assertion** — an `expect` failing,
+  never a timeout, an unmatched locator or a setup error. The repro is a Playwright spec in the
+  feature's spec for that surface, asserting what should happen, never an `.e2e.ts`. Each confirmed
+  bug is a `fail` row naming it; after the fix pass it stays as an `@e2e` test under that surface's
+  registry row.
 - **Nothing else goes in the table.** Under it, list each charter and each rejected finding with
-  its reason as plain lines: the checker counts every table row as a flow and scans the whole file
-  for credentials, so never paste an explorer's video, trace or typed values.
+  its reason as plain lines, in words — no URL with a query, no `name: value`: the checker counts
+  every table row as a flow and scans the whole file for credentials.
 
-Your report gives the hunt's total cost, which `e2e` prints per run, or says there was no hunt.
+Your report gives the hunt's cost where `e2e` reported one, or says there was no hunt.
 
 ## The manifest
 
@@ -137,4 +145,5 @@ actors the recipe creates, never real user rows — the screenshots are committe
 
 Done when: every flow and edge carries a row, every browser pass has its screenshot on disk,
 every driven flow is a committed `@e2e` test the row names, every surface has its `@smoke`
-spec, both are in `specs/CHECKS.md`, and every `fail` is reproducible cold.
+spec, both are in `specs/CHECKS.md`, every `fail` is reproducible cold, and the hunt, where it
+ran, has its record under the table.
