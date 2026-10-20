@@ -47,8 +47,8 @@ flows the plan's `## Test map` names in its `E2E flows` column — or `flows.md`
 browser pass — and registers what it leaves in `specs/CHECKS.md`: the driven flows as `@e2e`
 (`make e2e env=staging` re-runs them after every deploy) and a read-only `@smoke` spec per
 surface (`make smoke`, production too). It reports the
-flow list it drove; read it for what is missing. On a project carrying `e2e.config.ts` it also
-runs the hunt — exploratory charters whose confirmed bugs arrive as `fail` rows like any other.
+flow list it drove; read it for what is missing. With a browser flow it also runs the hunt,
+once — exploratory charters whose confirmed bugs arrive as `fail` rows like any other.
 
 A change with no user-facing surface has nothing to drive: say so and go to Step 4.
 
@@ -59,15 +59,17 @@ python3 "${CLAUDE_PLUGIN_ROOT}/bin/shakeout-check.py" specs/<feature>
 ```
 
 On exit 1: each `fail` row is one fix, RED→GREEN; re-dispatch `shakeout-qa` for the affected
-flows; re-run the check until it exits 0. Nothing after this runs while it fails.
+flows; re-run the check until it exits 0. `✗ [shakeout-hunt]` is not a row: re-dispatch
+`shakeout-qa` to record the hunt, or why it could not run. Nothing after this runs while it fails.
 
 ## Step 4 — The screenshot yield
 
 Show Stefan one screenshot per surface — the PNGs the manifest's browser rows name, never a
 per-flow slideshow. Beside them list every `✓ [shakeout-accepted]` row the check printed:
 `Accepted-by-human:` is agent-writable, so one Stefan did not write is reverted and its row
-re-driven. Then the hunt's rejected findings under the table, so he can overrule a rejection:
-an overruled one gets its repro and a `fail` row, back to Step 3. This is a stop; wait for him.
+re-driven. Then the hunt's tally the check printed, and its `not ours:` and `rejected:` lines: he
+can overrule either — it gets its repro and a `fail` row, back to Step 3 — and a `not ours:` bug
+he leaves is his to schedule. This is a stop; wait for him.
 
 The review and its fix pass came before this shake-out (the `netdust-gates:policy` Close); what
 remains is `superpowers:finishing-a-development-branch` — on a project with `site.yml`, push
