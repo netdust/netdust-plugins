@@ -111,7 +111,10 @@ for a security-boundary unit or a plan that outlives one context. Name the rule 
 
 Upstream's four stops stand, and Netdust's: the plan approval; the shake-out screenshot yield
 (Close, step 4); a spec-less branch's flow list; every operator verb (`promote`, `unpromote`, `ship`,
-deploy, pushing a package's `main`), his to run or confirm by typing; a review finding about intent;
+deploy, pushing a package's `main`), his to run or confirm by typing — unless he has given a
+standing OK for the staging verbs: then the agent runs `promote`, `unpromote`, `deploy env=staging`,
+`e2e`, `smoke` and `review` itself (devops: `NETDUST_AGENT_OK=1`), and `ship` and production stay his;
+a review finding about intent;
 the coder's permission prompts, his alone to answer. A coder asks its reviewer, never Stefan; the
 reviewer rules technical ones, sparring with a fresh agent at need, and takes intent and upstream's
 four stops to Stefan. A shake-out exception he accepts is `Accepted-by-human:`, never `Ruling:`; only
@@ -139,8 +142,8 @@ list in the final message, a coder's with its deferred minors via its reviewer's
    `bin/shakeout-check.py` exits 0; Stefan sees one screenshot per surface. This shake-out writes the
    checks; `make e2e env=staging` re-runs all of them on the composition, and `ship` waits for it.
 5. Every change: `superpowers:finishing-a-development-branch` — on a project with `site.yml`,
-   in place of its menu: the branch pushed and `make promote name=<feature>` handed to Stefan
-   (it finds the saved review and skips it); a feature never merges into production by hand.
+   in place of its menu: the branch pushed and `make promote name=<feature>` handed to Stefan, or run
+   under his standing OK for the staging verbs (it finds the saved review and skips it); a feature never merges into production by hand.
 
 On demand, whenever Stefan asks: `/session-review <feature>` audits the work (six dimensions,
 core fit on WordPress — run it before finishing, while the task reports exist), and

@@ -999,6 +999,33 @@ for n in empty z; do
     fi
 done
 
+# NETDUST_AGENT_OK is the operator's standing OK for the staging verbs: promote and
+# unpromote answer their own Continue? with no terminal; ship still needs a human.
+git checkout -q staging; feat c origin/main
+AGENT() { env PATH="$CLIPATH" NETDUST_AGENT_OK=1 timeout 60 make --no-print-directory "$@" < /dev/null 2>&1; }
+out=$(AGENT promote name=c); rc=$?
+git fetch -q origin
+if [ $rc -eq 0 ] && git log --first-parent --format=%s origin/staging | grep -qxF "promote: c"; then
+    ok "NETDUST_AGENT_OK=1: promote runs without a terminal"
+else
+    bad "NETDUST_AGENT_OK=1: promote runs without a terminal" "exit $rc: $(printf '%s' "$out" | strip | tail -2)"
+fi
+out=$(AGENT unpromote name=c); rc=$?
+git fetch -q origin
+if [ $rc -eq 0 ] && ! git log --first-parent --format=%s origin/staging | grep -qxF "promote: c"; then
+    ok "NETDUST_AGENT_OK=1: unpromote runs without a terminal"
+else
+    bad "NETDUST_AGENT_OK=1: unpromote runs without a terminal" "exit $rc: $(printf '%s' "$out" | strip | tail -2)"
+fi
+git checkout -q feature/c; echo dirt > dirt.txt
+for v in ship "rollback env=staging" save; do
+    out=$(AGENT $v | strip)
+    printf '%s' "$out" | grep -q "needs a terminal" \
+        && ok "NETDUST_AGENT_OK=1 does not open make ${v%% *}" \
+        || bad "NETDUST_AGENT_OK=1 does not open make ${v%% *}" "$(printf '%s' "$out" | head -2)"
+done
+rm -f dirt.txt; git reset -q; git checkout -q staging
+
 # Driven as a target: ship runs _ship-path before the gate and the confirmation.
 git checkout -q -b hotfix/h origin/main
 for s in "fix one" "fix two"; do git -c user.email=t@t -c user.name=T commit -q --allow-empty -m "$s"; done

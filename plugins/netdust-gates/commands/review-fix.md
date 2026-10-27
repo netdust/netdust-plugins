@@ -15,5 +15,5 @@ allowed_tools: ["Bash", "Read", "Glob", "Grep", "Edit", "Write", "Skill", "AskUs
 4. **The fix pass** is the `netdust-gates:policy` Close's fix pass, on the picked findings only.
    Copy the report to `specs/$ARGUMENTS/review.md` and commit it with the fixes.
 5. **Push and hand back.** `git push`, then tell Stefan: `make promote name=$ARGUMENTS` puts
-   the fixed tip on staging; it finds the saved review and skips it — no re-review of a fix pass
+   the fixed tip on staging (run it yourself under his standing OK for the staging verbs); it finds the saved review and skips it — no re-review of a fix pass
    (`review=low` if he wants the fixes looked at).

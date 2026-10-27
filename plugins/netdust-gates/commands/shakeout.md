@@ -73,6 +73,7 @@ he leaves is his to schedule. This is a stop; wait for him.
 
 The review and its fix pass came before this shake-out (the `netdust-gates:policy` Close); what
 remains is `superpowers:finishing-a-development-branch` — on a project with `site.yml`, push
-and hand Stefan `make promote name=<feature>` (it skips the saved review); a feature never
+and hand Stefan `make promote name=<feature>` (it skips the saved review) — or run it under his
+standing OK for the staging verbs; a feature never
 merges into production by hand. Report the manifest and every `Ruling:`
 from the ledger together.

@@ -95,6 +95,13 @@ first, then refuse. That check is a speed bump against automation, not a control
 session that wanted one could hand itself a pty, so **for an agent the rule is
 *don't*, not *can't*.** An agent gets the state ready and hands the verb over.
 
+**One standing exception, the user's to grant.** When the user has said an agent may run the
+staging verbs freely, it runs `promote` and `unpromote` with `NETDUST_AGENT_OK=1` in front: no
+terminal, and the Continue? answers itself. `deploy env=staging`, `e2e`, `smoke` and `review` need
+no terminal. `ship`, `save`, `rollback` and anything on production ignore the variable and stay
+typed by the user. Without that grant the paragraph above stands. Never set the variable on your
+own initiative.
+
 ### The rule that matters most
 
 **A bug fix branches from the production branch**, never from staging —

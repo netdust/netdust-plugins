@@ -211,7 +211,7 @@ promote: ## Put a feature on the staging branch (make promote name=my-feature)
 	@$(call _check-name,promote,my-feature)
 	@if [ "$(BR_REVIEW)" = "$(BR_PROD)" ]; then \
 		echo "$(RED)✗ No staging environment in site.yml — promote needs one$(RESET)"; exit 1; fi
-	@$(MAKE) --no-print-directory _need-tty verb=promote
+	@[ -n "$$NETDUST_AGENT_OK" ] || $(MAKE) --no-print-directory _need-tty verb=promote
 	@$(MAKE) --no-print-directory _ensure-flow
 	@if ! git rev-parse --verify --quiet "origin/feature/$(name)" >/dev/null; then \
 		echo "$(RED)✗ No such branch on origin: feature/$(name)$(RESET)"; \
@@ -229,7 +229,7 @@ promote: ## Put a feature on the staging branch (make promote name=my-feature)
 			echo "$(YELLOW)reviewed at $$(git rev-parse --short "$$AT" 2>/dev/null || echo ?), $$(git rev-list --count "$$AT..origin/feature/$(name)" 2>/dev/null || echo ?) commit(s) since — skipping (review=full to review again)$(RESET)"; \
 		else $(MAKE) --no-print-directory review name=$(name) review=$(or $(review),full) \
 			|| echo "$(YELLOW)⚠ the review failed — promote goes on$(RESET)"; fi; fi; \
-	read -p "Continue? Type 'yes': " reply; \
+	if [ -n "$$NETDUST_AGENT_OK" ]; then reply=yes; else read -p "Continue? Type 'yes': " reply; fi; \
 	[ "$$reply" = "yes" ] || { echo "$(RED)✗ Cancelled$(RESET)"; exit 1; }; \
 	ADD="$(name)"; DROP=""; $(_rebuild-staging); \
 	echo "$(GREEN)✅ feature/$(name) is on $(BR_REVIEW). Next: make deploy env=staging$(RESET)"
@@ -239,7 +239,7 @@ unpromote: ## Take a feature off the staging branch (make unpromote name=my-feat
 	@$(call _check-name,unpromote,my-feature)
 	@if [ "$(BR_REVIEW)" = "$(BR_PROD)" ]; then \
 		echo "$(RED)✗ No staging environment in site.yml — unpromote needs one$(RESET)"; exit 1; fi
-	@$(MAKE) --no-print-directory _need-tty verb=unpromote
+	@[ -n "$$NETDUST_AGENT_OK" ] || $(MAKE) --no-print-directory _need-tty verb=unpromote
 	@$(MAKE) --no-print-directory _ensure-flow
 	@if ! git log --merges --first-parent --format='%s' origin/$(BR_PROD)..origin/$(BR_REVIEW) \
 		| grep -qxF "promote: $(name)"; then \
@@ -247,7 +247,7 @@ unpromote: ## Take a feature off the staging branch (make unpromote name=my-feat
 		git log --merges --first-parent --format='  %s' origin/$(BR_PROD)..origin/$(BR_REVIEW) | grep 'promote: '; \
 		exit 1; fi
 	@echo "$(YELLOW)Taking feature/$(name) off $(BR_REVIEW); every other feature is re-merged where it was$(RESET)"; \
-	read -p "Continue? Type 'yes': " reply; \
+	if [ -n "$$NETDUST_AGENT_OK" ]; then reply=yes; else read -p "Continue? Type 'yes': " reply; fi; \
 	[ "$$reply" = "yes" ] || { echo "$(RED)✗ Cancelled$(RESET)"; exit 1; }; \
 	ADD=""; DROP="$(name)"; $(_rebuild-staging); \
 	echo "$(GREEN)✅ feature/$(name) is off $(BR_REVIEW). Next: make deploy env=staging$(RESET)"
@@ -999,6 +999,9 @@ _warn-rung-branch:
 		echo "$(YELLOW)⚠  on the $${ROLE#rung:} branch — fine for looking, not for editing: make feature name=<x> before you change anything$(RESET)";; \
 	esac
 
+# NETDUST_AGENT_OK=1 (environment, set by the operator's standing OK) lets promote and
+# unpromote run without a terminal: staging is rebuilt, never production. ship, save and
+# rollback ignore it.
 # A confirming verb reads its `yes` from a HUMAN. Piped or redirected stdin is
 # not a terminal, so it is refused — `echo yes | make ship` and
 # `make ship < answers` both stop here.
