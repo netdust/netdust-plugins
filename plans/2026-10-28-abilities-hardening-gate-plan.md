@@ -354,3 +354,13 @@ MCP so a client can update texts by chat. Two facts for whoever picks this up:
   cluster A option, `destructive => false`, `idempotent => true`. Content held in ntdst-core
   models is the easy case and needs nothing beyond A. This is a future consumer-named
   feature, not part of this plan.
+
+**Same day, later:** make.wordpress.org/ai published "WordPress for the agentic web"
+(Jason Adams, 2026-10-28). Four workstreams with version targets: MCP Adapter hardened
+alongside 7.2 and proposed for core in 7.3; a baseline of site-management Abilities, a few
+possibly in 7.2, a useful native set in 7.3; OAuth mapped during 7.2, core in 7.3, with the
+7.2 Secrets API for token handling; an end-to-end agent-authorization UX prototyped in 7.2,
+delivered in 7.3. Consequences for this plan: the OAuth deferral above now has a target
+(7.3, not a plugin); cluster A should cover domain routes only, since core intends to ship
+the generic content abilities itself; A06's threat model should name the Secrets API as the
+place a token lives once 7.2 ships. The post says nothing about themes, skills or Playground.
