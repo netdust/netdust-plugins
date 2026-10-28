@@ -334,3 +334,23 @@ C: 5 + plan review ≈ 7. D: 7 ≈ 4 (small). E: 1. Total ≈ 28 iterations acro
 - inpsyde's ExtendingModule idea for the container (no consumer).
 - Admin columns and filters in the Data layer after Extended CPTs (no consumer asked).
 - Timber, WordPlate, Studio: reference only.
+
+## Recorded after the plan (2026-10-28, same session)
+
+Stefan asked whether Claude or ChatGPT in the browser will be able to connect to a site over
+MCP so a client can update texts by chat. Two facts for whoever picks this up:
+
+- **Browser clients need OAuth 2.1 on the WordPress side.** Claude.ai custom connectors and
+  ChatGPT developer mode connect to a remote HTTPS MCP server, which the MCP Adapter already
+  serves, but both expect OAuth 2.1 with PKCE. The adapter authenticates with application
+  passwords and core has no OAuth server; today that is a third-party plugin (Enable
+  Abilities for MCP, miniOrange, AtlasMCP) or Automattic's desktop proxy. Ruling deferred:
+  not before WordPress 7.2 shows whether core picks it up. The in-admin path (WP 7.0 AI
+  client + client-side abilities, the client already logged in with their own role) needs no
+  OAuth and is served by the same abilities cluster A produces.
+- **"Update a text" on a YOOtheme site is a route, not `wp/v2/posts`.** The text lives in
+  the builder's layout JSON in post meta. The ability is a route that edits a named text node
+  in a layout (the `yoo-content.php` territory in `ntdst-yootheme`), declared with the
+  cluster A option, `destructive => false`, `idempotent => true`. Content held in ntdst-core
+  models is the easy case and needs nothing beyond A. This is a future consumer-named
+  feature, not part of this plan.
