@@ -759,7 +759,7 @@
       ],
       "prompt": "On ntdst-core 5.5 an MCP client should be able to call my editions-summary endpoint. Show me the registration and what the client receives.",
       "baseline_expected_failure": "A wp_register_ability() call (or an AbilityRegistrar class) with its own execute_callback and permission, beside the route.",
-      "with_skill_assertion": "The `ability` block on the ntdst_rest() route, a `schema`, exposure left to core (declared is exposed), the response data as the return, no wp_register_ability().",
+      "with_skill_assertion": "The `ability` block on the ntdst_rest() route, a `schema` on the route or an `output_schema` in the block, exposure left to core (declared is exposed), the response data as the return, no wp_register_ability().",
       "must_contain": [
         "'ability'",
         "ntdst_rest("
@@ -780,9 +780,9 @@
       "context_after": [
         "skills/wp-testing/SKILL.md"
       ],
-      "prompt": "ntdst-baseline is a composer mu-plugin package with only Brain Monkey tests. How do I give it real-WordPress integration tests?",
+      "prompt": "ntdst-baseline is a composer mu-plugin package with only Brain Monkey tests. How do I give it real-WordPress integration tests, and keep them running on the newest WordPress and packages?",
       "baseline_expected_failure": "Proposes WordPress Playground / a Blueprint, wp-env, or a shared test site.",
-      "with_skill_assertion": "Adopt wp-starter's gate in its package shape — WordPress in `require-dev`, the package's own DDEV project, `tests/Integration/` with `WP_UnitTestCase`, `composer gate` running it — and names Playground, Blueprints, wp-env and a shared test site as not used.",
+      "with_skill_assertion": "Adopt wp-starter's gate in its package shape — WordPress in `require-dev`, the package's own DDEV project, `tests/Integration/` with `WP_UnitTestCase`, `composer gate` running it — and does not propose Playground, Blueprints, wp-env or a shared test site.",
       "must_contain": [
         "require-dev",
         "deps:latest"
