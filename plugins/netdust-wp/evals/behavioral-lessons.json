@@ -768,6 +768,30 @@
         "wp_register_ability("
       ],
       "discriminator": "grep -c \"'ability' =>\" skills/ntdst-framework/SKILL.md — 0 before, ≥1 after"
+    },
+    {
+      "id": "package-gate-not-playground",
+      "skill": "wp-testing",
+      "lesson": "a package hosts the gate itself — one gate, two shapes",
+      "baseline_ref": "a317d2f — main",
+      "context_before": [
+        "skills/wp-testing/SKILL.md"
+      ],
+      "context_after": [
+        "skills/wp-testing/SKILL.md"
+      ],
+      "prompt": "ntdst-baseline is a composer mu-plugin package with only Brain Monkey tests. How do I give it real-WordPress integration tests?",
+      "baseline_expected_failure": "Proposes WordPress Playground / a Blueprint, wp-env, or a shared test site.",
+      "with_skill_assertion": "Adopt wp-starter's gate in its package shape — WordPress in `require-dev`, the package's own DDEV project, `tests/Integration/` with `WP_UnitTestCase`, `composer gate` running it — and names Playground, Blueprints, wp-env and a shared test site as not used.",
+      "must_contain": [
+        "require-dev",
+        "deps:latest"
+      ],
+      "must_not_contain": [
+        "Blueprint",
+        "wp-env"
+      ],
+      "discriminator": "grep -c \"Playground MAY be the browser\" skills/wp-testing/SKILL.md — 1 before, 0 after"
     }
   ]
 }
