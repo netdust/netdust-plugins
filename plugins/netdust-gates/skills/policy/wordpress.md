@@ -25,7 +25,7 @@ skill, do not paraphrase it here.
   carries a threat model.
 - Drift: nothing `netdust-wp:ntdst-drift-reviewer` reports — a Critical or Drift finding is
   fixed or is a deviation the plan names; the review quotes the agent's findings, never "looks clean".
-- Tests: the close is `make gate`. Unit = Brain Monkey, integration = wp-phpunit through
+- Tests: the close is `make gate` (a package: `composer gate`). Unit = Brain Monkey, integration = wp-phpunit through
   DDEV, e2e = Playwright; commands and setup are `netdust-wp:wp-testing`'s. Evidence: the exit
   code and the summary lines of a run after the task's last edit. A tier that did not run is
   reported as not run, never as a pass. A site's tests cover its code and its configuration of
@@ -33,7 +33,8 @@ skill, do not paraphrase it here.
 - Local and ship: DDEV always; the Makefile is the only route to a server
   (`netdust-devops:devops`); anything that must ship names its `deploy.payload` path, and
   `make deploy-test env=staging` output listing it is quoted. An rsync, scp or SFTP to a server
-  outside the Makefile is a defect the review reports.
+  outside the Makefile is a defect the review reports. A package ships by tag: no payload, no deploy line.
+- Abilities: a route an agent will operate declares `ability` (`netdust-wp:ntdst-framework`, core 5.5.0); the task that touches such a route runs the upstream `wp-abilities-verify` skill on its own DDEV, in runtime mode as `ntdst-framework` reads it, and quotes its report in the task report — its reviewer reads the quote there, the way it reads every line's evidence, and never runs it (the headless review reads code, plan and spec; runtime mode executes write abilities); a hand-registered ability is drift check #16.
 
 | Red flag — the excuse | The answer |
 |---|---|
