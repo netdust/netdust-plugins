@@ -1,6 +1,6 @@
 ---
 name: parallel-work
-description: Use when more than one thing needs to happen at once in a project and the pieces could fight over the working tree — a bug found in an imported package while your feature is half-done, a production hotfix while the tree is dirty, a long test or gate run that blocks you, a second agent, a review that should not share your context. Answers ONE question — does this need a different checkout? — and the answer decides pane versus worktree. Triggers on "uncommitted changes" blocking a verb, "make hotfix" refusing on a dirty tree, editing anything under vendor/, "run the tests while I keep working", "fix it in a separate window", "second agent", "another pane", "another tab", "workspace", "worktree", "split the pane", "in parallel", "don't lose my work", "I'm mid-feature and prod is broken". Symptoms include a make verb refusing because the tree is not clean, finding a framework bug inside a Composer --prefer-source package, wanting a gate run off your critical path, or two agents about to edit the same directory. For the flow verbs themselves see the devops skill; for terminal syntax run `herdr --skill`.
+description: Use when more than one thing needs to happen at once in a project and the pieces could fight over the working tree — a bug found in an imported package while your feature is half-done, a production hotfix while the tree is dirty, a long test or gate run that blocks you, a second agent, a review that should not share your context. Answers ONE question — does this need a different checkout? — and the answer decides helper terminal versus worktree. Triggers on "uncommitted changes" blocking a verb, "make hotfix" refusing on a dirty tree, editing anything under vendor/, "run the tests while I keep working", "fix it in a separate window", "second agent", "another pane", "another tab", "workspace", "worktree", "split the pane", "in parallel", "don't lose my work", "I'm mid-feature and prod is broken". Symptoms include a make verb refusing because the tree is not clean, finding a framework bug inside a Composer --prefer-source package, wanting a gate run off your critical path, or two agents about to edit the same directory. For the flow verbs themselves see the devops skill; for agents and terminals run `hc --skill`.
 ---
 
 # Parallel work — one question decides it
@@ -11,19 +11,19 @@ That is the whole decision. Everything else follows.
 
 | | Needs a different checkout? | Use | Why |
 |---|---|---|---|
-| Run the gate, tests, a build, tail a log | no | **pane**, same directory | it reads and executes; it does not edit |
-| Read a spec, plan or report while you work | no | **tab**, same workspace | an artifact you look at, not a fourth pane crowding the layout |
-| Fix a bug in an imported package | **yes** | **worktree** (in its own workspace) | it is a different repository |
-| Hotfix production while your feature is dirty | **yes** | **worktree** | a different base, and `make hotfix` refuses on a dirty tree |
-| A second agent that EDITS | **yes** | **worktree** | two agents in one directory edit the same file |
-| A second agent that only reads | no | **pane** | nothing to collide over |
+| Run the gate, tests, a build, tail a log | no | **helper terminal** (`hc run --bg`), same directory | it reads and executes; it does not edit |
+| Read a spec, plan or report while you work | no | **tab** in the project's space | an artifact you look at, not another terminal crowding the work |
+| Fix a bug in an imported package | **yes** | that repository's own checkout | it is a different repository |
+| Hotfix production while your feature is dirty | **yes** | **worktree**, urgent | a different base, and `make hotfix` refuses on a dirty tree |
+| A second agent that EDITS while a coder holds the checkout | **yes** | it **waits**; a **worktree** only if urgent | two agents in one directory edit the same file |
+| A second agent that only reads | no | **helper terminal**, same directory | nothing to collide over |
 
-The terminal does not isolate anything: two panes in one directory write to the
-same files. **The worktree is the isolation.** A workspace is the container that
-makes a worktree visible and removable as one unit — it is organisation, not
-isolation, and on its own it gives you no separate git state.
+The terminal does not isolate anything: two agents in one directory write to the
+same files. **The worktree is the isolation**, and it costs a folder: one is made
+only for urgent work, under `~/.herdr/worktrees/<repo>/<branch>` — never in `~/Sites` —
+and removed once its branch lands.
 
-Default to a pane. Reach for a worktree only when the table above says the
+Default to a helper terminal. Reach for a worktree only when the table above says the
 checkout differs — a second checkout costs a second dependency install, a second
 container, and a `site.yml` pointing at the same servers from two places.
 
@@ -66,22 +66,27 @@ back. What you edit under `vendor/` is not covered by this project's
 ### A long gate run
 
 `make gate` on a full suite is minutes. It reads and executes — it edits
-nothing — so it is a **pane in the same directory**, on the branch you are
-already on. No worktree, no workspace, no change to how you work.
+nothing — so it is a **helper terminal in the same directory**
+(`hc run --bg --name gate make gate`), on the branch you are already on. No
+worktree, no change to how you work.
 
 The win is not a faster run. It is that the run happens beside you instead of
 in front of you, and its output lands somewhere other than your context.
 
 ### A second agent
 
-Reads only — a reviewer, a test runner, a log watcher → **pane**.
-Edits anything → **worktree**, always. Two agents in one directory will
-silently overwrite each other, and neither will report it.
+Reads only — a reviewer, a test runner, a log watcher → **helper terminal**.
+Edits anything → it never shares the directory: two agents in one directory will
+silently overwrite each other, and neither will report it. While a coder holds the
+checkout, other work in that project waits for it, unless it is urgent (a production
+hotfix, a blocker): only then a temporary worktree under `~/.herdr/worktrees`, removed
+when that work lands. Planning the next feature is not urgent: it waits, or happens
+without writing the tree.
 
-### A coder's worktree on a DDEV project
+### An urgent worktree on a DDEV project
 
-A planned feature runs as two sessions (`netdust-gates:policy`), and the coder works in
-its own worktree. On a DDEV project that worktree must be its own DDEV project, or its
+The coder of a planned feature works in the project's checkout (`netdust-gates:policy`);
+urgent work beside it gets a worktree. On a DDEV project that worktree must be its own DDEV project, or its
 `make gate` tests the wrong code: the gate's integration tier runs `ddev composer`, and a
 worktree carries the tracked `.ddev/config.yaml` — the main project's name, so the
 main checkout's container. Give it its own name in `.ddev/config.local.yaml`, which
@@ -148,9 +153,9 @@ free.
 |---|---|
 | `make save` on half-done work purely to unblock a hotfix | hotfix in a separate checkout; leave this one alone |
 | Editing a package under `vendor/` in place | fix it in that repository's own checkout, release, `composer update` |
-| A worktree for something that only reads | a pane in the same directory |
-| Two agents pointed at one directory | one of them gets a worktree, or it does not edit |
-| A workspace created "to be organised" | a workspace with no second checkout in it buys nothing |
+| A worktree for something that only reads | a helper terminal in the same directory |
+| Two agents pointed at one directory | the second waits for the coder; a worktree only if its work is urgent |
+| A worktree in `~/Sites`, or one for work that could wait | wait for the checkout; urgent work goes under `~/.herdr/worktrees` |
 | A worktree left behind after its branch landed | `git worktree remove <path>` — otherwise the branch cannot be deleted |
 | Raw `git checkout` to move between rungs | the verbs; a rung held elsewhere is exactly what they refuse over |
 
@@ -159,9 +164,9 @@ free.
 ## See also
 
 - `netdust-devops:devops` — the flow verbs, the deploy gate and ledger, `site.yml`
-- `herdr --skill` — **the syntax authority** for panes, tabs, workspaces and
-  agents. Run it; do not guess flags. `herdr worktree` lists the worktree verbs.
-- `netdust-core:herdr-orchestration` — which channel, which topology, and the
+- `hc --skill` — **the syntax authority** for agents, helper terminals and their
+  reports. Run it; do not guess flags. `herdr-app --skill` covers spaces and tabs.
+- `netdust-core:hc-orchestration` — the pair recipe, delegation, watching, and the
   protocol for talking to another session
 
 This skill owns the *decision*. Those own the *syntax*. If the two ever
