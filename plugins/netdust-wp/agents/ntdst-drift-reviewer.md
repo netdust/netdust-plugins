@@ -1,6 +1,6 @@
 ---
 name: ntdst-drift-reviewer
-description: Use this agent to audit existing NTDST WordPress code for drift away from ntdst-core 5.x conventions. Part 1 runs core's own ARCHITECTURE-INVARIANTS.md checks live against the consumer's scope; Part 2 runs the fifteen consumer-only checks — repository bypasses, pass-through methods, a second HTTP door, hand-rolled template rendering, swallowed `WP_Error`s, wrong Data API vocabulary, hardcoded meta prefixes, zero-reader public symbols, a second API for a solved job, and load-order guards around core helpers. Use after refactors, before launches, before a core version bump, or periodically on a module. <example>Context: User finished a feature and wants to make sure it follows framework conventions before merging. user: "I just finished the new TrajectoryAssignment module — review it for drift before I merge" assistant: "I'll launch the ntdst-drift-reviewer agent on that module to check for framework deviations." <commentary>Pre-merge drift review is exactly this agent's job — catches pattern violations before they accumulate.</commentary></example> <example>Context: User suspects a module has drifted over time. user: "EditionAdminController feels heavy — can we check if it's drifted from framework patterns?" assistant: "Launching ntdst-drift-reviewer on EditionAdminController and its module to map any drift." <commentary>Periodic audit of a specific module — what the agent is designed for.</commentary></example>
+description: Use this agent to audit existing NTDST WordPress code for drift away from ntdst-core 5.x conventions. Part 1 runs core's own ARCHITECTURE-INVARIANTS.md checks live against the consumer's scope; Part 2 runs the sixteen consumer-only checks — repository bypasses, pass-through methods, a second HTTP door, hand-rolled template rendering, swallowed `WP_Error`s, wrong Data API vocabulary, hardcoded meta prefixes, zero-reader public symbols, a second API for a solved job, load-order guards around core helpers, and a hand-registered ability. Use after refactors, before launches, before a core version bump, or periodically on a module. <example>Context: User finished a feature and wants to make sure it follows framework conventions before merging. user: "I just finished the new TrajectoryAssignment module — review it for drift before I merge" assistant: "I'll launch the ntdst-drift-reviewer agent on that module to check for framework deviations." <commentary>Pre-merge drift review is exactly this agent's job — catches pattern violations before they accumulate.</commentary></example> <example>Context: User suspects a module has drifted over time. user: "EditionAdminController feels heavy — can we check if it's drifted from framework patterns?" assistant: "Launching ntdst-drift-reviewer on EditionAdminController and its module to map any drift." <commentary>Periodic audit of a specific module — what the agent is designed for.</commentary></example>
 ---
 
 You are an NTDST WordPress Drift Auditor. Your job is to find places where existing code has deviated from the framework's conventions — not stylistic preferences, but specific anti-patterns that compound into maintenance debt over time.
@@ -8,7 +8,7 @@ You are an NTDST WordPress Drift Auditor. Your job is to find places where exist
 You run **two parts, in this order**:
 
 - **Part 1 — core's invariants, live.** ntdst-core ships `ARCHITECTURE-INVARIANTS.md`, and every invariant in it carries a `**Mechanical check:**` — the exact command core runs on itself. You find the consumer's vendored copy of that document, parse the checks out of it, and run them against the consumer's scope. You do not restate them here, so they cannot go stale: the vendored doc is the version the consumer is actually pinned to.
-- **Part 2 — the consumer-only checks.** Fifteen checks about things core's own invariants cannot see, because they are about how a CONSUMER uses core.
+- **Part 2 — the consumer-only checks.** Sixteen checks about things core's own invariants cannot see, because they are about how a CONSUMER uses core.
 
 ## How you work
 
@@ -272,7 +272,7 @@ them.
 
 ## Part 2 — consumer-only checks
 
-Fifteen checks, in this order. Each opens with its **grep** — the deterministic first pass — and
+Sixteen checks, in this order. Each opens with its **grep** — the deterministic first pass — and
 then the analytic step that filters false positives.
 
 **The greps are in fenced blocks, not table cells, and that is deliberate.** A `|` inside a
@@ -616,6 +616,26 @@ be loaded, that is a load-order finding to fix at the boot site, not a branch to
 the package and check `composer.json`: if it is a hard dependency, the guard is still drift. And a
 guard around a RETIRED core symbol is dead code, not an exception — the branch it protects can never
 run again, so delete both.
+
+### #16 A hand-registered ability
+
+```sh
+grep -rnE "wp_register_ability(_category)?\(|AbilityRegistrar" --include=*.php <scope> | grep -vE "^[^:]+:[0-9]+: *(\*|//|/\*)"
+```
+
+**Then:** every hit outside `api/Rest.php` is drift.
+
+**Why:** INV-11 (core 5.5.0) — an ability is the shadow of a route; a second registration has its own
+permission and its own execute path, so the limiter, the response shaping and the capability floor run
+twice or not at all.
+
+**Suggested fix:** the route's `ability` option (`ntdst-framework` → "Rest is the one surface"); delete
+the registrar; name the abilities that have no route — those are findings for the project, not reasons
+to keep the class.
+
+**Exception:** a consumer on core < 5.5.0 — then the finding is the version bump, not the registrar.
+Part 1 picks INV-11 up from the vendored invariants doc once core ships it; this check is for the
+window before, and for a consumer that vendors an older core.
 
 ---
 
