@@ -1,0 +1,26 @@
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -27,7 +27,8 @@
+ `testing-workflow` → the WordPress pack in `netdust-gates:policy` + `netdust-wp:wp-testing`;
+ `compounding` → `/session-learn`; `gate-check.py` and `tasks.md` grammar → gone, the plan is
+ superpowers' format; `implementer` / `test-author` / `reviewer` agents → superpowers'
+-executors and its whole-branch review.
++executors and its whole-branch review; `herdr-orchestration`, `herdr agent start` and the
++herdr watcher → `netdust-core:hc-orchestration` (hc's templates, `hc run`, `hc wait`).
+ 
+ ## 2. Architecture — superpowers is the loop, netdust-gates adds three things
+ 
+@@ -42,9 +43,10 @@
+ A split spec stays at `specs/<topic>/spec.md` (`/plan-review <topic>` reviews the set), each plan
+ at `specs/<feature>/plan.md`. Everything about a feature lives in `specs/<feature>/`.
+ * A planned feature runs as two sessions. After my plan approval, the session I planned
+-with turns reviewer, and a coder session executes the plan in its own worktree (its own
+-DDEV project on DDEV). Inside herdr it is started through netdust-core's pair recipe;
+-outside herdr it is one background subagent, in the same permission mode. The coder asks
++with turns reviewer, and a coder session executes the plan in the project's checkout (a
++worktree only for urgent parallel work, under `~/.herdr/worktrees`, its own DDEV project on
++DDEV). Inside hc it is started through netdust-core's pair recipe in hc, the pair in auto
++mode; outside hc it is one background subagent, in the same permission mode. The coder asks
+ its reviewer, never me; I am asked only at the policy's stops. Inside the coder:
+ **Native** by default, **subagent-driven** when a task touches a security-boundary path
+ or the plan would outlive one context. A change with no plan file stays in one session.
