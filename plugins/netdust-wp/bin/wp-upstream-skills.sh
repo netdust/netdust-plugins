@@ -4,15 +4,16 @@
 set -euo pipefail
 
 UPSTREAM="${UPSTREAM:-https://github.com/WordPress/agent-skills.git}"
-PIN="${PIN-d87ee6916e740c7960b6959220c0481a41b320c7}"  # trunk, 2026-09-06
-SKILLS_CLI_VERSION=1.5.23  # npm view skills version, 2026-09-06
-SKILLS="wp-plugin-development wp-rest-api wp-wpcli-and-ops wp-phpstan"
+PIN="${PIN-eff3785fc28c4380d172094518c66a6a997c95d4}"  # trunk, 2026-10-28
+SKILLS_CLI_VERSION=1.7.4  # npm view skills version, 2026-10-28
+SKILLS="wp-plugin-development wp-rest-api wp-wpcli-and-ops wp-phpstan wp-abilities-api wp-abilities-audit wp-abilities-verify"
 CLONE="${XDG_CACHE_HOME:-$HOME/.cache}/netdust/wp-upstream-skills"
 DRY=false
 
 run() { if $DRY; then echo "+ $*"; else "$@"; fi; }
 
 install() {
+  local s
   if [ ! -d "$CLONE/.git" ]; then
     run git init -q "$CLONE"
     run git -C "$CLONE" remote add origin "$UPSTREAM"
@@ -20,6 +21,11 @@ install() {
   if [ "$(git -C "$CLONE" rev-parse HEAD 2>/dev/null || true)" != "$PIN" ]; then
     run git -C "$CLONE" fetch -q --depth 1 origin "$PIN"
     run git -C "$CLONE" checkout -q "$PIN"
+  fi
+  if ! $DRY; then
+    for s in $SKILLS; do
+      [ -f "$CLONE/skills/$s/SKILL.md" ] || { echo "missing at pin: $s" >&2; exit 1; }
+    done
   fi
   run npx -y skills@"$SKILLS_CLI_VERSION" add "$CLONE" -s $SKILLS -a claude-code -g -y --copy
 }

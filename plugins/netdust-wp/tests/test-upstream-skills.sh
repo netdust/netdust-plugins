@@ -12,7 +12,7 @@ TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 export HOME="$TMP/home" XDG_CACHE_HOME="$TMP/cache"
 mkdir -p "$HOME" "$TMP/bin"
 CLONE="$XDG_CACHE_HOME/netdust/wp-upstream-skills"
-SKILLS="wp-plugin-development wp-rest-api wp-wpcli-and-ops wp-phpstan"
+SKILLS="wp-plugin-development wp-rest-api wp-wpcli-and-ops wp-phpstan wp-abilities-api wp-abilities-audit wp-abilities-verify"
 CLI_VER=$(sed -n 's/^SKILLS_CLI_VERSION=\([0-9][0-9.]*\).*/\1/p' "$BIN"); export CLI_VER
 [ -n "$CLI_VER" ] && ok "the skills CLI is pinned: SKILLS_CLI_VERSION=$CLI_VER" || bad "no SKILLS_CLI_VERSION=<x.y.z> in $BIN"
 
@@ -61,7 +61,7 @@ grep -q "skills@$CLI_VER add .* --copy" <<<"$out" && ok "--dry-run prints the pi
 [ ! -e "$CLONE" ] && [ ! -e "$HOME/.claude" ] && ok "--dry-run touched nothing" || bad "--dry-run created files"
 [ ! -s "$NPX_LOG" ] && ok "--dry-run did not call npx" || bad "--dry-run called npx: $(cat "$NPX_LOG")"
 
-# (a) install: clone at the pin, four dirs land
+# (a) install: clone at the pin, every skill lands
 out=$(bash "$BIN" 2>&1); rc=$?
 [ $rc -eq 0 ] && ok "install exits 0" || bad "install exit $rc: $out"
 [ "$(git -C "$CLONE" rev-parse HEAD 2>/dev/null)" = "$PIN" ] && ok "clone checked out at PIN" || bad "clone not at PIN"
@@ -84,14 +84,24 @@ out=$(PIN="$PIN2" bash "$BIN" 2>&1); rc=$?
 [ $rc -eq 0 ] && ok "changed pin: install exits 0" || bad "changed pin exit $rc: $out"
 [ "$(git -C "$CLONE" rev-parse HEAD)" = "$PIN2" ] && ok "changed pin: clone moved to the new sha" || bad "clone still at $(git -C "$CLONE" rev-parse HEAD)"
 [ "$(cat "$HOME/.claude/skills/wp-phpstan/SKILL.md")" = "# wp-phpstan v2" ] && ok "changed pin: new content landed" || bad "wp-phpstan content: $(cat "$HOME/.claude/skills/wp-phpstan/SKILL.md")"
+# a name absent at the pin is refused before the add; the stale copy in $HOME must not hide it
+git -C "$TMP/src" rm -rq skills/wp-abilities-audit
+git -C "$TMP/src" -c user.email=t@test -c user.name=t commit -qm drop-audit
+git -C "$TMP/src" push -q "$TMP/upstream.git" trunk
+PIN3=$(git -C "$TMP/src" rev-parse HEAD)
+before=$(wc -l < "$NPX_LOG")
+out=$(PIN="$PIN3" bash "$BIN" 2>&1); rc=$?
+[ $rc -eq 1 ] && ok "missing at pin: exits 1" || bad "missing at pin: exit $rc (want 1): $out"
+grep -q "missing at pin: wp-abilities-audit" <<<"$out" && ok "missing at pin: names wp-abilities-audit" || bad "missing at pin: stderr: $out"
+[ "$(wc -l < "$NPX_LOG")" -eq "$before" ] && ok "missing at pin: npx was not called" || bad "missing at pin: npx was called"
 PIN=$(git -C "$TMP/src" rev-parse HEAD~1); export PIN
 
-# (b) --check after install lists four, exit 0
+# (b) --check after install lists seven, exit 0
 out=$(bash "$BIN" --check 2>&1); rc=$?
 [ $rc -eq 0 ] && ok "--check exits 0 when all present" || bad "--check exit $rc: $out"
 grep -q "$PIN" <<<"$out" && ok "--check prints the pin" || bad "--check output lacks pin: $out"
 grep -q "$CLI_VER" <<<"$out" && ok "--check prints the CLI version" || bad "--check output lacks the CLI version: $out"
-[ "$(grep -c "^present" <<<"$out")" -eq 4 ] && ok "--check lists four present" || bad "--check output: $out"
+[ "$(grep -c "^present" <<<"$out")" -eq 7 ] && ok "--check lists seven present" || bad "--check output: $out"
 
 # (c) one dir removed → --check exit 1 naming it
 rm -rf "$HOME/.claude/skills/wp-rest-api"

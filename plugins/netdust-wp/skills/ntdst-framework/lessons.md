@@ -372,3 +372,11 @@ helpers), the specs are cited as the authority and the header says `pre-tag`.
 - **`render()`, the envelope, `Theme::style()`/`script()`, `Scheduler`, `Mailer`** — the
   renderer and the envelope left with the dispatcher; assets, scheduling and mail are
   WordPress primitives or another package's job (`docs/philosophy.md` §6).
+
+## The upstream abilities skills, read on a netdust project
+
+Installed by `bin/wp-upstream-skills.sh` (pin 2026-10-28). Each reads differently on a consumer of ntdst-core.
+
+- **`wp-abilities-api`** — its references propose an `Abilities_Registrar` class with its own `wp_register_ability()` calls. On a netdust project the answer is the `ability` option on the `ntdst_rest()` route (spec `wp-ai-base` R1, INV-11 from core 5.5.0).
+- **`wp-abilities-audit`** — it inventories REST controllers and refuses `__return_true` gates: kept. Its grouping rule ("do not atomize one ability per HTTP method", collapsing N variants into one) contradicts one ability per route. On a netdust project the route is the unit, and a collapsed ability is a route the project has not written yet.
+- **`wp-abilities-verify`** — it stops at "no abilities registered" in both modes when `wp_register_ability(` has zero hits in source (its Prerequisites and Failure modes), and its runtime enumeration filters names on the plugin slug. A route ability is named by its namespace (`stride-v1/…`), so run as written it is blind on a netdust consumer in either mode. All three skills also require `wp-project-triage`, which is not installed; `site.yml` and the composer type stand in for it. How a netdust session uses the skill is the sentence Task 3 puts in `SKILL.md` (which sessions load; this journal is not).
