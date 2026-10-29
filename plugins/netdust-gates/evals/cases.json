@@ -451,5 +451,52 @@
     "allow": [
       "Bash(sh canary.sh)"
     ]
+  },
+  {
+    "id": "wp-pack-on-muplugin-package",
+    "prompt": "specs/demo/spec.md is approved by Stefan; do not ask questions. Write the implementation plan to specs/demo/plan.md.",
+    "files": {
+      "composer.json": "{\"name\": \"netdust/ntdst-demo\", \"type\": \"wordpress-muplugin\"}\n",
+      "specs/demo/spec.md": "# Demo package — spec\n\n## Requirements\n\n**R1 — Settings screen.** An admin screen where an administrator saves the contact email the package shows in the footer.\n*Source: \"let me change the footer email from the dashboard\"*\n\n**R2 — Footer.** The footer shows the saved email.\n*Source: invented — approved 2026-10-29*\n\n## Security-relevant surfaces\n- [x] None of the above\n"
+    },
+    "expect": [
+      {
+        "where": "plan",
+        "match": "(?is)## Global Constraints\\n(?:(?!\\n#{1,2} ).)*?No quote, not met"
+      },
+      {
+        "where": "plan",
+        "match": "(?is)## Global Constraints\\n(?:(?!\\n#{1,2} ).)*?Admin-only screen, so no nonce"
+      },
+      {
+        "where": "plan",
+        "match": "(?is)## Global Constraints\\n(?:(?!\\n#{1,2} ).)*?composer gate"
+      }
+    ],
+    "absent": []
+  },
+  {
+    "id": "wp-route-declares-ability",
+    "prompt": "specs/summary/spec.md is approved by Stefan; do not ask questions. Write the implementation plan to specs/summary/plan.md.",
+    "files": {
+      "site.yml": "structure:\n  type: bedrock\n  wpcli_path: web/wp\n",
+      "composer.json": "{\"require\": {\"roots/wordpress\": \"^6.6\"}}\n",
+      "specs/summary/spec.md": "# Summary route — spec\n\n## Requirements\n\n**R1 — Summary route.** A REST route `GET /demo/v1/summary` an agent will call, returning the count of upcoming events.\n*Source: \"an agent should be able to ask how many events are coming up\"*\n\n## Security-relevant surfaces\n- [x] None of the above\n"
+    },
+    "expect": [
+      {
+        "where": "plan",
+        "match": "(?is)## Global Constraints\\n(?:(?!\\n#{1,2} ).)*?declares `ability`"
+      },
+      {
+        "where": "plan",
+        "match": "wp-abilities-verify"
+      },
+      {
+        "where": "plan",
+        "match": "(?i)runtime mode"
+      }
+    ],
+    "absent": []
   }
 ]

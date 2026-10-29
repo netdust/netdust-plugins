@@ -1,4 +1,4 @@
-# ntdst-baseline (2.3.0)
+# ntdst-baseline (2.21.3)
 
 The WordPress-gaps layer: the things every Netdust site needs and WordPress does
 not ship. A sibling mu-plugin to ntdst-core, Composer-managed, **not** a fork of it.
@@ -14,7 +14,7 @@ it never fatals a site that has ntdst-baseline without ntdst-core.
 It conflicts with `ntdst-core < 4.2` — Composer refuses the pair rather than
 booting a baseline against a core that lacks what it calls.
 
-## Seven modules — six on by default, one opt-in
+## Eleven modules — seven on by default, four opt-in
 
 ```php
 add_filter('ntdst/baseline/modules', fn($m) => [...$m, 'schema' => false]);
@@ -28,7 +28,11 @@ add_filter('ntdst/baseline/modules', fn($m) => [...$m, 'schema' => false]);
 | `schema` | `SchemaService` | JSON-LD (`JsonLd`) |
 | `maintenance` | `MaintenanceService` | maintenance mode |
 | `cache_headers` | `CacheHeadersService` | cache headers (`CacheHeaderPolicy`) |
+| `admin_ui` | `AdminUIService` | the shared admin-app shell; adds nothing until a site registers an app through `ntdst/baseline/admin/apps` |
 | `yootheme` | `YOOthemeSourcesService` | **OFF by default** — ntdst-core models as YOOtheme builder sources |
+| `polylang` | `PolylangService` | **OFF by default** — Polylang integration; the door also stays shut unless `POLYLANG_VERSION` is defined |
+| `duplicate` | `DuplicateService` | **OFF by default** — a "Duplicate" admin action for pages, posts and CPTs |
+| `grants` | `GrantService` | **OFF by default** — personal links and a private file store for the gated types a site names |
 
 Turning a module off is how you hand its job to something else — a plugin, a host,
 a CDN. Two things writing the same header is the drift to look for.
@@ -141,3 +145,20 @@ The question is not "does it work" but **"is this solved here, or twice?"**
   Both converged onto ntdst-core (`NTDST_RateLimiter`, `NTDST_ClientIp`); the
   duplicate is the thing to remove. See the limiter's three verbs in `traps.md` —
   a lockout CHECK must not spend budget.
+
+## 2.22.0 — the hardening switches (spec wp-ai-base R12, lands with baseline's hardening-2026-10 plan)
+
+Eight rows, all ON by default, each a switch in the owning service's `config` filter.
+
+| Switch | Module | Default | What it does |
+|---|---|---|---|
+| `application_passwords_capability` (C1) | `security` | `manage_options` | `wp_is_application_passwords_available` false for users without the capability; `authorize-application.php` 403. The value is a capability: a site onboarding an editor as an MCP client lowers it (`edit_posts`); `false` turns the row off |
+| `revoke_sessions_after_reset` (C2) | `security` | on | on `after_password_reset` and a `profile_update` carrying a password: destroy other sessions, delete application passwords |
+| `disable_rest_jsonp` (C3) | `security` | on | `rest_jsonp_enabled` false |
+| `close_pingbacks` (C4) | `security` | on | `pings_open` false, `X-Pingback` header gone, `pingback.ping` unset from XML-RPC |
+| `pin_default_role` (C7) | `security` | on | `default_role` forced to `subscriber` via `pre_option_default_role` |
+| `block_htaccess_rewrite` (C8) | `security` | on | `flush_rewrite_rules_hard` false |
+| `disable_font_library` (C9) | `admin_ui` | on | `block_editor_settings_all` → `fontLibraryEnabled = false`, and the font-library REST routes unregistered |
+| `disable_auto_sizes` (C10) | `head_cleanup` | on | `wp_img_tag_add_auto_sizes` false |
+
+C5, C6 and C11 were not admitted.

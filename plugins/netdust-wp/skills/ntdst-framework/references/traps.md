@@ -14,6 +14,7 @@ Each line names what pins it — a core unit test, or an invariant in `ARCHITECT
 - **The retired `ntdst_service_{slug}_enabled` filter FAILED OPEN.** A service somebody kept switched off through it BOOTS after the upgrade, because the filter is gone and nothing reads the answer. Re-express the switch as `metadata()['enabled'] => false` or a `services.conditional` entry before you bump — pinned by PackageBootIntegrityTest.php.
 - **A pending `ntdst_send_queued_mail` cron event survives the upgrade with no listener.** The mailer left core, so the event still fires into nothing and every queued message is dropped in silence. Drain the queue before the bump, then `wp_clear_scheduled_hook()` — pinned by PackageBootIntegrityTest.php.
 - **A route carrying an option core does not know is not registered AT ALL.** One `_doing_it_wrong`, one log line, and the endpoint is absent — it reviews as protected and 404s on the wire. `permission_callback` is not one of the options; `permission` is — pinned by PackageBootIntegrityTest.php.
+- **An `ability` declared after `wp_abilities_api_init` fired registers nothing (5.5.0).** The hook fires lazily, on first registry access after `init`; core records every declaration and walks the record there, calling `rest_get_server()` first so routes declared at `rest_api_init` are in it. On WordPress < 6.9 the option is inert with one `_doing_it_wrong`, debug only; on core < 5.5.0 it is an unknown option and the route itself is absent — pinned by core's 5.5.0 unit tests.
 
 ## Silent no-ops
 

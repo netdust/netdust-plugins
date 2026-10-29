@@ -743,6 +743,55 @@
         "ReflectionClass",
         "ReflectionMethod"
       ]
+    },
+    {
+      "id": "abilities-route-option",
+      "skill": "ntdst-framework",
+      "lesson": "an ability is the shadow of a route — the `ability` option on `ntdst_rest()`, never `wp_register_ability()`",
+      "baseline_ref": "a317d2f — main, pre-5.5.0 skill text",
+      "context_before": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "context_after": [
+        "skills/ntdst-framework/SKILL.md",
+        "skills/ntdst-framework/references/traps.md"
+      ],
+      "prompt": "On ntdst-core 5.5 an MCP client should be able to call my editions-summary endpoint. Show me the registration and what the client receives.",
+      "baseline_expected_failure": "A wp_register_ability() call (or an AbilityRegistrar class) with its own execute_callback and permission, beside the route.",
+      "with_skill_assertion": "The `ability` block on the ntdst_rest() route, a `schema` on the route or an `output_schema` in the block, exposure left to core (declared is exposed), the response data as the return, no wp_register_ability().",
+      "must_contain": [
+        "'ability'",
+        "ntdst_rest("
+      ],
+      "must_not_contain": [
+        "wp_register_ability("
+      ],
+      "discriminator": "grep -c \"'ability' =>\" skills/ntdst-framework/SKILL.md — 0 before, ≥1 after"
+    },
+    {
+      "id": "package-gate-not-playground",
+      "skill": "wp-testing",
+      "lesson": "a package hosts the gate itself — one gate, two shapes",
+      "baseline_ref": "a317d2f — main",
+      "context_before": [
+        "skills/wp-testing/SKILL.md"
+      ],
+      "context_after": [
+        "skills/wp-testing/SKILL.md"
+      ],
+      "prompt": "ntdst-baseline is a composer mu-plugin package with only Brain Monkey tests. How do I give it real-WordPress integration tests, and keep them running on the newest WordPress and packages?",
+      "baseline_expected_failure": "Proposes WordPress Playground / a Blueprint, wp-env, or a shared test site.",
+      "with_skill_assertion": "Adopt wp-starter's gate in its package shape — WordPress in `require-dev`, the package's own DDEV project, `tests/Integration/` with `WP_UnitTestCase`, `composer gate` running it — and does not propose Playground, Blueprints, wp-env or a shared test site.",
+      "must_contain": [
+        "require-dev",
+        "deps:latest"
+      ],
+      "must_not_contain": [
+        "Blueprint",
+        "wp-env"
+      ],
+      "discriminator": "grep -c \"Playground MAY be the browser\" skills/wp-testing/SKILL.md — 1 before, 0 after"
     }
   ]
 }

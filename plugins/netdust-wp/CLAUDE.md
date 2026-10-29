@@ -10,10 +10,11 @@ otherwise.
 
 Once per box, after `/plugin install`, run `bash bin/wp-upstream-skills.sh`. It installs the
 official `WordPress/agent-skills` set this plugin cites instead of restating —
-`wp-plugin-development`, `wp-rest-api`, `wp-wpcli-and-ops`, `wp-phpstan` — into
+`wp-plugin-development`, `wp-rest-api`, `wp-wpcli-and-ops`, `wp-phpstan`, `wp-abilities-api`,
+`wp-abilities-audit`, `wp-abilities-verify` — into
 `~/.claude/skills/` at the commit pinned in the script (`PIN`, bumped only by a reviewed
-commit here), copied from a local clone so nothing is fetched by tag or branch. `--check`
-prints the pin and which of the four are present (exit 1 if any is missing); `--dry-run`
+commit here; trunk of 2026-10-28), copied from a local clone so nothing is fetched by tag or branch. `--check`
+prints the pin and which of the seven are present (exit 1 if any is missing); `--dry-run`
 prints the commands and touches nothing.
 
 ## Entry — `netdust-gates:policy`, then this plugin's skills
