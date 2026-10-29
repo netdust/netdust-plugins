@@ -210,8 +210,18 @@ A custom route through `ntdst_rest()` earns its place only for logic the collect
 declare(strict_types=1);
 
 // A route that earns its place: cross-type aggregation /wp/v2 cannot do.
-ntdst_rest('{project}/v1')->get('/editions/upcoming-summary', [$service, 'upcomingSummary']);
+ntdst_rest('{project}/v1')->get('/editions/upcoming-summary', [$service, 'upcomingSummary'], [
+    'schema'  => [$service, 'summarySchema'],
+    // core 5.5.0+ — on an older core the option is unknown and the route is not registered
+    'ability' => [
+        'name'        => 'upcoming-editions-summary',
+        'label'       => 'Upcoming editions summary',
+        'description' => 'Counts the editions that start today or later, per type.',
+    ],
+]);
 ```
+
+A route an agent operates declares `ability`; the response data is what the agent receives.
 
 ---
 
