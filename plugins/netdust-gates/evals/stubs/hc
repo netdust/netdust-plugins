@@ -81,7 +81,13 @@ case "$verb" in
         printf ']}\n'
         ;;
     wait)
-        printf '{"terminal":"t1","ended":false,"reason":"timeout","turn":3,"children":[]}\n'
+        # One check-in, then the wait ends, so a session cannot loop on timeouts to max_turns.
+        if [ -e "$dir/waited" ]; then
+            printf '{"terminal":"t2","ended":true,"reason":"exited","exit_code":0,"turn":1,"children":[]}\n'
+        else
+            touch "$dir/waited"
+            printf '{"terminal":"t1","ended":false,"reason":"timeout","turn":3,"children":[]}\n'
+        fi
         ;;
     send)
         printf '{"turn":1,"started":true}\n'

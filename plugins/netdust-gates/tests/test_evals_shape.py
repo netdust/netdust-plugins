@@ -26,7 +26,8 @@ HC_DENY = ["Bash(hc server*)", "Bash(hc machine*)", "Bash(hc update*)", "Bash(hc
            "Bash(hc put*)", "Bash(hc keys*)", "Bash(hc connect*)", "Bash(hc * --on*)", "Bash(hc --on*)",
            "Bash(HC_*)", "Bash(herdr*)"]
 HC_STATE_VERBS = ("server", "machine", "update", "exec", "file", "put", "keys", "connect")
-LIVE = {"HERDR_ENV": "1", "HC_SESSION": "default", "HC_TERMINAL_ID": "t8", "HERDR_SOCKET_PATH": "/live/herdr.sock", "HERDR_PANE_ID": "w1:p1",
+LIVE = {"HERDR_ENV": "1", "HC_SESSION": "default", "HC_TERMINAL_ID": "t8", "HC_SOCKET": "/live/hc.sock",
+        "HC_TERMINAL_SOCKET": "/live/t.sock", "HERDR_SOCKET_PATH": "/live/herdr.sock", "HERDR_PANE_ID": "w1:p1",
         "CLAUDE_CODE_MESSAGING_SOCKET": "/live/cc.sock", "CLAUDE_CODE_MESSAGING_TOKEN": "t",
         "PLOI_API_TOKEN": "t", "SSH_AUTH_SOCK": "/live/ssh.sock", "XDG_RUNTIME_DIR": "/run/user/1000",
         "DBUS_SESSION_BUS_ADDRESS": "unix:path=/live/bus", "NETDUST_GUARD_ASK": "off",
@@ -34,7 +35,7 @@ LIVE = {"HERDR_ENV": "1", "HC_SESSION": "default", "HC_TERMINAL_ID": "t8", "HERD
         "CLAUDE_PID": "1", "CLAUDECODE": "1", "AI_AGENT": "claude",
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ.get("HOME", "/")}
 PASSED = {"HOME", "USER", "LOGNAME", "SHELL", "LANG", "TERM", "PATH", "TMPDIR"}
-SET = {"HERDR_SOCKET_PATH", "HC_SESSION", "EVAL_ROOT", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_STATE_HOME",
+SET = {"SHELL", "HERDR_SOCKET_PATH", "HC_SESSION", "EVAL_ROOT", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_STATE_HOME",
        "XDG_DATA_HOME", "TMPDIR"}
 XDG = ("XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME")
 
@@ -93,6 +94,8 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
         marker = (root / ".hc" / "run-coder").read_text() if (root / ".hc" / "run-coder").is_file() else ""
         space = stub_sh("hc get t1 --json")
         listed = stub_sh("hc ls --json")
+        first_wait = stub_sh("hc wait --children any")
+        second_wait = stub_sh("hc wait --children any")
         help_out = stub_sh("hc run --help")
         after_help = stub_sh("hc ls --json")
         excluded = (root / ".git" / "info" / "exclude").read_text()
@@ -140,6 +143,12 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
              f"the stub's `hc ls` lists the child it started, under its parent (got {listed!r})"),
             ("Usage" in help_out and after_help == listed,
              f"`hc run --help` prints usage and starts nothing, as hc does (got {help_out!r})"),
+            (_json(first_wait).get("reason") == "timeout" and _json(second_wait).get("ended") is True,
+             f"the stub's wait checks in once, then ends, so a session cannot loop to max_turns (got {second_wait!r})"),
+            (bare.get("SHELL") == "/bin/bash",
+             "child_env runs the case's shell as /bin/bash, the shell the stub preflight checks"),
+            (_core_canary(getattr(runner, "real_core_started", None), Path(tmp)),
+             "a case fails if a real hc core started in its scratch dirs (the stub was bypassed)"),
             (".hc/" in excluded.splitlines() and ".herdr/" not in excluded.splitlines(),
              "the sandbox's .git/info/exclude hides .hc/, the stub's log"),
             (not sibling.exists() and str(sibling) in removed,
@@ -148,7 +157,7 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
             (_strays_flagged(getattr(runner, "stray_worktrees", None), root),
              "a stubbed case fails on any worktree: the coder works in the checkout (hc-flow R6)"),
             (_escape_refused(prepare_sandbox, Path(tmp)), "a case's file cannot land outside its sandbox"),
-            (_env_refused(child_env, root), "a case's env cannot set HC_* (but HC_TERMINAL_ID), HERDR_* or CLAUDE_*"),
+            (_env_refused(child_env, root), "a case's env may set only HC_TERMINAL_ID"),
             (_group_killed(getattr(runner, "spawn", None), root),
              "a case that times out has its whole process group killed, grandchildren included"),
         ]
@@ -173,7 +182,8 @@ def _escape_refused(prepare_sandbox, tmp: Path) -> bool:
 
 
 def _env_refused(child_env, root: Path) -> bool:
-    for env in ({"HC_SESSION": "default"}, {"HERDR_SOCKET_PATH": "/live.sock"}, {"CLAUDE_CODE_MESSAGING_TOKEN": "t"}):
+    for env in ({"HC_SESSION": "default"}, {"HERDR_SOCKET_PATH": "/live.sock"}, {"CLAUDE_CODE_MESSAGING_TOKEN": "t"},
+                {"PATH": "/evil"}, {"BASH_ENV": "/evil"}, {"LD_PRELOAD": "/evil.so"}):
         try:
             child_env({"id": "e", "env": env}, dict(LIVE), root)
             return False
@@ -244,6 +254,16 @@ def _stale_reviews(cases: list[dict]) -> list[str]:
                 if m.group(1) != blob:
                     stale.append(f"{c['id']}:{rel}")
     return stale
+
+
+def _core_canary(real_core_started, tmp: Path) -> bool:
+    if real_core_started is None:
+        return False
+    root = tmp / "canary"
+    root.mkdir()
+    clean = real_core_started(root)
+    (root / ".tmp" / "hc" / "state" / "herdr-core").mkdir(parents=True)
+    return clean is False and real_core_started(root) is True
 
 
 def _json(text: str) -> dict:

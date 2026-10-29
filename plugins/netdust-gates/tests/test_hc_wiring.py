@@ -11,6 +11,9 @@ SKIP_FILES = {"tests/test_session_start.py", "tests/test_policy_skill.py", "test
 STALE = ("herdr" + "-orchestration", "herdr agent" + " start", "herdr" + "-watcher", "HERDR" + "_ENV",
          "herdr" + " --skill")
 PARALLEL = PLUGINS / "netdust-devops" / "skills" / "parallel-work" / "SKILL.md"
+HC_SKILL = PLUGINS / "netdust-core" / "skills" / "hc-orchestration" / "SKILL.md"
+SESSION_LEARN = PLUGINS / "netdust-gates" / "commands" / "session-learn.md"
+POLICY = PLUGINS / "netdust-gates" / "skills" / "policy" / "SKILL.md"
 
 
 def _live_files():
@@ -44,7 +47,18 @@ def _section(text: str, heading: str) -> str:
 def run() -> list[tuple[bool, str]]:
     hits = _stale_hits()
     parallel = PARALLEL.read_text()
+    skill = HC_SKILL.read_text()
     return [
+        ("AF_UNIX" in skill and "connect" in skill,
+         "hc-orchestration decides whether a core runs by connecting to its socket, not by the file existing"),
+        ("your reviewer is now" in skill,
+         "hc-orchestration: a restarted reviewer tells its coder its new address (hc has no reparent)"),
+        ("HC_TERMINAL_ID" in parallel and "outside hc" in parallel.lower(),
+         "parallel-work prescribes hc helper terminals inside hc only, and sends sessions outside hc to the core rule"),
+        ("in its own worktree" not in SESSION_LEARN.read_text(),
+         "session-learn's netdust proposals no longer cut a worktree by default (hc-flow R6)"),
+        ("from its own\ncheckout" not in POLICY.read_text() and "from its own checkout" not in POLICY.read_text(),
+         "policy: the reviewer shares the project's checkout now; make review reads the pushed branch"),
         (not hits, f"no live file in core, gates or devops teaches the herdr 0.9 flow (found {hits[:8]})"),
         ("~/.herdr/worktrees" in parallel, "parallel-work puts a worktree under ~/.herdr/worktrees, never ~/Sites"),
         ("**worktree**, always" not in parallel, "parallel-work no longer gives every editing agent a worktree"),

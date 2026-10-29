@@ -1,6 +1,6 @@
 # hc-orchestration evals
 
-Six A/B scenarios. Each has a baseline leg (skill not loaded), a skill-on leg (SKILL.md read
+Seven A/B scenarios. Each has a baseline leg (skill not loaded), a skill-on leg (SKILL.md read
 first) and a judge template whose rules the skill must make pass.
 
 ## Procedure
@@ -31,8 +31,13 @@ pass. The skill must not make them worse.
 | 4 waiting on children (guard) | E1–E5 | none | none | guard holds |
 | 5 the observer | O1–O5 | O3 O4 | none | skill earns it |
 | 6 no core running | C1–C4 | C1 C2 C3 C4 | none | skill earns it |
+| 7 stale socket file (review S2) | C5–C7 | C5 C6 C7 | none | skill earns it |
 
 Baselines worth remembering: S2 cut `~/Sites/stride-greeting` and started the coder without
 `--outlive-parent`; S3 put both the hotfix and the planning in `~/Sites/*` worktrees; S5 wrote a
 running digest and looped until told to stop; S6 ran `hc server status` and `hc ls` to "confirm"
 no core, which would have started it.
+
+Feature review fix pass, same day: S7's baseline slot holds the skill-on leg run on the PRE-fix
+skill (socket-file check), which took `default.sock` as a running core (the RED for review S2).
+S6 re-run on the fixed skill (connect probe): C1–C4 still pass.

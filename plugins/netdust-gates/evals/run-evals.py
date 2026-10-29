@@ -111,10 +111,9 @@ def hc_home(root: Path) -> Path:
 
 
 def child_env(case: dict, base: dict, root: Path) -> dict:
-    reserved = [k for k in case.get("env", {}) if k.startswith(("CLAUDE", "HERDR_"))
-                or (k.startswith("HC_") and k != "HC_TERMINAL_ID")]
+    reserved = [k for k in case.get("env", {}) if k != "HC_TERMINAL_ID"]
     if reserved:
-        raise ValueError(f"a case's env may not set {reserved}")
+        raise ValueError(f"a case's env may set only HC_TERMINAL_ID, not {reserved}")
     env = {k: base[k] for k in PASSED_ENV if k in base}
     env.update(case.get("env", {}))
     env["HERDR_SOCKET_PATH"] = str(root / ".tmp" / "herdr-none.sock")
@@ -124,6 +123,8 @@ def child_env(case: dict, base: dict, root: Path) -> dict:
                XDG_STATE_HOME=str(home / "state"), XDG_DATA_HOME=str(home / "data"))
     env["EVAL_ROOT"] = str(root)
     env["TMPDIR"] = str(root / ".tmp")
+    # The stub preflight resolves hc in bash; the case's own shell must be the same one.
+    env["SHELL"] = "/bin/bash"
     if "stub_bin" in case:
         stub = stub_for(case)
         # ~/.profile prepends ~/.local/bin in a login shell; BASH_ENV is sourced after it.
@@ -163,6 +164,11 @@ def remove_worktrees(root: Path) -> tuple[list[str], list[str]]:
         (removed if done.returncode == 0 else kept).append(path)
     subprocess.run(["git", "-C", str(root), "worktree", "prune"], capture_output=True)
     return removed, kept
+
+
+# Only a real hc writes core state; under the stub this dir never appears.
+def real_core_started(root: Path) -> bool:
+    return (hc_home(root) / "state" / "herdr-core").exists()
 
 
 # The coder works in the checkout (hc-flow R6), so any worktree a stubbed case cuts is a stray.
@@ -208,6 +214,8 @@ def run_case(case: dict) -> tuple[bool, list[str]]:
         before = stub_digests()
         try:
             ok, failures = _run_in(case, root)
+            if real_core_started(root):
+                ok, failures = False, failures + ["a real hc core started in the case's scratch dirs"]
         finally:
             if not hc_home(root).is_relative_to(root):
                 shutil.rmtree(hc_home(root), ignore_errors=True)

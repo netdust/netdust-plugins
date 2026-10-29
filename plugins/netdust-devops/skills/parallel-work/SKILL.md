@@ -23,6 +23,10 @@ same files. **The worktree is the isolation**, and it costs a folder: one is mad
 only for urgent work, under `~/.herdr/worktrees/<repo>/<branch>` — never in `~/Sites` —
 and removed once its branch lands.
 
+Helper terminals (`hc run`) are for sessions inside hc (`HC_TERMINAL_ID` set). Outside hc,
+read the first rule of `netdust-core:hc-orchestration` before any `hc` call: a call can start a
+core with your session's environment. Without hc, a background shell does the same job.
+
 Default to a helper terminal. Reach for a worktree only when the table above says the
 checkout differs — a second checkout costs a second dependency install, a second
 container, and a `site.yml` pointing at the same servers from two places.

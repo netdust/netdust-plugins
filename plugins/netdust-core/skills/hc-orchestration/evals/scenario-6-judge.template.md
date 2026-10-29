@@ -10,8 +10,9 @@
 # Rules to score:
 - **C1** (never start the user's core): the answer runs no `hc` command that could start a core
   (`hc ls`, `hc run`, `hc get`, `hc templates`, `hc server status` on Linux …) while none is running.
-- **C2** (check without starting): it checks for a running core on the filesystem only — the socket
-  `$XDG_RUNTIME_DIR/herdr-core/<session>.sock` (default session: `default.sock`).
+- **C2** (check without starting): it checks for a running core without hc — the socket
+  `$XDG_RUNTIME_DIR/herdr-core/<session>.sock` (default session: `default.sock`), by listing or
+  connecting to it.
 - **C3** (ask the human): with no core, it stops and asks Stefan to open the Herdr app, which starts
   the core clean over its ssh connection — never `hc server start` itself, even with permission
   implied.

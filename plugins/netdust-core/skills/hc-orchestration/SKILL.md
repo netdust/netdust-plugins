@@ -16,10 +16,13 @@ stands (one background subagent), and the first rule below decides whether you m
 
 hc builds its core's environment from whoever starts it, and any `hc` call starts a missing
 core. A core started from a Claude session hands that session's identity and messaging
-variables to every agent the app starts afterwards. So before your first `hc` call outside hc:
+variables to every agent the app starts afterwards. So probe before your first `hc` call, and
+again after any hc connection error, inside hc too (a core can die under you):
 
-- Linux: check the socket on the filesystem, `$XDG_RUNTIME_DIR/herdr-core/${HC_SESSION:-default}.sock`.
-  No socket → run no `hc` command at all (`hc ls` and `hc server status` start it too).
+- Linux: a socket file proves nothing, a crashed core leaves it behind. Connect to it, without hc:
+  `python3 -c 'import socket,sys; socket.socket(socket.AF_UNIX).connect(sys.argv[1])' "$sock"`,
+  where `$sock` is `$HC_SOCKET` if set, else `$XDG_RUNTIME_DIR/herdr-core/${HC_SESSION:-default}.sock`.
+  Refused or missing → no core: run no `hc` command at all (`hc ls` and `hc server status` start one).
 - Windows: `hc server status` never starts one.
 - No core → stop and ask Stefan to open the Herdr app; its ssh connection starts the core clean.
   Never `hc server start` yourself.
@@ -30,8 +33,8 @@ Scratch sessions in tests (own `HC_SESSION`, scratch XDG dirs) are exempt: throw
 
 `coder`, `reviewer` and `sparring` ship in netdust-core's `hc-templates/`; `bin/hc-templates`
 installs them (`--on <machine>` for another machine). `hc templates` lists what a machine has.
-`reviewer` and `sparring` are read-only by tool list; `sparring` argues the other side of a
-technical ruling. The gate is not an agent: `hc run --bg --name gate make gate`.
+`reviewer` and `sparring` are read-only by instruction (Edit and Write denied, no commit or push;
+Bash can still write); `sparring` argues the other side of a technical ruling. The gate is not an agent: `hc run --bg --name gate make gate`.
 
 ## Delegating to a helper
 
@@ -64,6 +67,8 @@ session Stefan planned with turns reviewer at his approval.
    `hc wait --children any`; each finding is one fix request closed by its RED→GREEN test.
 6. **Restart from disk.** Find the coder with `hc get <f>-coder`, never by a conversation name;
    re-read the plan, `git log` and the coder's ledger (`.superpowers/sdd/<plan>/progress.md`).
+   hc has no reparent: the coder still reports to your old address. Tell it
+   `hc send <f>-coder "your reviewer is now $HC_TERMINAL_ID"`, then wait with `hc wait <f>-coder`.
 
 ## Worktrees
 

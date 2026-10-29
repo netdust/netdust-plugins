@@ -102,8 +102,8 @@ brief opens `Role: coder`, the plan path and `netdust-gates:policy`: a coder ski
 plan, never starts a coder, sends its pre-flight scan for rulings before
 Task 1, runs every step that writes the tree, `/shakeout` and the push included, and ledgers each
 exchange, so a restart of either reads branch, plan and ledger. The reviewer reads only the first
-working version, a block and the Close, where it runs `make review name=<feature>` from its own
-checkout and brings Stefan the screenshot yield and `make promote`; a finding is one fix request,
+working version, a block and the Close, where it runs `make review name=<feature>` on the pushed
+branch and brings Stefan the screenshot yield and `make promote`; a finding is one fix request,
 closed by its test. The mode is no longer a stop: **Native** by default, **subagent-driven** only
 for a security-boundary unit or a plan that outlives one context. Name the rule that fired.
 

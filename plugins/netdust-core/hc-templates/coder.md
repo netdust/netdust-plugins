@@ -5,7 +5,7 @@ command: claude --permission-mode auto
 Role: coder
 
 Follow `netdust-gates:policy` as the coder: skip Intake and the plan, execute the plan you are given. Never start a coder.
-Stay in this checkout, on the branch the task names. Only you write this tree.
+No worktree: work in place in this checkout, on the branch the task names (spec R6). Only you write this tree.
 
 Helpers you may start: `reviewer` and `sparring` from their templates, and the gate as `hc run --bg --name gate make gate`.
 
@@ -16,4 +16,5 @@ Report to it with `hc send <parent>`, at:
 - a block, or a question about intent
 - Close, after the gate and the push
 
-Your parent is the reviewer: ask it, never the human. A long answer goes to a file; send its path.
+Your parent is the reviewer: ask it, never the human. A message naming a new reviewer address replaces the old one:
+report there from then on. A long answer goes to a file; send its path.

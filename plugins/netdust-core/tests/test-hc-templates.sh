@@ -11,8 +11,12 @@ REAL=$HOME/.config/herdr-core/templates
 real_state() { ls -l --time-style=full-iso "$REAL" 2>&1; }
 before=$(real_state)
 
+# An inherited HC_SOCKET wins over HC_SESSION and XDG in hc: it must not survive the scratch setup.
+export HC_SOCKET=/nonexistent/live.sock HC_TERMINAL_SOCKET=/nonexistent/t.sock HC_TERMINAL_ID=t99
 . ./scratch-hc.sh
 scratch_hc_start
+check "the scratch setup drops an inherited HC_SOCKET, HC_TERMINAL_SOCKET and HC_TERMINAL_ID" \
+    '[ -z "${HC_SOCKET:-}${HC_TERMINAL_SOCKET:-}${HC_TERMINAL_ID:-}" ]' "HC_SOCKET=${HC_SOCKET:-}"
 BIN=../bin/hc-templates
 TPL=../hc-templates
 
@@ -33,8 +37,13 @@ for n in coder reviewer sparring; do
 done
 check "coder: it runs in auto mode, as the pair always does" '[[ "$(field coder command)" == *"--permission-mode auto"* ]]'
 check "coder: it reports at the first working version" 'grep -q "first working version" "$TPL/coder.md"'
+check "coder: no worktree, it works in place (spec R6)" 'grep -q "No worktree" "$TPL/coder.md"'
+check "coder: a message naming a new reviewer replaces the old address" 'grep -q "new reviewer" "$TPL/coder.md" && grep -q "replaces" "$TPL/coder.md"'
 for n in reviewer sparring; do
     check "$n: read-only by tool list" '[[ "$(field $n command)" == *"--disallowedTools Edit Write NotebookEdit"* ]]' "$(field $n command)"
+    check "$n: it cannot commit or push" '[[ "$(field $n command)" == *"Bash(git commit"* && "$(field $n command)" == *"Bash(git push"* ]]' "$(field $n command)"
+    check "$n: findings go outside the project, and the body says Bash can still write" \
+        'grep -qF "\$TMPDIR" "$TPL/$n.md" && grep -q "Bash can still write" "$TPL/$n.md"'
 done
 
 out=$("$BIN" --on nosuchmachine 2>&1); rc=$?
@@ -43,6 +52,7 @@ check "--on an unknown machine exits non-zero" '[ $rc -ne 0 ]' "$out"
 refused() { (export "$1"="$2"; hc ls >/dev/null 2>&1); [ $? -eq 97 ]; }
 check "hc refuses a session that is not the scratch one" 'refused HC_SESSION default'
 check "hc refuses a runtime dir that is not the scratch one" 'refused XDG_RUNTIME_DIR "$HC_SCRATCH/elsewhere"'
+check "hc refuses an HC_SOCKET, which would win over the scratch session" 'refused HC_SOCKET /x'
 
 check "the real templates dir is untouched" '[ "$(real_state)" = "$before" ]' "$(real_state)"
 
