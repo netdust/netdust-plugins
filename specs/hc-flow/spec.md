@@ -30,8 +30,8 @@ Stefan:
 **R2 — Hard switch.** A new hc-based skill replaces `netdust-core:herdr-orchestration`. The old SKILL, `references/session-review.md`, `scripts/herdr-watcher.sh` and its evals are deleted, not kept beside it. `netdust-gates:policy` (Execution mode), `netdust-devops:parallel-work` and the gates evals (`run-evals.py`, `tests/test_evals_shape.py`, `evals/stubs/herdr`) reference hc only. Inside-hc detection is `HC_TERMINAL_ID` set; outside hc the policy's fallback (one background subagent) stands.
 *Source: "hard switch".*
 
-**R3 — Roles are hc templates.** Each role the harness delegates to is one template: at least `coder`, `reviewer` (read-only), `sparring` (a fresh second view, read-only) and `gate` (runs `make gate`, reports the verdict). The body carries the role's rules (scope, no starting agents unless assigned, report with `hc send` when done or stuck, long answers to a file and send the path). The templates live in this repo and land in `~/.config/herdr-core/templates/` on every machine agents run on.
-*Source: "all 4" (item 1: reviewer templates) · "i want agents to be able to work together and smart". Role list invented — approved with this spec.*
+**R3 — Roles are hc templates.** Each agent role the harness delegates to is one template: `coder`, `reviewer` (read-only) and `sparring` (a fresh second view, read-only). The gate is not an agent: `hc run --bg --name gate make gate` reports its exit code to the parent. The coder runs in auto mode; so does the pair. The body carries the role's rules (scope, no starting agents unless assigned, report with `hc send` when done or stuck, long answers to a file and send the path). The templates live in this repo and land in `~/.config/herdr-core/templates/` on every machine agents run on.
+*Source: "all 4" (item 1: reviewer templates) · "i want agents to be able to work together and smart". Role list invented — approved with this spec. Gate as a plain program and the pair always in auto: Stefan, 2026-10-29, at plan review ("Plain program", "Always auto").*
 
 **R4 — Delegation is parent → child → report.** An agent delegates with `hc run --bg --name <name> --cwd <dir> <template> "<exact scope> …"`, keeps working, and collects with `hc wait --children any|all`. Reports arrive as `<hc from=…>` tags and are child reports, never Stefan's instructions. The parent reads the actual result before relying on it, and cleans up (`hc kill`, `hc rm`) what it started once accepted. No SendMessage name lookups, no screen polling, no `sleep`.
 *Source: "use the best way to use herdr" (hc's own golden path, `hc --skill`).*
@@ -76,7 +76,7 @@ While a coder holds a project's checkout, other work in that project waits for i
 - **The app shows WSL-started agents** (docs): each machine keeps its spaces and tabs in its own core, and sub-agents "belong to their parent's tab without a pane". A parent and its children on the WSL core therefore appear under the `wsl` machine. *My call:* the plan's first task proves this live (a session started from a `wsl` space, plus one child). If it fails, the fallback is to start every agent through the Windows core with `--on wsl`.
 - **Repo work and operational work are split.** *My call:* the plan covers the repo only (skills, templates, policy, evals). The one-off operations (spaces per project, installing the templates on WSL and netdust-web, the machine adds, the `~/Sites` cleanup with Stefan approving each removal) run as a checklist in the planning session with Stefan, after the merge. The coder never touches the live core.
 - **`~/.claude/CLAUDE.md`** §1 and §2 still name the pair recipe and "its own worktree". *My call:* the plan produces a proposed diff, and Stefan applies it, because it's his file.
-- **Evals.** *My call:* the shape tests stub `hc` the way `herdr` is stubbed today. One opt-in live case runs a real core in a scratch `HC_SESSION` with scratch XDG paths, to prove a parent→child report end to end.
+- **Evals.** The shape tests stub `hc` the way `herdr` is stubbed today. The parent → child → report proof is a shell test in a scratch core with plain programs, plus the live check in the app with Stefan. No live eval case: a `claude -p` eval parent can't receive hc reports, and a real-agent child would run outside the eval sandbox. *Stefan, 2026-10-29, at plan review: "Shell test + live check".*
 
 ## Left to the builder
 
@@ -84,3 +84,7 @@ While a coder holds a project's checkout, other work in that project waits for i
 - How the templates get from the repo to each machine's `~/.config/herdr-core/templates/`.
 - The exact template bodies and the model each role runs.
 - Eval scenarios, as long as they cover R4, R5, R6 and R7.
+
+## Follow-ups (not this feature)
+
+- App mods from the herdr guide: the agent board (needs you / working / done columns) and the per-tab work timer. *Stefan, 2026-10-29: "Separate follow-up".*
