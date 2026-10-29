@@ -11,6 +11,22 @@ terminal() {
         "$1" "$2" "$EVAL_ROOT" "$3"
 }
 
+opt() {
+    local flag=$1
+    shift
+    while [ $# -gt 0 ]; do
+        [ "$1" = "$flag" ] && { printf '%s' "${2:-}"; return; }
+        shift
+    done
+}
+
+# Children this stub "started", one `address name` line each, so ls and get can show them.
+started="$dir/started"
+child() {
+    printf '{"address":"%s","name":"%s","parent":"t1","cwd":"%s","state":"live","turn":1,"status":"working","labels":{}}' \
+        "$1" "$2" "$EVAL_ROOT"
+}
+
 # The program or template: the first argument after the flags (and their values).
 program() {
     while [ $# -gt 0 ]; do
@@ -26,9 +42,12 @@ program() {
 
 verb=${1:-}
 [ $# -gt 0 ] && shift
+for arg in "$@"; do
+    case "$arg" in --help | -h) verb=--help ;; esac
+done
 case "$verb" in
     --skill | --help | help | "")
-        echo "hc 0.1.13 (eval stub). run [--bg] [--name N] [--label K=V] [--outlive-parent] <template|program> [task];"
+        echo "Usage: hc 0.1.13 (eval stub). run [--bg] [--name N] [--label K=V] [--outlive-parent] <template|program> [task];"
         echo "get <t>; ls [--all]; wait [<t>] [--children any|all]; send <t> <text>; read <t>; templates."
         ;;
     --version)
@@ -37,22 +56,32 @@ case "$verb" in
     run)
         prog=$(program "$@")
         [ "$prog" = coder ] && echo coder > "$dir/run-coder"
-        terminal t2 "$prog" ""
+        address="t$(( $(cat "$started" 2>/dev/null | wc -l) + 2 ))"
+        name=$(opt --name "$@")
+        echo "$address ${name:-$prog}" >> "$started"
+        terminal "$address" "${name:-$prog}" ""
         printf ',"first_message":{"sent":true,"turn":1}}\n'
         ;;
     get)
         if [ "${1:-}" = t1 ]; then
             printf '{"address":"t1","name":"thinker","parent":null,"cwd":"%s","state":"live","turn":3,"labels":{"herdr.space":"s1"}}\n' "$EVAL_ROOT"
+        elif line=$(grep -m1 -E "^(${1:-}) |^t[0-9]+ ${1:-}\$" "$started" 2>/dev/null); then
+            child $line
+            echo
         else
-            terminal t2 "${1:-coder}" ""
-            printf ',"status":"idle"}\n'
+            printf '{"error":{"kind":"not_found","message":"no terminal %s"}}\n' "${1:-}"
+            exit 3
         fi
         ;;
     ls)
-        printf '{"hidden_finished":0,"terminals":[{"address":"t1","name":"thinker","state":"live","turn":3,"labels":{"herdr.space":"s1"}}]}\n'
+        printf '{"hidden_finished":0,"terminals":[{"address":"t1","name":"thinker","state":"live","turn":3,"labels":{"herdr.space":"s1"}}'
+        while read -r address name; do
+            printf ','; child "$address" "$name"
+        done < <(cat "$started" 2>/dev/null)
+        printf ']}\n'
         ;;
     wait)
-        printf '{"terminal":"t2","ended":true,"reason":"idle","turn":1,"children":[]}\n'
+        printf '{"terminal":"t1","ended":false,"reason":"timeout","turn":3,"children":[]}\n'
         ;;
     send)
         printf '{"turn":1,"started":true}\n'

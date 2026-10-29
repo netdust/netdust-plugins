@@ -92,6 +92,9 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
         calls = (root / ".hc" / "calls.log").read_text() if (root / ".hc" / "calls.log").is_file() else ""
         marker = (root / ".hc" / "run-coder").read_text() if (root / ".hc" / "run-coder").is_file() else ""
         space = stub_sh("hc get t1 --json")
+        listed = stub_sh("hc ls --json")
+        help_out = stub_sh("hc run --help")
+        after_help = stub_sh("hc ls --json")
         excluded = (root / ".git" / "info" / "exclude").read_text()
 
         other = Path(tmp) / "other"
@@ -132,6 +135,11 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
              f"the stub logs `run … coder …` to .hc/calls.log, marks .hc/run-coder and answers like hc (got {out!r})"),
             (_json(space).get("labels", {}).get("herdr.space") == "s1",
              f"the stub's `hc get t1` carries a herdr.space label, so the pair recipe finds its space (got {space!r})"),
+            (any(t.get("name") == "stubbed-coder" and t.get("parent") == "t1"
+                 for t in _json(listed).get("terminals", [])),
+             f"the stub's `hc ls` lists the child it started, under its parent (got {listed!r})"),
+            ("Usage" in help_out and after_help == listed,
+             f"`hc run --help` prints usage and starts nothing, as hc does (got {help_out!r})"),
             (".hc/" in excluded.splitlines() and ".herdr/" not in excluded.splitlines(),
              "the sandbox's .git/info/exclude hides .hc/, the stub's log"),
             (not sibling.exists() and str(sibling) in removed,
@@ -224,6 +232,20 @@ def _refuses(stub_for) -> bool:
     return False
 
 
+def _stale_reviews(cases: list[dict]) -> list[str]:
+    stale = []
+    for c in cases:
+        for rel, content in c["files"].items():
+            m = re.search(r"(?m)^Reviewed-plan: ([0-9a-f]+)", content) if rel.endswith("plan-review.md") else None
+            plan = c["files"].get(rel.replace("plan-review.md", "plan.md"))
+            if m and plan is not None:
+                blob = subprocess.run(["git", "hash-object", "--stdin"], input=plan, capture_output=True,
+                                      text=True).stdout.strip()
+                if m.group(1) != blob:
+                    stale.append(f"{c['id']}:{rel}")
+    return stale
+
+
 def _json(text: str) -> dict:
     try:
         return json.loads(text)
@@ -311,6 +333,8 @@ def run() -> list[tuple[bool, str]]:
          "no case allows herdr: every flow runs on hc"),
         (not any("Bash(git *)" in c.get("allow", []) for c in cases),
          "no case allows every git command: `git -c alias.x='!sh'` is arbitrary execution"),
+        (not _stale_reviews(cases),
+         f"a case's plan review names its plan's real blob, so a careful session has no reason to stop (stale: {_stale_reviews(cases)})"),
         (_compiles(cases), "every expect regex compiles and names where it looks"),
         (parses, "run-evals.py parses"),
         *(_sandbox_checks(_runner()) if parses else [(False, "run-evals.py loads")]),
