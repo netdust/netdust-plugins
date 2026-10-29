@@ -101,10 +101,11 @@ def stub_digests() -> dict:
     return {f.name: hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted((EVALS / "stubs").iterdir())}
 
 
-# hc refuses a socket path over 107 bytes; a sandbox too deep for it gets a short dir in /tmp.
+# hc refuses a socket path over 107 bytes, the longest being its holder's `<session>.holder.<8 hex>.sock`;
+# a sandbox too deep for it gets a short dir in /tmp.
 def hc_home(root: Path) -> Path:
     home = root / ".tmp" / "hc"
-    if len(f"{home}/run/herdr-core/{HC_SESSION}.sock") <= 107:
+    if len(f"{home}/run/herdr-core/{HC_SESSION}.holder.sock") + 1 + 8 <= 107:
         return home
     return Path("/tmp") / f"hc{hashlib.sha256(str(root).encode()).hexdigest()[:8]}"
 

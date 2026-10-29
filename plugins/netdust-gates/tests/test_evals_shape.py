@@ -39,8 +39,9 @@ SET = {"HERDR_SOCKET_PATH", "HC_SESSION", "EVAL_ROOT", "XDG_RUNTIME_DIR", "XDG_C
 XDG = ("XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME")
 
 
+# hc's own rule (paths.rs): the longest path is the holder's, `<session>.holder.<8 hex>.sock`.
 def _socket_fits(env: dict) -> bool:
-    return len(f"{env.get('XDG_RUNTIME_DIR', '')}/herdr-core/{env.get('HC_SESSION', '')}.sock") <= 107
+    return len(f"{env.get('XDG_RUNTIME_DIR', '')}/herdr-core/{env.get('HC_SESSION', '')}.holder.sock") + 1 + 8 <= 107
 
 
 def _compiles(cases: list[dict]) -> bool:
@@ -77,7 +78,7 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
         herdr_keys = {k: v for k, v in bare.items() if k.startswith("HERDR_")}
         hc_keys = {k: v for k, v in bare.items() if k.startswith("HC_")}
         with_env = child_env({"id": "x", "env": {"HC_TERMINAL_ID": "t1"}}, dict(LIVE), root)
-        deep = Path(tmp) / ("d" * 90)
+        deep = Path(tmp) / ("d" * (108 - 9 - len(f"{tmp}/x/.tmp/hc/run/herdr-core/eval.holder.sock") + 1))
         far_env = child_env({"id": "deep"}, dict(LIVE), deep)
 
         case = {"id": "stubbed", "files": {"target.txt": "old\n"}, "commit": True, "stub_bin": "stubs/hc",
