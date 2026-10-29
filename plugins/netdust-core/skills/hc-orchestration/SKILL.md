@@ -16,12 +16,14 @@ stands (one background subagent), and the first rule below decides whether you m
 
 hc builds its core's environment from whoever starts it, and any `hc` call starts a missing
 core. A core started from a Claude session hands that session's identity and messaging
-variables to every agent the app starts afterwards. So probe before your first `hc` call, and
-again after any hc connection error, inside hc too (a core can die under you):
+variables to every agent the app starts afterwards. Outside hc, probe before your first `hc`
+call. Inside hc, probe only after an hc connection error, before any retry: the core was live
+when your terminal started, and its holder restarts a crashed one.
 
 - Linux: a socket file proves nothing, a crashed core leaves it behind. Connect to it, without hc:
-  `python3 -c 'import socket,sys; socket.socket(socket.AF_UNIX).connect(sys.argv[1])' "$sock"`,
-  where `$sock` is `$HC_SOCKET` if set, else `$XDG_RUNTIME_DIR/herdr-core/${HC_SESSION:-default}.sock`.
+  `python3 -c 'import socket,sys; socket.socket(socket.AF_UNIX).connect(sys.argv[1])' <path>`,
+  where `<path>` is `$HC_SOCKET` if set, else `$XDG_RUNTIME_DIR/herdr-core/<session>.sock`
+  (`default`), resolved to a literal path. It needs unsandboxed Bash; blocked → ask Stefan.
   Refused or missing → no core: run no `hc` command at all (`hc ls` and `hc server status` start one).
 - Windows: `hc server status` never starts one.
 - No core → stop and ask Stefan to open the Herdr app; its ssh connection starts the core clean.
@@ -97,3 +99,6 @@ not urgent: it waits, or happens without writing the tree.
 - `blocked` means a human. `--force` never answers a permission prompt for Stefan.
 - `reason: timeout` is a check-in: wait again.
 - A plain program has no status: it reports by exit note, read its output with `hc read`.
+- The holder restarts a crashed core with the holder's environment, so a clean start means the
+  first start of both, which is the app's ssh connection; a core restarted from a clean shell
+  still runs under the old holder.

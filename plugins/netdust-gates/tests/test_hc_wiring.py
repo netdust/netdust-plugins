@@ -51,6 +51,10 @@ def run() -> list[tuple[bool, str]]:
     return [
         ("AF_UNIX" in skill and "connect" in skill,
          "hc-orchestration decides whether a core runs by connecting to its socket, not by the file existing"),
+        ("inside hc, probe only after an hc connection error" in skill.lower() and "unsandboxed" in skill,
+         "hc-orchestration: probe before the first call outside hc; inside hc only after a connection error (reviewer ruling A)"),
+        ("holder's environment" in skill,
+         "hc-orchestration: a crashed core is restarted by its holder, with the holder's environment"),
         ("your reviewer is now" in skill,
          "hc-orchestration: a restarted reviewer tells its coder its new address (hc has no reparent)"),
         ("HC_TERMINAL_ID" in parallel and "outside hc" in parallel.lower(),
