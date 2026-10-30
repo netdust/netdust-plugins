@@ -43,6 +43,16 @@ Not mechanical:
   `image_align: top` (parts stay siblings of `.el-item`) and re-place with CSS grid; the
   image child is a `<picture>`; the `uk-margin-top` on `.el-title/.el-meta/.el-content`
   is `!important`, so the override is too.
+- **A footer (or any section) revealed from under the page is a section FIELD**:
+  `sticky: cover | reveal` ("Sticky Effect") — YOOtheme emits the `uk-sticky` and the
+  negative z-index, the parent theme's LESS carries the stacking. Never a hand-written
+  sticky footer (josworld 2026-09-10).
+- **A mobile menu panel that ends at its content (page visible beneath)** is
+  `mobile.dialog.layout: dropbar-top` + `mobile.header.transparent`. The inset dropbar is
+  then stretched to the viewport by the drop script and `reveal-top` animates that same
+  inline height, so never size the box in CSS — paint the panel on the inner
+  `.tm-height-min-1-1` wrapper, as a DESCENDANT (the reveal wraps it in a temporary div).
+  (josworld 2026-09-10)
 - **Scroll animation is native**: `animation: "parallax"` + `parallax_x/y/opacity`
   (`"from,to"` or `"v pos%"` stops) + `parallax_target: "!.uk-section"`. A logo marquee
   is a `panel-slider` with `slider_width: ""` + `slider_parallax` (a grid cannot bleed);

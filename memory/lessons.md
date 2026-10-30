@@ -15,3 +15,9 @@
 - herdr sessions are separate servers with separate ID spaces — a bare `herdr` command targets the session the calling pane lives in, not the project's session. Creating topology without first checking `herdr session list` puts it in whatever session you happen to be sitting in. There is no move between sessions; the only fix is rebuild in the right one and close the wrong one.
 - the session-review watcher observes the main agent's pane/tab live through herdr — lifecycle transitions, terminal title, viewport at the transition — not the session's transcript JSONL. Transcripts are complete but post-hoc; the point is watching the process as it runs, which also works on panes whose transcripts aren't readable (remote boxes, other agent kinds).
 - `herdr agent prompt --wait` can return a settled state produced by agent STARTUP rather than by your prompt, with no `agent_prompt_stalled` error. `done` immediately after `agent start` is not evidence the text ran. Verify by the terminal title changing from the generic `✳ Claude Code` to a conversation title, or by `agent get` reporting `agent_session`.
+
+### 2026-10-29
+- `/plan-review` ground-truths against the local `main` ref, which can be days behind origin. The reviewer should `git fetch` and read `origin/<production>` instead. Proposed skill lesson for netdust-gates with an eval case; not written to the plugin cache.
+
+### 2026-10-29
+- hc's core inherits the environment of whoever starts it, and any `hc` call auto-starts a missing core. Never run the first `hc` command from inside a Claude session; let the Herdr app (over ssh) or a clean login shell start it.
