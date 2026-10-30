@@ -63,7 +63,7 @@ def _run(tool_name: str, tool_input: dict, raw_stdin: str | None = None,
             capture_output=True,
             text=True,
             timeout=10,
-            env={**os.environ, **(env or {})},
+            env={**{k: v for k, v in os.environ.items() if k != "NETDUST_GUARD_ASK"}, **(env or {})},
         )
         return result.returncode, result.stdout
 
@@ -100,6 +100,21 @@ def _unattended_case(desc: str, cmd: str, expected: str, value: str = "off") -> 
     got = _decision(out)
     passed = (got == expected) and (rc == 0)
     return passed, f"{desc}: NETDUST_GUARD_ASK={value} {cmd!r} (expected {expected}, got {got}, rc={rc})"
+
+
+def _runner_flag_case() -> tuple[bool, str]:
+    """An unattended session running this suite exports the flag itself; it must not reach the cases."""
+    saved = os.environ.get("NETDUST_GUARD_ASK")
+    os.environ["NETDUST_GUARD_ASK"] = "off"
+    try:
+        passed, desc = _bash_case("(u6) the runner's own NETDUST_GUARD_ASK=off never reaches a case",
+                                  "rm -rf build/", "ask")
+    finally:
+        if saved is None:
+            del os.environ["NETDUST_GUARD_ASK"]
+        else:
+            os.environ["NETDUST_GUARD_ASK"] = saved
+    return passed, desc
 
 
 def _raw_case(desc: str, raw: str, expected: str) -> tuple[bool, str]:
@@ -272,6 +287,7 @@ def run() -> list[tuple[bool, str]]:
     r.append(_unattended_case("(u4) 0 also waives", "rm -rf build/", "passthrough", value="0"))
     # An inline prefix on the COMMAND never reaches the hook process.
     r.append(_bash_case("(u5) inline env prefix does not waive", "NETDUST_GUARD_ASK=off rm -rf build/", "ask"))
+    r.append(_runner_flag_case())
 
     # === Attack 1: rm -rf on broad paths → ask ===
     r.append(_bash_case("rm -rf /", "rm -rf /", "ask"))
