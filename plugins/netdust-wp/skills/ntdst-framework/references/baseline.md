@@ -11,8 +11,9 @@ It defers all wiring to `after_setup_theme` (after `plugins_loaded:5`) so the co
 container is guaranteed to exist, and **fails quiet** if the framework is absent —
 it never fatals a site that has ntdst-baseline without ntdst-core.
 
-It conflicts with `ntdst-core < 4.2` — Composer refuses the pair rather than
-booting a baseline against a core that lacks what it calls.
+It requires `netdust/ntdst-core ^5.4` (the hard require replaced the old
+`< 4.2` conflict) — Composer resolves the pair, so a baseline never boots against
+a core that lacks what it calls.
 
 ## Eleven modules — seven on by default, four opt-in
 
@@ -152,7 +153,7 @@ Eight rows, all ON by default, each a switch in the owning service's `config` fi
 
 | Switch | Module | Default | What it does |
 |---|---|---|---|
-| `application_passwords_capability` (C1) | `security` | `manage_options` | `wp_is_application_passwords_available` false for users without the capability; `authorize-application.php` 403. The value is a capability: a site onboarding an editor as an MCP client lowers it (`edit_posts`); `false` turns the row off |
+| `application_passwords_capability` (C1) | `security` | `manage_options` | `wp_is_application_passwords_available` false for users without the capability; `authorize-application.php` answers 501 (WordPress's own "not available" status, also on the REST controller). The value is a capability: a site onboarding an editor as an MCP client lowers it (`edit_posts`); `false` turns the row off |
 | `revoke_sessions_after_reset` (C2) | `security` | on | on `after_password_reset` and a `profile_update` carrying a password: destroy other sessions, delete application passwords |
 | `disable_rest_jsonp` (C3) | `security` | on | `rest_jsonp_enabled` false |
 | `close_pingbacks` (C4) | `security` | on | `pings_open` false, `X-Pingback` header gone, `pingback.ping` unset from XML-RPC |

@@ -213,7 +213,7 @@ existing voice. INV-4 holds: nothing counts logins outside the limiter.
 
 | Row | Service | Switch | What it does |
 |---|---|---|---|
-| C1 | security | `application_passwords_capability` → `manage_options` | `wp_is_application_passwords_available` false for users without the capability; `authorize-application.php` 403. The value is the capability; a site onboarding an editor as an MCP client lowers it (`edit_posts`); `false` turns the row off. Default: administrators only |
+| C1 | security | `application_passwords_capability` → `manage_options` | `wp_is_application_passwords_available` false for users without the capability; `authorize-application.php` 501. The value is the capability; a site onboarding an editor as an MCP client lowers it (`edit_posts`); `false` turns the row off. Default: administrators only |
 | C2 | security | `revoke_sessions_after_reset` | on `after_password_reset` and a `profile_update` carrying a password: destroy other sessions, delete application passwords |
 | C3 | security | `disable_rest_jsonp` | `rest_jsonp_enabled` false |
 | C4 | security | `close_pingbacks` | `pings_open` false, `X-Pingback` header gone, `pingback.ping` unset from XML-RPC |
