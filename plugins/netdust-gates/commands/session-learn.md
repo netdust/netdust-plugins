@@ -32,7 +32,8 @@ lessons file, an eval or a project file until he does.
 ## On his approval — apply, then ask again
 
 - **netdust** proposals: in the marketplace source (`~/Projects/netdust-plugins`), on a new
-  branch in its own worktree — each approved lesson in its skill's `lessons.md`, each with the
+  branch in that checkout (a worktree only when it is busy and the lesson urgent) — each
+  approved lesson in its skill's `lessons.md`, each with the
   eval case the proposal named, the plugin's tests run. Then show him the diff and wait: the
   merge is a second approval.
 - **project** proposals: in the project, as he approved them.

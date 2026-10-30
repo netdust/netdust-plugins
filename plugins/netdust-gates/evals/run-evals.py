@@ -9,8 +9,8 @@ then checks the plan, the reply and the files it left against the case's regexes
 `claude` CLI and a network; it is not part of tests/run.sh. Stochastic: a red case is a
 signal to tighten the skill, not proof of a regression.
 
-No case can reach a live herdr server or Claude session: every child gets its own environment
-(`child_env`) with a socket path nobody listens on, and a case's `stub_bin` shadows `herdr`
+No case can reach a live hc core or Claude session: every child gets its own environment
+(`child_env`) with its own hc session and XDG dirs, and a case's `stub_bin` shadows `hc`
 even in a login shell, checked before the case starts. No case loads the user's settings:
 `claude_args` runs it --restricted, with the plugins, permissions and env it builds itself.
 """
@@ -43,16 +43,16 @@ READ_ONLY = [PLUGIN.parent, Path.home() / ".claude" / "plugins" / "cache"]
 PROJECT_CLAUDE_MD = (
     "The first action on code-changing work is the `netdust-gates:policy` skill.\n"
     "Specs and plans live in `specs/<feature>/`.\n")
-# A named herdr session has its own socket, so `Bash(herdr *)` alone would let a case reach it.
-# git runs anything through -c alias.x='!sh', reaches other repos through -C, and writes files
-# anywhere through --output or a grep pager; only the stub cuts worktrees.
-DISALLOWED = ["Bash(herdr --session*)", "Bash(herdr --machine*)", "Bash(herdr --remote*)",
-              "Bash(herdr * --session*)", "Bash(herdr * --machine*)", "Bash(herdr * --remote*)",
-              "Bash(HERDR_*)", "Bash(herdr session*)", "Bash(herdr plugin*)", "Bash(herdr update*)",
-              "Bash(herdr server*)", "Bash(herdr machine*)", "Bash(herdr config*)", "Bash(herdr integration*)",
+# These hc verbs run programs or write files outside Claude Code's sandbox, or reach another core
+# or machine; herdr is not used at all. git runs anything through -c alias.x='!sh', reaches other
+# repos through -C, and writes files anywhere through --output or a grep pager; no case cuts a worktree.
+DISALLOWED = ["Bash(hc server*)", "Bash(hc machine*)", "Bash(hc update*)", "Bash(hc exec*)", "Bash(hc file*)",
+              "Bash(hc put*)", "Bash(hc keys*)", "Bash(hc connect*)", "Bash(hc * --on*)", "Bash(hc --on*)",
+              "Bash(HC_*)", "Bash(herdr*)",
               "Bash(git -C *)", "Bash(git -c *)", "Bash(git --*)", "Bash(git push*)", "Bash(git config*)",
               "Bash(git worktree add*)", "Bash(git grep* -O*)", "Bash(git grep* --open-files-in-pager*)",
               "Bash(git * --output*)"]
+HC_SESSION = "eval"
 PASSED_ENV = ("HOME", "USER", "LOGNAME", "SHELL", "LANG", "TERM", "PATH", "TMPDIR")
 GIT = ["git", "-c", "user.name=eval", "-c", "user.email=eval@localhost", "-c", "commit.gpgsign=false"]
 
@@ -101,21 +101,35 @@ def stub_digests() -> dict:
     return {f.name: hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted((EVALS / "stubs").iterdir())}
 
 
+# hc refuses a socket path over 107 bytes, the longest being its holder's `<session>.holder.<8 hex>.sock`;
+# a sandbox too deep for it gets a short dir in /tmp.
+def hc_home(root: Path) -> Path:
+    home = root / ".tmp" / "hc"
+    if len(f"{home}/run/herdr-core/{HC_SESSION}.holder.sock") + 1 + 8 <= 107:
+        return home
+    return Path("/tmp") / f"hc{hashlib.sha256(str(root).encode()).hexdigest()[:8]}"
+
+
 def child_env(case: dict, base: dict, root: Path) -> dict:
-    reserved = [k for k in case.get("env", {}) if k.startswith("CLAUDE") or (k.startswith("HERDR_") and k != "HERDR_ENV")]
+    reserved = [k for k in case.get("env", {}) if k != "HC_TERMINAL_ID"]
     if reserved:
-        raise ValueError(f"a case's env may not set {reserved}")
+        raise ValueError(f"a case's env may set only HC_TERMINAL_ID, not {reserved}")
     env = {k: base[k] for k in PASSED_ENV if k in base}
     env.update(case.get("env", {}))
-    env["HERDR_SOCKET_PATH"] = str(root / ".herdr" / "none.sock")
+    env["HERDR_SOCKET_PATH"] = str(root / ".tmp" / "herdr-none.sock")
+    env["HC_SESSION"] = HC_SESSION
+    home = hc_home(root)
+    env.update(XDG_RUNTIME_DIR=str(home / "run"), XDG_CONFIG_HOME=str(home / "config"),
+               XDG_STATE_HOME=str(home / "state"), XDG_DATA_HOME=str(home / "data"))
     env["EVAL_ROOT"] = str(root)
-    env["XDG_RUNTIME_DIR"] = str(root / ".xdg")
     env["TMPDIR"] = str(root / ".tmp")
+    # The stub preflight resolves hc in bash; the case's own shell must be the same one.
+    env["SHELL"] = "/bin/bash"
     if "stub_bin" in case:
         stub = stub_for(case)
         # ~/.profile prepends ~/.local/bin in a login shell; BASH_ENV is sourced after it.
         env.update(EVAL_STUB_DIR=str(stub.parent), BASH_ENV=str(EVALS / "stubs" / "bash-env"),
-                   HERDR_BIN_PATH=str(stub), PATH=f"{stub.parent}:{env.get('PATH', '')}")
+                   PATH=f"{stub.parent}:{env.get('PATH', '')}")
     return env
 
 
@@ -124,9 +138,9 @@ def prepare_sandbox(case: dict, root: Path) -> None:
     for rel, content in case["files"].items():
         _write(root, rel, content)
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
-    (root / ".xdg").mkdir(mode=0o700)
     (root / ".tmp").mkdir()
-    _write(root, ".git/info/exclude", ".herdr/\n.xdg/\n.tmp/\n")
+    (hc_home(root) / "run").mkdir(mode=0o700, parents=True, exist_ok=True)
+    _write(root, ".git/info/exclude", ".hc/\n.tmp/\n")
     if case.get("commit"):
         subprocess.run([*GIT, "add", "-A"], cwd=root, check=True)
         subprocess.run([*GIT, "commit", "-q", "-m", "eval sandbox"], cwd=root, check=True)
@@ -152,10 +166,14 @@ def remove_worktrees(root: Path) -> tuple[list[str], list[str]]:
     return removed, kept
 
 
+# Only a real hc writes core state; under the stub this dir never appears.
+def real_core_started(root: Path) -> bool:
+    return (hc_home(root) / "state" / "herdr-core").exists()
+
+
+# The coder works in the checkout (hc-flow R6), so any worktree a stubbed case cuts is a stray.
 def stray_worktrees(case: dict, root: Path, paths: list[str]) -> list[str]:
-    if "stub_bin" not in case:
-        return []
-    return [path for path in paths if Path(path).resolve() != (root / ".herdr" / "wt").resolve()]
+    return list(paths) if "stub_bin" in case else []
 
 
 def spawn(args: list[str], root: Path, env: dict, timeout: int) -> subprocess.CompletedProcess | None:
@@ -196,7 +214,11 @@ def run_case(case: dict) -> tuple[bool, list[str]]:
         before = stub_digests()
         try:
             ok, failures = _run_in(case, root)
+            if real_core_started(root):
+                ok, failures = False, failures + ["a real hc core started in the case's scratch dirs"]
         finally:
+            if not hc_home(root).is_relative_to(root):
+                shutil.rmtree(hc_home(root), ignore_errors=True)
             removed, kept = remove_worktrees(root)
             for path in removed:
                 print(f"      removed worktree {path}")
@@ -207,7 +229,7 @@ def run_case(case: dict) -> tuple[bool, list[str]]:
             ok, failures = False, failures + [f"evals/stubs/ changed during the case: {changed}"]
         strays = stray_worktrees(case, root, removed + kept)
         if strays:
-            ok, failures = False, failures + [f"a worktree other than .herdr/wt: {strays}"]
+            ok, failures = False, failures + [f"a worktree, where the coder works in the checkout: {strays}"]
         return ok, failures
 
 
@@ -217,10 +239,10 @@ def _run_in(case: dict, root: Path) -> tuple[bool, list[str]]:
         return False, [refusal]
     env = child_env(case, dict(os.environ), root)
     if "stub_bin" in case:
-        resolved = subprocess.run(["bash", "-lc", "command -v herdr"], cwd=root, env=env,
+        resolved = subprocess.run(["bash", "-lc", "command -v hc"], cwd=root, env=env,
                                   capture_output=True, text=True).stdout.strip()
-        if resolved != env["HERDR_BIN_PATH"]:
-            return False, [f"refused to start: herdr resolves to {resolved!r}, not the stub"]
+        if resolved != str(stub_for(case)):
+            return False, [f"refused to start: hc resolves to {resolved!r}, not the stub"]
     outside = [hit for glob in case["absent"] if glob.startswith("~/") for hit in found(root, glob)]
     if outside:
         return False, [f"refused to start: {outside} already exist"]

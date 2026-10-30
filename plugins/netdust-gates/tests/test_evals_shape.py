@@ -2,7 +2,7 @@
 The cases themselves need the `claude` CLI and are run by hand: python3 evals/run-evals.py
 
 The runner's child environment is tested through `child_env` and `prepare_sandbox`, because an
-eval started inside herdr must never reach the live herdr server (two-session spec R11)."""
+eval started inside hc must never reach the live hc core (hc-flow spec R10)."""
 import importlib.util
 import json
 import os
@@ -17,13 +17,17 @@ IDS = ["wp-feature-constraints", "security-surface-review-focus", "small-tweak-n
        "two-session-handoff", "coder-brief-no-recursion", "canary-home-write"]
 KEYS = {"id", "prompt", "files", "expect", "absent", "timeout", "env", "stub_bin", "commit", "allow", "max_turns",
         "branch"}
-STUB = (EVALS / "stubs" / "herdr").resolve()
+STUB = (EVALS / "stubs" / "hc").resolve()
 GIT_DENY = ["Bash(git -C *)", "Bash(git -c *)", "Bash(git --*)", "Bash(git push*)", "Bash(git config*)",
             "Bash(git worktree add*)", "Bash(git grep* -O*)", "Bash(git grep* --open-files-in-pager*)",
             "Bash(git * --output*)"]
-HERDR_DENY = ["Bash(herdr session*)", "Bash(herdr plugin*)", "Bash(herdr update*)", "Bash(herdr server*)",
-              "Bash(herdr machine*)", "Bash(herdr config*)", "Bash(herdr integration*)"]
-LIVE = {"HERDR_ENV": "1", "HERDR_SOCKET_PATH": "/live/herdr.sock", "HERDR_PANE_ID": "w1:p1",
+# hc verbs that run or write outside Claude Code's sandbox, or reach another core or machine.
+HC_DENY = ["Bash(hc server*)", "Bash(hc machine*)", "Bash(hc update*)", "Bash(hc exec*)", "Bash(hc file*)",
+           "Bash(hc put*)", "Bash(hc keys*)", "Bash(hc connect*)", "Bash(hc * --on*)", "Bash(hc --on*)",
+           "Bash(HC_*)", "Bash(herdr*)"]
+HC_STATE_VERBS = ("server", "machine", "update", "exec", "file", "put", "keys", "connect")
+LIVE = {"HERDR_ENV": "1", "HC_SESSION": "default", "HC_TERMINAL_ID": "t8", "HC_SOCKET": "/live/hc.sock",
+        "HC_TERMINAL_SOCKET": "/live/t.sock", "HERDR_SOCKET_PATH": "/live/herdr.sock", "HERDR_PANE_ID": "w1:p1",
         "CLAUDE_CODE_MESSAGING_SOCKET": "/live/cc.sock", "CLAUDE_CODE_MESSAGING_TOKEN": "t",
         "PLOI_API_TOKEN": "t", "SSH_AUTH_SOCK": "/live/ssh.sock", "XDG_RUNTIME_DIR": "/run/user/1000",
         "DBUS_SESSION_BUS_ADDRESS": "unix:path=/live/bus", "NETDUST_GUARD_ASK": "off",
@@ -31,7 +35,14 @@ LIVE = {"HERDR_ENV": "1", "HERDR_SOCKET_PATH": "/live/herdr.sock", "HERDR_PANE_I
         "CLAUDE_PID": "1", "CLAUDECODE": "1", "AI_AGENT": "claude",
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ.get("HOME", "/")}
 PASSED = {"HOME", "USER", "LOGNAME", "SHELL", "LANG", "TERM", "PATH", "TMPDIR"}
-SET = {"HERDR_SOCKET_PATH", "EVAL_ROOT", "XDG_RUNTIME_DIR", "TMPDIR"}
+SET = {"SHELL", "HERDR_SOCKET_PATH", "HC_SESSION", "EVAL_ROOT", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_STATE_HOME",
+       "XDG_DATA_HOME", "TMPDIR"}
+XDG = ("XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME")
+
+
+# hc's own rule (paths.rs): the longest path is the holder's, `<session>.holder.<8 hex>.sock`.
+def _socket_fits(env: dict) -> bool:
+    return len(f"{env.get('XDG_RUNTIME_DIR', '')}/herdr-core/{env.get('HC_SESSION', '')}.holder.sock") + 1 + 8 <= 107
 
 
 def _compiles(cases: list[dict]) -> bool:
@@ -66,16 +77,28 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
         root.mkdir()
         bare = child_env({"id": "bare"}, dict(LIVE), root)
         herdr_keys = {k: v for k, v in bare.items() if k.startswith("HERDR_")}
-        with_env = child_env({"id": "x", "env": {"HERDR_ENV": "1"}}, dict(LIVE), root)
+        hc_keys = {k: v for k, v in bare.items() if k.startswith("HC_")}
+        with_env = child_env({"id": "x", "env": {"HC_TERMINAL_ID": "t1"}}, dict(LIVE), root)
+        deep = Path(tmp) / ("d" * (108 - 9 - len(f"{tmp}/x/.tmp/hc/run/herdr-core/eval.holder.sock") + 1))
+        far_env = child_env({"id": "deep"}, dict(LIVE), deep)
 
-        case = {"id": "stubbed", "files": {"target.txt": "old\n"}, "commit": True, "stub_bin": "stubs/herdr",
-                "env": {"HERDR_ENV": "1"}}
+        case = {"id": "stubbed", "files": {"target.txt": "old\n"}, "commit": True, "stub_bin": "stubs/hc",
+                "env": {"HC_TERMINAL_ID": "t1"}}
         prepare_sandbox(case, root)
         stubbed = child_env(case, dict(LIVE), root)
-        resolved = _sh("command -v herdr", stubbed, root)
-        out = _sh(f"{STUB} worktree create --branch feature/stubbed", stubbed, root)
-        wt = root / ".herdr" / "wt"
-        calls = (root / ".herdr" / "calls.log").read_text() if (root / ".herdr" / "calls.log").is_file() else ""
+        resolved = _sh("command -v hc", stubbed, root)
+        # Only ever the stub: a real hc here would look for Stefan's core.
+        stub_sh = lambda cmd: _sh(cmd, stubbed, root) if resolved == str(STUB) else ""
+        out = stub_sh('hc run --bg --outlive-parent --name stubbed-coder coder "Plan: specs/x/plan.md"')
+        calls = (root / ".hc" / "calls.log").read_text() if (root / ".hc" / "calls.log").is_file() else ""
+        marker = (root / ".hc" / "run-coder").read_text() if (root / ".hc" / "run-coder").is_file() else ""
+        space = stub_sh("hc get t1 --json")
+        listed = stub_sh("hc ls --json")
+        first_wait = stub_sh("hc wait --children any")
+        second_wait = stub_sh("hc wait --children any")
+        help_out = stub_sh("hc run --help")
+        after_help = stub_sh("hc ls --json")
+        excluded = (root / ".git" / "info" / "exclude").read_text()
 
         other = Path(tmp) / "other"
         other.mkdir()
@@ -91,29 +114,50 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
         return [
             (set(herdr_keys) == {"HERDR_SOCKET_PATH"} and Path(herdr_keys["HERDR_SOCKET_PATH"]).is_relative_to(root),
              f"child_env strips every inherited HERDR_ value and points the socket under the sandbox (got {herdr_keys})"),
+            (hc_keys == {"HC_SESSION": "eval"},
+             f"child_env strips every inherited HC_ value and runs hc in its own session (got {hc_keys})"),
+            (all(Path(bare.get(k, "/")).is_relative_to(root) for k in XDG) and _socket_fits(bare),
+             f"hc's four XDG dirs are in the sandbox, its socket path within 107 bytes (got {[bare.get(k) for k in XDG]})"),
+            (_socket_fits(far_env) and not any(Path(far_env.get(k, "/")).is_relative_to(Path.home()) for k in XDG)
+             and len({str(Path(far_env.get(k, "/")).parent) for k in XDG}) == 1,
+             f"a sandbox too deep for the socket gets one short scratch dir instead (got {far_env.get('XDG_RUNTIME_DIR')})"),
             (not any(k.startswith("CLAUDE_CODE_MESSAGING_") for k in bare),
              "child_env strips CLAUDE_CODE_MESSAGING_*, so no child reaches a live Claude session"),
             (Path(bare.get("TMPDIR", "/")).is_relative_to(root),
              "TMPDIR is inside the sandbox, the one temp dir Claude Code's sandbox lets Bash write"),
             (set(bare) <= PASSED | SET and Path(bare.get("XDG_RUNTIME_DIR", "/")).is_relative_to(root),
              f"child_env passes only an allowlist and keeps XDG_RUNTIME_DIR in the sandbox (got {sorted(set(bare) - PASSED)})"),
-            (with_env.get("HERDR_ENV") == "1" and with_env.get("EVAL_ROOT") == str(root),
+            (with_env.get("HC_TERMINAL_ID") == "t1" and with_env.get("EVAL_ROOT") == str(root),
              "child_env applies the case's env and names the sandbox as EVAL_ROOT"),
-            (resolved == str(STUB) and stubbed.get("HERDR_BIN_PATH") == str(STUB),
-             f"with stub_bin, a login shell resolves herdr to the stub (got {resolved!r})"),
+            (resolved == str(STUB), f"with stub_bin, a login shell resolves hc to the stub (got {resolved!r})"),
             (_git(root, "rev-parse", "--abbrev-ref", "HEAD") == "feature/stubbed" and _git(root, "rev-parse", "--verify", "-q", "HEAD")
              and _git(other, "rev-parse", "--abbrev-ref", "HEAD") == "feature/elsewhere",
              "prepare_sandbox with commit: true ends on feature/<case-id>, or the case's branch, with a valid HEAD"),
-            (_git(wt, "rev-parse", "--is-inside-work-tree") == "true" and str(wt) in out
-             and "worktree create" in calls,
-             f"the stub's worktree create lands at $EVAL_ROOT/.herdr/wt, prints it and logs the call (got {out!r})"),
+            (re.search(r"(?m)^run .*--outlive-parent.*coder", calls) is not None and marker.strip() == "coder"
+             and _json(out).get("first_message", {}).get("sent") is True,
+             f"the stub logs `run … coder …` to .hc/calls.log, marks .hc/run-coder and answers like hc (got {out!r})"),
+            (_json(space).get("labels", {}).get("herdr.space") == "s1",
+             f"the stub's `hc get t1` carries a herdr.space label, so the pair recipe finds its space (got {space!r})"),
+            (any(t.get("name") == "stubbed-coder" and t.get("parent") == "t1"
+                 for t in _json(listed).get("terminals", [])),
+             f"the stub's `hc ls` lists the child it started, under its parent (got {listed!r})"),
+            ("Usage" in help_out and after_help == listed,
+             f"`hc run --help` prints usage and starts nothing, as hc does (got {help_out!r})"),
+            (_json(first_wait).get("reason") == "timeout" and _json(second_wait).get("ended") is True,
+             f"the stub's wait checks in once, then ends, so a session cannot loop to max_turns (got {second_wait!r})"),
+            (bare.get("SHELL") == "/bin/bash",
+             "child_env runs the case's shell as /bin/bash, the shell the stub preflight checks"),
+            (_core_canary(getattr(runner, "real_core_started", None), Path(tmp)),
+             "a case fails if a real hc core started in its scratch dirs (the stub was bypassed)"),
+            (".hc/" in excluded.splitlines() and ".herdr/" not in excluded.splitlines(),
+             "the sandbox's .git/info/exclude hides .hc/, the stub's log"),
             (not sibling.exists() and str(sibling) in removed,
              f"remove_worktrees removes a worktree the sandbox cut beside itself (got {removed})"),
             (far_kept, f"remove_worktrees deletes nothing outside the sandbox's temp parent and reports it (kept {kept})"),
             (_strays_flagged(getattr(runner, "stray_worktrees", None), root),
-             "a stubbed case fails on any worktree but the stub's .herdr/wt (spec R2: only the coder writes its tree)"),
+             "a stubbed case fails on any worktree: the coder works in the checkout (hc-flow R6)"),
             (_escape_refused(prepare_sandbox, Path(tmp)), "a case's file cannot land outside its sandbox"),
-            (_env_refused(child_env, root), "a case's env cannot set HERDR_* (but HERDR_ENV) or CLAUDE_*"),
+            (_env_refused(child_env, root), "a case's env may set only HC_TERMINAL_ID"),
             (_group_killed(getattr(runner, "spawn", None), root),
              "a case that times out has its whole process group killed, grandchildren included"),
         ]
@@ -122,8 +166,8 @@ def _sandbox_checks(runner) -> list[tuple[bool, str]]:
 def _strays_flagged(stray_worktrees, root: Path) -> bool:
     if stray_worktrees is None:
         return False
-    own, other = str(root / ".herdr" / "wt"), str(root / ".claude" / "worktrees" / "agent-x")
-    return (stray_worktrees({"stub_bin": "stubs/herdr"}, root, [own, other]) == [other]
+    one, other = str(root.parent / "wt"), str(root / ".claude" / "worktrees" / "agent-x")
+    return (stray_worktrees({"stub_bin": "stubs/hc"}, root, [one, other]) == [one, other]
             and stray_worktrees({}, root, [other]) == [])
 
 
@@ -138,13 +182,14 @@ def _escape_refused(prepare_sandbox, tmp: Path) -> bool:
 
 
 def _env_refused(child_env, root: Path) -> bool:
-    for env in ({"HERDR_SOCKET_PATH": "/live.sock"}, {"CLAUDE_CODE_MESSAGING_TOKEN": "t"}):
+    for env in ({"HC_SESSION": "default"}, {"HERDR_SOCKET_PATH": "/live.sock"}, {"CLAUDE_CODE_MESSAGING_TOKEN": "t"},
+                {"PATH": "/evil"}, {"BASH_ENV": "/evil"}, {"LD_PRELOAD": "/evil.so"}):
         try:
             child_env({"id": "e", "env": env}, dict(LIVE), root)
             return False
         except ValueError:
             pass
-    return child_env({"id": "e", "env": {"HERDR_ENV": "1"}}, dict(LIVE), root).get("HERDR_ENV") == "1"
+    return child_env({"id": "e", "env": {"HC_TERMINAL_ID": "t1"}}, dict(LIVE), root).get("HC_TERMINAL_ID") == "t1"
 
 
 def _group_killed(spawn, root: Path) -> bool:
@@ -193,8 +238,45 @@ def _refuses(stub_for) -> bool:
     try:
         stub_for({"stub_bin": "../run-evals.py"})
     except ValueError:
-        return stub_for({"stub_bin": "stubs/herdr"}) == STUB
+        return stub_for({"stub_bin": "stubs/hc"}) == STUB
     return False
+
+
+def _stale_reviews(cases: list[dict]) -> list[str]:
+    stale = []
+    for c in cases:
+        for rel, content in c["files"].items():
+            m = re.search(r"(?m)^Reviewed-plan: ([0-9a-f]+)", content) if rel.endswith("plan-review.md") else None
+            plan = c["files"].get(rel.replace("plan-review.md", "plan.md"))
+            if m and plan is not None:
+                blob = subprocess.run(["git", "hash-object", "--stdin"], input=plan, capture_output=True,
+                                      text=True).stdout.strip()
+                if m.group(1) != blob:
+                    stale.append(f"{c['id']}:{rel}")
+    return stale
+
+
+def _core_canary(real_core_started, tmp: Path) -> bool:
+    if real_core_started is None:
+        return False
+    root = tmp / "canary"
+    root.mkdir()
+    clean = real_core_started(root)
+    (root / ".tmp" / "hc" / "state" / "herdr-core").mkdir(parents=True)
+    return clean is False and real_core_started(root) is True
+
+
+def _json(text: str) -> dict:
+    try:
+        return json.loads(text)
+    except ValueError:
+        return {}
+
+
+def _grants_state_verb(rule: str) -> bool:
+    m = re.match(r"Bash\(hc\s*(\S*)(.*)\)$", rule)
+    return bool(m) and (m.group(1).rstrip("*") in HC_STATE_VERBS or m.group(1) in ("*", "")
+                        or m.group(1).startswith("--on") or "--on" in m.group(2))
 
 
 def _flag(args: list[str], name: str) -> list[str]:
@@ -205,7 +287,7 @@ def _isolation_checks(runner) -> list[tuple[bool, str]]:
     claude_args = getattr(runner, "claude_args", None)
     if claude_args is None:
         return [(False, "run-evals.py exposes claude_args, the argv every case runs with")]
-    case = {"id": "x", "prompt": "p", "allow": ["Bash(herdr agent start*)"]}
+    case = {"id": "x", "prompt": "p", "allow": ["Bash(hc run*)"]}
     args = claude_args(case)
     settings = json.loads((_flag(args, "--settings") or ["{}"])[0])
     enabled = {k for k, v in settings.get("enabledPlugins", {}).items() if v}
@@ -227,15 +309,16 @@ def _isolation_checks(runner) -> list[tuple[bool, str]]:
          "every --add-dir (the skills' companion files) is read-only: Edit(path) denies every file-editing tool"),
         (all(rule in settings.get("permissions", {}).get("deny", []) for rule in GIT_DENY),
          f"every case denies git's escape routes {GIT_DENY}"),
-        (all(rule in deny for rule in HERDR_DENY), f"every case denies herdr's state verbs {HERDR_DENY}"),
+        (all(rule in deny for rule in HC_DENY),
+         f"every case denies the hc verbs that act outside the sandbox, and herdr entirely {HC_DENY}"),
         (settings.get("sandbox") == {"enabled": True, "failIfUnavailable": True, "allowUnsandboxedCommands": False,
                                      "autoAllowBashIfSandboxed": False},
          f"every case's Bash runs in Claude Code's sandbox: never unsandboxed, never auto-allowed (got {settings.get('sandbox')})"),
         (_sandbox_refusal(getattr(runner, "sandbox_refusal", None)),
          "a case that may run Bash is refused while bwrap or socat is missing, or its .tmp is too long for the sandbox's sockets"),
         (_refuses(getattr(runner, "stub_for", None)),
-         "a stub_bin outside evals/stubs/ is refused, so a case cannot shadow herdr with any file"),
-        (set(getattr(runner, "stub_digests", dict)()) == {"herdr", "bash-env"},
+         "a stub_bin outside evals/stubs/ is refused, so a case cannot shadow hc with any file"),
+        (set(getattr(runner, "stub_digests", dict)()) == {"hc", "bash-env"},
          "both stub files are hashed around each case, so a case that rewrites them fails"),
     ]
 
@@ -252,21 +335,26 @@ def run() -> list[tuple[bool, str]]:
         (all({"id", "prompt", "files", "expect", "absent"} <= set(c) for c in cases),
          "every case carries id, prompt, files, expect, absent"),
         (all(set(c) <= KEYS for c in cases), f"every case key is one the runner reads ({sorted(KEYS)})"),
-        (not any(rule.startswith("Bash(printenv") and rule != "Bash(printenv HERDR_ENV)"
+        (not any(rule.startswith("Bash(printenv") and rule != "Bash(printenv HC_TERMINAL_ID)"
                  for c in cases for rule in c.get("allow", [])),
-         "a case may read HERDR_ENV, never the whole environment (`Bash(printenv *)` matches a bare printenv)"),
-        (any(e["where"] == ".herdr/calls.log" and "--permission-mode" in e["match"]
-             for c in cases if c["id"] == "two-session-handoff" for e in c["expect"]),
-         "two-session-handoff expects the coder started in the thinker's permission mode (R4)"),
+         "a case may read HC_TERMINAL_ID, never the whole environment (`Bash(printenv *)` matches a bare printenv)"),
+        (not [rule for c in cases for rule in c.get("allow", []) if _grants_state_verb(rule)],
+         f"no case's allow grants an hc verb that acts outside the sandbox {HC_STATE_VERBS} or --on"),
+        (not [c["id"] for c in cases if "stub_bin" not in c and any(r.startswith("Bash(hc") for r in c.get("allow", []))],
+         "a case that allows any hc verb runs on the stub, so `hc run` never starts a real program"),
         (all(c["prompt"].startswith("Role: coder\n") and "Plan: specs/greeting/plan.md" in c["prompt"]
              and "Entry: netdust-gates:policy" in c["prompt"] for c in cases if c["id"] == "coder-brief-no-recursion"),
          "coder-brief-no-recursion's prompt is shaped like the real brief, so it tests the exemption"),
         (_canary_reaches_sandbox(next((c for c in cases if c["id"] == "canary-home-write"), None)),
          "the canary's script passes the permission layer, so only the sandbox can stop its write to $HOME"),
-        (not any(rule == "Bash(herdr *)" for c in cases for rule in c.get("allow", [])),
-         "no case allows every herdr verb, only the ones the stub serves"),
+        (not any(rule in ("Bash(hc *)", "Bash(hc*)") for c in cases for rule in c.get("allow", [])),
+         "no case allows every hc verb, only the ones the stub serves"),
+        (not any(rule.startswith("Bash(herdr") for c in cases for rule in c.get("allow", [])),
+         "no case allows herdr: every flow runs on hc"),
         (not any("Bash(git *)" in c.get("allow", []) for c in cases),
          "no case allows every git command: `git -c alias.x='!sh'` is arbitrary execution"),
+        (not _stale_reviews(cases),
+         f"a case's plan review names its plan's real blob, so a careful session has no reason to stop (stale: {_stale_reviews(cases)})"),
         (_compiles(cases), "every expect regex compiles and names where it looks"),
         (parses, "run-evals.py parses"),
         *(_sandbox_checks(_runner()) if parses else [(False, "run-evals.py loads")]),

@@ -1,0 +1,17 @@
+#!/bin/sh
+# Install netdust's role templates for hc: here, or with --on <machine> on that machine.
+set -eu
+src=$(cd "$(dirname "$0")/../hc-templates" && pwd)
+on=
+if [ "${1:-}" = --on ]; then on=${2:?--on needs a machine}; fi
+dest=${XDG_CONFIG_HOME:-$HOME/.config}/herdr-core/templates
+[ -n "$on" ] || mkdir -p "$dest"
+for f in "$src"/*.md; do
+    name=$(basename "$f" .md)
+    if [ -n "$on" ]; then
+        hc file write --on "$on" ".config/herdr-core/templates/$name.md" < "$f" >/dev/null
+    else
+        cp "$f" "$dest/$name.md"
+    fi
+    echo "$name"
+done
