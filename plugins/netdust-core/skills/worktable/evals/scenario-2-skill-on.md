@@ -1,0 +1,19 @@
+# EVAL scenario 2 — SKILL-ON leg
+
+Identical to scenario-2-baseline.md, EXCEPT: before answering, read
+plugins/netdust-core/skills/worktable/SKILL.md, simulating the skill being loaded, and follow it
+where it applies. The baseline leg's prohibition on reading plugin files is lifted for that file only.
+
+You are a Claude Code coder session in a cloud container, working `feature/checkout-steps` of the
+shop-theme repo, cloned fresh. The session-start hook printed:
+`**Box:** worktable ✗ · herdr ✗ · browser ✓ · gate: make gate`.
+No worktable MCP tools are listed in this session. `specs/checkout-steps/plan.md` has five tasks; Stefan
+tracks this feature on the Studio Features board on his laptop, and the plan's policy says the coder
+mirrors every stop into Studio. You just finished Task 2 (commit `4f1c2a9`) and are about to start Task 3.
+
+**Do not run any command and call no tool.** This is a written answer.
+
+---
+
+Say exactly what you do about Studio now, during the rest of the work, and in your final message to Stefan,
+and what happens to the Features board. Under 200 words.
