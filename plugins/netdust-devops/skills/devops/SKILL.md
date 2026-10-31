@@ -188,7 +188,11 @@ git checkout <commit before the update> -- Makefile.netdust mk scripts .netdust-
    refuses, and a rung holding a commit origin lacks is refused — that commit is
    work, never discarded. They are git state only:
    `commands.gate` runs in `make gate` and inside `ship`, never in a deploy, so
-   `✓ deploy guards passed` never means a suite ran.
+   `✓ deploy guards passed` never means a suite ran. A green `make gate` on a
+   clean `feature/*` or `hotfix/*` stamps `gate/<branch>` on origin (a red one
+   deletes it), and `promote` says whether that stamp names the tip it puts on
+   staging — information for a box that could not run the suite, never a
+   refusal; `ship` runs the gate itself and stamps nothing.
 2. **The ledger.** Each deploy stamps `<state_dir>/<env>.json` on the server
    and moves a `deployed/<env>` tag — `make deployed` / `git diff
    deployed/production` read it back.

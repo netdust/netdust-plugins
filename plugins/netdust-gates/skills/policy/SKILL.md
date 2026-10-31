@@ -121,7 +121,7 @@ the final message, a coder's with its deferred minors via its reviewer's hand-ov
 
 1. `make gate` exits 0 — the project's own suite (`commands.gate` in `site.yml`; without one, the `gate` script of
    `package.json` or `composer.json`, as the session-start `Box:` line names). No gate declared: declaring one is the
-   work's first task, not a reason to skip. A box that cannot run it pushes, says so, and the promote waits for one that can.
+   work's first task, not a reason to skip. A box that cannot run it pushes and says so; `make promote` shows whether any box stamped it green.
 2. The feature review, plan or no plan: `make review name=<feature>` (`/feature-review <feature>`
    without devops) — superpowers' whole-branch review (`superpowers:requesting-code-review`, a fresh
    reviewer; the author never reviews its own diff) on the most capable model, joined by

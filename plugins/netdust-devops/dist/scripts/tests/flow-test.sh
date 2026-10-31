@@ -98,6 +98,32 @@ assert_eq "…and names a route the flow still has" "1 0" \
   "$(has "$out" 'make ship') $(has "$out" 'make fin''ish')"
 git checkout -q main && git branch -q -D hotfix/fix
 
+echo; echo "flow — the gate stamp: information for promote, never a refusal"
+gstamp() { git ls-remote origin refs/tags/gate/feature/one | awk '{print $1}'; }
+printf '#!/bin/sh\necho "suite ran"\nexit 0\n' > "$TMP/gate.sh"
+git checkout -q feature/one
+assert_ok "a green gate on a feature branch" M gate
+assert_eq "…stamps gate/feature/one with the commit it ran on" "$(git rev-parse HEAD)" "$(gstamp)"
+echo dirt > gatedirt.txt
+GOUT=$(M gate | strip)
+assert_eq "a green gate on a dirty tree says it did not stamp, and the old stamp stays" "1 $(git rev-parse HEAD)" \
+  "$(has "$GOUT" 'not stamped') $(gstamp)"
+rm gatedirt.txt
+printf '#!/bin/sh\necho "suite ran"\nexit 1\n' > "$TMP/gate.sh"
+assert_refuses "a red gate fails" "suite ran" M gate
+assert_eq "…and deletes the stamp" "" "$(gstamp)"
+printf '#!/bin/sh\necho "suite ran"\nexit 0\n' > "$TMP/gate.sh"
+git checkout -q main
+assert_ok "a green gate on main" M gate
+assert_eq "…stamps nothing: only feature and hotfix branches carry a stamp" "" "$(git ls-remote origin 'refs/tags/gate/*')"
+POUT=$(N "make --no-print-directory promote name=one" | strip)
+assert_eq "promote without a stamp says so, and still asks" "1 1" \
+  "$(has "$POUT" 'gate not run green on any box for this tip') $(has "$POUT" 'Cancelled')"
+git checkout -q feature/one && M gate >/dev/null; git checkout -q main
+POUT=$(N "make --no-print-directory promote name=one" | strip)
+assert_eq "promote with a stamp on the tip says the gate is green" "1" "$(has "$POUT" 'gate green on this tip')"
+git push -q origin ":refs/tags/gate/feature/one"
+
 echo; echo "flow — the vocabulary is the verbs of FR-2"
 flowverbs() { M help | strip | awk '/^FLOW/ {f=1; next} f && /^$/ {exit} f {print $1}' | paste -sd' '; }
 pathverbs() { M help | strip | sed -n 's/^Path: //p' | sed 's/ → /\n/g' | awk '{print $1}' | paste -sd' '; }

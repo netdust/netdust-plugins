@@ -222,6 +222,13 @@ promote: ## Put a feature on the staging branch (make promote name=my-feature)
 		|| echo "  (nothing — $(BR_REVIEW) is origin/$(BR_PROD))"; \
 	echo "$(YELLOW)feature/$(name) since origin/$(BR_PROD):$(RESET)"; \
 	git --no-pager log --oneline origin/$(BR_PROD)..origin/feature/$(name) | head -20 | sed 's/^/  /'; \
+	if [ -n "$$($(SITE) commands.gate 2>/dev/null)" ]; then \
+		TIP=$$(git rev-parse "origin/feature/$(name)"); \
+		GS=$$(git ls-remote origin "refs/tags/gate/feature/$(name)" 2>/dev/null \
+			| awk -v r="refs/tags/gate/feature/$(name)" '$$2 == r {print $$1}'); \
+		if [ "$$GS" = "$$TIP" ]; then echo "$(GREEN)gate green on this tip$(RESET)"; \
+		elif [ -n "$$GS" ]; then echo "$(YELLOW)gate green at $$(git rev-parse --short "$$GS"), not on this tip — ship runs it on $(BR_REVIEW)'s composition$(RESET)"; \
+		else echo "$(YELLOW)gate not run green on any box for this tip — ship runs it on $(BR_REVIEW)'s composition$(RESET)"; fi; fi; \
 	RF="$$(git rev-parse --git-common-dir)/reviews/$(name).md"; \
 	if [ "$(review)" != off ] && [ -n "$$($(SITE) commands.review 2>/dev/null)" ]; then \
 		if [ -z "$(review)" ] && [ -f "$$RF" ]; then \
@@ -314,7 +321,7 @@ ship: ## Ship to production: the staging commit that was deployed, or a gated ho
 # slip a tree past every check above. From the push on, the branch has moved
 # and only a deploy catches the site up.
 	@SHA=$$(git rev-parse HEAD); \
-	$(MAKE) --no-print-directory gate || { \
+	NETDUST_GATE_STAMP=off $(MAKE) --no-print-directory gate || { \
 		echo "$(RED)✗ the gate is red — nothing ships$(RESET)"; exit 1; }; \
 	{ [ "$$(git rev-parse HEAD)" = "$$SHA" ] && [ -z "$$(git status --porcelain)" ]; } || { \
 		echo "$(RED)✗ the checkout changed while the gate ran — only what the gate saw ships$(RESET)"; exit 1; }; \
@@ -452,10 +459,25 @@ audit: ## Report work that exists only on this machine (never pushes or deletes)
 	@bash scripts/work-audit.sh
 
 .PHONY: gate
+# On a feature or hotfix branch a green run from a clean tree stamps gate/<branch> on
+# origin with the commit it ran on, and a red run deletes the stamp, so promote can say
+# whether any box ran the suite on the tip it puts on staging (a cloud box without DDEV
+# cannot). The stamp is information, never a refusal: ship runs the gate itself, with
+# NETDUST_GATE_STAMP=off, since a ship moves nothing on origin but what it ships.
 gate: ## Run this project's own test suite (commands.gate from site.yml)
 	@G=$$($(SITE) commands.gate 2>/dev/null); \
 	if [ -z "$$G" ]; then echo "$(RED)✗ No commands.gate in site.yml$(RESET)"; exit 1; fi; \
-	echo "$(BLUE)$$G$(RESET)"; eval "$$G"
+	echo "$(BLUE)$$G$(RESET)"; \
+	BR=$$(git branch --show-current); case "$$BR" in feature/*|hotfix/*) STAMP="gate/$$BR";; *) STAMP="";; esac; \
+	[ "$$NETDUST_GATE_STAMP" != off ] || STAMP=""; \
+	HEAD0=$$(git rev-parse HEAD); RC=0; eval "$$G" || RC=$$?; \
+	[ -n "$$STAMP" ] || exit $$RC; \
+	if [ $$RC -ne 0 ]; then git push --quiet origin ":refs/tags/$$STAMP" 2>/dev/null || true; exit $$RC; fi; \
+	{ [ "$$(git rev-parse HEAD)" = "$$HEAD0" ] && [ -z "$$(git status --porcelain)" ]; } || { \
+		echo "$(YELLOW)   not stamped: the tree is not the clean commit the suite started on$(RESET)"; exit 0; }; \
+	git push --quiet -f origin "$$HEAD0:refs/tags/$$STAMP" 2>/dev/null \
+		&& echo "$(GREEN)✓ stamped $$STAMP @ $$(git rev-parse --short "$$HEAD0")$(RESET)" \
+		|| echo "$(YELLOW)   not stamped: origin not reachable$(RESET)"
 
 # The deployed environment, checked from outside: commands.smoke runs with the
 # environment's URL in SMOKE_URL. Read-only by construction — no login, no
