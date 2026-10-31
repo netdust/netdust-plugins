@@ -267,10 +267,14 @@ git checkout -q -- site.yml && git checkout -q main
 # promote checks the feature exists before the tty guard (a local check, no
 # server contact) — so the fixture needs a real feature branch to reach it.
 git branch -q feature/x main && git push -q origin feature/x 2>/dev/null
+out=$(timeout 20 make unpromote name=x < /dev/null 2>&1 | strip)
+printf '%s' "$out" | grep -q "needs a terminal" \
+    && ok "unpromote refuses without a terminal" \
+    || bad "unpromote refuses without a terminal" "$(printf '%s' "$out" | head -2)"
 out=$(timeout 20 make promote name=x < /dev/null 2>&1 | strip)
 printf '%s' "$out" | grep -q "needs a terminal" \
-    && ok "promote refuses without a terminal" \
-    || bad "promote refuses without a terminal" "$(printf '%s' "$out" | head -2)"
+    && bad "promote asks nothing, so it needs no terminal" "$(printf '%s' "$out" | head -2)" \
+    || ok "promote asks nothing, so it needs no terminal"
 
 out=$(timeout 20 make save < /dev/null 2>&1 | strip)
 printf '%s' "$out" | grep -q "deploy-only, never worked on" \
@@ -427,6 +431,7 @@ git worktree add -q ../agent -b feature/par origin/main
 cd ../agent && echo work > web/f.txt
 git add -A && git -c user.email=t@t -c user.name=T commit -qm "parallel work" >/dev/null
 git push -q origin feature/par 2>/dev/null
+git push -q origin feature/par:refs/tags/gate/feature/par 2>/dev/null   # what a green make gate leaves: promote takes only a stamped tip
 
 WTN=$(git worktree list | wc -l | tr -d ' ')
 wtout=$(timeout 60 script -qec "make promote name=par" /dev/null <<< yes 2>&1 | strip)
@@ -920,7 +925,8 @@ git add -A && git -c user.email=t@t -c user.name=T commit -qm init >/dev/null &&
 git push -q -u origin main 2>/dev/null; git push -q origin main:staging 2>/dev/null
 git checkout -q -b staging origin/staging
 feat() { git checkout -q -b "feature/$1" "$2" && echo "$1" > "web/$1.txt" && git add -A \
-    && git -c user.email=t@t -c user.name=T commit -qm "$1" >/dev/null && git push -q origin "feature/$1" 2>/dev/null
+    && git -c user.email=t@t -c user.name=T commit -qm "$1" >/dev/null && git push -q origin "feature/$1" 2>/dev/null \
+    && git push -q origin "feature/$1:refs/tags/gate/feature/$1" 2>/dev/null
     git checkout -q staging; }
 feat a origin/main; feat b origin/main; feat b2 feature/a
 PTY() { env PATH="$CLIPATH" timeout 60 script -qec "make --no-print-directory $1" /dev/null <<< yes 2>&1; }
@@ -987,7 +993,8 @@ rm -f web/b.txt; git reset -q --keep origin/staging
 
 # Two ways a promote adds nothing: no commits over production, or a tip that a
 # promoted feature sorting before it already carries ("Already up to date").
-git push -q origin origin/main:refs/heads/feature/empty feature/a:refs/heads/feature/z 2>/dev/null
+git push -q origin origin/main:refs/heads/feature/empty feature/a:refs/heads/feature/z \
+    origin/main:refs/tags/gate/feature/empty feature/a:refs/tags/gate/feature/z 2>/dev/null
 REMOTES=$(git ls-remote origin)
 for n in empty z; do
     out=$(PTY "promote name=$n"); rc=$?; out=$(printf '%s' "$out" | strip)

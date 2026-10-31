@@ -1,6 +1,6 @@
 ---
 name: devops
-description: Use for EVERY branch, environment or deploy action in a Netdust project — the make verbs, the promotion path, the deploy gate and ledger, site.yml, .env and DDEV. Load it BEFORE the first `make` call or the first git command on a project carrying site.yml; name it rather than waiting for it to trigger. Triggers on file edits to Makefile, site.yml, .env*, mk/*.mk, .ddev/config.yaml. Activates on make dev, make save, make feature, make hotfix, make promote, make unpromote, make gate, make deploy, make deploy-test, make ship, make deployed, make health, make doctor, make rollback, make refresh, make pull, make audit, make devops-update, ddev start, ddev wp, ddev describe, site.yml, environments, deploy gate, deploy ledger, staging branch, rung branch, git-flow, hotfix, .env.example. Fires on how the work is actually spoken, not just target names — "we work on X", "fix this", "we have a bug", "hotfix", "put it on staging", "test this", "colleagues can look", "take it off staging", "promote", "ship it", "go live", "release", "roll it back", "what's on prod", "what's live", "what isn't live yet", "sync from live", "staging is stale", "pull the database", "set up a new project". Symptoms include starting work, choosing a branch, deciding what to commit, deploying anywhere, rolling back, refreshing a non-production environment, or scaffolding a project. Stack-agnostic — WordPress, Statamic, Node and static projects use the same verbs. For WP-CLI, Bedrock layout and Vite see netdust-wp:wp-infra. For server provisioning see netdust-core:ploi and secure-server.
+description: Use for EVERY branch, environment or deploy action in a Netdust project — the make verbs, the promotion path, the deploy gate and ledger, site.yml, .env and DDEV. Load it BEFORE the first `make` call or the first git command on a project carrying site.yml; name it rather than waiting for it to trigger. Triggers on file edits to Makefile, site.yml, .env*, mk/*.mk, .ddev/config.yaml. Activates on make dev, make save, make feature, make hotfix, make promote, make unpromote, make land, make gate, make deploy, make deploy-test, make ship, make deployed, make health, make doctor, make rollback, make refresh, make pull, make audit, make devops-update, ddev start, ddev wp, ddev describe, site.yml, environments, deploy gate, deploy ledger, staging branch, rung branch, git-flow, hotfix, .env.example. Fires on how the work is actually spoken, not just target names — "we work on X", "merge it", "the site isn't live yet", "fix this", "we have a bug", "hotfix", "put it on staging", "test this", "colleagues can look", "take it off staging", "promote", "ship it", "go live", "release", "roll it back", "what's on prod", "what's live", "what isn't live yet", "sync from live", "staging is stale", "pull the database", "set up a new project". Symptoms include starting work, choosing a branch, deciding what to commit, deploying anywhere, rolling back, refreshing a non-production environment, or scaffolding a project. Stack-agnostic — WordPress, Statamic, Node and static projects use the same verbs. For WP-CLI, Bedrock layout and Vite see netdust-wp:wp-infra. For server provisioning see netdust-core:ploi and secure-server.
 ---
 
 # Netdust devops
@@ -70,6 +70,7 @@ if `make promote` breaks, fix the Makefile or report it.
 | "do the promoted features collide?" | `make review env=staging` | — |
 | "fix what the review found" | `/review-fix X`, then `make promote name=X` (it skips the saved review) | staging |
 | "take it off staging" | `make unpromote name=X`, then `make deploy env=staging` | staging |
+| "it's reviewed, merge it" — **before launch** (production has no `path` yet) | on `feature/X`: `make gate` (merge `origin/main` first if it moved), push, then `make land name=X` | **`main`** |
 | "fix this", "we have a bug" | `make hotfix name=X`, then `make ship` | **production** |
 | "ship it", "go live" | take what is not shipping off staging, `make deploy env=staging`, `make e2e env=staging`, look — then `make ship` from the staging checkout | **production** |
 | "what's on prod", "what's live" | `make deployed` | — |
@@ -88,17 +89,21 @@ especially the deletions.
 
 **Never run `make ship` unless the user asked for it in that turn.** Not
 because it follows from an earlier plan, not because the work looks finished.
-`save`, `promote`, `unpromote` and `ship` check for a terminal before doing
+`save`, `unpromote` and `ship` check for a terminal before doing
 anything at all, so `echo yes | make ship` and `make ship < answers` refuse
 without touching a server; `rollback` and a `confirm: true` deploy only read
 first, then refuse. That check is a speed bump against automation, not a control — a
 session that wanted one could hand itself a pty, so **for an agent the rule is
 *don't*, not *can't*.** An agent gets the state ready and hands the verb over.
 
+**`promote` and `land` ask nothing.** Their checks are the review they run first and, for
+`land`, the gate stamp it requires: when those pass it is good (Stefan, 2026-10-31), so an agent
+runs them itself once the Close is done, no terminal, no Continue?. `deploy env=staging`, `e2e`,
+`smoke` and `review` need no terminal either.
+
 **One standing exception, the user's to grant.** When the user has said an agent may run the
-staging verbs freely, it runs `promote` and `unpromote` with `NETDUST_AGENT_OK=1` in front: no
-terminal, and the Continue? answers itself. `deploy env=staging`, `e2e`, `smoke` and `review` need
-no terminal. `ship`, `save`, `rollback` and anything on production ignore the variable and stay
+staging verbs freely, it runs `unpromote` with `NETDUST_AGENT_OK=1` in front: no terminal, and the
+Continue? answers itself. `ship`, `save`, `rollback` and anything on production ignore the variable and stay
 typed by the user. Without that grant the paragraph above stands. Never set the variable on your
 own initiative.
 
@@ -120,8 +125,9 @@ that carry a decision:
 |---|---|
 | `make feature name=X` | branch `feature/X` from origin's production branch (**`main`**), wherever you stand |
 | `make hotfix name=X` | branch `hotfix/X` from origin's production branch (**`main`**), wherever you stand |
-| `make promote name=X` | rebuild staging as production + every promoted feature, X pinned at its current tip. Like opening a PR, it reviews X first, before its Continue?, unless a review is already saved, which it names and skips. `review=low\|full\|ultra` forces one, `review=off` skips. The review never refuses |
+| `make promote name=X` | rebuild staging as production + every promoted feature, X pinned at its current tip. Refused unless `gate/feature/X` names that tip. Like opening a PR, it reviews X first, then rebuilds without asking, unless a review is already saved, which it names and skips. `review=low\|full\|ultra` forces one, `review=off` skips. The review never refuses |
 | `make unpromote name=X` | the same rebuild, without X |
+| `make land name=X` | **before launch only** (`environments.production` has a branch, no `path`): merge `feature/X` into the production branch as a `land: X` merge, pushed with a lease, no checkout. Refused unless `feature/X` already contains `origin/main` and `gate/feature/X` names its tip — nothing gates `main` later, so what lands is what the gate ran on. Reviews X first like `promote`; rebuilds staging on the new tip when staging exists. Once production has a path it refuses and names promote and ship |
 | `make ship` | from the staging checkout, or a `hotfix/*` branch: the checks below, the gate, typed confirm, both backups, deploy, then rebuild staging on the new production |
 | `make review name=X` | review feature X now (`review=low\|full\|ultra`, default full; `env=staging`: where the promoted features meet). The report is saved under the common git dir with a `Findings:` line; `/review-fix X` follows it up. Reviewers inspect, they gate nothing |
 | `make rollback env=E` | redeploy the previously deployed commit's payload — `rsync` only; refused by name over `git-push` |
@@ -188,7 +194,12 @@ git checkout <commit before the update> -- Makefile.netdust mk scripts .netdust-
    refuses, and a rung holding a commit origin lacks is refused — that commit is
    work, never discarded. They are git state only:
    `commands.gate` runs in `make gate` and inside `ship`, never in a deploy, so
-   `✓ deploy guards passed` never means a suite ran.
+   `✓ deploy guards passed` never means a suite ran. A green `make gate` on a
+   clean `feature/*` or `hotfix/*` stamps `gate/<branch>` on origin (a red one
+   deletes it), and `promote` and `land` take only a tip that stamp names —
+   they ask nothing, so the suite having passed is their check. A box that
+   cannot run it pushes, and a box that can gates and promotes; `ship` runs
+   the gate itself and stamps nothing.
 2. **The ledger.** Each deploy stamps `<state_dir>/<env>.json` on the server
    and moves a `deployed/<env>` tag — `make deployed` / `git diff
    deployed/production` read it back.

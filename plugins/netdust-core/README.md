@@ -11,7 +11,7 @@ This is **not** a coding harness. Any code change enters through `netdust-gates:
 | **Identity** | `CLAUDE.md` (default agent context), `SOUL.md` (voice), `RULES.md` (universal non-negotiables) |
 | **Memory + hooks** | Per-project `memory/STATE.md` + `lessons.md` + `tasks/todo.md` convention and memory discipline. The live hooks — SessionStart loader, Stop-hook `DECISION:`/`RISK:`/`LESSON:`/`TODO:` tag scanner, PreToolUse destructive-command guard — live in **netdust-gates** (registration AND scripts). Core ships no hook scripts. |
 | **Content + marketing skills** | `brand-voice`, `marketing`, `market-research`, `research` |
-| **Ops + infra skills** | `secure-server` (VPS hardening), `ploi` (server/site lifecycle) |
+| **Ops + infra skills** | `secure-server` (VPS hardening), `ploi` (server/site lifecycle), `worktable` (a planned feature mirrored into Studio: steps, stops, voortgang) |
 | **Slash commands** | `/memory-audit`, `/pattern-miner` — `/deploy` moved to **netdust-devops** |
 | **MCP** | `ploi` MCP server (server + site management via Ploi API) |
 | **Templates** | `project-CLAUDE.md.tmpl`, `site.yml.tmpl` (stack-neutral scaffolds) |
@@ -80,7 +80,8 @@ In any existing project, you can manually add to its `CLAUDE.md`:
 │   ├── market-research/            ← audiences, competitors, pricing
 │   ├── research/                   ← technical + business investigation
 │   ├── secure-server/              ← VPS hardening
-│   └── ploi/                       ← Ploi + Hetzner lifecycle
+│   ├── ploi/                       ← Ploi + Hetzner lifecycle
+│   └── worktable/                  ← a plan mirrored into Studio over the worktable MCP
 │
 ├── memory/
 │

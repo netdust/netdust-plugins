@@ -249,6 +249,28 @@ def test_backslashes_in_memory_survive() -> tuple[bool, str]:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_box_line_names_the_gate_and_what_is_missing() -> tuple[bool, str]:
+    """A non-WordPress project's gate is its package.json script; worktable down reads ✗, unset reads –."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        (tmp / ".git").mkdir()
+        (tmp / "package.json").write_text('{"scripts": {"gate": "bun test"}}')
+        (tmp / "bun.lock").write_text("")
+        env = {k: v for k, v in os.environ.items() if k not in ("HC_TERMINAL_ID", "WORKTABLE_URL")}
+        rc, unset, _ = _run_hook_env(tmp, env)
+        rc2, down, _ = _run_hook_env(tmp, {**env, "WORKTABLE_URL": "http://127.0.0.1:9", "HC_TERMINAL_ID": "t1"})
+        box = lambda out: next((l for l in out.splitlines() if l.startswith("**Box:**")), "")
+        ok = (rc == 0 and rc2 == 0
+              and "worktable – · herdr ✗" in box(unset) and "gate: bun run gate" in box(unset)
+              and "worktable ✗ · herdr ✓" in box(down))
+        return ok, f"session-start: the Box line names the gate and the missing pieces (got {box(unset)!r} / {box(down)!r})"
+
+
+def _run_hook_env(cwd: Path, env: dict) -> tuple[int, str, str]:
+    proc = subprocess.run(["bash", str(HOOK)], cwd=str(cwd), capture_output=True, text=True, timeout=10, env=env)
+    return proc.returncode, proc.stdout, proc.stderr
+
+
 def run() -> list[tuple[bool, str]]:
     return [
         test_empty_cwd_emits_nothing_but_logs(),
@@ -258,4 +280,5 @@ def run() -> list[tuple[bool, str]]:
         test_backslashes_in_memory_survive(),
         test_site_yml_summary_carries_environments(),
         test_site_yml_summary_omits_rung_warning_without_environments(),
+        test_box_line_names_the_gate_and_what_is_missing(),
     ]

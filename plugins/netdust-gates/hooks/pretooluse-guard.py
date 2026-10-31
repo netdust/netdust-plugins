@@ -223,7 +223,7 @@ def check_vendor_floor(hook_input: dict) -> dict | None:
 # (git missing, unreadable cwd, a subprocess timeout) fails OPEN like the rest of the hook.
 
 FLOW_DEFAULT_RUNGS = ("main", "master", "staging", "development")
-FLOW_CONFIRMING_VERBS = r"(?:ship|unpromote|promote|deploy)"
+FLOW_CONFIRMING_VERBS = r"(?:ship|unpromote|promote|land|deploy)"
 # A make invocation that reaches a confirming verb (the verb must END there —
 # `deploy-test` is not `deploy`).
 FLOW_MAKE_CONFIRM = re.compile(

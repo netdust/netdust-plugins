@@ -92,26 +92,25 @@ blocks code on a plan's state — an old or half plan never holds up the work (S
 
 ## Execution mode
 
-A planned feature runs as two sessions; a change with no plan file stays in one. After the plan
-approval this session turns reviewer and a coder executes in the project's checkout on `feature/<feature>`,
-cut from production's branch with spec, plan and plan review as its first commits; only the coder
-writes that tree, and a worktree is only for urgent parallel work (`netdust-devops:parallel-work`).
-Inside hc (`HC_TERMINAL_ID` set) the pair recipe in `netdust-core:hc-orchestration` starts it with
-`hc run`, the pair in auto mode; outside it, one background subagent there, over SendMessage. The
-brief opens `Role: coder`, the plan path and `netdust-gates:policy`: a coder skips Intake and the
-plan, never starts a coder, sends its pre-flight scan for rulings before
-Task 1, runs every step that writes the tree, `/shakeout` and the push included, and ledgers each
-exchange, so a restart of either reads branch, plan and ledger. The reviewer reads only the first
-working version, a block and the Close, where it runs `make review name=<feature>` on the pushed
-branch and brings Stefan the screenshot yield and `make promote`; a finding is one fix request,
-closed by its test. The mode is no longer a stop: **Native** by default, **subagent-driven** only
-for a security-boundary unit or a plan that outlives one context. Name the rule that fired.
+A planned feature runs as two sessions; a change with no plan file stays in one. After the plan approval this session
+turns reviewer and a coder executes in the project's checkout on `feature/<feature>`, cut from production's branch
+with spec, plan and plan review as its first commits; only the coder writes that tree, and a worktree is only for
+urgent parallel work (`netdust-devops:parallel-work`). Inside hc (`HC_TERMINAL_ID` set) the pair recipe in
+`netdust-core:hc-orchestration` starts it with `hc run`, the pair in auto mode; outside it, one background subagent
+there, over SendMessage. The brief opens `Role: coder`, the plan path and `netdust-gates:policy`: a coder skips Intake
+and the plan, never starts a coder, sends its pre-flight scan for rulings before Task 1, runs every step that writes
+the tree, `/shakeout` and the push included, ledgers each exchange, so a restart of either reads branch, plan and
+ledger, and mirrors every stop into Studio by `netdust-core:worktable` where the box has it (never a reason to wait).
+The reviewer reads only the first working version, a block and the Close, where it runs `make review name=<feature>`
+on the pushed branch and brings Stefan the screenshot yield and `make promote`; a finding is one fix request, closed
+by its test. The mode is no longer a stop: **Native** by default, **subagent-driven** only for a security-boundary
+unit or a plan that outlives one context. Name the rule that fired.
 
 ## Stops
 
 Upstream's four stops stand, and Netdust's: the plan approval; the shake-out screenshot yield (Close, step 4); a spec-less
-branch's flow list; every operator verb (`promote`, `unpromote`, `ship`, deploy, pushing a package's `main`), his to run or
-confirm by typing — bar `promote`, `unpromote`, `deploy env=staging`, `e2e`, `smoke` and `review` under his standing OK
+branch's flow list; every operator verb (`unpromote`, `ship`, deploy, pushing a package's `main`), his to run or confirm
+by typing — `promote` and `land` ask nothing, and `unpromote`, `deploy env=staging`, `e2e`, `smoke`, `review` run under his standing OK
 (`NETDUST_AGENT_OK=1`); `ship` and production stay his; a review finding about intent; the coder's permission prompts, his
 alone to answer. A coder asks its reviewer, never Stefan; the reviewer rules technical ones, sparring with a fresh agent,
 and takes intent and upstream's four stops to Stefan. A shake-out exception he accepts is `Accepted-by-human:`, never
@@ -120,8 +119,9 @@ the final message, a coder's with its deferred minors via its reviewer's hand-ov
 
 ## Close
 
-1. `make gate` exits 0 — the project's own suite (`commands.gate` in `site.yml`). A project with
-   no declared gate declares one as the first task of the work; that is not a reason to skip.
+1. `make gate` exits 0 — the project's own suite (`commands.gate` in `site.yml`; without one, the `gate` script of
+   `package.json` or `composer.json`, as the session-start `Box:` line names). No gate declared: declaring one is the
+   work's first task, not a reason to skip. A box that cannot run it pushes and says so; promote and land take only a tip a green gate stamped.
 2. The feature review, plan or no plan: `make review name=<feature>` (`/feature-review <feature>`
    without devops) — superpowers' whole-branch review (`superpowers:requesting-code-review`, a fresh
    reviewer; the author never reviews its own diff) on the most capable model, joined by
@@ -139,8 +139,8 @@ the final message, a coder's with its deferred minors via its reviewer's hand-ov
    `bin/shakeout-check.py` exits 0; Stefan sees one screenshot per surface. This shake-out writes the
    checks; `make e2e env=staging` re-runs all of them on the composition, and `ship` waits for it.
 5. Every change: `superpowers:finishing-a-development-branch` — on a project with `site.yml`, in place of its menu: the
-   branch pushed and `make promote name=<feature>` handed to Stefan, or run under his standing OK (it finds the saved
-   review and skips it); a feature never merges into production by hand.
+   branch pushed, then `make promote name=<feature>` (before launch, production without a path: `make land name=<feature>`),
+   run by the agent once the review and gate are green (each finds the saved review); never a merge into production by hand.
 
 On demand, whenever Stefan asks: `/session-review <feature>` audits the work (six dimensions,
 core fit on WordPress — run it before finishing, while the task reports exist), and

@@ -216,7 +216,7 @@
     "id": "close-hands-over-promote",
     "prompt": "The feature/banner branch is done: make gate is green, it has no user-facing flow, and the whole-branch review's fix pass is complete. Close it as the policy says. Do not ask questions.",
     "files": {
-      "site.yml": "structure:\n  type: bedrock\n  wpcli_path: web/wp\nenvironments:\n  staging: {branch: staging, url: https://stg.example.test}\n  production: {branch: main, url: https://example.test}\n"
+      "site.yml": "structure:\n  type: bedrock\n  wpcli_path: web/wp\nenvironments:\n  staging: {branch: staging, url: https://stg.example.test}\n  production: {branch: main, url: https://example.test, path: /srv/prod}\n"
     },
     "expect": [
       {
@@ -227,10 +227,24 @@
     "absent": []
   },
   {
+    "id": "close-lands-before-launch",
+    "prompt": "The feature/banner branch is done: make gate is green and stamped on its tip, it has no user-facing flow, and the whole-branch review's fix pass is complete. The site is not live yet. Close it as the policy says. Do not ask questions.",
+    "files": {
+      "site.yml": "structure:\n  type: bedrock\n  wpcli_path: web/wp\nenvironments:\n  staging: {branch: staging, url: https://stg.example.test}\n  production: {branch: main, url: https://example.test}\n"
+    },
+    "expect": [
+      {
+        "where": "reply",
+        "match": "make land name=banner"
+      }
+    ],
+    "absent": []
+  },
+  {
     "id": "close-calls-make-review",
     "prompt": "feature/banner is done: make gate is green and it has no user-facing flow. It was started by hand — there is no plan. Close it as the policy says. Do not ask questions.",
     "files": {
-      "site.yml": "structure:\n  type: bedrock\nenvironments:\n  staging: {branch: staging, url: https://stg.example.test}\n  production: {branch: main, url: https://example.test}\ncommands:\n  gate: composer gate\n  review: claude -p \"/netdust-gates:feature-review\"\n"
+      "site.yml": "structure:\n  type: bedrock\nenvironments:\n  staging: {branch: staging, url: https://stg.example.test}\n  production: {branch: main, url: https://example.test, path: /srv/prod}\ncommands:\n  gate: composer gate\n  review: claude -p \"/netdust-gates:feature-review\"\n"
     },
     "expect": [
       {
