@@ -223,7 +223,7 @@ def _load_guard():
 _HINT_STALE = ("make " + "finish", "make " + "release", "make " + "candidate",
                "unfin" + "ish", "integra" + "tion", "back down")
 # FR-2's seven verbs, plus the four outside the flow a hint may legitimately name.
-_HINT_VOCABULARY = {"feature", "hotfix", "save", "promote", "unpromote", "gate", "ship",
+_HINT_VOCABULARY = {"feature", "hotfix", "save", "promote", "unpromote", "land", "gate", "ship",
                     "deploy", "rollback", "status", "doctor"}
 
 
@@ -399,6 +399,10 @@ def run() -> list[tuple[bool, str]]:
                    "echo yes | make unpromote name=x", "deny"),
         _flow_case("(e10) here-string into make promote off a rung", "feature/x",
                    "make promote name=x <<< yes", "deny"),
+        _flow_case("(e11) piped yes into make land, the pre-launch merge into production", "feature/x",
+                   "echo yes | make land name=x", "deny"),
+        _flow_case("(f4) make land itself is never inspected", "feature/x",
+                   "make land name=x", "passthrough"),
         _flow_case("(e11) forged stdin into the removed merge verb", "feature/x",
                    "echo yes | make " + "finish", "passthrough"),
         _flow_case("(e12) forged stdin into the removed release verb", "feature/x",

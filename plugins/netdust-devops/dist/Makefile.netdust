@@ -111,6 +111,7 @@ help: ## Show this help
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "review name=X"   "review a feature now (review=low|full|ultra); env=staging: where features meet"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "promote name=X"  "put a feature on $(BR_REVIEW) — reviews it first unless already reviewed (review=low|full|ultra forces, off skips)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "unpromote name=X" "take a feature off $(BR_REVIEW)"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "land name=X"     "before launch: a reviewed, gated feature merges into $(BR_PROD) — no staging round, no ship"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "gate"            "this project's own suite (commands.gate) — optional, ship runs it itself"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "ship"            "production: gate, backups, typed confirm"
 	@echo ""
@@ -130,7 +131,8 @@ help: ## Show this help
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "test"     "flow + deploy tooling tests (no server contact)"
 	@echo ""
 	@$(MAKE) --no-print-directory _help-stack
-	@echo "$(BLUE)Path:$(RESET) feature → promote → deploy env=staging → ship"
+	@if [ "$(HAS_PROD)" = "yes" ]; then echo "$(BLUE)Path:$(RESET) feature → promote → deploy env=staging → ship"; \
+	else echo "$(BLUE)Path:$(RESET) feature → gate → land   (before launch: production has no path yet)"; fi
 
 # ── FLOW ─────────────────────────────────────────────────────────────────────
 
@@ -259,6 +261,63 @@ unpromote: ## Take a feature off the staging branch (make unpromote name=my-feat
 	ADD=""; DROP="$(name)"; $(_rebuild-staging); \
 	echo "$(GREEN)✅ feature/$(name) is off $(BR_REVIEW). Next: make deploy env=staging$(RESET)"
 
+# Before launch there is no production to protect and nothing to ship: production
+# has a branch and no path yet. A reviewed feature then lands straight on the
+# production branch — a --no-ff merge commit built without a checkout, pushed with a
+# lease. Because nothing gates it later, land requires that the feature already
+# contains origin's production tip (so the merged tree IS the feature's tree) and
+# that `make gate` stamped green that exact tip. Staging, when declared, is rebuilt
+# on the new tip with the features still promoted. Once production has a path,
+# land refuses and names promote and ship.
+.PHONY: land
+land: ## Before launch: merge a reviewed feature into the production branch (make land name=my-feature)
+	@$(call _check-name,land,my-feature)
+	@if [ "$(HAS_PROD)" = "yes" ]; then \
+		echo "$(RED)✗ production is live (environments.production.path) — land is for a site before launch$(RESET)"; \
+		echo "$(YELLOW)  make promote name=$(name), make deploy env=staging, then make ship$(RESET)"; exit 1; fi
+	@[ -n "$$NETDUST_AGENT_OK" ] || $(MAKE) --no-print-directory _need-tty verb=land
+	@$(MAKE) --no-print-directory _ensure-flow
+	@if ! git rev-parse --verify --quiet "origin/feature/$(name)" >/dev/null; then \
+		echo "$(RED)✗ No such branch on origin: feature/$(name)$(RESET)"; \
+		echo "$(YELLOW)  push it first: git push -u origin feature/$(name)$(RESET)"; exit 1; fi
+	@PROD="origin/$(BR_PROD)"; OLD=$$(git rev-parse "$$PROD"); TIP=$$(git rev-parse "origin/feature/$(name)"); \
+	if git merge-base --is-ancestor "$$TIP" "$$OLD"; then \
+		echo "$(RED)✗ feature/$(name) has nothing $(BR_PROD) lacks — already landed?$(RESET)"; exit 1; fi; \
+	git merge-base --is-ancestor "$$OLD" "$$TIP" || { \
+		echo "$(RED)✗ feature/$(name) is behind origin/$(BR_PROD) — what lands must be what the gate ran on$(RESET)"; \
+		echo "$(YELLOW)  on feature/$(name): git merge origin/$(BR_PROD), make gate, push, then make land name=$(name)$(RESET)"; exit 1; }; \
+	[ -n "$$($(SITE) commands.gate 2>/dev/null)" ] || { \
+		echo "$(RED)✗ No commands.gate in site.yml — nothing gates what lands on $(BR_PROD)$(RESET)"; exit 1; }; \
+	GS=$$(git ls-remote origin "refs/tags/gate/feature/$(name)" 2>/dev/null \
+		| awk -v r="refs/tags/gate/feature/$(name)" '$$2 == r {print $$1}'); \
+	[ "$$GS" = "$$TIP" ] || { \
+		echo "$(RED)✗ the gate has not run green on feature/$(name)'s tip ($$(git rev-parse --short "$$TIP"))$(RESET)"; \
+		echo "$(YELLOW)  on a clean checkout of it: make gate — a green run stamps gate/feature/$(name)$(RESET)"; exit 1; }; \
+	echo "$(GREEN)gate green on this tip$(RESET)"; \
+	echo "$(YELLOW)feature/$(name) lands on $(BR_PROD) with:$(RESET)"; \
+	git --no-pager log --oneline "$$OLD..$$TIP" | head -20 | sed 's/^/  /'; \
+	RF="$$(git rev-parse --git-common-dir)/reviews/$(name).md"; \
+	if [ "$(review)" != off ] && [ -n "$$($(SITE) commands.review 2>/dev/null)" ]; then \
+		if [ -z "$(review)" ] && [ -f "$$RF" ]; then \
+			AT=$$(sed -n '1s/^Reviewed: //p' "$$RF"); \
+			echo "$(YELLOW)reviewed at $$(git rev-parse --short "$$AT" 2>/dev/null || echo ?), $$(git rev-list --count "$$AT..$$TIP" 2>/dev/null || echo ?) commit(s) since — skipping (review=full to review again)$(RESET)"; \
+		else $(MAKE) --no-print-directory review name=$(name) review=$(or $(review),full) \
+			|| echo "$(YELLOW)⚠ the review failed — land goes on$(RESET)"; fi; fi; \
+	if [ -n "$$NETDUST_AGENT_OK" ]; then reply=yes; else read -p "Land it on $(BR_PROD)? Type 'yes': " reply; fi; \
+	[ "$$reply" = "yes" ] || { echo "$(RED)✗ Cancelled$(RESET)"; exit 1; }; \
+	NEW=$$(git commit-tree "$$TIP^{tree}" -p "$$OLD" -p "$$TIP" -m "land: $(name)") \
+		|| { echo "$(RED)✗ could not build the merge commit — nothing changed$(RESET)"; exit 4; }; \
+	git push --quiet --force-with-lease=refs/heads/$(BR_PROD):$$OLD origin "$$NEW:refs/heads/$(BR_PROD)" \
+		|| { echo "$(RED)✗ origin changed — run it again$(RESET)"; exit 5; }; \
+	if [ "$$(git branch --show-current)" = "$(BR_PROD)" ]; then \
+		git merge -q --ff-only "$$NEW" 2>/dev/null || echo "$(YELLOW)⚠ this checkout could not follow — run: git merge --ff-only origin/$(BR_PROD)$(RESET)"; \
+	else git branch -q -f "$(BR_PROD)" "$$NEW" 2>/dev/null || true; fi; \
+	git fetch --quiet origin $(BR_PROD); \
+	echo "$(GREEN)✅ feature/$(name) landed on $(BR_PROD) @ $$(git rev-parse --short "$$NEW")$(RESET)"
+	@if [ "$(BR_REVIEW)" != "$(BR_PROD)" ]; then \
+		ADD=""; DROP=""; $(_rebuild-staging); \
+		echo "$(GREEN)✓ $(BR_REVIEW) rebuilt on the new $(BR_PROD) tip$(RESET)"; fi
+
 # ── DEPLOY ───────────────────────────────────────────────────────────────────
 
 # deploy checks the environment's branch out itself and returns you to yours
@@ -308,7 +367,7 @@ ship: ## Ship to production: the staging commit that was deployed, or a gated ho
 	@$(MAKE) --no-print-directory _flow-ready
 	@if [ "$(HAS_PROD)" != "yes" ]; then \
 		echo "$(RED)✗ No production environment in site.yml yet$(RESET)"; \
-		echo "$(YELLOW)  Add environments.production once the site is live.$(RESET)"; exit 1; fi
+		echo "$(YELLOW)  Before launch a feature lands: make land name=X. Add environments.production.path once the site is live.$(RESET)"; exit 1; fi
 	@if [ -n "$(dryrun)" ]; then \
 		echo "$(RED)✗ ship takes no dryrun= — it backs up and deploys production for real$(RESET)"; \
 		echo "$(YELLOW)  Preview the deploy itself: make deploy-test env=production$(RESET)"; exit 1; fi

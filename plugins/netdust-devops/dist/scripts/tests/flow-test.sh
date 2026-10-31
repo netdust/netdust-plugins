@@ -128,7 +128,7 @@ echo; echo "flow — the vocabulary is the verbs of FR-2"
 flowverbs() { M help | strip | awk '/^FLOW/ {f=1; next} f && /^$/ {exit} f {print $1}' | paste -sd' '; }
 pathverbs() { M help | strip | sed -n 's/^Path: //p' | sed 's/ → /\n/g' | awk '{print $1}' | paste -sd' '; }
 assert_eq "help's flow block lists the verbs that exist, in flow order, and nothing else" \
-  "feature hotfix save review promote unpromote gate ship" "$(flowverbs)"
+  "feature hotfix save review promote unpromote land gate ship" "$(flowverbs)"
 assert_eq "…and the path it closes with names only verbs that exist" \
   "feature promote deploy ship" "$(pathverbs)"
 assert_refuses "the verb that merged one rung into the next is gone" "No rule to make target" M finish
@@ -622,6 +622,42 @@ git checkout -q -f -B main "$HMAIN"; git branch -q -f staging "$HSTG"; git push 
 git push -q origin ":refs/heads/feature/sh"; git branch -q -D feature/sh; git branch -q -D hotfix/h hotfix/g hotfix/solo >/dev/null 2>&1
 for t in staging production; do git push -q origin ":refs/tags/deployed/$t" 2>/dev/null; git tag -d "deployed/$t" >/dev/null 2>&1; done; git push -q origin ":refs/tags/shipped/production" 2>/dev/null; git fetch -q --prune origin; : > "$LEAVES"
 assert_eq "…and the hotfix section leaves origin, the checkout, the tree and the leaf log as it found them" "$HORIG main " "$(git ls-remote origin) $(git branch --show-current) $(git status --porcelain)"
+
+echo; echo "flow — land: before launch a reviewed, gated feature merges into production"
+# Before launch production has a branch and no path: nothing to ship, so promote → deploy → ship
+# can never reach main. land is that door, and the only one: it wants the gate's stamp on the
+# feature's tip and a feature that already contains main, so what lands is what was gated.
+git checkout -q -f main; LORIG=$(git ls-remote origin); LGATE=$(cat "$TMP/gate.sh")
+printf '#!/bin/sh\necho "suite ran"\nexit 0\n' > "$TMP/gate.sh"
+git checkout -q -b feature/l1 origin/main && echo l1 > l1.txt && git add l1.txt && git commit -q -m l1 && git push -q origin feature/l1
+git checkout -q main
+assert_refuses "a live production refuses land, naming promote and ship" "production is live" Y "make --no-print-directory land name=l1"
+sed -i 's|^  production: {branch: main,    url: https://flowtest.test,     path: /srv/prod,|  production: {branch: main,    url: https://flowtest.test,|' site.yml
+assert_eq "setup: production has no path — the site is not live" "1" "$(scripts/site environments.production.path >/dev/null 2>&1 || echo 1)"
+assert_eq "help's path before launch is feature → gate → land" "1" "$(M help | strip | grep -c '^Path: feature → gate → land')"
+assert_refuses "land without a terminal is refused" "needs a terminal" bash -c 'make --no-print-directory land name=l1 < /dev/null'
+assert_refuses "land refuses a tip the gate never stamped" "has not run green" Y "make --no-print-directory land name=l1"
+assert_eq "…and main did not move" "$(git rev-parse origin/main)" "$(exact refs/heads/main)"
+git checkout -q feature/l1 && git stash -q && M gate >/dev/null; git stash pop -q; git checkout -q main
+LOLD=$(git rev-parse origin/main); LTIP=$(git rev-parse origin/feature/l1)
+YF "make --no-print-directory land name=l1"; git fetch -q origin
+LNEW=$(exact refs/heads/main)
+assert_eq "land a gated feature: exit 0, main is a land merge of old main and the tip" "0 land: l1 $LOLD $LTIP" \
+  "$YRC $(git log -1 --format='%s %P' "$LNEW")"
+assert_eq "…whose tree is the tree the gate ran on" "$(treeof "$LTIP")" "$(treeof "$LNEW")"
+assert_eq "…the local main follows, and staging is rebuilt on the new tip" "$LNEW 1" \
+  "$(git rev-parse main) $(git merge-base --is-ancestor "$LNEW" origin/staging && echo 1 || echo 0)"
+assert_refuses "landing it again: nothing main lacks" "already landed" Y "make --no-print-directory land name=l1"
+git checkout -q -b feature/l2 "$LOLD" && echo l2 > l2.txt && git add l2.txt && git commit -q -m l2 && git push -q origin feature/l2
+git stash -q && M gate >/dev/null; git stash pop -q; git checkout -q main
+assert_refuses "a gated feature behind main is refused: merge main, gate, then land" "is behind origin/main" Y "make --no-print-directory land name=l2"
+assert_refuses "ship before launch names land" "make land name=X" Y "make --no-print-directory ship"
+git checkout -q -- site.yml; printf '%s\n' "$LGATE" > "$TMP/gate.sh"
+git push -qf origin "$LOLD:refs/heads/main" "$(echo "$LORIG" | awk '$2 == "refs/heads/staging" {print $1}'):refs/heads/staging"
+git push -q origin ":refs/heads/feature/l1" ":refs/heads/feature/l2" ":refs/tags/gate/feature/l1" ":refs/tags/gate/feature/l2"
+git branch -q -f main "$LOLD"; git branch -q -D feature/l1 feature/l2; git fetch -q --prune origin
+git branch -q -f staging origin/staging 2>/dev/null
+assert_eq "…and the land section leaves origin and the tree as it found them" "$LORIG " "$(git ls-remote origin) $(git status --porcelain)"
 
 echo; echo "flow — smoke: the deployed environment, read-only, from commands.smoke"
 # make smoke env=E runs the project's own smoke command against environments.E.url.
