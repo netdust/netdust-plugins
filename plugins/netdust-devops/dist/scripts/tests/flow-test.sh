@@ -98,7 +98,7 @@ assert_eq "…and names a route the flow still has" "1 0" \
   "$(has "$out" 'make ship') $(has "$out" 'make fin''ish')"
 git checkout -q main && git branch -q -D hotfix/fix
 
-echo; echo "flow — the gate stamp: information for promote, never a refusal"
+echo; echo "flow — the gate stamp: promote and land take only a stamped tip"
 gstamp() { git ls-remote origin refs/tags/gate/feature/one | awk '{print $1}'; }
 printf '#!/bin/sh\necho "suite ran"\nexit 0\n' > "$TMP/gate.sh"
 git checkout -q feature/one
@@ -116,11 +116,10 @@ printf '#!/bin/sh\necho "suite ran"\nexit 0\n' > "$TMP/gate.sh"
 git checkout -q main
 assert_ok "a green gate on main" M gate
 assert_eq "…stamps nothing: only feature and hotfix branches carry a stamp" "" "$(git ls-remote origin 'refs/tags/gate/*')"
-SSTG=$(git rev-parse origin/staging)
+SSTG=$(git rev-parse origin/staging); BEFORE=$(git ls-remote origin)
 POUT=$(bash -c 'make --no-print-directory promote name=one < /dev/null' 2>&1 | strip)
-assert_eq "promote without a stamp says so, and goes on: it asks nothing and needs no terminal" "1 0 0" \
-  "$(has "$POUT" 'gate not run green on any box for this tip') $(has "$POUT" 'needs a terminal') $(has "$POUT" 'Cancelled')"
-git push -qf origin "$SSTG:refs/heads/staging"; git fetch -q origin; git branch -q -f staging origin/staging
+assert_eq "promote refuses a tip the gate never stamped — it asks nothing, so the suite is its check" "1 0 $BEFORE" \
+  "$(has "$POUT" 'has not run green') $(has "$POUT" 'needs a terminal') $(git ls-remote origin)"
 git checkout -q feature/one && M gate >/dev/null; git checkout -q main
 POUT=$(M promote name=one | strip)
 assert_eq "promote with a stamp on the tip says the gate is green" "1" "$(has "$POUT" 'gate green on this tip')"
@@ -241,6 +240,8 @@ echo; echo "flow — promote"
 # merges. Every claim here compares a TREE against a hand-merged reference,
 # never the verb's own success line.
 YF()       { YOUT=$(Y "$@"); YRC=$?; }
+# What a green `make gate` on each feature's tip leaves on origin: promote takes only a stamped tip.
+stampf()   { git fetch -q origin; for f; do git push -qf origin "$(git rev-parse "origin/feature/$f"):refs/tags/gate/feature/$f"; done; }
 step()     { YF "make --no-print-directory $*"; if [ "$YRC" -eq 0 ]; then ok "setup: make $*"; else fail "setup: make $*" "$YOUT"; fi; }
 exact()    { git ls-remote origin "$1" | awk -v r="$1" '$2 == r {print $1}'; }
 treeof()   { git rev-parse "$1^{tree}"; }
@@ -260,6 +261,7 @@ git checkout -q -b feature/t3 origin/main
 for n in 1 2 3; do echo "$n" > "t$n.txt" && git add "t$n.txt" && git commit -q -m "t$n"; done
 git checkout -q -b feature/x origin/main && echo conflict > a.txt && git add a.txt && git commit -q -m x
 git checkout -q main; for f in $FEATS; do git push -q origin "feature/$f"; done; git fetch -q --prune origin
+stampf $FEATS
 assert_eq "setup: staging starts at production, and all 8 features are on origin" "$(git rev-parse origin/main) 8" \
   "$(exact refs/heads/staging) $(for f in $FEATS; do exact "refs/heads/feature/$f"; done | grep -c .)"
 step promote name=a; step promote name=b; step promote name=c
@@ -274,7 +276,7 @@ assert_eq "unpromote c: staging is main+a+b, and carries no commit of c" \
   "$(treeof origin/staging) $(onstg) $(git merge-base --is-ancestor origin/feature/c origin/staging && echo 1 || echo 0)"
 PA=$(git rev-parse origin/feature/a)
 git checkout -q feature/a && echo more >> a.txt && git commit -qam "a again" && git push -q origin feature/a
-git checkout -q main && git fetch -q origin; PA2=$(git rev-parse origin/feature/a)
+git checkout -q main && git fetch -q origin; PA2=$(git rev-parse origin/feature/a); stampf a
 assert_eq "setup: feature/a moved on origin" "1" "$([ "$PA" != "$PA2" ] && echo 1)"
 step promote name=c
 git fetch -q origin
@@ -401,7 +403,7 @@ rm -rf "$TMP/nowt" "$TMP/nohead"
 git push -qf origin "$CSTG:refs/heads/staging"; git fetch -q --prune origin
 assert_eq "…and the case leaves no shim behind and origin as it found it" "0 0 $CASE0" \
   "$([ -e "$TMP/nowt/mk" ] && echo 1 || echo 0) $([ -e "$TMP/nohead/mk" ] && echo 1 || echo 0) $(git ls-remote origin)"
-for f in $FEATS; do git push -q origin ":refs/heads/feature/$f"; git branch -q -D "feature/$f"; done
+for f in $FEATS; do git push -q origin ":refs/heads/feature/$f" ":refs/tags/gate/feature/$f"; git branch -q -D "feature/$f"; done
 git push -qf origin "$STG0:refs/heads/staging"; git branch -q -f staging "$STG0"
 git fetch -q --prune origin
 assert_eq "…and the two rebuild sections leave origin byte-identical" "$ORIGIN0" "$(git ls-remote origin)"
@@ -422,7 +424,7 @@ shiprefused() { local l="$1" why="$2" here before was; here=$(git branch --show-
   assert_eq "$l" "1 1 0" "$(nz "$YRC") $(has "$YOUT" "$why") $(has "$YOUT" "Type 'yes'")"
   assert_eq "…and nothing moved: origin byte-identical, production unmoved, 0 leaves" "$before|$was|" "$(git ls-remote origin)|$(prodsha)|$(leaves)"
   git checkout -q "$here"; }
-for f in sa sb sc; do git checkout -q -b "feature/$f" origin/main; echo "$f" > "$f.txt"; git add "$f.txt"; git commit -q -m "$f"; git push -q origin "feature/$f"; done
+for f in sa sb sc; do git checkout -q -b "feature/$f" origin/main; echo "$f" > "$f.txt"; git add "$f.txt"; git commit -q -m "$f"; git push -q origin "feature/$f"; done; stampf sa sb sc
 git checkout -q main && git fetch -q origin; step promote name=sa; step promote name=sb; step promote name=sc
 git fetch -q origin; deploytag origin/staging; step unpromote name=sc
 git fetch -q origin; ABTREE=$(handtree "$SMAIN" origin/feature/sa origin/feature/sb); STGC=$(exact refs/heads/staging)
@@ -465,7 +467,7 @@ assert_eq "…(a) and staging is the new production tip: sa and sb are off it, s
 step promote name=sc; git fetch -q origin
 assert_eq "…(a) promoting sc after the ship puts it on the NEW production tip (AF-1)" "$(handtree origin/main origin/feature/sc) sc" "$(treeof origin/staging) $(onstg)"
 git checkout -q -f -B main "$SMAIN"; git branch -q -f staging "$SSTG"; git push -qf origin "$SMAIN:refs/heads/main" "$SSTG:refs/heads/staging"
-for f in sa sb sc; do git push -q origin ":refs/heads/feature/$f"; git branch -q -D "feature/$f"; done; for t in staging production; do git push -q origin ":refs/tags/deployed/$t" 2>/dev/null; git tag -d "deployed/$t" >/dev/null 2>&1; done; git push -q origin ":refs/tags/shipped/production" 2>/dev/null; git fetch -q --prune origin; : > "$LEAVES"
+for f in sa sb sc; do git push -q origin ":refs/heads/feature/$f" ":refs/tags/gate/feature/$f"; git branch -q -D "feature/$f"; done; for t in staging production; do git push -q origin ":refs/tags/deployed/$t" 2>/dev/null; git tag -d "deployed/$t" >/dev/null 2>&1; done; git push -q origin ":refs/tags/shipped/production" 2>/dev/null; git fetch -q --prune origin; : > "$LEAVES"
 assert_eq "…and the ship section leaves origin, the checkout, the tree and the leaf log as it found them" "$SHIP0 main " "$(git ls-remote origin) $(git branch --show-current) $(git status --porcelain)"
 
 echo; echo "flow — ship waits for the staging e2e"
@@ -478,7 +480,7 @@ e2etag() { exact refs/tags/e2e/staging; }
 git checkout -q main
 sed -i "s|^commands: {gate: \(.*\)}$|commands: {gate: \1, e2e: sh $E2ESHIP}|" site.yml
 git commit -q -am "declare commands.e2e" && git push -q origin main
-git checkout -q -b feature/se origin/main && echo se > se.txt && git add se.txt && git commit -q -m se && git push -q origin feature/se
+git checkout -q -b feature/se origin/main && echo se > se.txt && git add se.txt && git commit -q -m se && git push -q origin feature/se; stampf se
 git checkout -q main; step promote name=se; git fetch -q origin
 git checkout -q -B staging origin/staging; deploytag origin/staging; gatescript 0; e2escript 0; ESC=$(git rev-parse HEAD)
 shiprefused "(r) staging deployed, its e2e never run: refused naming the tag" "e2e/staging"
@@ -510,7 +512,7 @@ shiprefused "(r) e2e/staging names an older commit: refused" "e2e/staging"
 M e2e env=staging >/dev/null; : > "$LEAVES"; YF "make --no-print-directory ship"; git fetch -q --prune origin
 assert_eq "(r) Y make ship once the e2e passed on this commit: exit 0, production is that commit" "0 $ESC" "$YRC $(prodsha)"
 git checkout -q -f -B main "$EMAIN"; git branch -q -f staging "$ESTG"; git push -qf origin "$EMAIN:refs/heads/main" "$ESTG:refs/heads/staging"
-git push -q origin ":refs/heads/feature/se"; git branch -q -D feature/se
+git push -q origin ":refs/heads/feature/se" ":refs/tags/gate/feature/se"; git branch -q -D feature/se
 for t in deployed/staging deployed/production e2e/staging shipped/production; do git push -q origin ":refs/tags/$t" 2>/dev/null; git tag -d "$t" >/dev/null 2>&1; done; git fetch -q --prune origin; : > "$LEAVES"
 assert_eq "…and the e2e ship section leaves origin, the checkout, the tree and the leaf log as it found them" "$EORIG main " "$(git ls-remote origin) $(git branch --show-current) $(git status --porcelain)"
 
@@ -533,7 +535,7 @@ assert_eq "review=low reaches the reviewer as REVIEW_LEVEL" "name=banner scope=f
 RD="$(git rev-parse --git-common-dir)/reviews"; ROUT=$(M review name=banner)
 assert_eq "…the report is saved under the common git dir, and the findings line and follow-up are printed" "1 1 1" \
   "$(grep -c '^Findings: 1 Blocking' "$RD/banner.md") $(has "$ROUT" 'Findings: 1 Blocking') $(has "$ROUT" '/review-fix banner')"
-git checkout -q -b feature/rv origin/main && echo rv > rv.txt && git add rv.txt && git commit -q -m rv && git push -q origin feature/rv
+git checkout -q -b feature/rv origin/main && echo rv > rv.txt && git add rv.txt && git commit -q -m rv && git push -q origin feature/rv; stampf rv
 git checkout -q main; : > "$RLOG"; YF "make --no-print-directory promote name=rv"
 assert_eq "promote reviews first (level full), then promotes, asking nothing" "0 name=rv scope=feature level=full 1 0" \
   "$YRC $(head -1 "$RLOG") $([ "$(printf '%s' "$YOUT" | grep -n -m1 'Findings:' | cut -d: -f1)" -lt "$(printf '%s' "$YOUT" | grep -n "is on staging" | cut -d: -f1)" ] && echo 1) $(has "$YOUT" 'Continue?')"
@@ -548,14 +550,14 @@ assert_eq "promote review=off: no review even with none saved" "0 0" "$YRC $(wc 
 M review name=rv >/dev/null; : > "$TMP/review.fail"; YF "make --no-print-directory promote name=rv review=full"; rm -f "$TMP/review.fail"
 assert_eq "a review that fails: promote says so, still promotes, and keeps the last good report" "0 1 Reviewed: $RVTIP" "$YRC $(has "$YOUT" 'review failed') $(head -1 "$RD/rv.md")"
 git branch -q -f staging "$RSTG"; git push -qf origin "$RSTG:refs/heads/staging"
-git push -q origin :refs/heads/feature/rv; git branch -q -D feature/rv; rm -rf "$RD"; git fetch -q --prune origin
+git push -q origin :refs/heads/feature/rv :refs/tags/gate/feature/rv; git branch -q -D feature/rv; rm -rf "$RD"; git fetch -q --prune origin
 git checkout -q -- site.yml
 assert_eq "…and the review section leaves the tree clean, origin untouched" "$RORIG|" "$(git ls-remote origin)|$(git status --porcelain)"
 
 echo; echo "flow — hotfix"
 # FR-7: a hotfix ships from its own branch with no staging round, and FR-8 still rebuilds staging over it.
 HORIG=$(git ls-remote origin); HMAIN=$(exact refs/heads/main); HSTG=$(exact refs/heads/staging)
-git checkout -q -b feature/sh origin/main && echo sh > sh.txt && git add sh.txt && git commit -q -m sh && git push -q origin feature/sh
+git checkout -q -b feature/sh origin/main && echo sh > sh.txt && git add sh.txt && git commit -q -m sh && git push -q origin feature/sh; stampf sh
 git checkout -q main; step promote name=sh; git fetch -q origin; PSH=$(git rev-parse origin/feature/sh)
 M hotfix name=h >/dev/null; echo h > h.txt && git add h.txt && git commit -q -m "the fix"; HFIX=$(git rev-parse HEAD); gatescript 1
 shiprefused "(k) a hotfix with a red gate: refused, 0 backups" "gate is red"
@@ -617,7 +619,7 @@ SOLO=$(git rev-parse HEAD); WASSTG=$(exact refs/heads/staging); : > "$LEAVES"; Y
 assert_eq "(M6) a project with no staging environment: the hotfix ships, production is the hotfix commit" "0 $SOLO" "$YRC $(prodsha)"
 assert_eq "…(M6) and no rebuild ran: staging untouched, no lost lease, no dropped commit, the five production leaves" "$WASSTG 0 0 $SHIPPED" "$(exact refs/heads/staging) $(has "$YOUT" 'run it again') $(has "$YOUT" 'dropped') $(leaves)"
 git checkout -q -f -B main "$HMAIN"; git branch -q -f staging "$HSTG"; git push -qf origin "$HMAIN:refs/heads/main" "$HSTG:refs/heads/staging"
-git push -q origin ":refs/heads/feature/sh"; git branch -q -D feature/sh; git branch -q -D hotfix/h hotfix/g hotfix/solo >/dev/null 2>&1
+git push -q origin ":refs/heads/feature/sh" ":refs/tags/gate/feature/sh"; git branch -q -D feature/sh; git branch -q -D hotfix/h hotfix/g hotfix/solo >/dev/null 2>&1
 for t in staging production; do git push -q origin ":refs/tags/deployed/$t" 2>/dev/null; git tag -d "deployed/$t" >/dev/null 2>&1; done; git push -q origin ":refs/tags/shipped/production" 2>/dev/null; git fetch -q --prune origin; : > "$LEAVES"
 assert_eq "…and the hotfix section leaves origin, the checkout, the tree and the leaf log as it found them" "$HORIG main " "$(git ls-remote origin) $(git branch --show-current) $(git status --porcelain)"
 

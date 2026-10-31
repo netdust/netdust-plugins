@@ -225,13 +225,15 @@ promote: ## Put a feature on the staging branch (make promote name=my-feature)
 		|| echo "  (nothing — $(BR_REVIEW) is origin/$(BR_PROD))"; \
 	echo "$(YELLOW)feature/$(name) since origin/$(BR_PROD):$(RESET)"; \
 	git --no-pager log --oneline origin/$(BR_PROD)..origin/feature/$(name) | head -20 | sed 's/^/  /'; \
-	if [ -n "$$($(SITE) commands.gate 2>/dev/null)" ]; then \
-		TIP=$$(git rev-parse "origin/feature/$(name)"); \
-		GS=$$(git ls-remote origin "refs/tags/gate/feature/$(name)" 2>/dev/null \
-			| awk -v r="refs/tags/gate/feature/$(name)" '$$2 == r {print $$1}'); \
-		if [ "$$GS" = "$$TIP" ]; then echo "$(GREEN)gate green on this tip$(RESET)"; \
-		elif [ -n "$$GS" ]; then echo "$(YELLOW)gate green at $$(git rev-parse --short "$$GS"), not on this tip — ship runs it on $(BR_REVIEW)'s composition$(RESET)"; \
-		else echo "$(YELLOW)gate not run green on any box for this tip — ship runs it on $(BR_REVIEW)'s composition$(RESET)"; fi; fi; \
+	[ -n "$$($(SITE) commands.gate 2>/dev/null)" ] || { \
+		echo "$(RED)✗ No commands.gate in site.yml — promote puts only a gated tip on $(BR_REVIEW)$(RESET)"; exit 1; }; \
+	TIP=$$(git rev-parse "origin/feature/$(name)"); \
+	GS=$$(git ls-remote origin "refs/tags/gate/feature/$(name)" 2>/dev/null \
+		| awk -v r="refs/tags/gate/feature/$(name)" '$$2 == r {print $$1}'); \
+	[ "$$GS" = "$$TIP" ] || { \
+		echo "$(RED)✗ the gate has not run green on feature/$(name)'s tip ($$(git rev-parse --short "$$TIP"))$(RESET)"; \
+		echo "$(YELLOW)  on a clean checkout of it: make gate — a green run stamps gate/feature/$(name)$(RESET)"; exit 1; }; \
+	echo "$(GREEN)gate green on this tip$(RESET)"; \
 	RF="$$(git rev-parse --git-common-dir)/reviews/$(name).md"; \
 	if [ "$(review)" != off ] && [ -n "$$($(SITE) commands.review 2>/dev/null)" ]; then \
 		if [ -z "$(review)" ] && [ -f "$$RF" ]; then \
@@ -518,9 +520,10 @@ audit: ## Report work that exists only on this machine (never pushes or deletes)
 
 .PHONY: gate
 # On a feature or hotfix branch a green run from a clean tree stamps gate/<branch> on
-# origin with the commit it ran on, and a red run deletes the stamp, so promote can say
-# whether any box ran the suite on the tip it puts on staging (a cloud box without DDEV
-# cannot). The stamp is information, never a refusal: ship runs the gate itself, with
+# origin with the commit it ran on, and a red run deletes the stamp. promote and land
+# take only a tip the stamp names: they ask nothing, so the suite having passed is their
+# check (Stefan, 2026-10-31) — a box that cannot run it (a cloud box without DDEV)
+# pushes, and a box that can gates and promotes. ship runs the gate itself, with
 # NETDUST_GATE_STAMP=off, since a ship moves nothing on origin but what it ships.
 gate: ## Run this project's own test suite (commands.gate from site.yml)
 	@G=$$($(SITE) commands.gate 2>/dev/null); \

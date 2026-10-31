@@ -125,7 +125,7 @@ that carry a decision:
 |---|---|
 | `make feature name=X` | branch `feature/X` from origin's production branch (**`main`**), wherever you stand |
 | `make hotfix name=X` | branch `hotfix/X` from origin's production branch (**`main`**), wherever you stand |
-| `make promote name=X` | rebuild staging as production + every promoted feature, X pinned at its current tip. Like opening a PR, it reviews X first, then rebuilds without asking, unless a review is already saved, which it names and skips. `review=low\|full\|ultra` forces one, `review=off` skips. The review never refuses |
+| `make promote name=X` | rebuild staging as production + every promoted feature, X pinned at its current tip. Refused unless `gate/feature/X` names that tip. Like opening a PR, it reviews X first, then rebuilds without asking, unless a review is already saved, which it names and skips. `review=low\|full\|ultra` forces one, `review=off` skips. The review never refuses |
 | `make unpromote name=X` | the same rebuild, without X |
 | `make land name=X` | **before launch only** (`environments.production` has a branch, no `path`): merge `feature/X` into the production branch as a `land: X` merge, pushed with a lease, no checkout. Refused unless `feature/X` already contains `origin/main` and `gate/feature/X` names its tip — nothing gates `main` later, so what lands is what the gate ran on. Reviews X first like `promote`; rebuilds staging on the new tip when staging exists. Once production has a path it refuses and names promote and ship |
 | `make ship` | from the staging checkout, or a `hotfix/*` branch: the checks below, the gate, typed confirm, both backups, deploy, then rebuild staging on the new production |
@@ -196,9 +196,10 @@ git checkout <commit before the update> -- Makefile.netdust mk scripts .netdust-
    `commands.gate` runs in `make gate` and inside `ship`, never in a deploy, so
    `✓ deploy guards passed` never means a suite ran. A green `make gate` on a
    clean `feature/*` or `hotfix/*` stamps `gate/<branch>` on origin (a red one
-   deletes it), and `promote` says whether that stamp names the tip it puts on
-   staging — information for a box that could not run the suite, never a
-   refusal; `ship` runs the gate itself and stamps nothing.
+   deletes it), and `promote` and `land` take only a tip that stamp names —
+   they ask nothing, so the suite having passed is their check. A box that
+   cannot run it pushes, and a box that can gates and promotes; `ship` runs
+   the gate itself and stamps nothing.
 2. **The ledger.** Each deploy stamps `<state_dir>/<env>.json` on the server
    and moves a `deployed/<env>` tag — `make deployed` / `git diff
    deployed/production` read it back.
