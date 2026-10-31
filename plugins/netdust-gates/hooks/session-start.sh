@@ -200,6 +200,46 @@ if [[ -f "$HARNESS_GLOBAL" ]]; then
   OUTPUT+="$(esc < "$HARNESS_GLOBAL")\n\n"
 fi
 
+# ── Box: what this machine can reach ────────────────────────────────────────
+# The same project runs on the laptop, netdust-web and a cloud container, and not every box has
+# worktable, herdr, DDEV or a browser. One stated line, so a skill branches on a fact instead of
+# finding out halfway through a failed call. Cheap by construction: no command here waits more
+# than a second, and the worktable probe runs only when WORKTABLE_URL names an engine.
+box_gate() {
+  if [ -f "$ROOT/Makefile" ] && grep -qsE '^(gate:|include .*Makefile\.netdust)' "$ROOT/Makefile"; then echo 'make gate'; return; fi
+  if [ -f "$ROOT/package.json" ] && grep -qsE '"gate"[[:space:]]*:' "$ROOT/package.json"; then
+    if [ -f "$ROOT/bun.lock" ] || [ -f "$ROOT/bun.lockb" ]; then echo 'bun run gate'
+    elif [ -f "$ROOT/pnpm-lock.yaml" ]; then echo 'pnpm run gate'
+    else echo 'npm run gate'; fi
+    return
+  fi
+  if [ -f "$ROOT/composer.json" ] && grep -qsE '"gate"[[:space:]]*:' "$ROOT/composer.json"; then echo 'composer gate'; return; fi
+  echo 'none declared'
+}
+box_line() {
+  local wt='–' hc='✗' parts
+  if [ -n "${WORKTABLE_URL:-}" ]; then
+    local code
+    code=$(curl -s --noproxy '*' -o /dev/null -m 1 -w '%{http_code}' "${WORKTABLE_URL%/}/api/schema" 2>/dev/null || true)
+    if [ -n "$code" ] && [ "$code" != "000" ]; then wt='✓'; else wt='✗'; fi
+  fi
+  [ -n "${HC_TERMINAL_ID:-}" ] && hc='✓'
+  parts="worktable $wt · herdr $hc"
+  if [ -d "$ROOT/.ddev" ]; then
+    if command -v ddev >/dev/null 2>&1; then parts+=" · ddev ✓"; else parts+=" · ddev ✗"; fi
+  fi
+  if command -v chromium >/dev/null 2>&1 || command -v google-chrome >/dev/null 2>&1 \
+     || [ -d /opt/pw-browsers ] || [ -d "$HOME/.cache/ms-playwright" ] || [ -d "$HOME/Library/Caches/ms-playwright" ]; then
+    parts+=" · browser ✓"
+  else
+    parts+=" · browser ✗"
+  fi
+  printf '%s · gate: %s' "$parts" "$(box_gate)"
+}
+if [ -e "$ROOT/.git" ] || [ -f "$ROOT/site.yml" ]; then
+  OUTPUT+="**Box:** $(box_line | esc). A ✗ is a fact about this machine, not the project: skip what needs it, say so once, never work around it. \`worktable –\` means WORKTABLE_URL is unset.\n\n"
+fi
+
 # ── site.yml (per-project operational config) ───────────────────────────────
 SITE_YML="$ROOT/site.yml"
 note site_yml "$SITE_YML"
