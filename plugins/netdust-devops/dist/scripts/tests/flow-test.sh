@@ -116,12 +116,15 @@ printf '#!/bin/sh\necho "suite ran"\nexit 0\n' > "$TMP/gate.sh"
 git checkout -q main
 assert_ok "a green gate on main" M gate
 assert_eq "…stamps nothing: only feature and hotfix branches carry a stamp" "" "$(git ls-remote origin 'refs/tags/gate/*')"
-POUT=$(N "make --no-print-directory promote name=one" | strip)
-assert_eq "promote without a stamp says so, and still asks" "1 1" \
-  "$(has "$POUT" 'gate not run green on any box for this tip') $(has "$POUT" 'Cancelled')"
+SSTG=$(git rev-parse origin/staging)
+POUT=$(bash -c 'make --no-print-directory promote name=one < /dev/null' 2>&1 | strip)
+assert_eq "promote without a stamp says so, and goes on: it asks nothing and needs no terminal" "1 0 0" \
+  "$(has "$POUT" 'gate not run green on any box for this tip') $(has "$POUT" 'needs a terminal') $(has "$POUT" 'Cancelled')"
+git push -qf origin "$SSTG:refs/heads/staging"; git fetch -q origin; git branch -q -f staging origin/staging
 git checkout -q feature/one && M gate >/dev/null; git checkout -q main
-POUT=$(N "make --no-print-directory promote name=one" | strip)
+POUT=$(M promote name=one | strip)
 assert_eq "promote with a stamp on the tip says the gate is green" "1" "$(has "$POUT" 'gate green on this tip')"
+git push -qf origin "$SSTG:refs/heads/staging"; git fetch -q origin; git branch -q -f staging origin/staging
 git push -q origin ":refs/tags/gate/feature/one"
 
 echo; echo "flow — the vocabulary is the verbs of FR-2"
@@ -179,9 +182,6 @@ assert_refuses "echo yes | make ship is refused" "needs a terminal" bash -c 'ech
 assert_refuses "make ship < file is refused" "needs a terminal" \
   bash -c "echo yes > $TMP/yes; make --no-print-directory ship < $TMP/yes; rc=\$?; rm -f $TMP/yes; exit \$rc"
 assert_eq "…and main did not move" "$(git rev-parse origin/main)" "$(git rev-parse main)"
-BEFORE=$(git ls-remote origin)
-assert_refuses "a typed 'no' cancels and pushes nothing" "Cancelled" N "make --no-print-directory promote name=one"
-assert_eq "…origin is byte-identical after the cancelled promote" "$BEFORE" "$(git ls-remote origin)"
 
 echo; echo "flow — a stale staging is re-pointed, production is not (I3)"
 # A rebuilt staging is stale on every machine that did not run the verb;
@@ -319,9 +319,7 @@ git fetch -q --prune origin; BEFORE=$(git ls-remote origin)
 YF "make --no-print-directory promote name=x"
 assert_eq "a feature conflicting with a: refused naming it, nothing pushed, no worktree left (SC-3)" "1 1 1 $BEFORE" \
   "$(nz "$YRC") $(has "$YOUT" 'conflict: x') $(git worktree list | wc -l | tr -d ' ') $(git ls-remote origin)"
-assert_refuses "promote without a terminal is refused before anything else (C1)" "needs a terminal" \
-  bash -c 'make --no-print-directory promote name=a < /dev/null'
-assert_refuses "…and unpromote too" "needs a terminal" \
+assert_refuses "unpromote without a terminal is refused before anything else (C1)" "needs a terminal" \
   bash -c 'make --no-print-directory unpromote name=a < /dev/null'
 assert_refuses "promote of a feature that is not on origin, by name" "No such branch on origin: feature/nope" \
   Y "make --no-print-directory promote name=nope"
@@ -537,8 +535,8 @@ assert_eq "…the report is saved under the common git dir, and the findings lin
   "$(grep -c '^Findings: 1 Blocking' "$RD/banner.md") $(has "$ROUT" 'Findings: 1 Blocking') $(has "$ROUT" '/review-fix banner')"
 git checkout -q -b feature/rv origin/main && echo rv > rv.txt && git add rv.txt && git commit -q -m rv && git push -q origin feature/rv
 git checkout -q main; : > "$RLOG"; YF "make --no-print-directory promote name=rv"
-assert_eq "promote reviews first (level full), then asks, then promotes" "0 name=rv scope=feature level=full 1" \
-  "$YRC $(head -1 "$RLOG") $([ "$(printf '%s' "$YOUT" | grep -n -m1 'Findings:' | cut -d: -f1)" -lt "$(printf '%s' "$YOUT" | grep -n "Continue?" | cut -d: -f1)" ] && echo 1)"
+assert_eq "promote reviews first (level full), then promotes, asking nothing" "0 name=rv scope=feature level=full 1 0" \
+  "$YRC $(head -1 "$RLOG") $([ "$(printf '%s' "$YOUT" | grep -n -m1 'Findings:' | cut -d: -f1)" -lt "$(printf '%s' "$YOUT" | grep -n "is on staging" | cut -d: -f1)" ] && echo 1) $(has "$YOUT" 'Continue?')"
 RVTIP=$(git rev-parse origin/feature/rv)
 assert_eq "…and its report opens with the commit it reviewed" "Reviewed: $RVTIP" "$(head -1 "$RD/rv.md")"
 : > "$RLOG"; YF "make --no-print-directory promote name=rv"
@@ -634,8 +632,12 @@ git checkout -q main
 assert_refuses "a live production refuses land, naming promote and ship" "production is live" Y "make --no-print-directory land name=l1"
 sed -i 's|^  production: {branch: main,    url: https://flowtest.test,     path: /srv/prod,|  production: {branch: main,    url: https://flowtest.test,|' site.yml
 assert_eq "setup: production has no path — the site is not live" "1" "$(scripts/site environments.production.path >/dev/null 2>&1 || echo 1)"
+sed -i 's|^  production: {branch: main,    url: https://flowtest.test,|  production: {branch: main,    url: https://flowtest.test,     path: TODO,|' site.yml
+assert_eq "a scaffolded production path of TODO is still before launch" "1" "$(M help | strip | grep -c '^Path: feature → gate → land')"
+git checkout -q -- site.yml
+sed -i 's|^  production: {branch: main,    url: https://flowtest.test,     path: /srv/prod,|  production: {branch: main,    url: https://flowtest.test,|' site.yml
 assert_eq "help's path before launch is feature → gate → land" "1" "$(M help | strip | grep -c '^Path: feature → gate → land')"
-assert_refuses "land without a terminal is refused" "needs a terminal" bash -c 'make --no-print-directory land name=l1 < /dev/null'
+assert_refuses "land needs no terminal: without one it stops only at its own checks" "has not run green" bash -c 'make --no-print-directory land name=l1 < /dev/null'
 assert_refuses "land refuses a tip the gate never stamped" "has not run green" Y "make --no-print-directory land name=l1"
 assert_eq "…and main did not move" "$(git rev-parse origin/main)" "$(exact refs/heads/main)"
 git checkout -q feature/l1 && git stash -q && M gate >/dev/null; git stash pop -q; git checkout -q main
@@ -699,7 +701,9 @@ git remote remove origin
 for v in "feature name=two" "hotfix name=two"; do
   assert_refuses "no origin: make $v" "no 'origin' remote" M $v
 done
-for v in "promote name=one" "unpromote name=one"; do
+assert_refuses "no origin: make promote name=one, which needs no terminal" "no 'origin' remote" \
+  bash -c "make --no-print-directory promote name=one < /dev/null"
+for v in "unpromote name=one"; do
   assert_refuses "no origin, no terminal: make $v refuses for the terminal first" "needs a terminal" \
     bash -c "make --no-print-directory $v < /dev/null"
   assert_refuses "no origin, with a terminal: make $v stops on the missing remote" "no 'origin' remote" \

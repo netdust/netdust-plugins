@@ -109,8 +109,8 @@ unit or a plan that outlives one context. Name the rule that fired.
 ## Stops
 
 Upstream's four stops stand, and Netdust's: the plan approval; the shake-out screenshot yield (Close, step 4); a spec-less
-branch's flow list; every operator verb (`promote`, `unpromote`, `ship`, deploy, pushing a package's `main`), his to run or
-confirm by typing — bar `promote`, `unpromote`, `land`, `deploy env=staging`, `e2e`, `smoke`, `review` under his standing OK
+branch's flow list; every operator verb (`unpromote`, `ship`, deploy, pushing a package's `main`), his to run or confirm
+by typing — `promote` and `land` ask nothing, and `unpromote`, `deploy env=staging`, `e2e`, `smoke`, `review` run under his standing OK
 (`NETDUST_AGENT_OK=1`); `ship` and production stay his; a review finding about intent; the coder's permission prompts, his
 alone to answer. A coder asks its reviewer, never Stefan; the reviewer rules technical ones, sparring with a fresh agent,
 and takes intent and upstream's four stops to Stefan. A shake-out exception he accepts is `Accepted-by-human:`, never
@@ -139,8 +139,8 @@ the final message, a coder's with its deferred minors via its reviewer's hand-ov
    `bin/shakeout-check.py` exits 0; Stefan sees one screenshot per surface. This shake-out writes the
    checks; `make e2e env=staging` re-runs all of them on the composition, and `ship` waits for it.
 5. Every change: `superpowers:finishing-a-development-branch` — on a project with `site.yml`, in place of its menu: the
-   branch pushed and `make promote name=<feature>` (before launch, production without a path: `make land name=<feature>`)
-   handed to Stefan or run under his standing OK (each finds the saved review); never a merge into production by hand.
+   branch pushed, then `make promote name=<feature>` (before launch, production without a path: `make land name=<feature>`),
+   run by the agent once the review and gate are green (each finds the saved review); never a merge into production by hand.
 
 On demand, whenever Stefan asks: `/session-review <feature>` audits the work (six dimensions,
 core fit on WordPress — run it before finishing, while the task reports exist), and

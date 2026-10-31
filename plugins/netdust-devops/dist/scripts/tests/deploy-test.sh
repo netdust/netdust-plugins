@@ -165,9 +165,7 @@ assert_refuses "refuses promote without a name"   "Usage: make promote name="   
 assert_refuses "refuses unpromote without a name" "Usage: make unpromote name=" make -s unpromote
 # The terminal floor runs before anything is read, so this holds with or without
 # an origin. WHICH names are refused is flow-test.sh's subject, not this one's.
-assert_refuses "refuses a promote it could never read a typed 'yes' for" "needs a terminal" \
-  bash -c 'make -s promote name=definitely-not-a-real-feature < /dev/null'
-assert_refuses "…and an unpromote too" "needs a terminal" \
+assert_refuses "refuses an unpromote it could never read a typed 'yes' for" "needs a terminal" \
   bash -c 'make -s unpromote name=definitely-not-a-real-feature < /dev/null'
 
 echo

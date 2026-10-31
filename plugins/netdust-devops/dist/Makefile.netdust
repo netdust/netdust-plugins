@@ -75,7 +75,9 @@ WEBROOT      := $(shell $(SITE) structure.webroot)
 # There are two: production, and the staging branch the release is built on.
 BR_PROD   := $(shell $(SITE) environments.production.branch 2>/dev/null || $(SITE) environments.staging.branch 2>/dev/null)
 BR_REVIEW := $(shell $(SITE) environments.staging.branch 2>/dev/null || $(SITE) environments.production.branch 2>/dev/null)
-HAS_PROD  := $(shell $(SITE) environments.production.path >/dev/null 2>&1 && echo yes || echo no)
+# Production is live once its path is a real one: the scaffold writes `path: TODO`, so a
+# new project is before launch until someone fills it in.
+HAS_PROD  := $(shell P=$$($(SITE) environments.production.path 2>/dev/null) && [ -n "$$P" ] && [ "$$P" != TODO ] && echo yes || echo no)
 
 # `?=` would take an exported STACK; which stack this is belongs to the project file.
 STACK := $(if $(filter file override,$(origin STACK)),$(STACK),$(shell $(SITE) structure.stack 2>/dev/null || echo generic))
@@ -213,7 +215,6 @@ promote: ## Put a feature on the staging branch (make promote name=my-feature)
 	@$(call _check-name,promote,my-feature)
 	@if [ "$(BR_REVIEW)" = "$(BR_PROD)" ]; then \
 		echo "$(RED)✗ No staging environment in site.yml — promote needs one$(RESET)"; exit 1; fi
-	@[ -n "$$NETDUST_AGENT_OK" ] || $(MAKE) --no-print-directory _need-tty verb=promote
 	@$(MAKE) --no-print-directory _ensure-flow
 	@if ! git rev-parse --verify --quiet "origin/feature/$(name)" >/dev/null; then \
 		echo "$(RED)✗ No such branch on origin: feature/$(name)$(RESET)"; \
@@ -238,8 +239,6 @@ promote: ## Put a feature on the staging branch (make promote name=my-feature)
 			echo "$(YELLOW)reviewed at $$(git rev-parse --short "$$AT" 2>/dev/null || echo ?), $$(git rev-list --count "$$AT..origin/feature/$(name)" 2>/dev/null || echo ?) commit(s) since — skipping (review=full to review again)$(RESET)"; \
 		else $(MAKE) --no-print-directory review name=$(name) review=$(or $(review),full) \
 			|| echo "$(YELLOW)⚠ the review failed — promote goes on$(RESET)"; fi; fi; \
-	if [ -n "$$NETDUST_AGENT_OK" ]; then reply=yes; else read -p "Continue? Type 'yes': " reply; fi; \
-	[ "$$reply" = "yes" ] || { echo "$(RED)✗ Cancelled$(RESET)"; exit 1; }; \
 	ADD="$(name)"; DROP=""; $(_rebuild-staging); \
 	echo "$(GREEN)✅ feature/$(name) is on $(BR_REVIEW). Next: make deploy env=staging$(RESET)"
 
@@ -268,14 +267,16 @@ unpromote: ## Take a feature off the staging branch (make unpromote name=my-feat
 # contains origin's production tip (so the merged tree IS the feature's tree) and
 # that `make gate` stamped green that exact tip. Staging, when declared, is rebuilt
 # on the new tip with the features still promoted. Once production has a path,
-# land refuses and names promote and ship.
+# land refuses and names promote and ship. Like promote it asks nothing: its checks are
+# the gate stamp and the review, so an agent runs it.
 .PHONY: land
 land: ## Before launch: merge a reviewed feature into the production branch (make land name=my-feature)
 	@$(call _check-name,land,my-feature)
 	@if [ "$(HAS_PROD)" = "yes" ]; then \
 		echo "$(RED)✗ production is live (environments.production.path) — land is for a site before launch$(RESET)"; \
 		echo "$(YELLOW)  make promote name=$(name), make deploy env=staging, then make ship$(RESET)"; exit 1; fi
-	@[ -n "$$NETDUST_AGENT_OK" ] || $(MAKE) --no-print-directory _need-tty verb=land
+	@$(SITE) environments.production.branch >/dev/null 2>&1 || { \
+		echo "$(RED)✗ site.yml declares no environments.production.branch — land merges into production's branch, and there is none$(RESET)"; exit 1; }
 	@$(MAKE) --no-print-directory _ensure-flow
 	@if ! git rev-parse --verify --quiet "origin/feature/$(name)" >/dev/null; then \
 		echo "$(RED)✗ No such branch on origin: feature/$(name)$(RESET)"; \
@@ -303,8 +304,6 @@ land: ## Before launch: merge a reviewed feature into the production branch (mak
 			echo "$(YELLOW)reviewed at $$(git rev-parse --short "$$AT" 2>/dev/null || echo ?), $$(git rev-list --count "$$AT..$$TIP" 2>/dev/null || echo ?) commit(s) since — skipping (review=full to review again)$(RESET)"; \
 		else $(MAKE) --no-print-directory review name=$(name) review=$(or $(review),full) \
 			|| echo "$(YELLOW)⚠ the review failed — land goes on$(RESET)"; fi; fi; \
-	if [ -n "$$NETDUST_AGENT_OK" ]; then reply=yes; else read -p "Land it on $(BR_PROD)? Type 'yes': " reply; fi; \
-	[ "$$reply" = "yes" ] || { echo "$(RED)✗ Cancelled$(RESET)"; exit 1; }; \
 	NEW=$$(git commit-tree "$$TIP^{tree}" -p "$$OLD" -p "$$TIP" -m "land: $(name)") \
 		|| { echo "$(RED)✗ could not build the merge commit — nothing changed$(RESET)"; exit 4; }; \
 	git push --quiet --force-with-lease=refs/heads/$(BR_PROD):$$OLD origin "$$NEW:refs/heads/$(BR_PROD)" \

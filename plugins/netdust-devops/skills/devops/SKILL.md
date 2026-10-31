@@ -89,17 +89,21 @@ especially the deletions.
 
 **Never run `make ship` unless the user asked for it in that turn.** Not
 because it follows from an earlier plan, not because the work looks finished.
-`save`, `promote`, `unpromote` and `ship` check for a terminal before doing
+`save`, `unpromote` and `ship` check for a terminal before doing
 anything at all, so `echo yes | make ship` and `make ship < answers` refuse
 without touching a server; `rollback` and a `confirm: true` deploy only read
 first, then refuse. That check is a speed bump against automation, not a control — a
 session that wanted one could hand itself a pty, so **for an agent the rule is
 *don't*, not *can't*.** An agent gets the state ready and hands the verb over.
 
+**`promote` and `land` ask nothing.** Their checks are the review they run first and, for
+`land`, the gate stamp it requires: when those pass it is good (Stefan, 2026-10-31), so an agent
+runs them itself once the Close is done, no terminal, no Continue?. `deploy env=staging`, `e2e`,
+`smoke` and `review` need no terminal either.
+
 **One standing exception, the user's to grant.** When the user has said an agent may run the
-staging verbs freely, it runs `promote` and `unpromote` with `NETDUST_AGENT_OK=1` in front: no
-terminal, and the Continue? answers itself. `deploy env=staging`, `e2e`, `smoke` and `review` need
-no terminal. `ship`, `save`, `rollback` and anything on production ignore the variable and stay
+staging verbs freely, it runs `unpromote` with `NETDUST_AGENT_OK=1` in front: no terminal, and the
+Continue? answers itself. `ship`, `save`, `rollback` and anything on production ignore the variable and stay
 typed by the user. Without that grant the paragraph above stands. Never set the variable on your
 own initiative.
 
@@ -121,7 +125,7 @@ that carry a decision:
 |---|---|
 | `make feature name=X` | branch `feature/X` from origin's production branch (**`main`**), wherever you stand |
 | `make hotfix name=X` | branch `hotfix/X` from origin's production branch (**`main`**), wherever you stand |
-| `make promote name=X` | rebuild staging as production + every promoted feature, X pinned at its current tip. Like opening a PR, it reviews X first, before its Continue?, unless a review is already saved, which it names and skips. `review=low\|full\|ultra` forces one, `review=off` skips. The review never refuses |
+| `make promote name=X` | rebuild staging as production + every promoted feature, X pinned at its current tip. Like opening a PR, it reviews X first, then rebuilds without asking, unless a review is already saved, which it names and skips. `review=low\|full\|ultra` forces one, `review=off` skips. The review never refuses |
 | `make unpromote name=X` | the same rebuild, without X |
 | `make land name=X` | **before launch only** (`environments.production` has a branch, no `path`): merge `feature/X` into the production branch as a `land: X` merge, pushed with a lease, no checkout. Refused unless `feature/X` already contains `origin/main` and `gate/feature/X` names its tip — nothing gates `main` later, so what lands is what the gate ran on. Reviews X first like `promote`; rebuilds staging on the new tip when staging exists. Once production has a path it refuses and names promote and ship |
 | `make ship` | from the staging checkout, or a `hotfix/*` branch: the checks below, the gate, typed confirm, both backups, deploy, then rebuild staging on the new production |

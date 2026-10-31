@@ -267,10 +267,14 @@ git checkout -q -- site.yml && git checkout -q main
 # promote checks the feature exists before the tty guard (a local check, no
 # server contact) — so the fixture needs a real feature branch to reach it.
 git branch -q feature/x main && git push -q origin feature/x 2>/dev/null
+out=$(timeout 20 make unpromote name=x < /dev/null 2>&1 | strip)
+printf '%s' "$out" | grep -q "needs a terminal" \
+    && ok "unpromote refuses without a terminal" \
+    || bad "unpromote refuses without a terminal" "$(printf '%s' "$out" | head -2)"
 out=$(timeout 20 make promote name=x < /dev/null 2>&1 | strip)
 printf '%s' "$out" | grep -q "needs a terminal" \
-    && ok "promote refuses without a terminal" \
-    || bad "promote refuses without a terminal" "$(printf '%s' "$out" | head -2)"
+    && bad "promote asks nothing, so it needs no terminal" "$(printf '%s' "$out" | head -2)" \
+    || ok "promote asks nothing, so it needs no terminal"
 
 out=$(timeout 20 make save < /dev/null 2>&1 | strip)
 printf '%s' "$out" | grep -q "deploy-only, never worked on" \
