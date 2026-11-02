@@ -104,7 +104,7 @@ Notes on that design:
 | # | Question | Recommendation |
 |---|---|---|
 | 1 | Which site pilots it? It must run the polylang module and have a client who wants this | Stefan names it; the threat model names its data |
-| 2 | Does baseline register a chat role, or does each site? | Baseline registers one role and one capability (for example `ntdst_translate`), off unless the chat switch is on. Every Polylang site wants the same thing, and the role is the limit of what chat can do |
+| 2 | Who is chat, in WordPress? | **The client's own account, no chat role.** With OAuth the client signs in as themselves and approves (the interim plugin sets that user as current). Two limits remain, and they are enough: only the three translation abilities are exposed, and each route's permission is `edit_post` on the copy. Chat can never do more than the person can do in wp-admin. A dedicated low-privilege user only matters for the application-password route (a key in a Claude Desktop or Code config file), which is for Stefan, not clients |
 | 3 | May chat write to a published copy? | No. Drafts and pending only, matching the CLI's refusal without `--force`. A published copy changes only through wp-admin |
 | 4 | After chat writes a copy, may `Retranslation` overwrite it with DeepL when the source changes? | No. Chat output is closer to a human edit than a machine pass: either do not store a written hash for chat writes, or mark the source of the write so `Retranslation` skips it. The spec decides how |
 | 5 | Should reads include the copy's current text, so the model can improve rather than replace? | Yes, already in the design above |
@@ -118,13 +118,30 @@ Notes on that design:
   per ability, and gives claude.ai an OAuth 2.1 connector with only a URL. ChatGPT is beta and
   needs developer mode on a paid plan. Each OAuth session is stored as a WordPress application
   password named "MCP OAuth…", acting as the user who consented.
+- **How its OAuth works (read in its code, 2.13.7, 2026-11-02).** The OAuth layer is a bundled
+  library from WP Media (`vendor/wp-media/mcp-oauth`). The token is a JWT the plugin verifies
+  itself (`Transport/OAuthHttpTransport.php`): signature, audience, issuer, then the session's
+  application-password entry must still exist, then `wp_set_current_user()` on the consenting
+  user. The application-password list is only its session and revocation record. It never goes
+  through WordPress's application-password login, which is the only place WordPress checks
+  `wp_is_application_passwords_available_for_user()` (`wp-includes/user.php`), and
+  `create_new_application_password()` does not check it either.
 - **Consequences for this spec:**
-  - Baseline's `security` switch `application_passwords_capability` (default `manage_options`)
-    must point at the chat role's capability, or the client consents and then nothing works.
-  - Switch off every built-in tool of the plugin; expose only the three translation abilities.
-    Its changelog fixed two serious authorization bugs in those built-in tools (2.13.3, 2.13.7).
-  - `revoke_sessions_after_reset` already deletes application passwords on a password reset,
-    which ends the OAuth sessions too. Keep it on.
+  - Baseline's `security` switch `application_passwords_capability` does NOT affect these OAuth
+    sessions. Keep its default (`manage_options`): editors cannot mint plain-text keys from
+    their profile, and they can still connect chat through OAuth consent. That is the right
+    combination. (Corrects this file's first version, which said the switch had to change.)
+  - Any logged-in user can complete the consent screen (`is_user_logged_in()` is the only
+    check). Harmless here, because the routes check `edit_post`, but the spec should say so.
+  - Tokens carry one scope, `mcp`. There is no finer scoping, so the plugin's per-ability
+    switches are the only scope: switch off every built-in tool and expose only the three
+    translation abilities. Its changelog fixed two serious authorization bugs in those built-in
+    tools (2.13.3, 2.13.7).
+  - Keep the plugin's single-admin API-key mode off; that bearer key carries administrator
+    rights (`includes/auth.php`).
+  - `revoke_sessions_after_reset` deletes application passwords on a password reset, and the
+    transport refuses a token whose entry is gone, so a reset ends the OAuth sessions too.
+    Keep it on.
 - **This is site configuration, not baseline code.** Document it in the README; do not add the
   plugin to baseline's `composer.json`. At 7.3 the plugin is deactivated, its sessions end, and
   the adapter and abilities stay.
@@ -138,7 +155,7 @@ Notes on that design:
 - **Prompt injection through content.** The model reads page text that anyone with edit rights
   wrote. Mitigation in the design: the abilities can only read flagged copies and write strings
   into one draft copy, through guards that refuse new HTML comments and run kses.
-- **Object-level access.** Permission is the chat capability plus `edit_post` on the copy id.
+- **Object-level access.** Permission is `edit_post` on the copy id, for the client's own account.
   The 2.13.3 bug in the interim plugin was exactly a missing object-level check.
 - **Path smuggling.** Core already `rawurlencode`s path parameters into the dispatch (core
   threat model T5).
