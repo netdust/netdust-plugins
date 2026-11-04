@@ -30,8 +30,9 @@ intake → spec → plan → plan-review ─(cap 2 rounds)→ STOP: Stefan appro
 
 ## Requirements
 
-**R1 — A diff-scoped mutation tier in `make gate`.** wp-starter's `gate/bin/gate.sh` gains a `test:mutation` tier after `test:int`: Infection for PHP, Stryker for JS, restricted to files the branch changed against production's branch. A surviving mutant exits non-zero and names the file and mutator. A branch that changes no source file skips the tier and says so. Mutating the e2e tier is not done: it is too slow and too flaky; R2 proves e2e another way.
+**R1 — A diff-scoped mutation tier in `make gate`.** wp-starter's `gate/bin/gate.sh` gains a `test:mutation` tier after `test:int`: Infection for PHP, Stryker for JS, restricted to files the branch changed against production's branch. A surviving mutant exits non-zero and names the file and mutator. A branch that changes no source file skips the tier and says so. The tier has a time cap, 10 minutes by default and set in the project's gate config: at the cap it stops, exits non-zero as `incomplete`, and names the files it did not reach. An incomplete run is a stop for Stefan, not a retry. Mutating the e2e tier is not done: it is too slow and too flaky; R2 proves e2e another way.
 *Source: "I want every features to be E2E testable in shakeouts with tests that are proven to work."*
+*Cap: "I can't wait for hours just for this" — approved 2026-11-04; the 10-minute value is invented, approved: pending.*
 *Tool choice (Infection, Stryker): invented — approved: pending.*
 
 **R2 — Every new e2e test is proven to fail without the feature.** `shakeout-qa` runs each test it commits against the base commit's non-test code and records the run as `specs/<feature>/shakeout/<name>.revert.log` with the exit code. `bin/shakeout-check.py` requires, for each `browser` and `wire` row, that the log exists and shows a non-zero exit; a row without one fails the check. Only the human's `Accepted-by-human:` excuses a row, as today.
@@ -61,14 +62,14 @@ intake → spec → plan → plan-review ─(cap 2 rounds)→ STOP: Stefan appro
 **R9 — Screenshots are captured straight to the committed path.** `shakeout-qa` captures to `specs/<feature>/shakeout/<name>.png`, never to the session scratchpad, and shows Stefan that path. `shakeout-check.py` already rejects a manifest without a real PNG there; the fix is the explicit destination in the agent prompt, and a test in `test_shakeout_check.py` that a scratchpad path in the Evidence column fails.
 *Source: "the screenshots are stored outside the project in tmp folder which is a hassle" — "it's an easy fix we'll do together with this bigger plan".*
 
-**R10 — Studio holds links to the artifacts of a feature.** `netdust-core:worktable` gains one step at each stop and at Close: write onto the `werkpakket` a pointer per artifact (spec, plan, plan-review, review, prune, shakeout, report, screenshots), each as repo-relative path plus the commit sha it was read at. Git stays the source of truth; Studio links to it. A session without Studio loses nothing and the next one catches up. This depends on Studio having fields for the pointers: the first task calls `schema` on a box where the worktable MCP server is connected, and if no field exists, the missing field is a Studio change outside this repo and R10 waits for it.
+**R10 — Studio holds links to the artifacts of a feature.** `netdust-core:worktable` gains one step at each stop and at Close: write onto the `werkpakket` a pointer per artifact (spec, plan, plan-review, review, prune, shakeout, report, screenshots), each as repo-relative path plus the commit sha it was read at. Git stays the source of truth; Studio links to it. A session without Studio loses nothing and the next one catches up. Studio probably has no fields for the pointers yet (Stefan: "possibly not yet, easy to change"). Adding them is a Studio change outside this repo; R10 is built last and waits for it. Nothing else in this spec depends on it, and until it lands the artifacts are reachable in git as before.
 *Source: "Now that I have netdust studio… there every branch is recorded. The specs, plans, the screenshots and report can be linked? So I use studio to track state and easy access?"*
-*Which fields: invented — approved: pending, blocked on `schema`.*
+*Which fields: invented — approved: pending, blocked on the Studio change.*
 
 **R11 — Consumer-side architecture drift becomes a gate tier (gap 1).** The mechanical checks that `ntdst-drift-reviewer` runs as greps become one script that runs in `make gate` as an `invariants` tier, between `analyse` and `audit:deps`. It covers Part 1 (core's `ARCHITECTURE-INVARIANTS.md` checks, run against the consumer's tree with the path rewriting the agent's `locate()`/`parse()`/`run()` sections already define) and the grep-able Part 2 checks (#1 repository bypass, #3 second HTTP door, #8 raw post and meta functions, #9 raw `template_include`, #11 baseline re-emitted, #15 `function_exists()` around a core helper, #16 hand-registered ability). A non-empty hit fails the tier and names the invariant, file and line. The script's expectation handling follows the agent's rules: an expectation of empty or 0 is hard, and a count with a named list is compared as written.
 The script has one home. `ntdst-drift-reviewer` runs it, reads its output, and keeps only the checks that need judgment (#2 pass-through, #4, #5, #6, #7, #10, #12, #13, #14) and the "borderline" triage. The agent's own copy of the mechanical greps is deleted, so the two cannot diverge.
 *Source: "Check if nothing likes this exists already" (answer: the agent exists, the gate tier does not); "Add solutions for the 2 gaps".*
-*Home of the script (ntdst-core versus wp-starter's `gate/`): invented — approved: pending, see open question 3.*
+*Home of the script: wp-starter's `gate/bin/check-invariants.sh`. Stefan, 2026-11-04: "core is pure php, gate/ makes more sense. If the whole setup needs rearranging to have this better, ok." It renders into every site and, through `package-gate/`, into packages. Core's invariants stay in core's doc; the script reads the doc from the vendored copy, as the agent does today.*
 
 **R12 — Baseline's invariants are not run against sites (gap 2).** `ntdst-baseline`'s INV-1…14 describe baseline's own internals (`Shell`, `SharedSlugs`, `PostCopier`, `PrivateFiles`, `GrantRepository`) and are already enforced where they belong: `bin/check-invariants.sh` runs inside baseline's own `composer gate`. Running them against a site would report baseline's code, or nothing. The one rule baseline holds for consumers, INV-2 ("one configuration door: `ntdst/baseline/*` filters, never an option; a module is configured or turned off, never shadowed"), is already drift-reviewer check #11, and R11 moves its grep part into the gate script. Nothing else from baseline's list crosses over. The reasoning is recorded in `skills/policy/wordpress.md` so the question is not reopened.
 *Source: "Add solutions for the 2 gaps".*
@@ -81,7 +82,7 @@ The script has one home. `ntdst-drift-reviewer` runs it, reads its output, and k
 
 | Change | Repo | Files |
 |---|---|---|
-| R1, R11 | wp-starter (and the script's source, see Q3) | `gate/bin/gate.sh`, `gate/composer.json` scripts, `gate/bin/check-invariants.sh`, mutation configs |
+| R1, R11 | wp-starter | `gate/bin/gate.sh`, `gate/composer.json` scripts, `gate/bin/check-invariants.sh`, mutation configs |
 | R2, R9 | netdust-plugins | `bin/shakeout-check.py`, `agents/shakeout-qa.md`, `tests/test_shakeout_check.py` |
 | R3, R4, R5, R6, R7 | netdust-plugins | `skills/policy/SKILL.md`, `agents/test-pruner.md`, `CLAUDE.md`, `commands/feature-review.md`, `agents/plan-reviewer.md` |
 | R8 | netdust-plugins | `bin/feature-report.py`, `commands/shakeout.md` |
@@ -98,10 +99,9 @@ The script has one home. `ntdst-drift-reviewer` runs it, reads its output, and k
 
 ## Open questions
 
-1. **Mutation runtime.** Is a slow mutation run a hard failure, or does it get a time cap after which the tier fails with "incomplete"? This spec assumes the cap, but not its value.
-2. **Studio fields** (R10): do `werkpakket` rows have a place for artifact pointers? Only `schema` on a connected box knows.
-3. **Home of the consumer script** (R11): in `ntdst-core` (owns the invariants, versions with them, ships in every site's vendor tree) or in wp-starter's `gate/` (one place for the whole gate, but the checks then live apart from the doc they come from). Recommendation: core.
-4. **Slices and Studio** (R7, R10): is a slice a `Taak` group, or is it enough that tasks carry a slice label in `notities`?
+Resolved 2026-11-04: mutation gets a time cap (R1); Studio fields are a later, easy change (R10); the consumer script lives in wp-starter (R11).
+
+1. **Slices and Studio** (R7, R10): proposal is that the plan's tasks carry a slice label (`### Task 4 · Slice 2: …`), and Studio mirrors it in each `Taak`'s `notities` until a real grouping field exists. Awaiting Stefan's confirmation of what a slice is (R7).
 
 ## Success
 
