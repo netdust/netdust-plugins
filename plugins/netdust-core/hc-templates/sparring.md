@@ -1,6 +1,6 @@
 ---
 description: Argues the other side of a technical ruling. Read-only; reports to its parent.
-command: claude --model opus --permission-mode auto --disallowedTools Edit Write NotebookEdit 'Bash(git commit*)' 'Bash(git push*)'
+command: env -u CLAUDECODE -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_SESSION_ATTENDED -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_EXECPATH -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN claude --model opus --permission-mode auto --disallowedTools Edit Write NotebookEdit 'Bash(git commit*)' 'Bash(git push*)'
 ---
 Role: sparring
 

@@ -30,7 +30,10 @@ names=$(python3 -c 'import json,sys; print(" ".join(sorted(t["name"] for t in js
 check "hc templates lists exactly coder, reviewer, sparring" '[ "$names" = "coder reviewer sparring" ]' "$names"
 for n in coder reviewer sparring; do
     cmd=$(field $n command)
-    check "$n: its command starts an interactive claude" '[[ "$cmd" == claude\ * ]]' "$cmd"
+    claude_part=${cmd#env * claude }; [[ "$claude_part" == "$cmd" ]] || claude_part="claude $claude_part"
+    check "$n: its command starts an interactive claude" '[[ "$claude_part" == claude\ * && "$claude_part" != *" -p"* ]]' "$cmd"
+    check "$n: it sheds the parent session's identity (a child marker means no transcript)" \
+        '[[ "$cmd" == "env -u CLAUDECODE -u CLAUDE_CODE_CHILD_SESSION "* && "$cmd" == *"-u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN claude "* ]]' "$cmd"
     check "$n: it carries a description" '[ -n "$(field $n description)" ]'
     check "$n: its body reports to the parent with hc send" 'grep -q "hc send" "$TPL/$n.md"'
     check "$n: its body says where the parent's address is (no \$parent exists in a child)" 'grep -qF "hc get \$HC_TERMINAL_ID" "$TPL/$n.md" && ! grep -qF "\$parent" "$TPL/$n.md"'

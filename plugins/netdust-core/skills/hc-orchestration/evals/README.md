@@ -1,6 +1,6 @@
 # hc-orchestration evals
 
-Seven A/B scenarios. Each has a baseline leg (skill not loaded), a skill-on leg (SKILL.md read
+Eight A/B scenarios. Each has a baseline leg (skill not loaded), a skill-on leg (SKILL.md read
 first) and a judge template whose rules the skill must make pass.
 
 ## Procedure
@@ -14,6 +14,10 @@ first) and a judge template whose rules the skill must make pass.
    leg with one quoted line of evidence.
 4. The skill earns its keep when the skill-on leg passes every rule the baseline fails and
    fails none the baseline passes. Record the scores below.
+
+S8 was scored 2026-11-04, both legs on sonnet, the judge on opus; both legs were told `herdr-app`
+is a Windows binary, which favours the baseline on A1. Its baseline found `herdr-gpui`, could not make
+a space, cut a worktree and left the coder unlabelled without `--outlive-parent`.
 
 S1 and S4 are regression guards: `hc --skill` already teaches delegation (template, file report,
 wait, cleanup) and event waits (timeout as a check-in, blocked as a human), so their baselines
@@ -32,6 +36,7 @@ pass. The skill must not make them worse.
 | 5 the observer | O1–O5 | O3 O4 | none | skill earns it |
 | 6 no core running | C1–C4 | C1 C2 C3 C4 | none | skill earns it |
 | 7 stale socket file (review S2) | C5–C7 | C5 C6 C7 | none | skill earns it |
+| 8 open it as a space (2026-11-04) | A1–A4 | A1 A2 A3 | none | skill earns it |
 
 Baselines worth remembering: S2 cut `~/Sites/stride-greeting` and started the coder without
 `--outlive-parent`; S3 put both the hotfix and the planning in `~/Sites/*` worktrees; S5 wrote a
