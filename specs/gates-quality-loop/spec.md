@@ -18,7 +18,8 @@ This spec closes both, adds the feature report Stefan asked for, and writes the 
 ```
 intake → spec → plan → plan-review ─(cap 2 rounds)→ STOP: Stefan approves the plan
   → build, per slice (coder session, RED→GREEN, cap 3 attempts per task)
-  → Close, per slice (each step is a make verb, R14):
+      per slice: make gate · that slice's own shake-out flows · make report
+  → Close, once per feature (each step is a make verb, R14):
       make gate  (… test:unit → test:int → MUTATION → …)
       make prune (fresh agent; reverted automatically if a killed mutant returns; 1 attempt)
       make review (whole-branch review, plus security-sentinel and invariant-auditor where they apply; checks that the right tests EXIST)
@@ -54,9 +55,9 @@ intake → spec → plan → plan-review ─(cap 2 rounds)→ STOP: Stefan appro
 *Source: "as long as we don't end up in endless loop, good".*
 *The numbers (2, 3, 1): invented — approved: pending.*
 
-**R7 — Large features are cut into slices; each slice closes with a report.** The plan may divide its tasks into slices. A slice is a vertical cut: it ends in something Stefan can see or run. A layer ("database first") is not a slice. A slice with no visible surface has no flows and its report says only what was built. The plan review judges the cut, as it already judges a spec's cut into plans. The Close runs per slice: gate, prune, reviews, fix pass, and the slice's own shake-out flows. The full registered `@e2e` set runs once more at the end of the feature. One plan stays one branch and one promotable unit; slices do not change that or add dependencies between plans.
+**R7 — Large features are cut into slices; each slice closes with a report.** The plan may divide its tasks into slices. A slice is a vertical cut: it ends in something Stefan can see or run. A layer ("database first") is not a slice. A slice with no visible surface has no flows and its report says only what was built. The plan review judges the cut, as it already judges a spec's cut into plans. Per slice, only the cheap steps run: `make gate`, the slice's own shake-out flows, and the slice's report. The prune, the whole-branch review, the one fix pass, the final gate and the full registered `@e2e` set run once, at the end of the feature. A feature of one slice runs exactly the Close it has today. Reviews are not multiplied by slices. One plan stays one branch and one promotable unit; slices do not change that or add dependencies between plans.
 *Source: "features can be large. If they get [split] up in meaningful steps, this happens after each step…"; "I wouldn't change what we have now, we just need to make sure that everything is logical".*
-*Slice = vertical cut, full suite once at the end: invented — approved: pending.*
+*Slice = vertical cut: approved 2026-11-04 ("the slice is ok, as long as we don't go back to endless writing test and testing. netdust-agent used something similar and things slowed down a lot"). Per-slice steps limited to gate, own flows, report: invented in answer to that condition, approved: pending.*
 
 **R8 — The feature report is generated, not written.** `bin/feature-report.py <feature dir>` writes `specs/<feature>/report.md`, one section per slice, from `plan.md` (the test map and tasks), `shakeout.md` and `specs/CHECKS.md`. Each section lists what was built and the user flows, and each flow links its test file, its `@e2e` entry, its screenshot and its revert log. A flow with no test, or a test with no revert log, appears as a named gap. The script reads artifacts only; an agent never fills in a field from memory.
 *Source: "after a feature is done, I need a report telling me what has been build and what E2E test are added for a shakeout. Naming the user flows etc."*
@@ -88,6 +89,7 @@ The script has one home. `ntdst-drift-reviewer` runs it, reads its output, and k
 | R2, R9 | netdust-plugins | `bin/shakeout-check.py`, `agents/shakeout-qa.md`, `tests/test_shakeout_check.py` |
 | R3, R4, R5, R6, R7 | netdust-plugins | `skills/policy/SKILL.md`, `agents/test-pruner.md`, `CLAUDE.md`, `commands/feature-review.md`, `agents/plan-reviewer.md` |
 | R8 | netdust-plugins | `bin/feature-report.py`, `commands/shakeout.md` |
+| R15 | netdust-plugins | `CLAUDE.md`, `bin/feature-report.py` |
 | R14 | netdust-plugins | `netdust-devops/dist/Makefile.netdust`, `dist/VERSION`, `site.yml` schema docs, `skills/policy/SKILL.md` |
 | R10 | netdust-plugins (+ Studio) | `netdust-core/skills/worktable/SKILL.md` |
 | R11 | netdust-plugins | `netdust-wp/agents/ntdst-drift-reviewer.md` |
@@ -96,6 +98,10 @@ The script has one home. `ntdst-drift-reviewer` runs it, reads its output, and k
 
 **R14 — Every Close step is a `make` verb, and the Makefile is the one interface for human and agent.** `netdust-devops`'s `dist/Makefile.netdust` gains `prune name=X`, `shakeout name=X` and `report name=X`, each reading `commands.<verb>` from `site.yml` the way `review` reads `commands.review` (`commands.prune`: `claude -p "/netdust-gates:prune-tests …"`; `commands.shakeout`: `claude -p "/netdust-gates:shakeout"`; `commands.report`: `python3 bin/feature-report.py`). `make doctor` lists them, `help` documents them, and the devops `VERSION` is bumped. `skills/policy/SKILL.md`'s Close names the verbs in order — `make gate`, `make prune`, `make review`, the fix pass, `make gate`, `make shakeout`, `make report` — and never the agents behind them, so a human running the Close by hand and a coder session run the same commands in the same order. The agent behind a verb can change without the policy changing. A box without a `commands.<verb>` says so, as `review` does, and never fails the Close for it.
 *Source: "the make file is human memory and human tool, but i want the agents to implement same code and that the flow is logical, with tests and reviews there where we need them."*
+
+**R15 — Every step this spec adds is on trial.** The mutation tier, the pruner and the revert proof each carry a removal condition, in the growth rule's own shape: when the last five features show the step did nothing — no surviving mutant found, `prune.md` removed nothing, no revert log failed unexpectedly — it comes out. `bin/feature-report.py` appends one line per feature to `specs/CHECKS.md`'s trial log (`mutants: <killed>/<found> · pruned: <n> · revert-fails: <n>`) so the count is a grep, not a memory; the plugin's `CLAUDE.md` gains the removal rule beside the shake-out hunt's. The Close's added wall-clock and tokens are compared with the same feature's previous Close (`run-cost.py`) in the first three features; if the Close costs more than the review it protects, the steps are cut back before any new one is added.
+*Source: "as long as we don't go back to endless writing test and testing. netdust-agent used something similar and things slowed down a lot."*
+*The removal counts (five features) follow the shake-out hunt's rule: invented — approved: pending.*
 
 ## Not in this spec
 
