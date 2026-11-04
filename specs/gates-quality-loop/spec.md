@@ -18,14 +18,14 @@ This spec closes both, adds the feature report Stefan asked for, and writes the 
 ```
 intake → spec → plan → plan-review ─(cap 2 rounds)→ STOP: Stefan approves the plan
   → build, per slice (coder session, RED→GREEN, cap 3 attempts per task)
-  → Close, per slice:
+  → Close, per slice (each step is a make verb, R14):
       make gate  (… test:unit → test:int → MUTATION → …)
-      prune      (fresh agent; reverted automatically if a killed mutant returns; 1 attempt)
-      reviews    (make review · security-sentinel · invariant-auditor; check that the right tests EXIST)
+      make prune (fresh agent; reverted automatically if a killed mutant returns; 1 attempt)
+      make review (whole-branch review, plus security-sentinel and invariant-auditor where they apply; checks that the right tests EXIST)
       one fix pass (each fix RED→GREEN; no pruner, no re-review)
       make gate  again on the final tip — mutation re-runs; a green run stamps gate/feature/<name>
-      /shakeout  (real browser; screenshots committed; revert proof; shakeout-check.py exits 0)
-      report     (generated from artifacts; one section per slice)
+      make shakeout (real browser; screenshots committed; revert proof; shakeout-check.py exits 0)
+      make report (generated from artifacts; one section per slice)
   → STOP: Stefan sees the screenshots → make promote
 ```
 
@@ -88,10 +88,14 @@ The script has one home. `ntdst-drift-reviewer` runs it, reads its output, and k
 | R2, R9 | netdust-plugins | `bin/shakeout-check.py`, `agents/shakeout-qa.md`, `tests/test_shakeout_check.py` |
 | R3, R4, R5, R6, R7 | netdust-plugins | `skills/policy/SKILL.md`, `agents/test-pruner.md`, `CLAUDE.md`, `commands/feature-review.md`, `agents/plan-reviewer.md` |
 | R8 | netdust-plugins | `bin/feature-report.py`, `commands/shakeout.md` |
+| R14 | netdust-plugins | `netdust-devops/dist/Makefile.netdust`, `dist/VERSION`, `site.yml` schema docs, `skills/policy/SKILL.md` |
 | R10 | netdust-plugins (+ Studio) | `netdust-core/skills/worktable/SKILL.md` |
 | R11 | netdust-plugins | `netdust-wp/agents/ntdst-drift-reviewer.md` |
 | R12 | netdust-plugins | `skills/policy/wordpress.md` |
 | R13 | netdust-plugins | `evals/cases.json` |
+
+**R14 — Every Close step is a `make` verb, and the Makefile is the one interface for human and agent.** `netdust-devops`'s `dist/Makefile.netdust` gains `prune name=X`, `shakeout name=X` and `report name=X`, each reading `commands.<verb>` from `site.yml` the way `review` reads `commands.review` (`commands.prune`: `claude -p "/netdust-gates:prune-tests …"`; `commands.shakeout`: `claude -p "/netdust-gates:shakeout"`; `commands.report`: `python3 bin/feature-report.py`). `make doctor` lists them, `help` documents them, and the devops `VERSION` is bumped. `skills/policy/SKILL.md`'s Close names the verbs in order — `make gate`, `make prune`, `make review`, the fix pass, `make gate`, `make shakeout`, `make report` — and never the agents behind them, so a human running the Close by hand and a coder session run the same commands in the same order. The agent behind a verb can change without the policy changing. A box without a `commands.<verb>` says so, as `review` does, and never fails the Close for it.
+*Source: "the make file is human memory and human tool, but i want the agents to implement same code and that the flow is logical, with tests and reviews there where we need them."*
 
 ## Not in this spec
 
