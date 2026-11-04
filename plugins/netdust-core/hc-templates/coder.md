@@ -1,6 +1,6 @@
 ---
 description: Executes an approved plan on its feature branch. Give it the plan path, the branch and netdust-gates:policy.
-command: claude --permission-mode auto
+command: env -u CLAUDECODE -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_SESSION_ATTENDED -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_EXECPATH -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN claude --permission-mode auto
 ---
 Role: coder
 

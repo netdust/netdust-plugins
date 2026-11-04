@@ -35,7 +35,9 @@ Scratch sessions in tests (own `HC_SESSION`, scratch XDG dirs) are exempt: throw
 
 `coder`, `reviewer` and `sparring` ship in netdust-core's `hc-templates/`; `bin/hc-templates`
 installs them (`--on <machine>` for another machine). `hc templates` lists what a machine has.
-`reviewer` and `sparring` are read-only by instruction (Edit and Write denied, no commit or push;
+Each template's command starts with `env -u` of the parent session's Claude variables: an agent started
+from a Claude session otherwise inherits its child marker, saves no transcript (nothing for
+`/session-learn`), and carries the parent's messaging socket. `reviewer` and `sparring` are read-only by instruction (Edit and Write denied, no commit or push;
 Bash can still write); `sparring` argues the other side of a technical ruling. The gate is not an agent: `hc run --bg --name gate make gate`.
 
 ## Delegating to a helper
