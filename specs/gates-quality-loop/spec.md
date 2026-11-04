@@ -22,7 +22,8 @@ intake → spec → plan → plan-review ─(cap 2 rounds)→ STOP: Stefan appro
       make gate  (… test:unit → test:int → MUTATION → …)
       prune      (fresh agent; reverted automatically if a killed mutant returns; 1 attempt)
       reviews    (make review · security-sentinel · invariant-auditor; check that the right tests EXIST)
-      one fix pass (each fix RED→GREEN; mutation re-runs once; no pruner, no re-review)
+      one fix pass (each fix RED→GREEN; no pruner, no re-review)
+      make gate  again on the final tip — mutation re-runs; a green run stamps gate/feature/<name>
       /shakeout  (real browser; screenshots committed; revert proof; shakeout-check.py exits 0)
       report     (generated from artifacts; one section per slice)
   → STOP: Stefan sees the screenshots → make promote
@@ -30,7 +31,7 @@ intake → spec → plan → plan-review ─(cap 2 rounds)→ STOP: Stefan appro
 
 ## Requirements
 
-**R1 — A diff-scoped mutation tier in `make gate`.** wp-starter's `gate/bin/gate.sh` gains a `test:mutation` tier after `test:int`: Infection for PHP, Stryker for JS, restricted to files the branch changed against production's branch. A surviving mutant exits non-zero and names the file and mutator. A branch that changes no source file skips the tier and says so. The tier has a time cap, 10 minutes by default and set in the project's gate config: at the cap it stops, exits non-zero as `incomplete`, and names the files it did not reach. An incomplete run is a stop for Stefan, not a retry. Mutating the e2e tier is not done: it is too slow and too flaky; R2 proves e2e another way.
+**R1 — A diff-scoped mutation tier in `make gate`.** wp-starter's `gate/bin/gate.sh` gains a `test:mutation` tier after `test:int`: Infection for PHP, Stryker for JS, restricted to files the branch changed against production's branch. A surviving mutant exits non-zero and names the file and mutator. The tier runs only where `make gate` writes a stamp: a clean `feature/*` or `hotfix/*` tree. `deploy` and `ship` run the same gate on a composed commit with `NETDUST_GATE_STAMP=off`; there the mutation tier is skipped and says so, so a deploy never waits for it or fails on its cap. A branch that changes no source file skips the tier and says so. The tier has a time cap, 10 minutes by default and set in the project's gate config: at the cap it stops, exits non-zero as `incomplete`, and names the files it did not reach. An incomplete run is a stop for Stefan, not a retry. Mutating the e2e tier is not done: it is too slow and too flaky; R2 proves e2e another way.
 *Source: "I want every features to be E2E testable in shakeouts with tests that are proven to work."*
 *Cap: "I can't wait for hours just for this" — approved 2026-11-04; the 10-minute value is invented, approved: pending.*
 *Tool choice (Infection, Stryker): invented — approved: pending.*
@@ -45,7 +46,8 @@ intake → spec → plan → plan-review ─(cap 2 rounds)→ STOP: Stefan appro
 **R4 — Reviewers check that the right tests exist, not how good they are.** The `make review` prompt, `security-sentinel` and `invariant-auditor` each gain one line: test quality was decided by the mutation tier and the pruner; check that every Review Focus line has a Test map row with a test that covers the risk, and do not re-judge assertions or redundancy. A finding about a test the pruner kept on purpose is out of scope.
 *Source: "the prune is a reviewer for the tests, no? So the reviewers after it, do they again review test code?" — approved 2026-11-04 ("Ok").*
 
-**R5 — The fix pass re-runs mutation once, never the pruner.** After the one fix pass the gate's mutation tier runs once. A failure goes to Stefan as a stop, not to another agent. The pruner does not run again: a fix test exists because a reviewer found a specific problem, and pruning it would undo the fix.
+**R5 — The fix pass is followed by one more `make gate`, never by the pruner.** `promote` and `land` take only a tip a green gate stamped, and the prune and the fix pass both move the tip, so the final `make gate` after the fix pass is required by devops already; its mutation tier is the re-run. It runs once. A failure goes to Stefan as a stop, not to another agent. The pruner does not run again: a fix test exists because a reviewer found a specific problem, and pruning it would undo the fix.
+*Basis: `netdust-devops/dist/Makefile.netdust` (`promote`, `land`, `gate` stamp).*
 *Source: "What do you think? Should it?" — answered with the position above, approved 2026-11-04 ("Ok as long as we don't end up in endless loop, good").*
 
 **R6 — Every loop in the flow is capped, and a cap ends in a stop for Stefan.** Plan review: two rounds, then Stefan gets the plan with the open findings. Coder, per task: three failed attempts at a green gate tier, then it asks its reviewer session. Pruner: one attempt. Fix pass: one pass, one mutation re-run, no re-review. A cap hit is ledgered as `Ruling:` with the cost if wrong, and listed in the final message. The caps are written once in `skills/policy/SKILL.md` and stated nowhere else.
