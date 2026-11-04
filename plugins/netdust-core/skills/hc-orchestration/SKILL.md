@@ -57,10 +57,13 @@ session Stefan planned with turns reviewer at his approval.
    (see Worktrees). From here only the coder writes that tree; you read it with git.
 2. **Start the coder**, task inline (a send to a booting agent can drop):
    `hc run --bg --outlive-parent --name <f>-coder --label herdr.space=<s> --label herdr.tab=<f> coder "<brief>"`.
-   `<s>` is your own `herdr.space` label from `hc get $HC_TERMINAL_ID`, machine prefix
-   (`wsl/`) stripped; an unknown tab id becomes a new tab. `--outlive-parent` keeps the coder
+   `<s>` is the coder's project's space (see The window): the one Stefan names, or the space
+   named after the coder's repo, opened if missing; your own `herdr.space` label (`hc get
+   $HC_TERMINAL_ID`) only when the coder works in your own project. An unknown tab id becomes a
+   new tab. `--outlive-parent` keeps the coder
    alive when you restart. The template carries auto mode and the coder's rules.
-3. **The brief** carries the plan path, the branch and `netdust-gates:policy`; the boundaries
+3. **The brief** names you by `$HC_TERMINAL_ID` read now — a resumed session has a new address,
+   so never copy one from an older brief. It carries the plan path, the branch and `netdust-gates:policy`; the boundaries
    (push only at Close, no merge, no operator verb); the ledger; and the report points. Extra
    context goes in a file in your scratchpad, outside the coder's tree, that the task points at.
 4. **Rulings.** The coder asks you, never Stefan. Technical questions you rule (a `sparring`
@@ -71,6 +74,31 @@ session Stefan planned with turns reviewer at his approval.
    re-read the plan, `git log` and the coder's ledger (`.superpowers/sdd/<plan>/progress.md`).
    hc has no reparent: the coder still reports to your old address. Tell it
    `hc send <f>-coder "your reviewer is now $HC_TERMINAL_ID"`, then wait with `hc wait <f>-coder`.
+
+## The window — spaces and tabs
+
+The Herdr app is an agents app whose whole window is files and commands: spaces, tabs, panes,
+layouts, keys and panels (mods) are all driven by `herdr-app do <command>`. hc runs the terminals;
+`herdr-app` changes what Stefan sees. On WSL it is the Windows binary:
+`ls /mnt/c/Users/*/AppData/Local/Programs/herdr-app/herdr-app.exe` finds it; strip `\r` from its
+output. Its authorities: `herdr-app --skill`, `herdr-app commands`, and — before any layout, key or
+mod change — the installed guide `/mnt/c/Users/<user>/.config/herdr-app/AGENTS.md`, rewritten on
+every start. Read `--skill` whole before the first window change of a session, the guide before
+the first layout, key or mod change; never from memory.
+
+- **Ids.** `herdr-app ls` prints `wsl/sp…`; an hc label takes the same id without the prefix.
+- **A project's space** is the one named after its repo — find it by name in `herdr-app ls`; a
+  space's `folder` is where it was opened and drifts, never proof. Missing,
+  or Stefan says "open it as a space": `herdr-app do space.new --name <repo> --machine wsl
+  --folder <checkout>`. Without `--machine` the space opens on Windows. It brings a shell tab of
+  its own; leave it.
+- **Agents into it**: `hc run … --label herdr.space=<id> --label herdr.tab=<name>`. A helper needs no
+  label: a terminal you start is your sub-agent, listed under your tab without a pane;
+  `terminal.peek` shows it, `terminal.keep` gives it a pane when Stefan wants to watch.
+- New spaces and tabs only when asked or for a pair.
+- **Seeing it**: `herdr-app shot <file.png>` is the window's own frame. A change to what Stefan sees
+  (a layout, a mod, a new space) is claimed done only after `herdr-app status` shows no error and
+  you have looked at the shot.
 
 ## Worktrees
 
@@ -95,6 +123,8 @@ not urgent: it waits, or happens without writing the tree.
 
 ## Traps
 
+- A tab label sets where the coder lands, not its name: Herdr calls a new tab by its number until
+  `herdr-app do tab.rename --id <wsl/tab-id> --name <f>`.
 - `first_message.sent=false`: the task did NOT arrive. `hc read` first, never resend blindly.
 - `blocked` means a human. `--force` never answers a permission prompt for Stefan.
 - `reason: timeout` is a check-in: wait again.
