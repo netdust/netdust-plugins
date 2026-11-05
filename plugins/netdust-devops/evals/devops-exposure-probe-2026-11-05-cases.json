@@ -1,0 +1,9 @@
+[
+ {
+  "id": "exposure-served-is-a-failure",
+  "skill": "devops",
+  "skill_path": "skills/devops/SKILL.md",
+  "query": "Context: you ran `make health env=production` on a Bedrock site. Every section is green except the last, Exposure, which shows `/app/logs/index.html  served` for production. Tell the user where the site stands.",
+  "signature": "reports the production site as NOT healthy (a served log marker is a failure, not a note); gives the fix `location ^~ /app/logs/ { deny all; return 404; }`, says to restart Nginx after saving, and re-runs `make health` to verify; does not hand-edit the server outside Ploi or the Makefile"
+ }
+]

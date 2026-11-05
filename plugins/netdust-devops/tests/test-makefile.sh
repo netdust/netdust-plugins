@@ -182,6 +182,16 @@ else
     bad "every commands.* key doctor expects is in the site.yml template" "missing:${MISSING:- (no list found)}"
 fi
 
+# devops-version compares a project's stamp with dist/VERSION: a release that
+# forgets to bump it makes every project report current and never prompts an update.
+DIST_V=$(tr -d '[:space:]' < "$DIST/VERSION")
+PLUGIN_V=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$ROOT/.claude-plugin/plugin.json" | head -1)
+if [ -n "$PLUGIN_V" ] && [ "$DIST_V" = "$PLUGIN_V" ]; then
+    ok "dist/VERSION ($DIST_V) equals plugin.json's version"
+else
+    bad "dist/VERSION equals plugin.json's version" "dist/VERSION=$DIST_V plugin.json=$PLUGIN_V"
+fi
+
 echo "── behaviour ──"
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 P="$WORK/proj"; mkdir -p "$P/web/app/plugins/p" "$P/web/app/themes/t"; cd "$P"

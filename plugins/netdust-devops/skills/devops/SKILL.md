@@ -141,6 +141,13 @@ that carry a decision:
 deploy cannot do.
 It also reports each server's disk, measured at the site's path and FULL at 80% —
 sites share a server, and the composer cache, the journal and old backups fill it silently.
+Its last section, Exposure, asks each environment's `url` whether eight paths answer 200
+(`/app/logs/index.html`, `/wp-content/logs/index.html`, `/wp-content/debug.log`, `/app/debug.log`,
+`/.env`, `/.git/HEAD`, `/composer.json`, `/composer.lock`); `health.deny_paths` in `site.yml` adds
+paths, never removes one. A `served` path is a failure of the site and makes `make health` exit
+non-zero: deny the directory in Nginx (`location ^~ <dir> { deny all; return 404; }`), restart
+Nginx, re-run `make health`. A catch-all site or a 3xx/401/5xx reads `not conclusive`, a dead one
+`unreachable` — neither is a pass.
 
 **After a staging deploy or a plugin update: `make e2e env=staging`, then
 `make smoke`.** e2e is the proof — the flows each feature's shake-out drove, re-run on the
