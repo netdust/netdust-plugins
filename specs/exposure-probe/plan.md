@@ -16,11 +16,11 @@ Not a WordPress project: the spec's own constraints, one line each.
 
 - The probe sends one `HEAD` request per path per environment (a 405 or 501 is retried once as a `GET` with the body discarded), keeps no body, follows no redirect, sends a generic user agent and a short timeout (8 seconds), runs sequentially, and needs no SSH and no terminal. It runs against production.
 - The default paths are exactly: `/app/logs/index.html`, `/wp-content/logs/index.html`, `/wp-content/debug.log`, `/app/debug.log`, `/.env`, `/.git/HEAD`, `/composer.json`, `/composer.lock`. `site.yml` adds paths under `health.deny_paths` and cannot remove a default.
-- Classes: `served` = HTTP 200 on an environment whose control path does not also answer 200 (red); `not served` = 403, 404, 410 (green); `not conclusive` = any 3xx, 401, any 5xx, or a 200 on a catch-all environment (yellow); `unreachable` = no answer or timeout (yellow). An environment with no `url` prints one yellow line saying so.
+- Classes: `served` = HTTP 200 on an environment whose control path does not also answer 200 (red); `not served` = 403, 404, 410 (green); `unreachable` = `000`, no answer or timeout (yellow); and everything else is `not conclusive` (yellow): any 3xx, 401, any 5xx, a 200 on a catch-all environment, and every code not named above (400, 402, 406, 429, 204, a 405 that persists on the `GET` retry). The default branch of the classifier is `not conclusive`, never green. An environment with no `url` prints one yellow line saying so.
 - The control request is one random non-existent path per environment, sent first; if it answers 200 the environment is a catch-all.
 - Exit status: `health` exits non-zero only when some environment shows `served`; the Exposure section runs last, as `_health-exposure`; every other section keeps exiting 0.
-- Contacting only 127.0.0.1 in tests (the suite header says "contacts no server": it still contacts no remote one).
-- `Makefile.netdust` recipe lines carry no backticks (`tests/test-makefile.sh` asserts it); `dist/scripts/*` is vendored with checksums by `make devops-update`.
+- Contacting only 127.0.0.1 in tests, in EVERY environment url of every fixture copy (the suite header says "contacts no server": it still contacts no remote one).
+- `Makefile.netdust` recipe lines carry no backticks (`tests/test-makefile.sh` asserts it). A `dist/scripts/` file is vendored with a checksum by `make devops-update` and by `bin/new-project` only if it is listed in the closed `MANAGED` array of `dist/scripts/devops-version`; a script that is not listed reaches no project and `make health` would fail with exit 127.
 - Release: `netdust-devops` 0.14.0 in `plugin.json`, `.claude-plugin/marketplace.json` and `dist/VERSION`, agreeing (`tests/test-marketplace.sh`); `netdust-wp` 1.4.1 in its `plugin.json` and the marketplace, carrying the `wp-infra` fix already on `main` plus its pointer to `make health`. Merge and push are Stefan's.
 
 ## Threat model
@@ -40,11 +40,11 @@ Not a WordPress project: the spec's own constraints, one line each.
 
 ## Simplest design
 
-The simplest design is a few `curl` lines inside the `health` recipe. That puts the classification, the control request and the input validation in a Makefile recipe nobody can unit-test, which is the shape that let the log directory sit open. So the probe is a script a test can call directly, and the Makefile only calls it.
+The simplest design is a few `curl` lines inside the `health` recipe. A recipe can be tested (`_health-disk` is), but about sixty lines of classification, control request, `GET` retry, de-duplication and input validation in `$$`-escaped recipe syntax is unreadable, and the first working version needs a standalone, runnable thing. So the probe is a script a test and a person can call directly, and the Makefile only calls it.
 
 ## First working version
 
-Task 1: `bash dist/scripts/health-exposure`, run from a project root that has `scripts/site` and a `site.yml`, prints one line per path per environment and exits 1 on a served path. Stefan can run it from `~/Sites/netdust` before the wiring task exists.
+Task 1: `bash dist/scripts/health-exposure`, run from a project root that has `scripts/site` and a `site.yml`, prints one line per path per environment and exits 1 on a served path. Task 1 Step 5 runs it read-only against netdust.be's `site.yml` before the wiring task exists, and the coder quotes the output in its report.
 
 ## Test map
 
@@ -61,8 +61,10 @@ Task 1: `bash dist/scripts/health-exposure`, run from a project root that has `s
 3. A `HEAD` the server answers 405 is retried as `GET` and a served path behind it is still caught — Task 1.
 4. A hostile `deny_paths` entry (spaces, a quote, `;`, `$(…)`, a path not starting with `/`) is skipped and never reaches a shell; 25 added paths probe 20 and name the rest — Task 1.
 5. An environment with no `url`, and a project with no `deny_paths` key at all, both run without error — Task 1.
-6. `make health` exits 1 when only the Exposure section is red and 0 when only Drift or Patch-gone is red — Task 2 (the delivery seam: the status survives `make`).
-7. The defaults cannot be removed: `deny_paths` containing a default does not duplicate it, and nothing in `site.yml` shortens the list — Task 1.
+6. `make health` exits 1 when only the Exposure section is red and 0 when another section (Patch-gone) is red — Task 2 (the delivery seam: the status survives `make`).
+7. A new script reaches the fleet: after `scripts/devops-version --update` a fixture project has an executable `scripts/health-exposure` listed in `.netdust-devops` — Task 1 (the vendoring assertion; without it nothing ships).
+8. The probe prints no response body: a served path whose body is a marker string never shows the marker — Task 1.
+9. The defaults cannot be removed: `deny_paths` containing a default does not duplicate it, and nothing in `site.yml` shortens the list — Task 1.
 
 ---
 
@@ -70,16 +72,17 @@ Task 1: `bash dist/scripts/health-exposure`, run from a project root that has `s
 
 **Files:**
 - Create: `plugins/netdust-devops/dist/scripts/health-exposure`
-- Modify: `plugins/netdust-devops/tests/test-makefile.sh` (new section before `── first bring-up: files before the database ──`)
+- Modify: `plugins/netdust-devops/dist/scripts/devops-version` (add `"scripts/health-exposure"` to the closed `MANAGED` array, lines 23-39), `plugins/netdust-devops/dist/scripts/README.md` (one table row), `plugins/netdust-devops/tests/test-makefile.sh` (new section before `── first bring-up: files before the database ──`)
 
 **Interfaces:**
 - Consumes: `scripts/site` (prints one list item per line; exits 1 on a missing key), run from the project root; `curl`.
-- Produces: `scripts/health-exposure`, no arguments; stdout: per environment a heading `<env>  <url>` then one line per path `  <path>  <class>` (classes as in Global Constraints); exit 0, or 1 when any path is `served`. Environment variable `SITE` overrides the `scripts/site` path, as the Makefile's `$(SITE)` does.
+- Produces: `scripts/health-exposure`, no arguments; stdout: per environment a heading `<env>  <url>` then one line per path `  <path>  <class>` (classes as in Global Constraints); exit 0, or 1 when any path is `served`. The environment variable `SITE` overrides the `scripts/site` path; its default is `scripts/site`, and Task 2's `_health-exposure` passes it explicitly (`SITE=$(SITE)`), because `$(SITE)` in `Makefile.netdust` is a make variable and is not exported.
 
-- [ ] **Step 1: Write the fixture and the failing tests** in the new section. Fixture: a router file under `$WORK/exposure/router.php` for `php -S 127.0.0.1:<free port>`, started in the background (port chosen by binding port 0 through PHP, or by scanning from 18080) and killed in a trap; it answers by path: `/app/logs/index.html` 200 empty; `/composer.json` 301 to `/`; `/.env` 401; `/composer.lock` 403; `/.git/HEAD` 405 on `HEAD` and 200 on `GET`; `/app/debug.log` 500; everything else 404; and in `CATCHALL=1` mode (a second server instance) every path 200. The fixture `site.yml` is a copy of the suite's `$P` fixture with `environments.staging.url` set to `http://127.0.0.1:<port>`; a second copy points at the catch-all port; a third has an unreachable url (`http://127.0.0.1:1`) and an environment with no `url`. Tests, each asserting on stripped stdout and the exit code:
-  - `testServedPathIsRedAndFailsTheExit`: `/app/logs/index.html` shows `served`, exit 1.
+- [ ] **Step 1: Write the fixture and the failing tests** in the new section. The section opens with the suite's own guard (`command -v php` and `command -v curl`; if either is missing it prints a named skip and moves on, as line 140 does for php). Fixture: a router file under `$WORK/exposure/router.php` for `php -S 127.0.0.1:0` (port 0; the chosen port is parsed from the server's first log line, `Development Server (http://127.0.0.1:NNNNN) started`), started in the background; the PIDs of both servers are killed by RE-ARMING the suite's one cleanup trap (`trap 'kill $PHP1 $PHP2 2>/dev/null; rm -rf "$WORK"' EXIT`, since a second `trap … EXIT` would replace the existing `rm -rf "$WORK"`) or by killing them explicitly at the end of the section. The router answers by path: `/app/logs/index.html` 200 with the body `EXPOSURE-BODY-MARKER`; `/composer.json` 301 to `/`; `/.env` 401; `/composer.lock` 403; `/.git/HEAD` 405 on `HEAD` and 200 on `GET`; `/app/debug.log` 500; `/wp-content/logs/index.html` 429; everything else 404; and in `CATCHALL=1` mode (a second server instance) every path 200. Every fixture `site.yml` is a copy of the suite's `$P` fixture in which EVERY environment url (staging AND production) is rewritten to a 127.0.0.1 address: the served server, the catch-all server, or `http://127.0.0.1:1` for the unreachable one; a further copy has an environment with no `url`. Tests, each asserting on stripped stdout and the exit code:
+  - `testServedPathIsRedAndFailsTheExit`: `/app/logs/index.html` shows `served`, exit 1, and the output does NOT contain `EXPOSURE-BODY-MARKER`.
   - `testNotServedIsGreen`: `/composer.lock` shows `not served` (403) and `/wp-content/debug.log` shows `not served` (404).
-  - `testRedirectAuthAndServerErrorAreNotConclusive`: `/composer.json` (301), `/.env` (401) and `/app/debug.log` (500) each show `not conclusive`.
+  - `testRedirectAuthAndServerErrorAreNotConclusive`: `/composer.json` (301), `/.env` (401), `/app/debug.log` (500) and `/wp-content/logs/index.html` (429, an unnamed code) each show `not conclusive`.
+  - `testANewScriptIsVendoredAndChecksummed`: in a fixture copy, after `scripts/devops-version --update`, `scripts/health-exposure` exists, is executable, and `.netdust-devops` lists its checksum (the vendoring assertion; the section `── vendoring ──` near line 507 shows the pattern).
   - `testHeadRefusedIsRetriedAsGet`: `/.git/HEAD` shows `served` although `HEAD` was answered 405.
   - `testCatchAllSiteIsNeverServed`: against the catch-all instance every path is `not conclusive` and the exit is 0.
   - `testUnreachableIsYellowNotGreen`: the unreachable environment shows `unreachable` and exit 0.
@@ -88,10 +91,10 @@ Task 1: `bash dist/scripts/health-exposure`, run from a project root that has `s
   - `testMoreThanTwentyAddedPathsAreCapped`: 25 added paths probe 20 and print the names of the skipped five.
   - `testAddedPathIsProbedAndDefaultsStay`: an added `/extra.txt` appears after the eight defaults; a `deny_paths` entry equal to a default is not probed twice; a project with no `health` key at all lists exactly the eight defaults.
 - [ ] **Step 2: Run** `bash plugins/netdust-devops/tests/test-makefile.sh`. Expected: the new section FAILS (script not found).
-- [ ] **Step 3: Create `scripts/health-exposure`.** Signatures in the file: `valid_path()`, `valid_url()`, `fetch(url, path)` printing the HTTP status (`curl -sS -o /dev/null -w '%{http_code}' -I --max-time 8 -A 'netdust-health' -- "$url$path"`, retried once without `-I` as `GET` on 405 or 501, `000` when curl fails), `classify(code, catchall)` printing one of the four classes. Per environment: print the heading, probe the control path first (`/__exposure_control_$RANDOM$RANDOM`), then the defaults, then the added paths (valid, de-duplicated against the defaults, at most 20). No `eval`, no `sh -c`, every expansion quoted. Colours as the Makefile's (red `\033[31m`, green `\033[32m`, yellow `\033[33m`). The final exit status is 1 when any line was `served`.
+- [ ] **Step 3: Create `scripts/health-exposure`.** Signatures in the file: `valid_path()`, `valid_url()`, `fetch(url, path)` printing the HTTP status (`curl -sS -o /dev/null -w '%{http_code}' -I --max-time 8 -A 'netdust-health' -- "$url$path"`, retried once without `-I` as `GET` on 405 or 501, `000` when curl fails), `classify(code, catchall)` printing one of the four classes, its `case` ending in a default branch `*) not conclusive`. Per environment: print the heading, probe the control path first (`/__exposure_control_$RANDOM$RANDOM`), then the defaults, then the added paths (valid, de-duplicated against the defaults, at most 20). No `eval`, no `sh -c`, every expansion quoted. Colours as the Makefile's (red `\033[31m`, green `\033[32m`, yellow `\033[33m`). The final exit status is 1 when any line was `served`.
 - [ ] **Step 4: Run** `bash plugins/netdust-devops/tests/test-makefile.sh`. Expected: the new section PASSES and every earlier section still does. Quote the summary line.
 - [ ] **Step 5: Run it for real, read-only:** `cd ~/Sites/netdust && bash ~/Projects/netdust-plugins/plugins/netdust-devops/dist/scripts/health-exposure`. Expected: both environments' log markers `not served` (the fix of 2026-11-05) and exit 0; quote the output. If a path shows `served`, stop and report it to the reviewer, do not fix a server.
-- [ ] **Step 6: Commit:** `git add plugins/netdust-devops/dist/scripts/health-exposure plugins/netdust-devops/tests/test-makefile.sh && git commit -m "feat(devops): health-exposure — the probe for paths a server must not serve"`.
+- [ ] **Step 6: Commit:** `git add plugins/netdust-devops/dist/scripts/health-exposure plugins/netdust-devops/dist/scripts/devops-version plugins/netdust-devops/dist/scripts/README.md plugins/netdust-devops/tests/test-makefile.sh && git commit -m "feat(devops): health-exposure — the probe for paths a server must not serve"`.
 
 ### Task 2: Wire it into `health`
 
@@ -103,9 +106,9 @@ Task 1: `bash dist/scripts/health-exposure`, run from a project root that has `s
 - Consumes: `scripts/health-exposure` (Task 1).
 - Produces: `make _health-exposure` (runs the script, prints a `Exposure — paths a server must not serve` heading in `$(BLUE)`, and ends with a one-line fix hint when the script exits non-zero); `make health` whose last command is `@$(MAKE) --no-print-directory _health-exposure`.
 
-- [ ] **Step 1: Write the failing tests:** `testHealthExitsOneWhenExposureIsRed`: `make _health-exposure` against the served fixture exits 1 and prints the hint naming `location ^~ /app/logs/ { deny all; return 404; }` and "restart Nginx" and "make health"; `testHealthExitsZeroWhenOnlyAnotherSectionIsRed`: `make health` against a fixture where the exposure URL answers 404 for everything and the ssh stub reports drift (the existing stubs) exits 0; `testHelpListsExposure`: `make help` names exposure on the `health` line.
+- [ ] **Step 1: Write the failing tests:** `testHealthExitsOneWhenExposureIsRed`: `make _health-exposure` against the served fixture exits 1 and prints the hint naming `location ^~ /app/logs/ { deny all; return 404; }` and "restart Nginx" and "make health"; `testHealthExitsZeroWhenOnlyAnotherSectionIsRed`: no test runs `make health` end to end today, so this one brings its own `ssh` stub under `$WORK/exposure/bin/` (it answers `0` to the `grep -c` of the markers check and a `df` line to `df -P`) and a fixture copy with `health: {markers: ["app/x.php|needle"]}` whose urls all answer 404 on the fixture server; `make health` prints `PATCH GONE` and exits 0 (Drift is not exercised: it would need `rsync` stubbed too); `testHelpListsExposure`: `make help` names exposure on the `health` line.
 - [ ] **Step 2: Run** `bash plugins/netdust-devops/tests/test-makefile.sh`. Expected: FAIL (`_health-exposure` has no rule).
-- [ ] **Step 3: Implement** the target and the last line of `health`; no backtick in any recipe line; the help line reads `"ledger, server drift, guards, topology, patched files, exposed paths"`.
+- [ ] **Step 3: Implement** the target (it runs `SITE=$(SITE) bash scripts/health-exposure`) and the last line of `health`; no backtick in any recipe line; the help line reads `"ledger, server drift, guards, topology, patched files, exposed paths"`.
 - [ ] **Step 4: Run** `bash plugins/netdust-devops/tests/run.sh`. Expected: all three suites pass; quote the final line.
 - [ ] **Step 5: Commit:** `git add plugins/netdust-devops/dist/Makefile.netdust plugins/netdust-devops/tests/test-makefile.sh && git commit -m "feat(devops): make health ends with the exposure probe and exits non-zero on a served path"`.
 
@@ -119,10 +122,10 @@ Task 1: `bash dist/scripts/health-exposure`, run from a project root that has `s
 - Produces: one eval case `exposure-served-is-a-failure` in the suite's shape (`id`, `skill`, `skill_path`, `query`, `signature`): the query is a session that ran `make health env=production` and sees `/app/logs/index.html` `served`; the signature is: reports it as a failure of the site (not healthy), gives the `location ^~ /app/logs/ { deny all; return 404; }` rule and the restart, re-runs `make health` to verify, and does not hand-edit the server outside Ploi or the Makefile.
 
 - [ ] **Step 1: Edit the docs.** The `devops` skill's health paragraph names the Exposure section, the eight defaults, `health.deny_paths`, and that `health` now exits non-zero on a served path; the template gets the commented example; `wp-infra`'s Logs paragraph ends with "`make health` probes this on every environment".
-- [ ] **Step 2: Bump versions:** `dist/VERSION` and both `netdust-devops` version fields to 0.14.0, the marketplace description gains a `0.14.0:` line at its head (the style of the existing ones), `netdust-wp` 1.4.1 in `plugin.json` and the marketplace with a `1.4.1:` line naming the `^~` rule, the restart-after-save note and the `make health` pointer.
+- [ ] **Step 2: Bump versions:** `dist/VERSION` and both `netdust-devops` version fields to 0.14.0, the description of BOTH `plugin.json` and the marketplace entry gains a `0.14.0:` line at its head (the texts differ today, so each is edited on its own), and `netdust-wp` 1.4.1 in `plugin.json` and the marketplace with a `1.4.1:` line at the head of both descriptions naming the `^~` rule, the restart-after-save note and the `make health` pointer.
 - [ ] **Step 3: Run** `bash plugins/netdust-devops/tests/run.sh`, expected all pass including `test-marketplace.sh` (versions agree); and `bash plugins/netdust-devops/tests/test-makefile.sh` once more. Quote both final lines.
 - [ ] **Step 4: Commit:** `git add -A plugins/netdust-devops plugins/netdust-wp .claude-plugin/marketplace.json && git commit -m "release: netdust-devops 0.14.0, netdust-wp 1.4.1 — the exposure probe in make health"`. Push the branch; do not merge.
 
 ## Hand-over
 
-Stefan merges and pushes; the installed copies pick the release up through `scripts/sync.sh` and `make devops-update` in each project, which is how the probe reaches the fleet. The first real run is `make health` in `~/Sites/netdust` and `~/Sites/daan` after the update; their log markers must read `not served`. Plan 2 (`core-lint-gate`) is independent.
+Stefan merges and pushes; the installed copies pick the release up through `scripts/sync.sh` and `make devops-update` in each project, which is how the probe reaches the fleet, because `scripts/health-exposure` is in `devops-version`'s `MANAGED` list. The first real run is `make health` in `~/Sites/netdust` and `~/Sites/daan` after the update; their log markers must read `not served`. Plan 2 (`core-lint-gate`) is independent.
