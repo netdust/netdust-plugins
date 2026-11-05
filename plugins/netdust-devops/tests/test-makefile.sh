@@ -1488,6 +1488,37 @@ printf '%s' "$out" | grep -qE '(✅|❌) curl' \
     && ok "doctor checks for curl" \
     || bad "doctor checks for curl" "$(printf '%s' "$out" | sed -n 1,14p)"
 
+# An update from an older core stops before the new script (0.14.0 shipped it
+# that way: netdust and daan ended with `scripts/health-exposure: No such file`
+# and a hint that said SERVED). A missing script is an instruction, not a failure.
+mkfix "$EX/nosc" "$URL_OK" "$URL_OK"; rm -f "$EX/nosc/scripts/health-exposure"
+out=$(cd "$EX/nosc" && make --no-print-directory _health-exposure < /dev/null 2>&1); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && printf '%s' "$out" | grep -q 'make devops-update again' && ! printf '%s' "$out" | grep -q 'SERVED'; then
+    ok "a missing health-exposure says to run devops-update again and does not fail health"
+else bad "a missing health-exposure says to run devops-update again and does not fail health" "rc=$rc $out"; fi
+
+# A probe that crashes is a broken tool, not a served path: non-zero, never SERVED.
+mkfix "$EX/crash" "$URL_OK" "$URL_OK"; printf '#!/usr/bin/env bash\nexit 3\n' > "$EX/crash/scripts/health-exposure"
+out=$(cd "$EX/crash" && make --no-print-directory _health-exposure < /dev/null 2>&1); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q 'exposure probe failed (exit 3)' && ! printf '%s' "$out" | grep -q 'SERVED'; then
+    ok "a crashing probe is reported as a broken probe, never as a served path"
+else bad "a crashing probe is reported as a broken probe, never as a served path" "rc=$rc $out"; fi
+
+# The updater is a managed file itself. Run from a copy whose file list is stale
+# (here: today's script without the health-exposure entry, the shape 0.13.0 had),
+# it must replace itself, re-run with the new list, and vendor the new script.
+S="$EX/stale"; rm -rf "$S"; mkdir -p "$S/scripts"
+sed '/"scripts\/health-exposure"/d' "$DIST/scripts/devops-version" > "$S/scripts/devops-version"; chmod +x "$S/scripts/devops-version"
+! grep -q 'health-exposure"' "$S/scripts/devops-version" || bad "the stale updater fixture lacks the entry" "sed did not remove it"
+out=$(cd "$S" && NETDUST_DEVOPS_DIST="$DIST" bash scripts/devops-version --update 2>&1); rc=$?
+if [ $rc -eq 0 ] && ! printf '%s' "$out" | grep -q 'unexpected EOF' && [ -x "$S/scripts/health-exposure" ] \
+   && grep -q 'scripts/health-exposure' "$S/.netdust-devops" && cmp -s "$S/scripts/devops-version" "$DIST/scripts/devops-version"; then
+    ok "an updater with a stale file list replaces itself and vendors the new script in one run"
+else bad "an updater with a stale file list replaces itself and vendors the new script in one run" "rc=$rc $out"; fi
+out=$(cd "$S" && NETDUST_DEVOPS_DIST="$DIST" bash scripts/devops-version --update 2>&1); rc=$?
+[ $rc -eq 0 ] && ok "a second update from the current updater is clean" \
+              || bad "a second update from the current updater is clean" "rc=$rc $out"
+
 kill $(cat "$EX/pids" 2>/dev/null) 2>/dev/null
 trap 'rm -rf "$WORK"' EXIT
 fi

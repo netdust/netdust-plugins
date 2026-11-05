@@ -113,13 +113,30 @@ cmd_update() {
     fi
     version=$(cat "$dist/VERSION" 2>/dev/null || echo "unknown")
 
+    # This script is one of the files it vendors. Run from an older copy, its
+    # in-memory MANAGED list is the OLD one, so a file the new release added
+    # (0.14.0: scripts/health-exposure) is never copied, and copying over a
+    # running script makes bash read garbage from the new file's offsets. So a
+    # copy that differs from the plugin's replaces itself atomically (a rename,
+    # which leaves the running process its own inode) and re-runs, once, with
+    # the new list.
+    if [[ -z "${NETDUST_DEVOPS_REEXEC:-}" && -f "$dist/scripts/devops-version" ]] \
+       && ! cmp -s "$dist/scripts/devops-version" "$0"; then
+        mkdir -p scripts
+        cp "$dist/scripts/devops-version" "scripts/devops-version.new.$$"
+        chmod +x "scripts/devops-version.new.$$"
+        mv -f "scripts/devops-version.new.$$" scripts/devops-version
+        NETDUST_DEVOPS_REEXEC=1 exec bash scripts/devops-version --update
+    fi
+
     for f in "${MANAGED[@]}"; do
         [[ -f "$dist/$f" ]] || continue
         mkdir -p "$(dirname "$f")"
-        cp "$dist/$f" "$f"
+        cp "$dist/$f" "$f.new.$$"
         case "$f" in
-            scripts/*|*.sh) chmod +x "$f" ;;
+            scripts/*|*.sh) chmod +x "$f.new.$$" ;;
         esac
+        mv -f "$f.new.$$" "$f"
     done
 
     { printf '%s\n' "$version"
