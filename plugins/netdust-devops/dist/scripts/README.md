@@ -9,6 +9,7 @@ any file edited in place.
 | `site` | reads one dotted key out of `site.yml`. The only reader the Makefile uses. |
 | `devops-version` | vendors the core in, and reports version drift + files edited in place. |
 | `deploy-context` | the deploy's view of the current environment. |
+| `health-exposure` | `make health`'s Exposure section: asks each environment's url whether paths a server must not serve (log markers, `.env`, `.git`) answer 200. Read-only. |
 | `work-audit.sh` | reports work that exists only on this machine. Never writes. |
 | `remote/refresh-db.sh` | runs ON the server for a server-to-server database refresh. |
 | `remote/00-block-outgoing-mail.php` | mu-plugin that blocks mail on non-production. Self-disables on the production host. |

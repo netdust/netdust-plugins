@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Probe each environment for paths a server must never serve. Read-only: one
+# HEAD per path, no body kept, no redirect followed. Exits 1 on a served path.
+set -u
+
+SITE="${SITE:-scripts/site}"
+MAX_EXTRA=20
+DEFAULTS=(/app/logs/index.html /wp-content/logs/index.html /wp-content/debug.log
+          /app/debug.log /.env /.git/HEAD /composer.json /composer.lock)
+RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; OFF=$'\033[0m'
+PATH_RE='^/[A-Za-z0-9._~/%-]*$'
+URL_RE='^https?://[A-Za-z0-9._:/%~-]+$'
+
+valid_path() { [[ $1 =~ $PATH_RE ]]; }
+valid_url()  { [[ $1 =~ $URL_RE ]]; }
+
+curl_code() { # $@ = extra curl flags, last arg the url
+    curl -q -sS -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 8 \
+        -A 'netdust-health' "$@" 2>/dev/null || true
+}
+
+fetch() { # $1 base url, $2 path: the HTTP status, 000 when nothing answered
+    local code
+    code=$(curl_code -I -- "$1$2")
+    case $code in 405|501) code=$(curl_code -- "$1$2");; esac
+    printf '%s' "${code:-000}"
+}
+
+classify() { # $1 code, $2 catch-all (1/0)
+    case $1 in
+        000)         echo unreachable;;
+        200)         [ "$2" = 1 ] && echo "not conclusive" || echo served;;
+        403|404|410) echo "not served";;
+        *)           echo "not conclusive";;
+    esac
+}
+
+colour() {
+    case $1 in
+        served) printf '%s' "$RED";;
+        "not served") printf '%s' "$GREEN";;
+        *) printf '%s' "$YELLOW";;
+    esac
+}
+
+note() { printf '%s  %s%s%s\n' "$1" "$YELLOW" "$2" "$OFF"; }
+
+if ! command -v curl >/dev/null 2>&1; then note "exposure" "curl not found, nothing probed"; exit 0; fi
+ENVS=$("$SITE" environments 2>/dev/null) || { note "exposure" "site.yml unreadable (is $SITE there, and PyYAML installed?), nothing probed"; exit 0; }
+
+PATHS=("${DEFAULTS[@]}")
+added=0; over=()
+while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    if ! valid_path "$p"; then printf '  skipped %q (not a valid path)\n' "$p"; continue; fi
+    case " ${PATHS[*]} " in *" $p "*) continue;; esac
+    if [ "$added" -ge "$MAX_EXTRA" ]; then over+=("$p"); continue; fi
+    PATHS+=("$p"); added=$((added+1))
+done < <("$SITE" health.deny_paths 2>/dev/null)
+[ "${#over[@]}" -eq 0 ] || printf '  skipped %s (more than %s added paths)\n' "${over[*]}" "$MAX_EXTRA"
+
+status=0
+while IFS= read -r env; do
+    [ -n "$env" ] || continue
+    url=$("$SITE" "environments.$env.url" 2>/dev/null) || url=""
+    if [ -z "$url" ]; then note "$env" "no url, not probed"; continue; fi
+    if ! valid_url "$url"; then note "$env" "skipped, url is not valid"; continue; fi
+    url=${url%/}
+    control=$(fetch "$url" "/__exposure_control_$RANDOM$RANDOM")
+    if [ "$control" = 000 ]; then note "$env" "unreachable"; continue; fi
+    case $control in
+        200|404|410) ;;
+        *) note "$env" "not conclusive (control path answered $control)"; continue;;
+    esac
+    catchall=0; [ "$control" = 200 ] && catchall=1
+    printf '%s  %s\n' "$env" "$url"
+    for p in "${PATHS[@]}"; do
+        class=$(classify "$(fetch "$url" "$p")" "$catchall")
+        [ "$class" = served ] && status=1
+        printf '  %s  %s%s%s\n' "$p" "$(colour "$class")" "$class" "$OFF"
+    done
+done <<< "$ENVS"
+exit "$status"

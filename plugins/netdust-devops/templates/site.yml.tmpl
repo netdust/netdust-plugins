@@ -126,6 +126,11 @@ deploy:
 # health:
 #   markers:
 #     - "content/plugins/some-plugin/some-file.php|MY hotfix"
+#
+# Extra paths `make health` must find NOT served (it already probes the log
+# markers, debug logs, .env, .git/HEAD and composer files on every environment url).
+#   deny_paths:
+#     - /backup.sql
 
 local:
   ddev_project: {{PROJECT_NAME}}

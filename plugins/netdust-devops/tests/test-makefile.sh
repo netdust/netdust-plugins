@@ -182,6 +182,16 @@ else
     bad "every commands.* key doctor expects is in the site.yml template" "missing:${MISSING:- (no list found)}"
 fi
 
+# devops-version compares a project's stamp with dist/VERSION: a release that
+# forgets to bump it makes every project report current and never prompts an update.
+DIST_V=$(tr -d '[:space:]' < "$DIST/VERSION")
+PLUGIN_V=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$ROOT/.claude-plugin/plugin.json" | head -1)
+if [ -n "$PLUGIN_V" ] && [ "$DIST_V" = "$PLUGIN_V" ]; then
+    ok "dist/VERSION ($DIST_V) equals plugin.json's version"
+else
+    bad "dist/VERSION equals plugin.json's version" "dist/VERSION=$DIST_V plugin.json=$PLUGIN_V"
+fi
+
 echo "── behaviour ──"
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 P="$WORK/proj"; mkdir -p "$P/web/app/plugins/p" "$P/web/app/themes/t"; cd "$P"
@@ -1245,6 +1255,242 @@ printf '%s' "$out" | grep -q "nobody@example.invalid.*30%" && printf '%s' "$out"
     && grep -q "other@example.invalid df -P '/srv/prod'" "$DK/ssh.log" \
     && ok "health reports two servers separately, each at its own environment's path" \
     || bad "health reports two servers separately, each at its own environment's path" "$out | $(cat "$DK/ssh.log")"
+echo
+echo "── health: exposure ──"
+# A deployed site that serves its log marker, .env or .git is the failure this
+# probe exists for (netdust.be and daan.be served web/app/logs/, 2026-11-05).
+# Fixtures answer on loopback only: no remote server is contacted.
+if ! command -v php >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then
+    echo "  (skipped: php and curl are needed for the exposure fixture server)"
+else
+EX="$WORK/exposure"; mkdir -p "$EX"
+cat > "$EX/router.php" <<'PHP'
+<?php
+$p = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$m = $_SERVER['REQUEST_METHOD'];
+if (getenv('ALL404')) { http_response_code(404); return; }
+if (getenv('WALL')) { http_response_code(403); return; }
+if (getenv('SERVE_PATH')) { http_response_code(getenv('SERVE_PATH') === $p ? 200 : 404); return; }
+if (getenv('CATCHALL')) { http_response_code(200); echo 'catch-all'; return; }
+switch ($p) {
+    case '/app/logs/index.html': http_response_code(200); echo 'EXPOSURE-BODY-MARKER'; break;
+    case '/composer.json': http_response_code(301); header('Location: /'); break;
+    case '/.env': http_response_code(401); break;
+    case '/composer.lock': http_response_code(403); break;
+    case '/.git/HEAD': if ($m === 'HEAD') { http_response_code(405); } else { http_response_code(200); echo 'ref: refs/heads/main'; } break;
+    case '/app/debug.log': http_response_code(500); break;
+    case '/wp-content/logs/index.html': http_response_code(429); break;
+    case '/ok': case '/extra.txt': http_response_code(404); break;
+    default: http_response_code(404);
+}
+PHP
+start_fixture() { # $1 = log, rest = env assignments; prints the base url
+    local log="$1"; shift
+    : > "$log"
+    env "$@" php -S 127.0.0.1:0 -t "$EX" "$EX/router.php" > "$log" 2>&1 &
+    echo $! >> "$EX/pids"
+    local i url=""
+    for i in $(seq 1 50); do
+        url=$(grep -oE 'http://127\.0\.0\.1:[0-9]+' "$log" | head -1)
+        [ -n "$url" ] && break; sleep 0.1
+    done
+    printf '%s' "$url"
+}
+trap 'kill $(cat "$EX/pids" 2>/dev/null) 2>/dev/null; rm -rf "$WORK"' EXIT
+URL_OK=$(start_fixture "$EX/ok.log" X=1)
+URL_ALL=$(start_fixture "$EX/all.log" CATCHALL=1)
+URL_DEAD="http://127.0.0.2:1"
+# A project copy with every environment url on loopback: $1 dir, $2 staging, $3 production.
+mkfix() {
+    rm -rf "$1"; cp -r "$P" "$1"
+    sed -i -e "s|url: \"https://staging.example.invalid\"|url: \"$2\"|" -e "s|url: \"https://example.invalid\"|url: \"$3\"|" "$1/site.yml"
+}
+xp() { out=$(cd "$1" && bash "$DIST/scripts/health-exposure" < /dev/null 2>&1); rc=$?; out=$(printf '%s' "$out" | strip); }
+line() { printf '%s\n' "$out" | grep -qE "^ +$1 +$2\$"; }
+
+mkfix "$EX/served" "$URL_OK" "$URL_OK"; xp "$EX/served"
+if line /app/logs/index.html served && [ $rc -eq 1 ] && ! printf '%s' "$out" | grep -qE 'EXPOSURE-BODY-MARKER|ref: refs/heads/main'; then
+    ok "a served log marker is reported, fails the exit and prints no body"
+else bad "a served log marker is reported, fails the exit and prints no body" "rc=$rc $out"; fi
+
+if line /composer.lock "not served" && line /wp-content/debug.log "not served"; then
+    ok "403 and 404 read as not served"
+else bad "403 and 404 read as not served" "$out"; fi
+
+if line /composer.json "not conclusive" && line /.env "not conclusive" \
+   && line /app/debug.log "not conclusive" && line /wp-content/logs/index.html "not conclusive"; then
+    ok "a 301, a 401, a 500 and an unnamed 429 are not conclusive, never green or red"
+else bad "a 301, a 401, a 500 and an unnamed 429 are not conclusive" "$out"; fi
+
+line /.git/HEAD served \
+    && ok "a HEAD answered 405 is retried as GET and the served path is caught" \
+    || bad "a HEAD answered 405 is retried as GET and the served path is caught" "$out"
+
+V="$WORK/vendor-exp"; rm -rf "$V"; cp -r "$P" "$V"; rm -f "$V/scripts/health-exposure"
+( cd "$V" && NETDUST_DEVOPS_DIST="$DIST" scripts/devops-version --update >/dev/null 2>&1 )
+if [ -x "$V/scripts/health-exposure" ] && grep -q 'scripts/health-exposure' "$V/.netdust-devops"; then
+    ok "a new script is vendored, executable and checksummed by devops-version --update"
+else bad "a new script is vendored, executable and checksummed" "$(ls "$V/scripts")"; fi
+
+mkfix "$EX/all" "$URL_ALL" "$URL_ALL"; xp "$EX/all"
+n200=$(printf '%s\n' "$out" | grep -cE '^ +/.* +not conclusive$')
+if [ $rc -eq 0 ] && [ "$n200" -eq 16 ] && ! printf '%s' "$out" | grep -qE ' served$'; then
+    ok "a catch-all site never produces served: every path is not conclusive"
+else bad "a catch-all site never produces served" "rc=$rc n=$n200 $out"; fi
+
+mkfix "$EX/dead" "$URL_DEAD" "$URL_DEAD"; t0=$SECONDS; xp "$EX/dead"; dt=$((SECONDS-t0))
+if [ $rc -eq 0 ] && [ "$(printf '%s\n' "$out" | wc -l)" -eq 2 ] \
+   && [ "$(printf '%s\n' "$out" | grep -cE ' unreachable$')" -eq 2 ] && [ $dt -lt 20 ]; then
+    ok "an unreachable environment is one yellow line, exit 0, in seconds"
+else bad "an unreachable environment is one yellow line, exit 0, in seconds" "rc=$rc dt=${dt}s $out"; fi
+
+mkfix "$EX/hosturl" "http://127.0.0.1:1/;touch $EX/pwned-url" "$URL_ALL"; xp "$EX/hosturl"
+if printf '%s' "$out" | grep -qE 'staging.*skipped' && [ ! -e "$EX/pwned-url" ]; then
+    ok "a hostile environment url is skipped and never reaches a shell"
+else bad "a hostile environment url is skipped and never reaches a shell" "$out"; fi
+
+mkfix "$EX/nourl" "$URL_ALL" "$URL_ALL"; sed -i 's|url: "[^"]*", path: /srv/staging|path: /srv/staging|' "$EX/nourl/site.yml"; xp "$EX/nourl"
+if printf '%s' "$out" | grep -qE 'staging.*no url' && [ $rc -eq 0 ]; then
+    ok "an environment without a url says so in a line"
+else bad "an environment without a url says so in a line" "rc=$rc $out"; fi
+
+mkfix "$EX/hostile" "$URL_OK" "$URL_OK"
+cat >> "$EX/hostile/site.yml" <<YML
+health:
+  deny_paths: ["/a b", "/x;id", '/\$(id)', "no-slash", "/x;touch $EX/pwned", "/ok"]
+YML
+xp "$EX/hostile"
+nskip=$(printf '%s\n' "$out" | grep -c 'skipped')
+if line /ok "not served" && [ "$nskip" -ge 5 ] && [ ! -e "$EX/pwned" ]; then
+    ok "hostile deny_paths entries are skipped, /ok is probed, nothing runs"
+else bad "hostile deny_paths entries are skipped, /ok is probed, nothing runs" "nskip=$nskip $out"; fi
+
+mkfix "$EX/many" "$URL_OK" "$URL_OK"
+{ printf 'health:\n  deny_paths:\n'; for i in $(seq 1 25); do printf '    - /p%s\n' "$i"; done; } >> "$EX/many/site.yml"
+xp "$EX/many"
+nprobed=$(printf '%s\n' "$out" | awk '/^production/{f=1} f && /^ +\/p[0-9]+ /' | wc -l)
+if [ "$nprobed" -eq 20 ] && printf '%s' "$out" | grep -E 'skipped|capped' | grep -q '/p21' \
+   && printf '%s' "$out" | grep -E 'skipped|capped' | grep -q '/p25'; then
+    ok "25 added paths probe 20 and name the rest"
+else bad "25 added paths probe 20 and name the rest" "probed=$nprobed $out"; fi
+
+mkfix "$EX/extra" "$URL_OK" "$URL_OK"
+printf 'health:\n  deny_paths: ["/extra.txt", "/.env"]\n' >> "$EX/extra/site.yml"; xp "$EX/extra"
+prod=$(printf '%s\n' "$out" | awk '/^production/{f=1} f && /^ +\//{print $1}' | paste -sd' ')
+want="/app/logs/index.html /wp-content/logs/index.html /wp-content/debug.log /app/debug.log /.env /.git/HEAD /composer.json /composer.lock /extra.txt"
+mkfix "$EX/nohealth" "$URL_OK" "$URL_OK"; xp "$EX/nohealth"
+prod2=$(printf '%s\n' "$out" | awk '/^production/{f=1} f && /^ +\//{print $1}' | paste -sd' ')
+if [ "$prod" = "$want" ] && [ "$prod2" = "${want% /extra.txt}" ] && [ $rc -eq 1 ]; then
+    ok "an added path follows the eight defaults, a default is not probed twice, no health key lists the defaults"
+else bad "added path follows the defaults, no duplicate, no health key" "extra: $prod | none: $prod2"; fi
+
+URL_404=$(start_fixture "$EX/n404.log" ALL404=1)
+
+# Wiring: the section ends make health, and its exit status is the recipe's.
+mkfix "$EX/wire" "$URL_OK" "$URL_OK"
+out=$(cd "$EX/wire" && make --no-print-directory _health-exposure < /dev/null 2>&1); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -qF 'location ^~ /app/logs/ { deny all; return 404; }' \
+   && printf '%s' "$out" | grep -q 'Nginx' && printf '%s' "$out" | grep -q 'make health'; then
+    ok "a served path makes _health-exposure exit non-zero and print the deny rule, the restart and the re-run"
+else bad "a served path makes _health-exposure exit 1 with a fix hint" "rc=$rc $out"; fi
+
+mkdir -p "$EX/bin"
+cat > "$EX/bin/ssh" <<'SH'
+#!/bin/sh
+exec < /dev/null
+case "$*" in
+  *"grep -c"*) echo 0;;
+  *"df -P"*) echo "/dev/sda1 39845888 33554432 6291456 50% /";;
+  *) exit 255;;
+esac
+SH
+chmod +x "$EX/bin/ssh"
+mkfix "$EX/e2e" "$URL_404" "$URL_404"
+printf 'health:\n  markers: ["app/x.php|needle"]\n' >> "$EX/e2e/site.yml"
+out=$(cd "$EX/e2e" && env PATH="$EX/bin:$PATH" timeout 60 make --no-print-directory health < /dev/null 2>&1); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && printf '%s' "$out" | grep -q 'PATCH GONE' && printf '%s' "$out" | grep -qE 'staging +clean' \
+   && printf '%s' "$out" | grep -q 'Exposure'; then
+    ok "make health exits 0 when only another section (Patch-gone) is red"
+else bad "make health exits 0 when only another section is red" "rc=$rc $(printf '%s' "$out" | tail -12)"; fi
+mkfix "$EX/e2e-red" "$URL_OK" "$URL_OK"
+out=$(cd "$EX/e2e-red" && env PATH="$EX/bin:$PATH" timeout 60 make --no-print-directory health < /dev/null 2>&1); rc=$?
+[ $rc -ne 0 ] \
+    && ok "make health exits non-zero (make reports 2) when the Exposure section shows a served path" \
+    || bad "make health exits non-zero (make reports 2) when the Exposure section shows a served path" "rc=$rc"
+out=$(make help 2>&1 | strip)
+printf '%s\n' "$out" | grep -E '^ +health ' | grep -qi 'exposed paths' \
+    && ok "make help names the exposure probe on the health line" \
+    || bad "make help names the exposure probe on the health line" "$(printf '%s\n' "$out" | grep -E '^ +health ')"
+
+# Review fix pass: the hint, the walled site, the tool and reader guards.
+URL_DBG=$(start_fixture "$EX/dbg.log" SERVE_PATH=/app/debug.log)
+URL_WPD=$(start_fixture "$EX/wpd.log" SERVE_PATH=/wp-content/debug.log)
+URL_GIT=$(start_fixture "$EX/git.log" SERVE_PATH=/.git/HEAD)
+URL_WALL=$(start_fixture "$EX/wall.log" WALL=1)
+hint() { # $1 = a fixture url; prints the make-level output
+    mkfix "$EX/hint" "$1" "$1"
+    out=$(cd "$EX/hint" && make --no-print-directory _health-exposure < /dev/null 2>&1); rc=$?; out=$(printf '%s' "$out" | strip)
+}
+hint "$URL_DBG"
+if printf '%s' "$out" | grep -qF 'location = /app/debug.log { deny all; return 404; }' && ! printf '%s' "$out" | grep -qF '^~ /app/'; then
+    ok "a served /app/debug.log is denied as that file, never as its directory"
+else bad "a served /app/debug.log is denied as that file, never as its directory" "$out"; fi
+hint "$URL_WPD"
+if printf '%s' "$out" | grep -qF 'location = /wp-content/debug.log' && ! printf '%s' "$out" | grep -qF '^~ /wp-content/'; then
+    ok "a served /wp-content/debug.log is denied as that file, never as wp-content"
+else bad "a served /wp-content/debug.log is denied as that file, never as wp-content" "$out"; fi
+hint "$URL_OK"
+printf '%s' "$out" | grep -qF 'location ^~ /app/logs/ { deny all; return 404; }' \
+    && ok "a served log marker still gets the directory rule" \
+    || bad "a served log marker still gets the directory rule" "$out"
+hint "$URL_GIT"
+printf '%s' "$out" | grep -qF 'location ^~ /.git/ { deny all; return 404; }' \
+    && ok "a served /.git/HEAD gets the /.git/ directory rule" \
+    || bad "a served /.git/HEAD gets the /.git/ directory rule" "$out"
+
+mkfix "$EX/wall" "$URL_WALL" "$URL_WALL"; xp "$EX/wall"
+if [ $rc -eq 0 ] && printf '%s' "$out" | grep -qE 'staging +not conclusive \(control path answered 403\)' \
+   && ! printf '%s' "$out" | grep -qE ' not served$'; then
+    ok "a site answering 403 to everything is not conclusive, never all green"
+else bad "a site answering 403 to everything is not conclusive, never all green" "rc=$rc $out"; fi
+
+mkdir -p "$EX/home"; printf 'location\n' > "$EX/home/.curlrc"
+out=$(cd "$EX/served" && HOME="$EX/home" bash "$DIST/scripts/health-exposure" < /dev/null 2>&1 | strip)
+printf '%s\n' "$out" | grep -qE '^ +/composer.json +not conclusive$' \
+    && ok "a ~/.curlrc cannot make the probe follow a redirect" \
+    || bad "a ~/.curlrc cannot make the probe follow a redirect" "$out"
+
+mkfix "$EX/userinfo" "http://admin:s3cret@${URL_OK#http://}" "$URL_OK"; xp "$EX/userinfo"
+if printf '%s' "$out" | grep -qE 'staging.*skipped' && ! printf '%s' "$out" | grep -q 's3cret'; then
+    ok "a url with credentials is skipped and never printed"
+else bad "a url with credentials is skipped and never printed" "$out"; fi
+
+mkdir -p "$EX/nocurl"; ln -sf "$(command -v python3)" "$EX/nocurl/python3"
+out=$(cd "$EX/served" && PATH="$EX/nocurl" "$(command -v bash)" "$DIST/scripts/health-exposure" < /dev/null 2>&1 | strip)
+printf '%s' "$out" | grep -qi 'curl' && ! printf '%s' "$out" | grep -qE 'unreachable' \
+    && ok "a box without curl says so instead of calling every site unreachable" \
+    || bad "a box without curl says so instead of calling every site unreachable" "$out"
+
+out=$(cd "$EX/served" && SITE="$EX/no-such-reader" bash "$DIST/scripts/health-exposure" < /dev/null 2>&1 | strip)
+printf '%s' "$out" | grep -q 'site.yml unreadable' \
+    && ok "a site reader that fails says site.yml is unreadable" \
+    || bad "a site reader that fails says site.yml is unreadable" "$out"
+
+mkfix "$EX/skipserved" "$URL_DBG" "$URL_DBG"
+printf 'health:\n  deny_paths: ["/a b"]\n' >> "$EX/skipserved/site.yml"
+out=$(cd "$EX/skipserved" && make --no-print-directory _health-exposure < /dev/null 2>&1 | strip)
+printf '%s' "$out" | grep -qF 'location = /app/debug.log' \
+    && ok "the hint reads the first served path line, not a skipped note" \
+    || bad "the hint reads the first served path line, not a skipped note" "$out"
+
+out=$(cd "$EX/wire" && env PATH="$EX/bin:$PATH" timeout 60 make doctor < /dev/null 2>&1 | strip)
+printf '%s' "$out" | grep -qE '(✅|❌) curl' \
+    && ok "doctor checks for curl" \
+    || bad "doctor checks for curl" "$(printf '%s' "$out" | sed -n 1,14p)"
+
+kill $(cat "$EX/pids" 2>/dev/null) 2>/dev/null
+trap 'rm -rf "$WORK"' EXIT
+fi
 
 echo
 echo "── first bring-up: files before the database ──"
