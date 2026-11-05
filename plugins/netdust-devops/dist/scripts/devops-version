@@ -29,6 +29,7 @@ MANAGED=(
     "mk/wp.mk"
     "scripts/site"
     "scripts/deploy-context"
+    "scripts/health-exposure"
     "scripts/devops-version"
     "scripts/work-audit.sh"
     "scripts/README.md"
