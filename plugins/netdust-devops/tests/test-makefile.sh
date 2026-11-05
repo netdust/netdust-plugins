@@ -1258,6 +1258,7 @@ cat > "$EX/router.php" <<'PHP'
 <?php
 $p = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $m = $_SERVER['REQUEST_METHOD'];
+if (getenv('ALL404')) { http_response_code(404); return; }
 if (getenv('CATCHALL')) { http_response_code(200); echo 'catch-all'; return; }
 switch ($p) {
     case '/app/logs/index.html': http_response_code(200); echo 'EXPOSURE-BODY-MARKER'; break;
@@ -1370,6 +1371,44 @@ prod2=$(printf '%s\n' "$out" | awk '/^production/{f=1} f && /^ +\//{print $1}' |
 if [ "$prod" = "$want" ] && [ "$prod2" = "${want% /extra.txt}" ] && [ $rc -eq 1 ]; then
     ok "an added path follows the eight defaults, a default is not probed twice, no health key lists the defaults"
 else bad "added path follows the defaults, no duplicate, no health key" "extra: $prod | none: $prod2"; fi
+
+URL_404=$(start_fixture "$EX/n404.log" ALL404=1)
+
+# Wiring: the section ends make health, and its exit status is the recipe's.
+mkfix "$EX/wire" "$URL_OK" "$URL_OK"
+out=$(cd "$EX/wire" && make --no-print-directory _health-exposure < /dev/null 2>&1); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -qF 'location ^~ /app/logs/ { deny all; return 404; }' \
+   && printf '%s' "$out" | grep -q 'Nginx' && printf '%s' "$out" | grep -q 'make health'; then
+    ok "a served path makes _health-exposure exit non-zero and print the deny rule, the restart and the re-run"
+else bad "a served path makes _health-exposure exit 1 with a fix hint" "rc=$rc $out"; fi
+
+mkdir -p "$EX/bin"
+cat > "$EX/bin/ssh" <<'SH'
+#!/bin/sh
+exec < /dev/null
+case "$*" in
+  *"grep -c"*) echo 0;;
+  *"df -P"*) echo "/dev/sda1 39845888 33554432 6291456 50% /";;
+  *) exit 255;;
+esac
+SH
+chmod +x "$EX/bin/ssh"
+mkfix "$EX/e2e" "$URL_404" "$URL_404"
+printf 'health:\n  markers: ["app/x.php|needle"]\n' >> "$EX/e2e/site.yml"
+out=$(cd "$EX/e2e" && env PATH="$EX/bin:$PATH" timeout 60 make --no-print-directory health < /dev/null 2>&1); rc=$?; out=$(printf '%s' "$out" | strip)
+if [ $rc -eq 0 ] && printf '%s' "$out" | grep -q 'PATCH GONE' && printf '%s' "$out" | grep -qE 'staging +clean' \
+   && printf '%s' "$out" | grep -q 'Exposure'; then
+    ok "make health exits 0 when only another section (Patch-gone) is red"
+else bad "make health exits 0 when only another section is red" "rc=$rc $(printf '%s' "$out" | tail -12)"; fi
+mkfix "$EX/e2e-red" "$URL_OK" "$URL_OK"
+out=$(cd "$EX/e2e-red" && env PATH="$EX/bin:$PATH" timeout 60 make --no-print-directory health < /dev/null 2>&1); rc=$?
+[ $rc -ne 0 ] \
+    && ok "make health exits non-zero (make reports 2) when the Exposure section shows a served path" \
+    || bad "make health exits 1 when the Exposure section shows a served path" "rc=$rc"
+out=$(make help 2>&1 | strip)
+printf '%s\n' "$out" | grep -E '^ +health ' | grep -qi 'exposed paths' \
+    && ok "make help names the exposure probe on the health line" \
+    || bad "make help names the exposure probe on the health line" "$(printf '%s\n' "$out" | grep -E '^ +health ')"
 
 kill $(cat "$EX/pids" 2>/dev/null) 2>/dev/null
 trap 'rm -rf "$WORK"' EXIT

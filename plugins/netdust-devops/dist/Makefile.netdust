@@ -127,7 +127,7 @@ help: ## Show this help
 	@echo "$(YELLOW)INSPECT$(RESET)      read-only — safe to run anywhere, any time"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "status"   "branch, flow position, what runs where"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "deployed" "which commit runs on each environment"
-	@printf "  $(GREEN)%-22s$(RESET) %s\n" "health"   "ledger, server drift, guards, topology, patched files"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "health"   "ledger, server drift, guards, topology, patched files, exposed paths"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "doctor"   "tools, SSH reachability, payload"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "audit"    "work that exists only on this machine"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "test"     "flow + deploy tooling tests (no server contact)"
@@ -747,6 +747,8 @@ health: ## Ledger, server drift, deploy guards, branch topology, patched files
 	fi
 	@echo ""
 	@$(MAKE) --no-print-directory _health-disk
+	@echo ""
+	@$(MAKE) --no-print-directory _health-exposure
 
 # A server hosts many sites; one site's health is the first place anyone looks.
 # Measured at the site's path: a mounted volume or a hosting quota is its own disk.
@@ -765,6 +767,17 @@ _health-disk:
 			   else printf "  $(GREEN)%-28s %s%%$(RESET)\n" "$$H" "$$P"; fi;; \
 		esac; \
 	done
+
+# What an anonymous visitor can fetch. Last in health, so a served path is health's exit status.
+.PHONY: _health-exposure
+_health-exposure:
+	@echo "$(BLUE)Exposure — paths a server must not serve$(RESET)"
+	@O=$$(SITE=$(SITE) bash scripts/health-exposure); rc=$$?; printf '%s\n' "$$O"; \
+	if [ $$rc -ne 0 ]; then \
+		P=$$(printf '%s\n' "$$O" | sed 's/\x1b\[[0-9;]*m//g' | awk '$$2=="served"{print $$1; exit}'); \
+		D=$$(dirname "$$P"); if [ "$$D" = / ]; then R="= $$P"; else R="^~ $$D/"; fi; \
+		printf "  $(RED)SERVED$(RESET) — deny it in Nginx: location %s { deny all; return 404; } then restart Nginx and re-run make health\n" "$$R"; \
+	fi; exit $$rc
 
 # ═════════════════════════════════════════════════════════════════════════════
 # INTERNAL HELPERS — never call these directly
