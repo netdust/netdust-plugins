@@ -772,11 +772,15 @@ _health-disk:
 .PHONY: _health-exposure
 _health-exposure:
 	@echo "$(BLUE)Exposure — paths a server must not serve$(RESET)"
-	@O=$$(SITE=$(SITE) bash scripts/health-exposure); rc=$$?; printf '%s\n' "$$O"; \
-	if [ $$rc -ne 0 ]; then \
+	@if [ ! -f scripts/health-exposure ]; then \
+		printf "  $(YELLOW)scripts/health-exposure is missing — an update from an older core stops before it. Run make devops-update again.$(RESET)\n"; exit 0; fi; \
+	O=$$(SITE=$(SITE) bash scripts/health-exposure); rc=$$?; printf '%s\n' "$$O"; \
+	if [ $$rc -eq 1 ]; then \
 		P=$$(printf '%s\n' "$$O" | sed 's/\x1b\[[0-9;]*m//g' | awk '$$1 ~ /^\// && $$2=="served"{print $$1; exit}'); \
 		case "$$P" in /app/logs/index.html|/wp-content/logs/index.html|/.git/HEAD) R="^~ $$(dirname "$$P")/";; *) R="= $$P";; esac; \
 		printf "  $(RED)SERVED$(RESET) — deny it in Nginx: location %s { deny all; return 404; } then restart Nginx and re-run make health\n" "$$R"; \
+	elif [ $$rc -ne 0 ]; then \
+		printf "  $(RED)exposure probe failed (exit %s) — this is the probe, not a served path$(RESET)\n" "$$rc"; \
 	fi; exit $$rc
 
 # ═════════════════════════════════════════════════════════════════════════════
