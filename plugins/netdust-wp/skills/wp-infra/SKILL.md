@@ -59,8 +59,15 @@ NTDST writes channel logs to `wp-content/logs/{channel}-{YYYY-MM-DD}.log`. Under
 - `.htaccess` is **inert on Nginx**. Ploi / Combell / any Nginx-fronted host MUST add an explicit deny in server config:
 
 ```nginx
-location ~ ^/app/logs/ { deny all; return 404; }
+location ^~ /app/logs/ { deny all; return 404; }
 ```
+
+  Write it with `^~`, not `~`: a prefix block with `^~` stops Nginx checking regex locations, while a plain
+  regex block loses to any earlier regex location in the file (Ploi's `include .../server/*` sits above it).
+  Saving the config does not activate it: Ploi's API answers "Don't forget to reload or restart NGINX", so
+  restart Nginx after the save (on a shared server that restarts every site on it).
+  Verify after every change: `curl -sI https://<site>/app/logs/index.html` must answer 404, never 200
+  (netdust.be and daan.be answered 200 with the regex form and no restart, 2026-11-05).
 
 - The database log handler is now **opt-in** (default: only on under `WP_DEBUG`). In production, ERROR+ entries still hit the file log and PHP's `error_log()` — they don't disappear. Force on with `add_filter('ntdst_log_database_enabled', '__return_true')` if you have an observability stack reading from `log_entry`.
 - Don't log user-submitted values that may contain PII (emails, names, form content). Log identifiers and structural metadata only.
