@@ -9,13 +9,13 @@ DEFAULTS=(/app/logs/index.html /wp-content/logs/index.html /wp-content/debug.log
           /app/debug.log /.env /.git/HEAD /composer.json /composer.lock)
 RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; OFF=$'\033[0m'
 PATH_RE='^/[A-Za-z0-9._~/%-]*$'
-URL_RE='^https?://[A-Za-z0-9._:/@%~-]+$'
+URL_RE='^https?://[A-Za-z0-9._:/%~-]+$'
 
 valid_path() { [[ $1 =~ $PATH_RE ]]; }
 valid_url()  { [[ $1 =~ $URL_RE ]]; }
 
 curl_code() { # $@ = extra curl flags, last arg the url
-    curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 8 \
+    curl -q -sS -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 8 \
         -A 'netdust-health' "$@" 2>/dev/null || true
 }
 
@@ -45,6 +45,9 @@ colour() {
 
 note() { printf '%s  %s%s%s\n' "$1" "$YELLOW" "$2" "$OFF"; }
 
+if ! command -v curl >/dev/null 2>&1; then note "exposure" "curl not found, nothing probed"; exit 0; fi
+ENVS=$("$SITE" environments 2>/dev/null) || { note "exposure" "site.yml unreadable (is $SITE there, and PyYAML installed?), nothing probed"; exit 0; }
+
 PATHS=("${DEFAULTS[@]}")
 added=0; over=()
 while IFS= read -r p; do
@@ -65,6 +68,10 @@ while IFS= read -r env; do
     url=${url%/}
     control=$(fetch "$url" "/__exposure_control_$RANDOM$RANDOM")
     if [ "$control" = 000 ]; then note "$env" "unreachable"; continue; fi
+    case $control in
+        200|404|410) ;;
+        *) note "$env" "not conclusive (control path answered $control)"; continue;;
+    esac
     catchall=0; [ "$control" = 200 ] && catchall=1
     printf '%s  %s\n' "$env" "$url"
     for p in "${PATHS[@]}"; do
@@ -72,5 +79,5 @@ while IFS= read -r env; do
         [ "$class" = served ] && status=1
         printf '  %s  %s%s%s\n' "$p" "$(colour "$class")" "$class" "$OFF"
     done
-done < <("$SITE" environments 2>/dev/null)
+done <<< "$ENVS"
 exit "$status"

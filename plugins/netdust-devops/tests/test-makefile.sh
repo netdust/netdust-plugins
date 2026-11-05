@@ -1269,6 +1269,8 @@ cat > "$EX/router.php" <<'PHP'
 $p = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $m = $_SERVER['REQUEST_METHOD'];
 if (getenv('ALL404')) { http_response_code(404); return; }
+if (getenv('WALL')) { http_response_code(403); return; }
+if (getenv('SERVE_PATH')) { http_response_code(getenv('SERVE_PATH') === $p ? 200 : 404); return; }
 if (getenv('CATCHALL')) { http_response_code(200); echo 'catch-all'; return; }
 switch ($p) {
     case '/app/logs/index.html': http_response_code(200); echo 'EXPOSURE-BODY-MARKER'; break;
@@ -1307,7 +1309,7 @@ xp() { out=$(cd "$1" && bash "$DIST/scripts/health-exposure" < /dev/null 2>&1); 
 line() { printf '%s\n' "$out" | grep -qE "^ +$1 +$2\$"; }
 
 mkfix "$EX/served" "$URL_OK" "$URL_OK"; xp "$EX/served"
-if line /app/logs/index.html served && [ $rc -eq 1 ] && ! printf '%s' "$out" | grep -q EXPOSURE-BODY-MARKER; then
+if line /app/logs/index.html served && [ $rc -eq 1 ] && ! printf '%s' "$out" | grep -qE 'EXPOSURE-BODY-MARKER|ref: refs/heads/main'; then
     ok "a served log marker is reported, fails the exit and prints no body"
 else bad "a served log marker is reported, fails the exit and prints no body" "rc=$rc $out"; fi
 
@@ -1414,11 +1416,77 @@ mkfix "$EX/e2e-red" "$URL_OK" "$URL_OK"
 out=$(cd "$EX/e2e-red" && env PATH="$EX/bin:$PATH" timeout 60 make --no-print-directory health < /dev/null 2>&1); rc=$?
 [ $rc -ne 0 ] \
     && ok "make health exits non-zero (make reports 2) when the Exposure section shows a served path" \
-    || bad "make health exits 1 when the Exposure section shows a served path" "rc=$rc"
+    || bad "make health exits non-zero (make reports 2) when the Exposure section shows a served path" "rc=$rc"
 out=$(make help 2>&1 | strip)
 printf '%s\n' "$out" | grep -E '^ +health ' | grep -qi 'exposed paths' \
     && ok "make help names the exposure probe on the health line" \
     || bad "make help names the exposure probe on the health line" "$(printf '%s\n' "$out" | grep -E '^ +health ')"
+
+# Review fix pass: the hint, the walled site, the tool and reader guards.
+URL_DBG=$(start_fixture "$EX/dbg.log" SERVE_PATH=/app/debug.log)
+URL_WPD=$(start_fixture "$EX/wpd.log" SERVE_PATH=/wp-content/debug.log)
+URL_GIT=$(start_fixture "$EX/git.log" SERVE_PATH=/.git/HEAD)
+URL_WALL=$(start_fixture "$EX/wall.log" WALL=1)
+hint() { # $1 = a fixture url; prints the make-level output
+    mkfix "$EX/hint" "$1" "$1"
+    out=$(cd "$EX/hint" && make --no-print-directory _health-exposure < /dev/null 2>&1); rc=$?; out=$(printf '%s' "$out" | strip)
+}
+hint "$URL_DBG"
+if printf '%s' "$out" | grep -qF 'location = /app/debug.log { deny all; return 404; }' && ! printf '%s' "$out" | grep -qF '^~ /app/'; then
+    ok "a served /app/debug.log is denied as that file, never as its directory"
+else bad "a served /app/debug.log is denied as that file, never as its directory" "$out"; fi
+hint "$URL_WPD"
+if printf '%s' "$out" | grep -qF 'location = /wp-content/debug.log' && ! printf '%s' "$out" | grep -qF '^~ /wp-content/'; then
+    ok "a served /wp-content/debug.log is denied as that file, never as wp-content"
+else bad "a served /wp-content/debug.log is denied as that file, never as wp-content" "$out"; fi
+hint "$URL_OK"
+printf '%s' "$out" | grep -qF 'location ^~ /app/logs/ { deny all; return 404; }' \
+    && ok "a served log marker still gets the directory rule" \
+    || bad "a served log marker still gets the directory rule" "$out"
+hint "$URL_GIT"
+printf '%s' "$out" | grep -qF 'location ^~ /.git/ { deny all; return 404; }' \
+    && ok "a served /.git/HEAD gets the /.git/ directory rule" \
+    || bad "a served /.git/HEAD gets the /.git/ directory rule" "$out"
+
+mkfix "$EX/wall" "$URL_WALL" "$URL_WALL"; xp "$EX/wall"
+if [ $rc -eq 0 ] && printf '%s' "$out" | grep -qE 'staging +not conclusive \(control path answered 403\)' \
+   && ! printf '%s' "$out" | grep -qE ' not served$'; then
+    ok "a site answering 403 to everything is not conclusive, never all green"
+else bad "a site answering 403 to everything is not conclusive, never all green" "rc=$rc $out"; fi
+
+mkdir -p "$EX/home"; printf 'location\n' > "$EX/home/.curlrc"
+out=$(cd "$EX/served" && HOME="$EX/home" bash "$DIST/scripts/health-exposure" < /dev/null 2>&1 | strip)
+printf '%s\n' "$out" | grep -qE '^ +/composer.json +not conclusive$' \
+    && ok "a ~/.curlrc cannot make the probe follow a redirect" \
+    || bad "a ~/.curlrc cannot make the probe follow a redirect" "$out"
+
+mkfix "$EX/userinfo" "http://admin:s3cret@${URL_OK#http://}" "$URL_OK"; xp "$EX/userinfo"
+if printf '%s' "$out" | grep -qE 'staging.*skipped' && ! printf '%s' "$out" | grep -q 's3cret'; then
+    ok "a url with credentials is skipped and never printed"
+else bad "a url with credentials is skipped and never printed" "$out"; fi
+
+mkdir -p "$EX/nocurl"; ln -sf "$(command -v python3)" "$EX/nocurl/python3"
+out=$(cd "$EX/served" && PATH="$EX/nocurl" "$(command -v bash)" "$DIST/scripts/health-exposure" < /dev/null 2>&1 | strip)
+printf '%s' "$out" | grep -qi 'curl' && ! printf '%s' "$out" | grep -qE 'unreachable' \
+    && ok "a box without curl says so instead of calling every site unreachable" \
+    || bad "a box without curl says so instead of calling every site unreachable" "$out"
+
+out=$(cd "$EX/served" && SITE="$EX/no-such-reader" bash "$DIST/scripts/health-exposure" < /dev/null 2>&1 | strip)
+printf '%s' "$out" | grep -q 'site.yml unreadable' \
+    && ok "a site reader that fails says site.yml is unreadable" \
+    || bad "a site reader that fails says site.yml is unreadable" "$out"
+
+mkfix "$EX/skipserved" "$URL_DBG" "$URL_DBG"
+printf 'health:\n  deny_paths: ["/a b"]\n' >> "$EX/skipserved/site.yml"
+out=$(cd "$EX/skipserved" && make --no-print-directory _health-exposure < /dev/null 2>&1 | strip)
+printf '%s' "$out" | grep -qF 'location = /app/debug.log' \
+    && ok "the hint reads the first served path line, not a skipped note" \
+    || bad "the hint reads the first served path line, not a skipped note" "$out"
+
+out=$(cd "$EX/wire" && env PATH="$EX/bin:$PATH" timeout 60 make doctor < /dev/null 2>&1 | strip)
+printf '%s' "$out" | grep -qE '(✅|❌) curl' \
+    && ok "doctor checks for curl" \
+    || bad "doctor checks for curl" "$(printf '%s' "$out" | sed -n 1,14p)"
 
 kill $(cat "$EX/pids" 2>/dev/null) 2>/dev/null
 trap 'rm -rf "$WORK"' EXIT

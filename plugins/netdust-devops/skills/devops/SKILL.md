@@ -145,9 +145,12 @@ Its last section, Exposure, asks each environment's `url` whether eight paths an
 (`/app/logs/index.html`, `/wp-content/logs/index.html`, `/wp-content/debug.log`, `/app/debug.log`,
 `/.env`, `/.git/HEAD`, `/composer.json`, `/composer.lock`); `health.deny_paths` in `site.yml` adds
 paths, never removes one. A `served` path is a failure of the site and makes `make health` exit
-non-zero: deny the directory in Nginx (`location ^~ <dir> { deny all; return 404; }`), restart
-Nginx, re-run `make health`. A catch-all site or a 3xx/401/5xx reads `not conclusive`, a dead one
-`unreachable` — neither is a pass.
+non-zero: deny it in Nginx, restart Nginx, re-run `make health`. The rule is the directory
+(`location ^~ /app/logs/ { deny all; return 404; }`) only for a log marker or `/.git/HEAD`; any other
+served path (`debug.log`, `.env`, `composer.json`) is denied as that file, `location = <path> { … }`,
+never as its parent directory (`/app/` and `/wp-content/` hold the site's assets). A catch-all
+site, a 3xx/401/5xx, or an environment whose control path answers something other than
+404/410 (a WAF wall) reads `not conclusive`, a dead one `unreachable` — neither is a pass.
 
 **After a staging deploy or a plugin update: `make e2e env=staging`, then
 `make smoke`.** e2e is the proof — the flows each feature's shake-out drove, re-run on the

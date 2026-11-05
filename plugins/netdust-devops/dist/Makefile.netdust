@@ -631,7 +631,7 @@ doctor: ## Check required tools, SSH reachability, and the payload
 	@$(MAKE) --no-print-directory _flow-state
 	@echo ""
 	@echo "$(BLUE)Tools$(RESET)"
-	@for c in git rsync ssh python3; do \
+	@for c in git rsync ssh python3 curl; do \
 		command -v $$c >/dev/null 2>&1 \
 			&& printf "  ✅ %s\n" "$$c" \
 			|| printf "  $(RED)❌ %s (required)$(RESET)\n" "$$c"; \
@@ -669,7 +669,7 @@ devops-update: ## Re-vendor Makefile.netdust, mk/ and scripts/ from the installe
 	@bash scripts/devops-version --update
 
 .PHONY: health
-health: ## Ledger, server drift, deploy guards, branch topology, patched files
+health: ## Ledger, server drift, deploy guards, branch topology, patched files, exposed paths
 	@git fetch --quiet origin 2>/dev/null || true
 	@echo "$(BLUE)Ledger — is each environment running its branch head?$(RESET)"
 	@DIR=$$($(SITE) deploy.state_dir); \
@@ -774,8 +774,8 @@ _health-exposure:
 	@echo "$(BLUE)Exposure — paths a server must not serve$(RESET)"
 	@O=$$(SITE=$(SITE) bash scripts/health-exposure); rc=$$?; printf '%s\n' "$$O"; \
 	if [ $$rc -ne 0 ]; then \
-		P=$$(printf '%s\n' "$$O" | sed 's/\x1b\[[0-9;]*m//g' | awk '$$2=="served"{print $$1; exit}'); \
-		D=$$(dirname "$$P"); if [ "$$D" = / ]; then R="= $$P"; else R="^~ $$D/"; fi; \
+		P=$$(printf '%s\n' "$$O" | sed 's/\x1b\[[0-9;]*m//g' | awk '$$1 ~ /^\// && $$2=="served"{print $$1; exit}'); \
+		case "$$P" in /app/logs/index.html|/wp-content/logs/index.html|/.git/HEAD) R="^~ $$(dirname "$$P")/";; *) R="= $$P";; esac; \
 		printf "  $(RED)SERVED$(RESET) — deny it in Nginx: location %s { deny all; return 404; } then restart Nginx and re-run make health\n" "$$R"; \
 	fi; exit $$rc
 
