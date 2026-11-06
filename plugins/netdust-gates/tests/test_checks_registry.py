@@ -22,9 +22,15 @@ CHECKER = Path(__file__).resolve().parent.parent / "bin" / "shakeout-check.py"
 PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 1200
 MANIFEST = (
     "# Shake-out — feat\n\n| # | Flow | Layer | Verdict | Evidence |\n|---|---|---|---|---|\n"
-    "| AF-1 | Agenda lists events | browser | pass | Browser: https://x.ddev.site/agenda/ · shakeout/af-1.png |\n"
+    "| AF-1 | Agenda lists events | browser | pass | Test: tests/e2e/agenda.spec.ts :: Agenda lists events · "
+    "Browser: https://x.ddev.site/agenda/ · shakeout/af-1.png |\n"
     "\nHunt: 3 charters · 0 confirmed · 0 not ours · 0 rejected\n"
 )
+# The row's test is new (registered under feat), so its revert proof is background here.
+REVERT_LOG = ("tests__e2e__agenda.spec.ts--agenda-lists-events.revert.log",
+              "revert-run: assertion-failed\nfeature: feat\ntest: tests/e2e/agenda.spec.ts :: Agenda lists events\n"
+              "base: 0000000 (main)\nswapped: src/agenda.php (M)\ncommand: npx playwright test --grep 'Agenda lists events'\n"
+              "exit: 1\n--- output: 2 lines, excerpt 1-2 ---\nError: expect(locator).toBeVisible() failed\nExpected: visible\n")
 HEAD = "# Checks\n\n| surface | tier | entry | test | first feature | verified |\n|---|---|---|---|---|---|\n"
 SMOKE_ROW = "| /agenda/ | smoke | GET /agenda/ | tests/e2e/smoke/agenda.spec.ts | feat | a1b2c3d 2026-09-22 |\n"
 E2E_ROW = "| /agenda/ filters | e2e | /agenda/?type&when | tests/e2e/agenda.spec.ts | feat | a1b2c3d 2026-09-22 |\n"
@@ -40,6 +46,7 @@ def _drive(registry, smoke_spec, e2e_spec, manifest):
         (feature / "shakeout").mkdir(parents=True)
         (feature / "shakeout.md").write_text(manifest)
         (feature / "shakeout" / "af-1.png").write_bytes(PNG)
+        (feature / "shakeout" / REVERT_LOG[0]).write_text(REVERT_LOG[1])
         if registry is not None:
             (r / "specs" / "CHECKS.md").write_text(registry)
         for rel, text in (("tests/e2e/smoke/agenda.spec.ts", smoke_spec), ("tests/e2e/agenda.spec.ts", e2e_spec)):

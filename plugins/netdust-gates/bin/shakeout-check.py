@@ -5,13 +5,25 @@
 
 Reads <feature dir>/shakeout.md and exits 0 only when every row passes on evidence a file can
 prove, never on the verdict word: a `browser` row needs `Browser: <http url> · <png>` with a
-real 1 KB–2 MB PNG under the feature dir; a manifest with a browser row records its hunt
-(`Hunt: <n> charters …`); the whole file is scanned for credentials with no override; only the
-human's `Accepted-by-human:` excuses a row. Bare python3.
+real 1 KB–2 MB PNG under the feature dir; every `browser` and `wire` row names its one test,
+`Test: <path> :: <title>`, first in Evidence, and a NEW test is proven by its revert log
+(`shakeout/<stem>.revert.log`, written by bin/revert-run) showing an assertion failure on the
+base; a manifest with a browser row records its hunt (`Hunt: <n> charters …`); the whole file and
+every revert log are scanned for credentials with no override; only the human's
+`Accepted-by-human:` excuses a row.
+
+New or re-driven is decided by the registry and git, never by a word in the row: a test file named
+by a `specs/CHECKS.md` row whose `first feature` is this feature, or by none, is new; a file named
+only by rows of earlier features is re-driven and exempt. Inside a new file git decides the row —
+a title the base's copy already holds (`git show <base>:<path>`) is re-driven, every other title is
+new; a file absent from the base, or a root that is not a repository, makes every row new. Bare python3.
 """
 from __future__ import annotations
 
+import functools
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -183,10 +195,13 @@ def _registry_row_problem(row: dict, root: Path) -> str | None:
     return None
 
 
-def check_registry(spec_dir: Path, driven: int) -> list[Finding]:
-    """The registry rows this feature owes and the tests those rows name."""
+def _registry_rows(spec_dir: Path) -> list[dict]:
     registry = spec_dir.parent / "CHECKS.md"
-    rows = parse_registry(registry.read_text()) if registry.is_file() else []
+    return parse_registry(registry.read_text()) if registry.is_file() else []
+
+
+def check_registry(spec_dir: Path, driven: int, rows: list[dict]) -> list[Finding]:
+    """The registry rows this feature owes and the tests those rows name."""
     findings: list[Finding] = []
     for row in rows:
         problem = _registry_row_problem(row, spec_dir.parent.parent)
@@ -204,6 +219,111 @@ def check_registry(spec_dir: Path, driven: int) -> list[Finding]:
                          f"{len(rows)} row{'s' if len(rows) != 1 else ''}, every test present and tagged for its tier"))
     return findings
 
+
+# ── the revert proof ──────────────────────────────────────────────────────────
+# `Test: <path> :: <title>` keys a row to its one test; its log is derived, never pointed at.
+TEST = re.compile(r"Test:\s*(?P<path>\S+)\s*::\s*(?P<title>[^·]+?)\s*(?:·|$)")
+LOG_VERDICT = {"assertion-failed": None,
+               "passed": "shows the test passing on the base — it cannot fail without the feature",
+               "error": "is an error run (a timeout, an unmatched locator, a login or a seeding error), not an assertion failure"}
+
+
+def stem(path: str, title: str) -> str:
+    """The log name revert-run writes: the path with / as __, then --, then the title slugged."""
+    slug = re.sub(r"[^a-z0-9]+", "-", re.sub(r"[A-Z]", lambda m: m.group(0).lower(), title))
+    return f"{path.replace('/', '__')}--{slug}"
+
+
+def _git(root: Path, *args: str) -> str | None:
+    try:
+        proc = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return proc.stdout if proc.returncode == 0 else None
+
+
+@functools.lru_cache(maxsize=None)
+def _base(root: Path) -> str | None:
+    """The merge-base of HEAD with production's branch, resolved as revert-run resolves it."""
+    site, branch = root / "scripts" / "site", None
+    if os.access(site, os.X_OK):
+        try:
+            branch = subprocess.run([str(site), "environments.production.branch"], cwd=root,
+                                    capture_output=True, text=True, timeout=30).stdout.strip() or None
+        except (OSError, subprocess.SubprocessError):
+            branch = None
+    for b in (branch, "main", "master"):
+        for ref in ((f"origin/{b}", b) if b else ()):
+            if _git(root, "rev-parse", "-q", "--verify", f"{ref}^{{commit}}") is not None:
+                out = _git(root, "merge-base", ref, "HEAD")
+                return out.strip() if out else None
+    return None
+
+
+@functools.lru_cache(maxsize=None)
+def _base_copy(root: Path, path: str) -> str | None:
+    base = _base(root)
+    return _git(root, "show", f"{base}:{path}") if base else None
+
+
+def _redriven_by_git(root: Path, path: str, title: str) -> bool:
+    text = _base_copy(root, path)
+    return bool(text) and re.search(rf"(?<![\w-]){re.escape(title)}(?![\w-])", text) is not None
+
+
+def _log_problem(spec_dir: Path, path: str, title: str) -> tuple[str | None, Path | None, list[str]]:
+    log = spec_dir / "shakeout" / f"{stem(path, title)}.revert.log"
+    if not log.is_file():
+        return f"no revert log at shakeout/{log.name} — run revert-run for `{path} :: {title}`", None, []
+    try:
+        lines = log.read_text().splitlines()
+    except (OSError, ValueError) as e:
+        return f"{log.name} could not be read ({e.__class__.__name__})", log, []
+    first = lines[0].strip() if lines else ""
+    cls = first[len("revert-run: "):] if first.startswith("revert-run: ") else ""
+    if cls not in LOG_VERDICT:
+        return f"{log.name} has no `revert-run: <class>` first line", log, lines
+    verdict = LOG_VERDICT[cls]
+    return (f"{log.name} {verdict}" if verdict else None), log, lines
+
+
+def check_revert(spec_dir: Path, rows: list[dict], registry: list[dict]) -> list[Finding]:
+    """Every browser and wire row names its test; each new one owns an assertion-failed revert log."""
+    root = spec_dir.parent.parent
+    mine = {r["test"].strip("`") for r in registry if r["feature"] == spec_dir.name}
+    earlier = {r["test"].strip("`") for r in registry if r["feature"] != spec_dir.name}
+    findings: list[Finding] = []
+    keys: dict[tuple[str, str], str] = {}
+    new = redriven = 0
+    for row in rows:
+        n = row["n"] or "?"
+        if row["layer"].lower() not in ("browser", "wire") or ACCEPTED.search(row["evidence"]):
+            continue
+        m = TEST.search(row["evidence"])
+        if not m:
+            findings.append(("fail", "shakeout-revert",
+                             f"{n}: no `Test: <path> :: <title>` in Evidence — every browser and wire row names its one test, first"))
+            continue
+        path, title = m.group("path").strip("`"), m.group("title").strip()
+        if (path in earlier and path not in mine) or _redriven_by_git(root, path, title):
+            redriven += 1
+            continue
+        new += 1
+        if (path, title) in keys:
+            findings.append(("fail", "shakeout-revert", f"{n} and {keys[path, title]}: two new rows share one test `{path} :: {title}`"))
+            continue
+        keys[path, title] = n
+        problem, log, lines = _log_problem(spec_dir, path, title)
+        if problem:
+            findings.append(("fail", "shakeout-revert", f"{n}: {problem}"))
+        if log:
+            findings += [("fail", "shakeout-credential", f"{log.name} line {i}: carries a credential — the log is committed")
+                         for i, ln in enumerate(lines, 1) if not ln.startswith("test: ") and CREDENTIAL.search(ln)]
+    if (new or redriven) and not any(s == "fail" and c == "shakeout-revert" for s, c, _ in findings):
+        findings.append(("pass", "shakeout-revert", f"{new} new row(s) proven on the base, {redriven} re-driven"))
+    return findings
+
+
 def check(spec_dir: Path) -> list[Finding]:
     if not spec_dir.is_dir():
         return [("fail", "shakeout-manifest", f"{spec_dir} is not a directory")]
@@ -216,7 +336,7 @@ def check(spec_dir: Path) -> list[Finding]:
         return [("fail", "shakeout-manifest", f"shakeout.md could not be read ({e.__class__.__name__})")]
     findings: list[Finding] = [
         ("fail", "shakeout-credential", f"line {i}: carries a credential — the whole file is committed")
-        for i, ln in enumerate(text.splitlines(), 1) if CREDENTIAL.search(ln)]
+        for i, ln in enumerate(text.splitlines(), 1) if CREDENTIAL.search(TEST.sub(" ", ln))]
     rows = parse_rows(text)
     if not rows:
         return findings + [("fail", "shakeout-manifest",
@@ -236,11 +356,13 @@ def check(spec_dir: Path) -> list[Finding]:
             findings.append(("fail", "shakeout-manifest", f"{row['n'] or '?'}: {problem}"))
         driven += row["layer"].lower() == "browser" and problem is None
     findings.append(("pass", "shakeout-manifest", f"shakeout: {len(rows)} rows, {driven} browser rows driven"))
+    registry = _registry_rows(spec_dir)
+    findings += check_revert(spec_dir, rows, registry)
     hunt = _hunt_finding(text, rows)
     if hunt:
         findings.append(hunt)
     passed = sum(1 for row in rows if _row_problem(row, spec_dir) is None)
-    findings += check_registry(spec_dir, passed)
+    findings += check_registry(spec_dir, passed, registry)
     return findings
 
 
