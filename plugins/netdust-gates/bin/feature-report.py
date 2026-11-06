@@ -10,9 +10,9 @@ its Test map rows; every flow joined to its manifest row (the `Flow` cell carryi
 that row's `Test:` key to its `@e2e` registry row, its screenshot and its revert log. A flow with
 no row, a row with no test, a new test with no `assertion-failed` log, a Test map row no task
 heading carries: each is a named GAP. A cell an artifact lacks says `missing`; nothing is guessed.
-It also writes one trial line per feature under `## Trial log` in specs/CHECKS.md, replaced on
-every run. Exit 0; 1 when the plan is missing. Bare python3; the manifest grammar is imported from
-shakeout-check.py beside this file.
+It also writes one trial line per feature under `## Trial log` in specs/CHECKS.md, dated, replaced
+on every run. Exit 0; 1 when the plan is missing. Bare python3; the manifest grammar, the
+new-or-re-driven rule and the log's checks are imported from shakeout-check.py beside this file.
 """
 from __future__ import annotations
 
@@ -111,13 +111,11 @@ class Report:
         manifest = (spec_dir / "shakeout.md").read_text() if (spec_dir / "shakeout.md").is_file() else ""
         self.rows = sc.parse_rows(manifest) if manifest else []
         self.tally, self.hunt_notes = _hunt(manifest) if manifest else (None, [])
-        registry = sc._registry_rows(spec_dir)
+        self.registry = sc._registry_rows(spec_dir)
         self.e2e = {}
-        for r in registry:
+        for r in self.registry:
             if r["tier"].lower() == "e2e":
                 self.e2e.setdefault(r["test"].strip("`"), []).append(f"{r['surface']} ({r['entry']})")
-        self.mine = {r["test"].strip("`") for r in registry if r["feature"] == self.feature}
-        self.earlier = {r["test"].strip("`") for r in registry if r["feature"] != self.feature}
         self.gaps = 0
 
     def gap(self, text: str) -> str:
@@ -129,19 +127,13 @@ class Report:
         return next((r for r in self.rows if needle in r["flow"].lower()), None)
 
     def _revert(self, path: str, title: str) -> tuple[str, bool]:
-        """The revert cell and whether it is a gap."""
-        if (path in self.earlier and path not in self.mine) or sc._redriven_by_git(self.root, path, title):
+        """The revert cell and whether it is a gap — the checker's rule, so the report never disagrees with `make shakeout`."""
+        if sc.row_is_redriven(self.root, path, title, self.registry, self.feature):
             return "revert: re-driven, no proof owed", False
-        log = self.spec_dir / "shakeout" / f"{sc.stem(path, title)}.revert.txt"
-        rel = f"shakeout/{log.name}"
-        if not log.is_file():
-            return f"new test {path} :: {title} has no revert log ({rel})", True
-        first = log.read_text().partition("\n")[0].strip()
-        cls = first[len("revert-run: "):] if first.startswith("revert-run: ") else "unclassified"
-        if cls == "assertion-failed":
-            return f"revert: assertion-failed ({rel})", False
-        why = {"passed": "the test cannot fail without the feature", "error": "not an assertion failure"}.get(cls, "no classification line")
-        return f"revert: {cls}, {why} ({rel})", True
+        problem = sc.log_problem(self.spec_dir, self.root, path, title)
+        if problem:
+            return f"revert: {problem}", True
+        return f"revert: assertion-failed (shakeout/{sc.stem(path, title)}.revert.txt)", False
 
     def flow_line(self, flow: str) -> str:
         row = self._row_for(flow)
@@ -201,13 +193,15 @@ class Report:
 
 
 def write_trial_line(checks: Path, line: str, feature: str) -> None:
+    """One dated line per feature under `## Trial log`, the feature's earlier line replaced."""
+    mine = re.compile(rf"^\d{{4}}-\d\d-\d\d · {re.escape(feature)} · revert-passed:")
     text = checks.read_text() if checks.is_file() else "# Checks registry\n"
     lines = text.rstrip("\n").split("\n")
     if "## Trial log" not in lines:
         lines += ["", "## Trial log", ""]
     head = lines.index("## Trial log")
     end = next((i for i in range(head + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
-    section = [ln for ln in lines[head + 1:end] if not ln.startswith(f"{feature} · revert-passed:")]
+    section = [ln for ln in lines[head + 1:end] if not mine.match(ln)]
     while section and not section[-1].strip():
         section.pop()
     section = (section or [""]) + [line]
@@ -228,7 +222,7 @@ def main(argv: list[str]) -> int:
     rendered = report.render(parse_tasks(text), parse_test_map(text))
     (spec_dir / "report.md").write_text(rendered)
     passed, errors = report.trial_counts()
-    line = f"{spec_dir.name} · revert-passed: {passed} · revert-errors: {errors} · report-gaps: {report.gaps}"
+    line = f"{date.today():%Y-%m-%d} · {spec_dir.name} · revert-passed: {passed} · revert-errors: {errors} · report-gaps: {report.gaps}"
     write_trial_line(spec_dir.parent / "CHECKS.md", line, spec_dir.name)
     print(f"report: {spec_dir / 'report.md'} ({report.gaps} gap(s)); trial log: {line}")
     return 0

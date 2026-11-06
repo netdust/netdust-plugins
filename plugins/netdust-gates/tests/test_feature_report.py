@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import date
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -17,13 +18,17 @@ FILTER_LOG = "shakeout/tests__e2e__list.spec.ts--list-filters-by-type.revert.txt
 DETAIL_LOG = "shakeout/tests__e2e__detail.spec.ts--detail-opens.revert.txt"
 
 
-def _log(cls="assertion-failed") -> str:
-    return (f"revert-run: {cls}\nfeature: feat\ntest: tests/e2e/list.spec.ts :: list shows rows\nbase: 0000000 (main)\n"
+LIST_KEY, FILTER_KEY, DETAIL_KEY = ("tests/e2e/list.spec.ts :: list shows rows", "tests/e2e/list.spec.ts :: list filters by type",
+                                    "tests/e2e/detail.spec.ts :: detail opens")
+
+
+def _log(cls="assertion-failed", test=LIST_KEY) -> str:
+    return (f"revert-run: {cls}\nfeature: feat\ntest: {test}\nbase: 0000000 (main)\n"
             f"swapped: src/list.php (M)\ncommand: npx playwright test\nexit: {0 if cls == 'passed' else 1}\n"
             "--- output: 1 lines, excerpt 1-1 ---\nError: expect(locator).toBeVisible() failed\n")
 
 
-LOGS = {LIST_LOG: _log(), FILTER_LOG: _log()}
+LOGS = {LIST_LOG: _log(), FILTER_LOG: _log(test=FILTER_KEY)}
 
 
 def _run(fixture="sliced", *, logs=LOGS, edit=None, runs=1):
@@ -94,13 +99,17 @@ def run() -> list[tuple[bool, str]]:
                    "rejected: rows sort by id")),
         _case("test_missing_revert_is_a_named_gap: the detail test is new and has no log",
               has=("GAP", "Detail opens", DETAIL_LOG)),
-        _case("…a passed log is a named gap too", logs={**LOGS, DETAIL_LOG: _log("passed")},
+        _case("…a passed log is a named gap too", logs={**LOGS, DETAIL_LOG: _log("passed", DETAIL_KEY)},
               has=("GAP", "Detail opens", "passed")),
+        _case("…and a log copied from another test (review S3): the checker's rule, one home", logs={**LOGS, DETAIL_LOG: _log()},
+              has=("GAP", "Detail opens", "is the log of `tests/e2e/list.spec.ts :: list shows rows`")),
         _case("test_trial_line_is_replaced_not_appended: two runs, one line", runs=2,
               checks_has=("## Trial log", "feat · revert-passed:"), checks_count=("feat · revert-passed:", 1)),
         _case("test_counts_follow_the_log_classes: passed and error logs are counted, gaps too",
-              logs={**LOGS, DETAIL_LOG: _log("error"), "shakeout/tests__e2e__extra.spec.ts--extra.revert.txt": _log("passed")},
+              logs={**LOGS, DETAIL_LOG: _log("error", DETAIL_KEY), "shakeout/tests__e2e__extra.spec.ts--extra.revert.txt": _log("passed")},
               checks_has=("feat · revert-passed: 1 · revert-errors: 1 · report-gaps: 2",)),
+        _case("test_trial_line_carries_its_date (review N2): the removal grep sorts by it",
+              checks_has=(f"{date.today():%Y-%m-%d} · feat · revert-passed:",)),
         _case("…the registry's table survives the trial log", checks_has=("| rows list | e2e |",)),
         _case("test_reads_artifacts_only: a flow with no manifest row, a row with no Test:, a test with no @e2e row, no review.md commit — each says missing or GAP, never a guess",
               edit=lambda root: (

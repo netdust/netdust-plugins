@@ -49,19 +49,26 @@ SPEC_FIVE = "".join(f"test('{t}', async ({{ page }}) => {{}});\n" for t in P_TIT
 SPEC_SIX = SPEC_FIVE + f"test('{NEW_TITLE}', async ({{ page }}) => {{}});\n"
 
 
-def _log(cls="assertion-failed", command="npx playwright test tests/e2e/audit.spec.ts --grep 'Audit page lists the rows'"):
-    return (f"revert-run: {cls}\nfeature: feat\ntest: tests/e2e/audit.spec.ts :: Audit page lists the rows\nbase: 0000000 (main)\n"
-            f"swapped: web/app/mu-plugins/audit/screen.php (M)\ncommand: {command}\nexit: {0 if cls == 'passed' else 1}\n"
+KEY_B = "tests/e2e/audit.spec.ts :: Audit page lists the rows"
+KEY_W = "tests/integration/AuditRestTest.php :: testListReturnsRows"
+
+
+def _log(cls="assertion-failed", command="npx playwright test tests/e2e/audit.spec.ts --grep 'Audit page lists the rows'", *,
+         test=KEY_B, base="0000000", swapped="web/app/mu-plugins/audit/screen.php (M)", exit=None):
+    """A revert log as revert-run writes it; `base: 0000000` becomes the real merge-base when the case has a repo."""
+    rc = (0 if cls == "passed" else 1) if exit is None else exit
+    return (f"revert-run: {cls}\nfeature: feat\ntest: {test}\nbase: {base} (main)\n"
+            f"swapped: {swapped}\ncommand: {command}\nexit: {rc}\n"
             "--- output: 3 lines, excerpt 1-3 ---\nError: expect(locator).toBeVisible() failed\nExpected: visible\n"
             "Received: <element(s) not found>\n")
 
 
-LOGS = {f"shakeout/{STEM_B}.revert.txt": _log(), f"shakeout/{STEM_W}.revert.txt": _log()}
+LOGS = {f"shakeout/{STEM_B}.revert.txt": _log(), f"shakeout/{STEM_W}.revert.txt": _log(test=KEY_W)}
 
 
-def _git(root: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(root), "-c", "user.email=t@t", "-c", "user.name=T", *args],
-                   capture_output=True, text=True, check=True)
+def _git(root: Path, *args: str) -> str:
+    return subprocess.run(["git", "-C", str(root), "-c", "user.email=t@t", "-c", "user.name=T", *args],
+                          capture_output=True, text=True, check=True).stdout
 
 
 def _drive(manifest, binaries=None, target="feat", *, registry=REGISTRY, logs=LOGS, texts=None, base=None,
@@ -71,6 +78,7 @@ def _drive(manifest, binaries=None, target="feat", *, registry=REGISTRY, logs=LO
     mixed-file rule reads the base's copy)."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
+        sha7 = "0000000"
         if base is not None:
             _git(root, "init", "-q", "-b", "main", ".")
             for rel, text in base.items():
@@ -78,6 +86,7 @@ def _drive(manifest, binaries=None, target="feat", *, registry=REGISTRY, logs=LO
                 (root / rel).write_text(text)
             _git(root, "add", "-A")
             _git(root, "commit", "-qm", "base")
+            sha7 = _git(root, "rev-parse", "--short=7", "HEAD").strip()
             _git(root, "checkout", "-qb", "feature/feat")
         for rel, text in (files or {}).items():
             (root / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -86,7 +95,8 @@ def _drive(manifest, binaries=None, target="feat", *, registry=REGISTRY, logs=LO
         feature.mkdir(parents=True)
         if manifest is not None:
             (feature / "shakeout.md").write_text(manifest)
-        for name, data in {**(binaries or {}), **{k: v.encode() for k, v in {**(logs or {}), **(texts or {})}.items()}}.items():
+        logs = {k: v.replace("base: 0000000", f"base: {sha7}") for k, v in (logs or {}).items()}
+        for name, data in {**(binaries or {}), **{k: v.encode() for k, v in {**logs, **(texts or {})}.items()}}.items():
             path = feature / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
@@ -152,16 +162,22 @@ NOT_CREDENTIALS = {
 # ── the revert proof (R2): a new browser or wire row names its test and owns a log that failed on an assertion
 PW_PATH = "tests/e2e/app-password.spec.ts"
 PW_EVIDENCE = EVIDENCE.replace("tests/e2e/audit.spec.ts", PW_PATH)
-PW_LOGS = {f"shakeout/tests__e2e__app-password.spec.ts--audit-page-lists-the-rows.revert.txt": _log(), **{k: v for k, v in LOGS.items() if STEM_W in k}}
-ODD_EVIDENCE = EVIDENCE.replace("tests/e2e/audit.spec.ts :: Audit page lists the rows", f"tests/e2e/x.spec.ts :: {ODD_TITLE}")
-ODD_LOGS = {f"shakeout/{ODD_STEM}.revert.txt": _log(), **{k: v for k, v in LOGS.items() if STEM_W in k}}
+PW_LOGS = {f"shakeout/tests__e2e__app-password.spec.ts--audit-page-lists-the-rows.revert.txt": _log(test=f"{PW_PATH} :: Audit page lists the rows"),
+           **{k: v for k, v in LOGS.items() if STEM_W in k}}
+ODD_EVIDENCE = EVIDENCE.replace(KEY_B, f"tests/e2e/x.spec.ts :: {ODD_TITLE}")
+ODD_LOGS = {f"shakeout/{ODD_STEM}.revert.txt": _log(test=f"tests/e2e/x.spec.ts :: {ODD_TITLE}"), **{k: v for k, v in LOGS.items() if STEM_W in k}}
 MIXED_REGISTRY = (REGISTRY + PRODUCTIONS
                   + f"| credits | e2e | /voorstellingen/<slug>/ | tests/e2e/productions.spec.ts | feat | 0000000 2026-11-06 |\n")
 MIXED = HEAD + BROWSER.format(EVIDENCE) + P_ROWS + NEW_ROW + HUNT
-MIXED_LOGS = {**LOGS, f"shakeout/{NEW_STEM}.revert.txt": _log()}
+NEW_KEY = f"tests/e2e/productions.spec.ts :: {NEW_TITLE}"
+MIXED_LOGS = {**LOGS, f"shakeout/{NEW_STEM}.revert.txt": _log(test=NEW_KEY)}
 MIXED_PNGS = {**PNG, **P_PNGS}
 BASE_FIVE = {"tests/e2e/productions.spec.ts": SPEC_FIVE, "src/page.php": "<h1>Title</h1>\n"}
 ON_BRANCH = {"tests/e2e/productions.spec.ts": SPEC_SIX}
+EARLIER_ONLY = HEAD + BROWSER.format(EVIDENCE) + P_ROWS + NEW_ROW + HUNT
+PHP_METHOD = {"tests/integration/AuditRestTest.php": "<?php\nclass AuditRestTest { public function testListReturnsRows(): void {} }\n"}
+PHP_COMMENT = {"tests/integration/AuditRestTest.php": "<?php\n// testListReturnsRows comes in the next feature\nclass AuditRestTest {}\n"}
+Q_BEARER = "npx playwright test -- -H Authorization:\\ Bearer\\ eyJhbGciOiJIUzI1NiJ9abcdef"
 
 
 def run() -> list[tuple[bool, str]]:
@@ -270,6 +286,42 @@ def run() -> list[tuple[bool, str]]:
         _case("test_credential_in_a_revert_log_fails", DRIVEN, PNG,
               logs={**LOGS, f"shakeout/{STEM_B}.revert.txt": _log(command="E2E_PASS=s3cr3tPw npx playwright test")},
               has=("✗ [shakeout-credential]", f"{STEM_B}.revert.txt"), lacks=("s3cr3tPw",)),
+        # fix pass (review B1, S6): git decides whenever it holds the base — the registry only without a repository
+        _case("test_new_title_in_an_earlier_only_file_needs_its_proof: a file registered under an earlier feature only, a title the base lacks → FAIL",
+              EARLIER_ONLY, MIXED_PNGS, registry=REGISTRY + PRODUCTIONS, logs=LOGS, base=BASE_FIVE, files=ON_BRANCH,
+              has=(f"✗ [shakeout-revert] AF-6: no revert log at shakeout/{NEW_STEM}.revert.txt",), lacks=("P-1:", "P-2:", "P-3:", "P-4:", "P-5:")),
+        _case("test_describe_title_in_the_base_is_not_a_test: `test.describe('<title>')` in the base's copy does not make `test('<title>')` re-driven",
+              MIXED, MIXED_PNGS, registry=MIXED_REGISTRY, logs=LOGS, files=ON_BRANCH,
+              base={**BASE_FIVE, "tests/e2e/productions.spec.ts": f"test.describe('{NEW_TITLE}', () => {{}});\n" + SPEC_FIVE},
+              has=(f"✗ [shakeout-revert] AF-6: no revert log at shakeout/{NEW_STEM}.revert.txt",)),
+        _case("test_phpunit_title_in_a_comment_is_not_a_test", HEAD + WIRE_PASS, logs={}, base=PHP_COMMENT,
+              has=(f"✗ [shakeout-revert] AF-2: no revert log at shakeout/{STEM_W}.revert.txt",)),
+        _case("test_phpunit_method_in_the_base_is_redriven (a pin: green before the anchored match too)", HEAD + WIRE_PASS, rc=0,
+              logs={}, base=PHP_METHOD, has=("✓ [shakeout-revert] 0 new row(s) proven on the base, 1 re-driven",)),
+        # fix pass (review S3): the proof is revert-run's own output — its test, its base, its exit
+        _case("test_a_log_of_another_test_proves_nothing", DRIVEN, PNG,
+              logs={**LOGS, f"shakeout/{STEM_B}.revert.txt": _log(test="tests/e2e/other.spec.ts :: other")},
+              has=("✗ [shakeout-revert] AF-1:", "is the log of `tests/e2e/other.spec.ts :: other`, not of `tests/e2e/audit.spec.ts :: Audit page lists the rows`")),
+        _case("test_a_log_from_another_base_proves_nothing", MIXED, MIXED_PNGS, registry=MIXED_REGISTRY, base=BASE_FIVE, files=ON_BRANCH,
+              logs={**LOGS, f"shakeout/{NEW_STEM}.revert.txt": _log(test=NEW_KEY, base="1234567")},
+              has=("✗ [shakeout-revert] AF-6:", "was run on base 1234567, the merge-base is now")),
+        _case("test_assertion_failed_with_exit_0_proves_nothing", DRIVEN, PNG,
+              logs={**LOGS, f"shakeout/{STEM_B}.revert.txt": _log(exit=0)}, has=("✗ [shakeout-revert] AF-1:", "exit 0")),
+        # fix pass (review S1): every log is scanned, the command un-escaped and the excerpt, never the header's paths; the title is scanned in the manifest
+        _case("test_bearer_in_a_percent_q_command_is_caught", DRIVEN, PNG, logs={**LOGS, f"shakeout/{STEM_B}.revert.txt": _log(command=Q_BEARER)},
+              has=("✗ [shakeout-credential]", f"{STEM_B}.revert.txt"), lacks=("eyJhbGci",)),
+        _case("test_orphan_log_is_scanned: a log no row names is committed too", DRIVEN, PNG,
+              logs={**LOGS, "shakeout/tests__e2e__orphan.spec.ts--orphan.revert.txt": _log(command="E2E_PASS=s3cr3tPw npx playwright test", test="tests/e2e/orphan.spec.ts :: orphan")},
+              has=("✗ [shakeout-credential]", "orphan.revert.txt"), lacks=("s3cr3tPw",)),
+        _case("test_path_shaped_swapped_line_is_not_a_credential", DRIVEN, PNG, rc=0,
+              logs={**LOGS, f"shakeout/{STEM_B}.revert.txt": _log(swapped="web/app/mu-plugins/app-password-reset/screen.php (M)")},
+              lacks=("shakeout-credential",)),
+        _case("test_secret_in_a_test_title_is_caught", DRIVEN.replace(KEY_B, "tests/e2e/audit.spec.ts :: login with pwd=s3cr3t"), PNG,
+              has=("✗ [shakeout-credential]",), lacks=("s3cr3t",)),
+        # fix pass (review S7): an intermediate slice records the hunt as deferred, with the reason
+        _case("test_deferred_hunt_of_an_intermediate_slice_passes", UNHUNTED + "\nHunt: deferred — runs at the feature's end\n", PNG, rc=0,
+              has=("✓ [shakeout-hunt] Hunt: deferred — runs at the feature's end",)),
+        _case("test_bare_deferred_hunt_fails (a pin)", UNHUNTED + "\nHunt: deferred\n", PNG, has=("✗ [shakeout-hunt]",)),
         _case("test_stem_is_shared_with_revert_run: the checker derives the name the script writes", DRIVEN.replace(EVIDENCE, ODD_EVIDENCE),
               PNG, rc=0, logs=ODD_LOGS, has=("✓ [shakeout-revert]",)),
         # R9 — a PIN (green before this feature): only `shakeout/<name>.png` is a screenshot path

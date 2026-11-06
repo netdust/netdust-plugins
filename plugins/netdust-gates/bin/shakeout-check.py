@@ -7,22 +7,24 @@ Reads <feature dir>/shakeout.md and exits 0 only when every row passes on eviden
 prove, never on the verdict word: a `browser` row needs `Browser: <http url> · <png>` with a
 real 1 KB–2 MB PNG under the feature dir; every `browser` and `wire` row names its one test,
 `Test: <path> :: <title>`, first in Evidence, and a NEW test is proven by its revert log
-(`shakeout/<stem>.revert.txt`, written by bin/revert-run) showing an assertion failure on the
-base; a manifest with a browser row records its hunt (`Hunt: <n> charters …`); the whole file and
-every revert log are scanned for credentials with no override; only the human's
-`Accepted-by-human:` excuses a row.
+(`shakeout/<stem>.revert.txt`, revert-run's own output: its `test:` line is the row's test, its
+`base:` the current merge-base, `assertion-failed` with a non-zero `exit:`); a manifest with a
+browser row records its hunt (`Hunt: <n> charters …`, or `Hunt: deferred — …` on an intermediate
+slice); the whole file (the `Test:` path excepted) and every revert log's command and excerpt are
+scanned for credentials with no override; only the human's `Accepted-by-human:` excuses a row.
 
-New or re-driven is decided by the registry and git, never by a word in the row: a test file named
-by a `specs/CHECKS.md` row whose `first feature` is this feature, or by none, is new; a file named
-only by rows of earlier features is re-driven and exempt. Inside a new file git decides the row —
-a title the base's copy already holds (`git show <base>:<path>`) is re-driven, every other title is
-new; a file absent from the base, or a root that is not a repository, makes every row new. Bare python3.
+New or re-driven is decided by git, never by a word in the row: a title the base's copy of the file
+(`git show <base>:<path>`) already carries as a test call — `test(`, `it(`, their modifiers, a PHPUnit
+method — is re-driven and exempt, every other title is new, and a file absent from the base makes
+every row new. Only a root that is not a repository falls back to `specs/CHECKS.md`: a file named
+only by rows of earlier features is re-driven, any other file new. Bare python3.
 """
 from __future__ import annotations
 
 import functools
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -52,7 +54,7 @@ TABLE_ROW = re.compile(r"^\s*\|(?P<cells>.*\|)\s*$")
 TABLE_SEPARATOR = re.compile(r"^\s*\|[\s:|-]+\|\s*$")
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 SCREENSHOT_BYTES = (1024, 2 * 1024 * 1024)
-HUNT = re.compile(r"^Hunt: (?:0 charters [—-] \S|[1-9]\d* charters? · \d+ confirmed · \d+ not ours · \d+ rejected\b)")
+HUNT = re.compile(r"^Hunt: (?:0 charters [—-] \S|deferred [—-] \S|[1-9]\d* charters? · \d+ confirmed · \d+ not ours · \d+ rejected\b)")
 
 Finding = tuple[str, str, str]  # (status, check, detail)
 
@@ -223,9 +225,10 @@ def check_registry(spec_dir: Path, driven: int, rows: list[dict]) -> list[Findin
 # ── the revert proof ──────────────────────────────────────────────────────────
 # `Test: <path> :: <title>` keys a row to its one test; its log is derived, never pointed at.
 TEST = re.compile(r"Test:\s*(?P<path>\S+)\s*::\s*(?P<title>[^·]+?)\s*(?:·|$)")
+TEST_PATH = re.compile(r"(Test:\s*)\S+")
 LOG_VERDICT = {"assertion-failed": None,
-               "passed": "shows the test passing on the base — it cannot fail without the feature",
-               "error": "is an error run (a timeout, an unmatched locator, a login or a seeding error), not an assertion failure"}
+               "passed": "shows the test passing on the base (`revert-run: passed`) — it cannot fail without the feature",
+               "error": "is an error run (`revert-run: error`: a timeout, an unmatched locator, a login or a seeding error), not an assertion failure"}
 
 
 def stem(path: str, title: str) -> str:
@@ -266,32 +269,102 @@ def _base_copy(root: Path, path: str) -> str | None:
     return _git(root, "show", f"{base}:{path}") if base else None
 
 
-def _redriven_by_git(root: Path, path: str, title: str) -> bool:
+def _test_call(title: str) -> re.Pattern:
+    """The title as a test call: `test(`, `it(` and their modifiers (never `describe`), or a PHPUnit method."""
+    t = re.escape(title)
+    return re.compile(rf"\b(?:test|it)(?:\.(?!describe\b)\w+)*\s*\(\s*['\"`]{t}['\"`]|\bfunction\s+{t}\s*\(")
+
+
+def row_is_redriven(root: Path, path: str, title: str, registry: list[dict], feature: str) -> bool:
+    """Git decides whenever it holds the base: a title the base's copy of the file already carries as
+    a test call is re-driven, any other title is new, a file absent from the base is all new. Only
+    without a repository does the registry decide: a file registered under earlier features alone."""
+    if _base(root) is None:
+        features = {r["feature"] for r in registry if r["test"].strip("`") == path}
+        return bool(features) and feature not in features
     text = _base_copy(root, path)
-    return bool(text) and re.search(rf"(?<![\w-]){re.escape(title)}(?![\w-])", text) is not None
+    return bool(text) and _test_call(title).search(text) is not None
 
 
-def _log_problem(spec_dir: Path, path: str, title: str) -> tuple[str | None, Path | None, list[str]]:
+def _log_head(lines: list[str]) -> dict[str, str]:
+    """The `key: value` lines above `--- output:`, the first of each key."""
+    head: dict[str, str] = {}
+    for ln in lines:
+        if ln.startswith("--- output:"):
+            break
+        key, sep, value = ln.partition(":")
+        if sep:
+            head.setdefault(key, value.strip())
+    return head
+
+
+def log_problem(spec_dir: Path, root: Path, path: str, title: str) -> str | None:
+    """Why the row's revert log proves nothing, or None. The log is revert-run's own output: its
+    `test:` line is this row's test, its `base:` the current merge-base, `assertion-failed` ends
+    with a non-zero `exit:` — a copied or hand-written log fails here."""
     log = spec_dir / "shakeout" / f"{stem(path, title)}.revert.txt"
     if not log.is_file():
-        return f"no revert log at shakeout/{log.name} — run revert-run for `{path} :: {title}`", None, []
+        return f"no revert log at shakeout/{log.name} — run revert-run for `{path} :: {title}`"
     try:
         lines = log.read_text().splitlines()
     except (OSError, ValueError) as e:
-        return f"{log.name} could not be read ({e.__class__.__name__})", log, []
-    first = lines[0].strip() if lines else ""
-    cls = first[len("revert-run: "):] if first.startswith("revert-run: ") else ""
-    if cls not in LOG_VERDICT:
-        return f"{log.name} has no `revert-run: <class>` first line", log, lines
-    verdict = LOG_VERDICT[cls]
-    return (f"{log.name} {verdict}" if verdict else None), log, lines
+        return f"{log.name} could not be read ({e.__class__.__name__})"
+    head = _log_head(lines)
+    cls = head.get("revert-run", "")
+    if not lines or not lines[0].startswith("revert-run: ") or cls not in LOG_VERDICT:
+        return f"{log.name} has no `revert-run: <class>` first line"
+    if head.get("test") != f"{path} :: {title}":
+        return f"{log.name} is the log of `{head.get('test', '?')}`, not of `{path} :: {title}` — a proof is revert-run's own output"
+    base, logged = _base(root), head.get("base", "").split(" ")[0]
+    if base and not (len(logged) >= 7 and base.startswith(logged)):
+        return f"{log.name} was run on base {logged or '?'}, the merge-base is now {base[:7]} — run revert-run again"
+    if LOG_VERDICT[cls]:
+        return f"{log.name} {LOG_VERDICT[cls]}"
+    if head.get("exit", "0") == "0":
+        return f"{log.name} says assertion-failed with exit 0 — not revert-run's output"
+    return None
+
+
+def _unescaped(words: str) -> str:
+    try:
+        return " ".join(shlex.split(words))
+    except ValueError:
+        return words
+
+
+def _log_credential_lines(lines: list[str]) -> list[int]:
+    """The lines of a revert log that carry a credential: the command, un-escaped from revert-run's
+    `%q`, and the output excerpt — never the header's paths (the manifest scan covers the title)."""
+    hits, in_output = [], False
+    for i, ln in enumerate(lines, 1):
+        if ln.startswith("--- output:"):
+            in_output = True
+        elif ln.startswith("command:"):
+            ln = _unescaped(ln[len("command:"):])
+        elif not in_output:
+            continue
+        if CREDENTIAL.search(ln):
+            hits.append(i)
+    return hits
+
+
+def check_logs(spec_dir: Path) -> list[Finding]:
+    """Every revert log is committed, so every one is scanned — a row's or an orphan's."""
+    shakeout = spec_dir / "shakeout"
+    findings: list[Finding] = []
+    for log in sorted(shakeout.glob("*.revert.txt")) if shakeout.is_dir() else []:
+        try:
+            lines = log.read_text().splitlines()
+        except (OSError, ValueError):
+            continue
+        findings += [("fail", "shakeout-credential", f"{log.name} line {i}: carries a credential — the log is committed")
+                     for i in _log_credential_lines(lines)]
+    return findings
 
 
 def check_revert(spec_dir: Path, rows: list[dict], registry: list[dict]) -> list[Finding]:
     """Every browser and wire row names its test; each new one owns an assertion-failed revert log."""
     root = spec_dir.parent.parent
-    mine = {r["test"].strip("`") for r in registry if r["feature"] == spec_dir.name}
-    earlier = {r["test"].strip("`") for r in registry if r["feature"] != spec_dir.name}
     findings: list[Finding] = []
     keys: dict[tuple[str, str], str] = {}
     new = redriven = 0
@@ -305,7 +378,10 @@ def check_revert(spec_dir: Path, rows: list[dict], registry: list[dict]) -> list
                              f"{n}: no `Test: <path> :: <title>` in Evidence — every browser and wire row names its one test, first"))
             continue
         path, title = m.group("path").strip("`"), m.group("title").strip()
-        if (path in earlier and path not in mine) or _redriven_by_git(root, path, title):
+        if CREDENTIAL.search(title):
+            findings.append(("fail", "shakeout-revert", f"{n}: the test title carries a credential — rename the test (the title is the log's name)"))
+            continue
+        if row_is_redriven(root, path, title, registry, spec_dir.name):
             redriven += 1
             continue
         new += 1
@@ -313,12 +389,9 @@ def check_revert(spec_dir: Path, rows: list[dict], registry: list[dict]) -> list
             findings.append(("fail", "shakeout-revert", f"{n} and {keys[path, title]}: two new rows share one test `{path} :: {title}`"))
             continue
         keys[path, title] = n
-        problem, log, lines = _log_problem(spec_dir, path, title)
+        problem = log_problem(spec_dir, root, path, title)
         if problem:
             findings.append(("fail", "shakeout-revert", f"{n}: {problem}"))
-        if log:
-            findings += [("fail", "shakeout-credential", f"{log.name} line {i}: carries a credential — the log is committed")
-                         for i, ln in enumerate(lines, 1) if not ln.startswith("test: ") and CREDENTIAL.search(ln)]
     if (new or redriven) and not any(s == "fail" and c == "shakeout-revert" for s, c, _ in findings):
         findings.append(("pass", "shakeout-revert", f"{new} new row(s) proven on the base, {redriven} re-driven"))
     return findings
@@ -336,7 +409,7 @@ def check(spec_dir: Path) -> list[Finding]:
         return [("fail", "shakeout-manifest", f"shakeout.md could not be read ({e.__class__.__name__})")]
     findings: list[Finding] = [
         ("fail", "shakeout-credential", f"line {i}: carries a credential — the whole file is committed")
-        for i, ln in enumerate(text.splitlines(), 1) if CREDENTIAL.search(TEST.sub(" ", ln))]
+        for i, ln in enumerate(text.splitlines(), 1) if CREDENTIAL.search(TEST_PATH.sub(r"\1", ln))]
     rows = parse_rows(text)
     if not rows:
         return findings + [("fail", "shakeout-manifest",
@@ -357,7 +430,7 @@ def check(spec_dir: Path) -> list[Finding]:
         driven += row["layer"].lower() == "browser" and problem is None
     findings.append(("pass", "shakeout-manifest", f"shakeout: {len(rows)} rows, {driven} browser rows driven"))
     registry = _registry_rows(spec_dir)
-    findings += check_revert(spec_dir, rows, registry)
+    findings += check_revert(spec_dir, rows, registry) + check_logs(spec_dir)
     hunt = _hunt_finding(text, rows)
     if hunt:
         findings.append(hunt)
