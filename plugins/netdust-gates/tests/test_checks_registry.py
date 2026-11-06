@@ -27,7 +27,7 @@ MANIFEST = (
     "\nHunt: 3 charters · 0 confirmed · 0 not ours · 0 rejected\n"
 )
 # The row's test is new (registered under feat), so its revert proof is background here.
-REVERT_LOG = ("tests__e2e__agenda.spec.ts--agenda-lists-events.revert.log",
+REVERT_LOG = ("tests__e2e__agenda.spec.ts--agenda-lists-events.revert.txt",
               "revert-run: assertion-failed\nfeature: feat\ntest: tests/e2e/agenda.spec.ts :: Agenda lists events\n"
               "base: 0000000 (main)\nswapped: src/agenda.php (M)\ncommand: npx playwright test --grep 'Agenda lists events'\n"
               "exit: 1\n--- output: 2 lines, excerpt 1-2 ---\nError: expect(locator).toBeVisible() failed\nExpected: visible\n")

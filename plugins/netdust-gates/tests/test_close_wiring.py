@@ -47,7 +47,7 @@ def run() -> list[tuple[bool, str]]:
         (all(s in command for s in ("bin/shakeout-check.py", "make gate", "Accepted-by-human:", "shakeout-qa",
                                     "screenshot", "netdust-gates:policy", "came before")),
          "/shakeout runs make gate, the qa agent, the checker, and points at the policy close"),
-        (all(s in qa for s in ("specs/<feature>/shakeout/*.revert.log", "revert-run", "Test: <path> :: <title>", "first in Evidence",
+        (all(s in qa for s in ("specs/<feature>/shakeout/*.revert.txt", "revert-run", "Test: <path> :: <title>", "first in Evidence",
                                "~/.claude/plugins/netdust-gates/bin/revert-run <feature> <test-path> <title> -- <command running that one test>",
                                "specs/<feature>/shakeout/<name>.png", "never the scratchpad", "built assets",
                                "the policy's fix round, then its stop", "re-driven", "git show", "one `shakeout.md`",

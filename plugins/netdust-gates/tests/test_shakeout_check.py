@@ -56,7 +56,7 @@ def _log(cls="assertion-failed", command="npx playwright test tests/e2e/audit.sp
             "Received: <element(s) not found>\n")
 
 
-LOGS = {f"shakeout/{STEM_B}.revert.log": _log(), f"shakeout/{STEM_W}.revert.log": _log()}
+LOGS = {f"shakeout/{STEM_B}.revert.txt": _log(), f"shakeout/{STEM_W}.revert.txt": _log()}
 
 
 def _git(root: Path, *args: str) -> None:
@@ -152,13 +152,13 @@ NOT_CREDENTIALS = {
 # ── the revert proof (R2): a new browser or wire row names its test and owns a log that failed on an assertion
 PW_PATH = "tests/e2e/app-password.spec.ts"
 PW_EVIDENCE = EVIDENCE.replace("tests/e2e/audit.spec.ts", PW_PATH)
-PW_LOGS = {f"shakeout/tests__e2e__app-password.spec.ts--audit-page-lists-the-rows.revert.log": _log(), **{k: v for k, v in LOGS.items() if STEM_W in k}}
+PW_LOGS = {f"shakeout/tests__e2e__app-password.spec.ts--audit-page-lists-the-rows.revert.txt": _log(), **{k: v for k, v in LOGS.items() if STEM_W in k}}
 ODD_EVIDENCE = EVIDENCE.replace("tests/e2e/audit.spec.ts :: Audit page lists the rows", f"tests/e2e/x.spec.ts :: {ODD_TITLE}")
-ODD_LOGS = {f"shakeout/{ODD_STEM}.revert.log": _log(), **{k: v for k, v in LOGS.items() if STEM_W in k}}
+ODD_LOGS = {f"shakeout/{ODD_STEM}.revert.txt": _log(), **{k: v for k, v in LOGS.items() if STEM_W in k}}
 MIXED_REGISTRY = (REGISTRY + PRODUCTIONS
                   + f"| credits | e2e | /voorstellingen/<slug>/ | tests/e2e/productions.spec.ts | feat | 0000000 2026-11-06 |\n")
 MIXED = HEAD + BROWSER.format(EVIDENCE) + P_ROWS + NEW_ROW + HUNT
-MIXED_LOGS = {**LOGS, f"shakeout/{NEW_STEM}.revert.log": _log()}
+MIXED_LOGS = {**LOGS, f"shakeout/{NEW_STEM}.revert.txt": _log()}
 MIXED_PNGS = {**PNG, **P_PNGS}
 BASE_FIVE = {"tests/e2e/productions.spec.ts": SPEC_FIVE, "src/page.php": "<h1>Title</h1>\n"}
 ON_BRANCH = {"tests/e2e/productions.spec.ts": SPEC_SIX}
@@ -232,10 +232,10 @@ def run() -> list[tuple[bool, str]]:
         _case("test_new_wire_row_without_test_marker_fails", HEAD + WIRE_PASS.replace(f"{TEST_W} · ", ""),
               has=("✗ [shakeout-revert] AF-2: no `Test: <path> :: <title>`",)),
         _case("test_new_row_without_its_log_fails", DRIVEN, PNG, logs={k: v for k, v in LOGS.items() if STEM_W in k},
-              has=(f"✗ [shakeout-revert] AF-1: no revert log at shakeout/{STEM_B}.revert.log",)),
-        _case("test_error_log_does_not_prove_a_row", DRIVEN, PNG, logs={**LOGS, f"shakeout/{STEM_B}.revert.log": _log("error")},
+              has=(f"✗ [shakeout-revert] AF-1: no revert log at shakeout/{STEM_B}.revert.txt",)),
+        _case("test_error_log_does_not_prove_a_row", DRIVEN, PNG, logs={**LOGS, f"shakeout/{STEM_B}.revert.txt": _log("error")},
               has=("✗ [shakeout-revert] AF-1:", "error run")),
-        _case("test_passed_log_does_not_prove_a_row", DRIVEN, PNG, logs={**LOGS, f"shakeout/{STEM_B}.revert.log": _log("passed")},
+        _case("test_passed_log_does_not_prove_a_row", DRIVEN, PNG, logs={**LOGS, f"shakeout/{STEM_B}.revert.txt": _log("passed")},
               has=("✗ [shakeout-revert] AF-1:", "passing on the base")),
         _case("test_two_new_rows_cannot_share_one_key: two new rows on one file and title fail, naming both",
               UNHUNTED + BROWSER.format(EVIDENCE).replace("AF-1", "AF-3") + HUNT, PNG,
@@ -245,7 +245,7 @@ def run() -> list[tuple[bool, str]]:
               has=("✓ [shakeout-revert]", "5 re-driven")),
         _case("test_new_test_in_an_older_file_needs_its_proof: a file registered under an older feature AND this one is new",
               HEAD + BROWSER.format(EVIDENCE) + NEW_ROW + HUNT, PNG, registry=MIXED_REGISTRY,
-              has=(f"✗ [shakeout-revert] AF-6: no revert log at shakeout/{NEW_STEM}.revert.log",)),
+              has=(f"✗ [shakeout-revert] AF-6: no revert log at shakeout/{NEW_STEM}.revert.txt",)),
         _case("test_redriven_row_in_a_mixed_file_is_exempt_by_git: five titles in the base's copy are re-driven, the sixth owes its proof → PASS",
               MIXED, MIXED_PNGS, rc=0, registry=MIXED_REGISTRY, logs=MIXED_LOGS, base=BASE_FIVE, files=ON_BRANCH,
               has=("✓ [shakeout-revert]", "2 new row", "5 re-driven")),
@@ -256,7 +256,7 @@ def run() -> list[tuple[bool, str]]:
               DRIVEN.replace(TEST_B, f"Re-driven · {TEST_B}"), PNG, logs={k: v for k, v in LOGS.items() if STEM_W in k},
               has=("✗ [shakeout-revert] AF-1: no revert log",)),
         _case("test_unregistered_test_counts_as_new", HEAD + WIRE_PASS.replace("AuditRestTest.php", "OtherTest.php"),
-              has=("✗ [shakeout-revert] AF-2: no revert log at shakeout/tests__integration__OtherTest.php--testlistreturnsrows.revert.log",)),
+              has=("✗ [shakeout-revert] AF-2: no revert log at shakeout/tests__integration__OtherTest.php--testlistreturnsrows.revert.txt",)),
         _case("test_test_marker_survives_accepted_by_human_order: Test: first, the human's reason is only his words",
               HEAD + BROWSER.format(f"{TEST_B} · Accepted-by-human: no browser on this box") + WIRE_PASS + NO_HUNT, rc=0,
               has=("[shakeout-accepted] AF-1: accepted by the human — no browser on this box",), lacks=("— Test:",)),
@@ -268,8 +268,8 @@ def run() -> list[tuple[bool, str]]:
         _case("test_cli_row_needs_no_revert", HEAD + "| AF-2 | wp cli lists | cli | pass | ddev wp audit list → 3 rows |\n", rc=0,
               logs={}, lacks=("shakeout-revert",)),
         _case("test_credential_in_a_revert_log_fails", DRIVEN, PNG,
-              logs={**LOGS, f"shakeout/{STEM_B}.revert.log": _log(command="E2E_PASS=s3cr3tPw npx playwright test")},
-              has=("✗ [shakeout-credential]", f"{STEM_B}.revert.log"), lacks=("s3cr3tPw",)),
+              logs={**LOGS, f"shakeout/{STEM_B}.revert.txt": _log(command="E2E_PASS=s3cr3tPw npx playwright test")},
+              has=("✗ [shakeout-credential]", f"{STEM_B}.revert.txt"), lacks=("s3cr3tPw",)),
         _case("test_stem_is_shared_with_revert_run: the checker derives the name the script writes", DRIVEN.replace(EVIDENCE, ODD_EVIDENCE),
               PNG, rc=0, logs=ODD_LOGS, has=("✓ [shakeout-revert]",)),
         # R9 — a PIN (green before this feature): only `shakeout/<name>.png` is a screenshot path

@@ -5,7 +5,7 @@
 #
 #   revert-run <feature> <test-path> <test-title> -- <command running that one test…>
 #
-# Writes specs/<feature>/shakeout/<stem>.revert.log, <stem> = the test path with / as __,
+# Writes specs/<feature>/shakeout/<stem>.revert.txt, <stem> = the test path with / as __,
 # then --, then the title slugged. Its first line is `revert-run: assertion-failed`, `passed`
 # or `error`. Exit 0 when the log was written, 2 on refusal or a git error. Never commits,
 # never touches an untracked file, never swaps tests/ or specs/.
@@ -111,7 +111,7 @@ last=$(( first + 19 )); [ "$last" -le "$total" ] || last=$total
 
 slug=$(printf '%s' "$title" | LC_ALL=C tr 'A-Z' 'a-z' | LC_ALL=C tr -cs 'a-z0-9' '-')
 stem="${test_path//\//__}--${slug}"
-log="specs/$feature/shakeout/$stem.revert.log"
+log="specs/$feature/shakeout/$stem.revert.txt"
 mkdir -p "specs/$feature/shakeout"
 {
     echo "revert-run: $class"

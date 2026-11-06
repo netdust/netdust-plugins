@@ -7,7 +7,7 @@ Reads <feature dir>/shakeout.md and exits 0 only when every row passes on eviden
 prove, never on the verdict word: a `browser` row needs `Browser: <http url> · <png>` with a
 real 1 KB–2 MB PNG under the feature dir; every `browser` and `wire` row names its one test,
 `Test: <path> :: <title>`, first in Evidence, and a NEW test is proven by its revert log
-(`shakeout/<stem>.revert.log`, written by bin/revert-run) showing an assertion failure on the
+(`shakeout/<stem>.revert.txt`, written by bin/revert-run) showing an assertion failure on the
 base; a manifest with a browser row records its hunt (`Hunt: <n> charters …`); the whole file and
 every revert log are scanned for credentials with no override; only the human's
 `Accepted-by-human:` excuses a row.
@@ -272,7 +272,7 @@ def _redriven_by_git(root: Path, path: str, title: str) -> bool:
 
 
 def _log_problem(spec_dir: Path, path: str, title: str) -> tuple[str | None, Path | None, list[str]]:
-    log = spec_dir / "shakeout" / f"{stem(path, title)}.revert.log"
+    log = spec_dir / "shakeout" / f"{stem(path, title)}.revert.txt"
     if not log.is_file():
         return f"no revert log at shakeout/{log.name} — run revert-run for `{path} :: {title}`", None, []
     try:

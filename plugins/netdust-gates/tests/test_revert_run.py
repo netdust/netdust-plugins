@@ -79,7 +79,7 @@ def _run(repo: Path, cmd: str, *, title=TITLE, path=TEST_PATH, feature="feat", t
         return 127, "", f"no script at {SCRIPT}", ""
     proc = subprocess.run([str(SCRIPT), feature, path, title, "--", "bash", "-c", cmd],
                           cwd=repo, capture_output=True, text=True, timeout=timeout)
-    logs = sorted((repo / "specs" / feature / "shakeout").glob("*.revert.log")) \
+    logs = sorted((repo / "specs" / feature / "shakeout").glob("*.revert.txt")) \
         if (repo / "specs" / feature / "shakeout").is_dir() else []
     log = logs[0].read_text() if logs else ""
     return proc.returncode, proc.stdout, proc.stderr, log
@@ -115,7 +115,7 @@ def _clean(repo: Path) -> bool:
 def _assertion_failed(repo, rec):
     (rec / "out.txt").write_text(PW_FAIL)
     rc, _, err, log = _run(repo, f"cat '{rec}/out.txt'; exit 1")
-    path = repo / "specs/feat/shakeout" / f"{STEM}.revert.log"
+    path = repo / "specs/feat/shakeout" / f"{STEM}.revert.txt"
     return (rc == 0 and path.is_file() and log.startswith("revert-run: assertion-failed\n")
             and "Expected: visible" in log and "exit: 1" in log and _clean(repo),
             f"rc {rc}, log at {path.name if path.is_file() else 'nowhere'}, head {log[:40]!r}, err {err[-200:]!r}")
@@ -224,12 +224,26 @@ def _excerpt(repo, rec):
 def _stem(repo, rec):
     (rec / "out.txt").write_text(PW_FAIL)
     rc, _, err, _ = _run(repo, f"cat '{rec}/out.txt'; exit 1", title=ODD_TITLE)
-    path = repo / "specs/feat/shakeout" / f"{ODD_STEM}.revert.log"
+    path = repo / "specs/feat/shakeout" / f"{ODD_STEM}.revert.txt"
     return rc == 0 and path.is_file(), f"rc {rc}, logs {[p.name for p in (repo / 'specs/feat/shakeout').glob('*')] if (repo / 'specs/feat/shakeout').is_dir() else []}, err {err[-200:]!r}"
+
+
+def _not_ignored(repo, rec):
+    """Every project ignores *.log (this repo, the devops gitignore template, most sites): the proof must survive git add."""
+    (repo / ".gitignore").write_text("*.log\n")
+    _git(repo, "add", ".gitignore")
+    _git(repo, "commit", "-qm", "ignore logs")
+    (rec / "out.txt").write_text(PW_FAIL)
+    rc, _, err, log = _run(repo, f"cat '{rec}/out.txt'; exit 1")
+    written = next(iter((repo / "specs/feat/shakeout").glob("*.revert.*")), None)
+    ignored = subprocess.run(["git", "-C", str(repo), "check-ignore", "-q", str(written)]).returncode == 0 if written else True
+    return rc == 0 and written is not None and not ignored, \
+        f"rc {rc}, log {written.name if written else None}, git-ignored={ignored}, err {err[-200:]!r}"
 
 
 def run() -> list[tuple[bool, str]]:
     return [
+        _case("test_log_is_not_git_ignored: a repo ignoring *.log still tracks the proof revert-run writes", _not_ignored),
         _case("test_expect_on_a_missing_element_is_assertion_failed: Playwright's toBeVisible text + exit 1 → assertion-failed, log at the derived stem", _assertion_failed),
         _case("test_phpunit_failed_asserting_is_assertion_failed", _phpunit),
         _case("test_click_timeout_is_error: a locator.click timeout with no expect is error", _timeout),

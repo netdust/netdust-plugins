@@ -18,7 +18,7 @@ shipped past a green suite. So you run the real artifact, through its faithful l
 ## Where you may write
 
 `tests/**`, `specs/<feature>/shakeout.md`, `specs/<feature>/shakeout/*.png`,
-`specs/<feature>/shakeout/*.revert.log`, `specs/CHECKS.md` — nothing else. A defect in the code is a
+`specs/<feature>/shakeout/*.revert.txt`, `specs/CHECKS.md` — nothing else. A defect in the code is a
 manifest row for the fix pass, never an edit of yours. `revert-run` (below) is the one command
 allowed to touch non-test files: it swaps them to the base for one test run and restores them itself.
 
@@ -114,7 +114,7 @@ the project root:
 
 (Playwright: `npx playwright test <path> --grep "<title>"`; PHPUnit: `--filter`). It puts the base's
 version of the branch's changed non-test files back, runs that one test on the same DDEV site,
-restores the tree in a trap whatever happens, and writes `specs/<feature>/shakeout/<stem>.revert.log`,
+restores the tree in a trap whatever happens, and writes `specs/<feature>/shakeout/<stem>.revert.txt`,
 committed with the manifest. Its first line is the verdict `bin/shakeout-check.py` reads:
 `revert-run: assertion-failed` — an `expect` failing on the base, `toBeVisible()` on an element the
 base does not render included — is the proof. `passed` means the test cannot fail without the
