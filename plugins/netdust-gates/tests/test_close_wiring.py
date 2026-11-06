@@ -111,5 +111,15 @@ def run() -> list[tuple[bool, str]]:
          "the yield lives in the policy's step 8; slices in the plan rule; the reviewers check tests exist and leave quality to "
          "studio-checks; the pack carries INV-2; CLAUDE.md the revert trial and the slice label; the plan reviewer flags a layer; "
          "/plan-review defers to the cap"),
+        (all(s in policy.split("\n3. ")[1].split("\n4. ")[0] for s in ("copied from `make review`'s saved report", "specs/<feature>/review.md"))
+         and all(s in policy.split("\n6. ")[1].split("\n7. ")[0] for s in ("report.md", "specs/CHECKS.md"))
+         and all(s in qa for s in ("Hunt: deferred — runs at the feature's end", "regex-escaped", "revert-run's own output",
+                                   ".git/revert-run.swapped", "`recover:`"))
+         and "Hunt: deferred" in command
+         and all(s in _read("CLAUDE.md") for s in ("<date> · <feature> · revert-passed:", "| sort | tail -5"))
+         and "than the review it protects" not in _read("CLAUDE.md"),
+         "the fix pass's wording (review S7, N2): review.md copied from make review's saved report, report.md committed with "
+         "specs/CHECKS.md, an intermediate slice's deferred hunt, --grep regex-escaped, the log is revert-run's own output, the "
+         "sentinel's recover line; CLAUDE.md's trial line is dated and the removal grep sorts by it, the cost comparison gone"),
         (not stale, f"none of the 0.28 machinery survives in the close (found {stale})"),
     ]

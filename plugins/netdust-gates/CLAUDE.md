@@ -23,11 +23,10 @@ The shake-out's hunt (0.13.0) is on trial: when the last five hunts that ran all
 `grep -sl '^Hunt: [1-9]' ~/Sites/*/specs/*/shakeout.md | xargs -r -d '\n' ls -t | head -5 | xargs -r -d '\n' grep -H '^Hunt:'`.
 
 The revert proof (0.19.0) is on trial the same way: `bin/feature-report.py` writes one line per feature under
-`## Trial log` in `specs/CHECKS.md` (`<feature> · revert-passed: <n> · revert-errors: <n> · report-gaps: <n>`). When the
-last five features show it did nothing — `revert-passed: 0` everywhere and no `report-gaps` traced to a missing or
-failed revert log — it comes out: `grep -sh '· revert-passed:' ~/Sites/*/specs/CHECKS.md | tail -5`. And over the first
-three features, if the proof costs more of the Close (the report's `Close:` minutes) than the review it protects, it is
-cut back before any new step is added.
+`## Trial log` in `specs/CHECKS.md` (`<date> · <feature> · revert-passed: <n> · revert-errors: <n> · report-gaps: <n>`).
+When the last five features show it did nothing — `revert-passed: 0` everywhere and no `report-gaps` traced to a missing
+or failed revert log — it comes out: `grep -sh '· revert-passed:' ~/Sites/*/specs/CHECKS.md | sort | tail -5` (the date
+leads the line, so the sort is by recency).
 
 ## Boundaries
 

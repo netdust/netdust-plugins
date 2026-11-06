@@ -793,6 +793,11 @@ if grep -q '^commands: {gate: "true"}$' site.yml; then
             && ok "make $v name=feat-1 runs commands.$v with the name in its env ($want)" \
             || bad "make $v name=feat-1 runs commands.$v with the name in its env" "rc $rc, env '$seen': $(printf '%s' "$out" | strip | head -3)"
     done
+    out=$(M report name=feat-1 | strip)
+    case "$out" in
+        *"report.md"*"specs/CHECKS.md"*) ok "make report's closing line says to commit report.md with specs/CHECKS.md (the trial line lands there)";;
+        *) bad "make report's closing line says to commit report.md with specs/CHECKS.md" "$(printf '%s' "$out" | tail -2)";;
+    esac
     sed -i 's/shakeout: "record-verb", report: "record-verb"/shakeout: "false", report: "false"/' site.yml
     for v in shakeout report; do
         out=$(M "$v" name=feat-1); rc=$?; out=$(printf '%s' "$out" | strip)

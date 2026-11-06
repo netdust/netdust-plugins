@@ -40,7 +40,8 @@ touches are still re-driven, as below.
 
 The Test map holds the flows someone thought of; the hunt looks for the ones nobody did. Every
 shake-out with a browser flow runs it once, in the Sweep — a re-dispatch re-drives its flows and
-never hunts again; a sliced plan hunts once, at the feature's end, after the last slice's flows —
+never hunts again; a sliced plan hunts once, at the feature's end, after the last slice's flows,
+and an intermediate slice records `Hunt: deferred — runs at the feature's end` in its place —
 in the browser you drive with, on the dev site only. When it cannot run — no
 browser, shake-out access other than the dev site, a manifest from before the hunt — the record is
 `Hunt: 0 charters — <why>`; a re-dispatch keeps the record as it is.
@@ -94,10 +95,11 @@ the link that minted the session.
 Every `browser` and `wire` row names its ONE test, first in Evidence, before `Browser:`:
 `Test: <path> :: <title>` — the project-relative file and the test title, because a file holds
 many flows. A new test is proven below; a re-driven row carries the marker and nothing more. New or
-re-driven is the registry's and git's call, never a word in the row: a test file registered in
-`specs/CHECKS.md` under this feature, or under none, is new; one registered only under earlier
-features is re-driven; inside a new file a title the base's copy already holds
-(`git show <base>:<path>`) is re-driven, every other title is new.
+re-driven is git's call, never a word in the row: a title the base's copy of the file
+(`git show <base>:<path>`) already carries as a test call — `test(`, `it(`, their modifiers, a
+PHPUnit method — is re-driven, every other title is new, a file the base lacks is all new; only
+without a repository does `specs/CHECKS.md` decide, a file registered under earlier features alone
+being re-driven. The title is also the log's file name: never a credential in it.
 
 ## The flows become the tests
 
@@ -112,10 +114,13 @@ the project root:
 
     ~/.claude/plugins/netdust-gates/bin/revert-run <feature> <test-path> <title> -- <command running that one test>
 
-(Playwright: `npx playwright test <path> --grep "<title>"`; PHPUnit: `--filter`). It puts the base's
-version of the branch's changed non-test files back, runs that one test on the same DDEV site,
-restores the tree in a trap whatever happens, and writes `specs/<feature>/shakeout/<stem>.revert.txt`,
-committed with the manifest. Its first line is the verdict `bin/shakeout-check.py` reads:
+(Playwright: `npx playwright test <path> --grep "<title>"` with the title regex-escaped — `--grep` is
+a regex, as PHPUnit's `--filter` is). It puts the base's version of the branch's changed non-test
+files back, runs that one test on the same DDEV site, restores the tree in a trap whatever happens,
+and writes `specs/<feature>/shakeout/<stem>.revert.txt`, committed with the manifest. The log is
+revert-run's own output and nothing else: the checker matches its `test:` line to the row, its
+`base:` to the current merge-base and its `exit:` to the verdict, so a copied or hand-written log
+fails. Its first line is the verdict `bin/shakeout-check.py` reads:
 `revert-run: assertion-failed` — an `expect` failing on the base, `toBeVisible()` on an element the
 base does not render included — is the proof. `passed` means the test cannot fail without the
 feature: sharpen its assertion and run it again. `error` — a timeout, an unmatched locator, a login
@@ -124,7 +129,9 @@ changed the schema), leave the row for Stefan's `Accepted-by-human:`. Untracked 
 (compiled JS/CSS) are not swapped, so a browser test can pass on the base for that reason alone;
 that is the safe direction — the row stays refused until the test asserts on what the server
 renders, or Stefan accepts it. It refuses to start on uncommitted changes in the files it would
-swap: commit first.
+swap (commit first), on anything on disk at a path the branch deleted, and on a
+`.git/revert-run.swapped` left by a killed or failed run — run the `recover:` line it prints, then
+run it again.
 
 ## What you leave for the deployed site
 

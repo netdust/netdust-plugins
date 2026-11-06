@@ -121,15 +121,15 @@ Every step is a `make` verb or names one, so a human by hand and a coder run the
    whole-branch review (`superpowers:requesting-code-review`, a fresh reviewer; the author never reviews its own diff) on
    the most capable model, joined by `security-sentinel` when the plan carries a `## Threat model` or the diff touches a
    security-boundary path, and `invariant-auditor` when the project carries `ARCHITECTURE-INVARIANTS.md`.
-3. One fix pass on every Blocking and Should fix finding (a finding that is a decision goes to Stefan), each fix
-   RED→GREEN through the seam where the finding showed — the request, route or render — never reflection on the private
-   method; the review is kept as `specs/<feature>/review.md` and committed with it. No re-review — named checks and the suites close it.
+3. One fix pass on every Blocking and Should fix finding (a finding that is a decision goes to Stefan), each fix RED→GREEN
+   through the seam where the finding showed — the request, route or render — never reflection on the private method; the
+   review, copied from `make review`'s saved report to `specs/<feature>/review.md`, is committed with it. No re-review — named checks and the suites close it.
 4. A user-facing change runs `/shakeout`, once, on the fixed code: `shakeout-qa` drives the flows through the real browser
    or wire, commits them as tests, proves each new test on the base (`revert-run`) and writes `specs/<feature>/shakeout.md`;
    it registers them in `specs/CHECKS.md` as `@e2e` (`make e2e env=staging`, the proof after a deploy or a plugin update)
    beside a read-only `@smoke` check (`make smoke`, production too). Then `make shakeout name=<feature>` (`bin/shakeout-check.py`) exits 0.
 5. One fix round for a failed shake-out row, then its stop.
-6. `make report name=<feature>` — `report.md`, generated from the artifacts, committed.
+6. `make report name=<feature>` — `report.md`, generated from the artifacts, committed with `specs/CHECKS.md` (its trial line).
 7. `make gate` once more, on that tip: the green run stamps what `promote` requires.
 8. STOP — the report yield: Stefan reads `report.md`: its screenshots, one per surface; every `Accepted-by-human:` row (an
    agent-written one is reverted and its row re-driven); the hunt's tally and its `not ours:` / `rejected:` lines, each his

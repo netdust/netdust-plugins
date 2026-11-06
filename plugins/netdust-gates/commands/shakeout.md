@@ -52,7 +52,8 @@ surface (`make smoke`, production too). Each new test it commits is proven on th
 a re-driven row carries the marker only. It reports the flow list it drove; read it for what is
 missing. With a browser flow it also runs the hunt, once — exploratory charters whose confirmed
 bugs arrive as `fail` rows like any other. On a sliced plan each slice's flows are appended to the
-one `shakeout.md`, and the hunt runs once, at the feature's end.
+one `shakeout.md`, and the hunt runs once, at the feature's end (an intermediate slice records
+`Hunt: deferred — runs at the feature's end`).
 
 A change with no user-facing surface has nothing to drive: say so and go to the Close.
 

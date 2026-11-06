@@ -126,7 +126,7 @@ help: ## Show this help
 	@echo ""
 	@echo "$(YELLOW)CLOSE$(RESET)        a feature's checks before promote (netdust-gates:policy Close)"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "shakeout name=X" "check a feature's shake-out artifacts (commands.shakeout): manifest, screenshots, revert logs"
-	@printf "  $(GREEN)%-22s$(RESET) %s\n" "report name=X"   "generate a feature's report from its artifacts (commands.report), committed with it"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "report name=X"   "generate a feature's report from its artifacts (commands.report); commit report.md with specs/CHECKS.md"
 	@echo ""
 	@echo "$(YELLOW)INSPECT$(RESET)      read-only — safe to run anywhere, any time"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "status"   "branch, flow position, what runs where"
@@ -650,7 +650,7 @@ report: ## Generate a feature's report from its artifacts (make report name=X)
 		printf "$(YELLOW)  e.g. %s$(RESET)\n" '$(_doctor-line-report)'; exit 1; fi; \
 	echo "$(BLUE)$$R  ← $(name)$(RESET)"; \
 	REPORT_NAME="$(name)" sh -c "$$R" || { echo "$(RED)✗ report failed for $(name)$(RESET)"; exit 1; }; \
-	echo "$(GREEN)✅ report of $(name) written — commit it with the feature$(RESET)"
+	echo "$(GREEN)✅ report of $(name) written — commit report.md and specs/CHECKS.md (its trial line) with the feature$(RESET)"
 
 .PHONY: test
 test: ## Run the deploy tooling + branch-flow tests (never contacts a server)
