@@ -1,13 +1,35 @@
-# Plan review — gates-quality-loop (plan 1: netdust-plugins), round 1
-Reviewed-plan: e2db55037d83b896ff15eacc0ff7c380c5cdc6db /home/ntdst/Projects/netdust-plugins/specs/gates-quality-loop/plan.md
+# Plan review — gates-quality-loop (plan 1: netdust-plugins), round 2
+Reviewed-plan: eec0b41d0c4d979bd9e6a5258e2d0994645cc4d3 /home/ntdst/Projects/netdust-plugins/specs/gates-quality-loop/plan.md
 Verdict: not ready
 
-(Round 1. The plan was rewritten to answer it and reviewed again; round 2 replaces this file. This round is kept in git history.)
+Round 1 (1 Blocking, 13 Should fix; in git at 15fd88e) is replaced by this round. Round 1's Blocking (no machine-readable test per row) is answered: the `Test:` marker parses beside `Browser:` in either order, `Accepted-by-human:` still matches, the credential scan does not fire on ordinary spec paths. 12 of the 13 Should fix hold against source.
 
-Blocking — B1: a manifest row has no machine-readable test reference (`shakeout-check.py:38` COLUMNS `#, Flow, Layer, Verdict, Evidence`; `shakeout-qa.md:88` "names the test" in free prose), so R2's row-to-log match and the re-driven exemption were left to an agent-written pointer and word: one `assertion-failed` log satisfies every row, and `Re-driven` skips the proof by being written. Fix: a parsed `Test: <path>` marker in Evidence; the log name derived from it; re-driven read from the registry's `first feature` (`shakeout-check.py:141-142,196`).
+## Blocking
 
-Should fix — S1 the policy (149/150 lines, `test_policy_skill.py:43`) cannot take the new Close without named cuts; S2 `test_close_wiring.py:83-85` pins the Close's step numbers ("5. Every change:", "(Close, step 4)"); S3 `report.md` is not in `test_artifact_layout.py:7-11` ALLOWED nor in the policy's artifact table; S4 `wordpress.md` is at its 60-line cap (`test_policy_skill.py:47`); S5 three prompts loop "until it exits 0" / "run /plan-review again" (`commands/shakeout.md:61-63`, `agents/shakeout-qa.md:138-139`, `commands/plan-review.md:35-36`) against caps stated once; S6 R4's reviewer line asks for revert logs at a step where none exist yet; S7 the screenshot-yield stop is inside `/shakeout` Step 4, before any report, while the spec puts it at the end; S8 the committed revert log carries raw test output and is never scanned for credentials (magic links); S9 an `expect(locator).toBeVisible()` on the base's missing element is the proof, while a non-`expect` timeout is an error — the plan must say so and test both with Playwright's real text; S10 `revert-fails` undefined; S11 Review Focus 6 points at no test; S12 `shakeout-qa`'s write list does not allow the revert log or `revert-run`; S13 the slice label is the growth rule's forbidden plan-grammar check unless `CLAUDE.md` records the exception.
+B1 — The row's key is the test FILE, and files are shared by rows in every real registry: `~/Sites/laika/specs/CHECKS.md` has five `e2e` rows on `tests/E2E/productions.spec.ts`, `doorverwijsgids-build` nine on `app.spec.ts`, `daan` two on `pages-from-home.spec.ts`; `shakeout-qa.md:116-117` ("never add a second row") and `:52` describe that shape. As written: a feature re-driving laika's productions writes five rows with one `Test:` and `test_two_rows_cannot_share_one_log` refuses a correct manifest; a new test added to a file registered only under an older feature is "re-driven" and never proven, the opposite of R2; "its row" is undefined. Smallest change: `Test: <path> :: <title>`, the stem slugged from both, `revert-run` running that one test; uniqueness for new rows only; "a test file named by any registry row whose first feature is this feature, or by none, is new"; re-driven rows may share a file.
 
-Notes — added files need no temp dir (all in HEAD); the restore must split by status and pass `--no-renames`; an INT trap runs after the child exits (signal the process group) and twice (make the restore idempotent); the scratchpad-path test is already green (a pin); a separate `shakeout-revert` pass must honour `Accepted-by-human:`; one trial line per feature, replaced; `Close:` minutes from `git log --diff-filter=A -- specs/<feature>/review.md`; untracked build output can make the base pass (safe direction, say it in the prompt); template keys must be declared, not commented, and `$$` in the doctor line; the `~/.claude/plugins/netdust-gates` link is made by the session-start hook; `revert-run`'s checkout is outside the guard's reach.
+## Should fix
 
-Cut: holds. Plan 1 (R2, R4, R6–R9, R12–R15), plan 2 in wp-starter (R11's tier), plan 3 here (R11's agent half), R10 waits on Studio.
+S1 the policy does not fit under 150 lines with the cuts named (148 with three over width, about 151 wrapped): name the Execution-mode cut (13 → 9) or two more lines (the duplicate sentence in `:85-91`, the `commands.gate` explanation). S2 the yield's content (`commands/shakeout.md:67-72`: accepted rows reviewed, the hunt's `not ours:`/`rejected:` overruled) and its pins (`test_close_wiring.py:72-73`) were dropped, not moved; `:74-79` contradicts steps 5-9. S3 R7's per-slice loop has no prompt home. S4 `feature-report.py`'s two joins (Test map row → task; flow → manifest row) are unnamed. S5 an untracked file at a branch-deleted path is overwritten then deleted; the second restore needs a tolerated `git rm`; a typechange `T` is unhandled. S6 "one fix round" restates a cap outside the policy. S7 Task 6 Step 3's prompt edits have no pin.
+
+## Note
+
+`ACCEPTED` is greedy (put `Test:` first); `CREDENTIAL` fires on `app-password.spec.ts`; the trial labels depart from the spec's `revert-fails` (say why); `## Risk model` is not an owned section (call it Threat model); name the agent's path `~/.claude/plugins/netdust-gates/bin/revert-run`; registry `test` cells may be backticked; `git cat-file -e <base>:<path>` is an exact alternative signal; `test_stop_hook_dedup` already fails on this branch (unrelated); Task 5 fits the harness.
+
+## The cut
+
+Holds as in round 1.
+
+## Applied after the review (by the planning session, not the reviewer)
+
+Two rounds is the policy's cap, so no third review ran; the plan goes to Stefan with this report. The plan's blob moved from `eec0b41d0c4d979bd9e6a5258e2d0994645cc4d3` to `9774f26c73bbc026e14bd7cf71c5b88cb685201a`. Every finding was applied:
+
+- B1: `Test: <path> :: <title>`, written first in Evidence; the stem from path and slugged title; uniqueness for new rows only, re-driven rows may share a file; new = the file named by a registry row of this feature, or by none; `revert-run` takes the title and the agent passes a command running that one test. Tests: `test_two_new_rows_cannot_share_one_key`, `test_redriven_rows_may_share_a_file`, `test_new_test_in_an_older_file_needs_its_proof`.
+- S1: the Execution-mode paragraph 13 → 9 lines, plus the duplicate sentence and the `commands.gate` explanation; the coder quotes `wc -l`.
+- S2: step 8 carries the accepted rows and the hunt lines; the report lists them; `commands/shakeout.md`'s tail points at steps 5-9; the pins move with the text.
+- S3: the per-slice line in the Close and the two-line slice rule, `Slice` pinned.
+- S4: both joins named (the Unit text in a task heading; the flow name in the manifest's `Flow` cell); a mismatch is a named gap.
+- S5: refusal on an untracked file at a deleted path; `--ignore-unmatch` on the `D` restore; `T` treated as `M`.
+- S6: "the policy's fix round, then its stop".
+- S7: the reviewer prompts, pack, `CLAUDE.md` and `plan-reviewer.md` tokens pinned in Test map row 4.
+- Notes: `Test:` first; the scan skips the `Test:` value; the trial-label departure stated; Threat model; the agent's path; backticks stripped; `test_stop_hook_dedup` named as pre-existing. Not taken: the `git cat-file` signal (the registry rule with the title key answers B1 without it).
