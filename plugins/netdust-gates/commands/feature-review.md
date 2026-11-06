@@ -35,6 +35,12 @@ subagent may not be allowed to run git. Dispatch in parallel, on the most capabl
 - `invariant-auditor` when the project has `ARCHITECTURE-INVARIANTS.md`;
 - on WordPress, `netdust-wp:ntdst-drift-reviewer`, per the policy's `wordpress.md`.
 
+**Tests, for every reviewer.** Check that the right tests EXIST, not how good they are: every
+`E2E flows` entry in the plan's Test map names a test that exists; a flow an earlier slice already
+drove has its revert log (`specs/<name>/shakeout/*.revert.txt`); a missing log is `make shakeout`'s
+to refuse, not yours. Do not re-judge assertions or redundancy — test quality is `studio-checks`'
+job (mutation and pruning), run outside the build.
+
 **Staging.** Dispatch `staging-reviewer` with the base, the head, the feature list and, for each
 feature, its `git diff $(git merge-base <base> <pin>) <pin>`.
 

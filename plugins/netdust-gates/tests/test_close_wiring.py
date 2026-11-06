@@ -13,6 +13,11 @@ def _read(rel: str) -> str:
     return (PLUGIN / rel).read_text()
 
 
+def _in_order(text: str, *needles: str) -> bool:
+    positions = [text.find(n) for n in needles]
+    return all(p >= 0 for p in positions) and positions == sorted(positions)
+
+
 def _frontmatter_ok(text: str, name: str) -> bool:
     m = re.match(r"---\n(?P<fm>.*?)\n---\n", text, re.S)
     return bool(m) and f"name: {name}" in m.group("fm") and "description:" in m.group("fm")
@@ -89,10 +94,22 @@ def run() -> list[tuple[bool, str]]:
             "specs/$ARGUMENTS/review.md"))
          and "/review-fix" in policy,
          "/review-fix: the saved report, Stefan picks, the policy's fix pass, the record in specs/, re-promote"),
-        (policy.index("make review name=<feature>") < policy.index("runs `/shakeout`")
-         and "(Close, step 4)" in policy and "\n5. Every change:" in policy
-         and "every Blocking and Should fix finding" in policy
+        (_in_order(policy, "make review name=<feature>", "runs `/shakeout`", "`make shakeout name=<feature>`",
+                   "`make report name=<feature>`", "7. `make gate`", "\n9. Every change:")
+         and "(Close, step 8)" in policy and "every Blocking and Should fix finding" in policy
          and "else `specs/$ARGUMENTS/review.md`" in _read("commands/review-fix.md"),
-         "Close orders by cost: gate, review, fix pass, then the shakeout once on settled code"),
+         "Close orders by cost: gate, review, fix pass, the shakeout and its check, the report, the last gate on the report's "
+         "commit (the stamp promote needs), the yield, the finish"),
+        (all(s in policy.split("8. ")[1].split("9. ")[0] for s in ("overrule", "the hunt's tally", "Accepted-by-human:", "report.md"))
+         and "Slice" in policy and "## Slice" not in policy and "the report yield" in policy
+         and all(s in _read(f) for f, _ in (("commands/feature-review.md", 0), ("agents/security-sentinel.md", 0),
+                                              ("agents/invariant-auditor.md", 0)) for s in ("studio-checks", "revert"))
+         and "INV-2" in _read("skills/policy/wordpress.md")
+         and all(s in _read("CLAUDE.md") for s in ("revert-passed:", "Slice M"))
+         and "layer" in reviewer
+         and "/plan-review` again" not in plan_cmd and "cap" in plan_cmd,
+         "the yield lives in the policy's step 8; slices in the plan rule; the reviewers check tests exist and leave quality to "
+         "studio-checks; the pack carries INV-2; CLAUDE.md the revert trial and the slice label; the plan reviewer flags a layer; "
+         "/plan-review defers to the cap"),
         (not stale, f"none of the 0.28 machinery survives in the close (found {stale})"),
     ]

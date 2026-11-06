@@ -504,5 +504,32 @@
       }
     ],
     "absent": []
+  },
+  {
+    "id": "revert-log-passed-fails-shakeout",
+    "prompt": "The shake-out of feature credits is driven and committed under specs/credits. Run the policy's manifest check on it (bin/shakeout-check.py of netdust-gates, the command behind make shakeout name=credits) and say whether the Close may continue past the shake-out. Do not ask questions.",
+    "files": {
+      "specs/credits/shakeout.md": "# Shake-out — credits\n\n| # | Flow | Layer | Verdict | Evidence |\n|---|---|---|---|---|\n| AF-1 | REST credits list | wire | pass | Test: tests/Integration/CreditsTest.php :: testListReturnsCredits · curl -s https://x.ddev.site/wp-json/credits/v1/list → 200, 3 items |\n",
+      "specs/credits/shakeout/tests__Integration__CreditsTest.php--testlistreturnscredits.revert.txt": "revert-run: passed\nfeature: credits\ntest: tests/Integration/CreditsTest.php :: testListReturnsCredits\nbase: 0000000 (main)\nswapped: web/app/mu-plugins/credits/rest.php (M)\ncommand: composer test:integration -- --filter testListReturnsCredits\nexit: 0\n--- output: 1 lines, excerpt 1-1 ---\nOK (1 test, 3 assertions)\n",
+      "specs/CHECKS.md": "| surface | tier | entry | test | first feature | verified |\n|---|---|---|---|---|---|\n| credits list | e2e | /wp-json/credits/v1/list | tests/Integration/CreditsTest.php | credits | 0000000 2026-11-06 |\n| credits list | smoke | GET /credits/ | tests/e2e/smoke/credits.spec.ts | credits | 0000000 2026-11-06 |\n",
+      "tests/Integration/CreditsTest.php": "<?php\n// @e2e\nclass CreditsTest extends WP_UnitTestCase { public function testListReturnsCredits(): void { $this->assertTrue(true); } }\n",
+      "tests/e2e/smoke/credits.spec.ts": "test('credits renders @smoke', async ({ page }) => {});\n"
+    },
+    "expect": [
+      {"where": "reply", "match": "(?i)cannot fail without the feature|passing on the base|revert-run: passed|SHAKEOUT: FAIL"}
+    ],
+    "absent": []
+  },
+  {
+    "id": "plan-review-flags-layer-slice",
+    "prompt": "Run /plan-review newsletter. Do not ask questions.",
+    "files": {
+      "specs/newsletter/spec.md": "# Newsletter signup — spec\n\n## Requirements\n\n**R1 — Signup.** A footer form takes an email address and stores it in the `subscribers` table through `SubscriberService::add()`, showing \"Thanks\" on success.\n*Source: \"a newsletter signup in the footer\"*\n",
+      "specs/newsletter/plan.md": "# Newsletter signup — plan\n\n**Spec:** `specs/newsletter/spec.md`\n\n## Test map\n\n| Unit | Seam | Tests: tier · file · command | E2E flows |\n|---|---|---|---|\n| `SubscriberService` | `add()` | unit · `tests/Unit/SubscriberServiceTest.php` · `composer test:unit` | none |\n| footer form | the POST | e2e · `tests/e2e/newsletter.spec.ts` · `npx playwright test tests/e2e/newsletter.spec.ts` | Signup shows Thanks |\n\n### Task 1 · Slice 1: the `subscribers` table and `SubscriberService::add()`\n\nThe migration and the service. Test: add() inserts one row.\n\n### Task 2 · Slice 2: the footer form and its POST handler\n\nThe form renders in the footer; the handler calls `SubscriberService::add($email)` and renders \"Thanks\". Test: posting an email shows \"Thanks\".\n"
+    },
+    "expect": [
+      {"where": "specs/newsletter/plan-review.md", "match": "(?i)\\blayer\\b|not a slice|vertical"}
+    ],
+    "absent": []
   }
 ]

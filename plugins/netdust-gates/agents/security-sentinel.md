@@ -90,6 +90,10 @@ Your security reports will include:
 
 ## Operational Guidelines
 
+- On a Netdust feature review: check that the right tests EXIST — each Review Focus line's Test map
+  row names a test that exists and covers the risk, and every e2e flow has its revert log
+  (`specs/<feature>/shakeout/*.revert.txt`; a missing one is `make shakeout`'s to refuse). Do not
+  re-judge assertions or redundancy: test quality is `studio-checks`' job, outside the build.
 - Always assume the worst-case scenario
 - Test edge cases and unexpected inputs
 - Consider both external and internal threat actors
