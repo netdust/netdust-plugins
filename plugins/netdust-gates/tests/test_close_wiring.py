@@ -46,7 +46,17 @@ def run() -> list[tuple[bool, str]]:
          "/shakeout reads the registry first, and the policy close names both verbs"),
         (all(s in command for s in ("bin/shakeout-check.py", "make gate", "Accepted-by-human:", "shakeout-qa",
                                     "screenshot", "netdust-gates:policy", "came before")),
-         "/shakeout runs make gate, the qa agent, the checker, the screenshot yield and points at the policy close"),
+         "/shakeout runs make gate, the qa agent, the checker, and points at the policy close"),
+        (all(s in qa for s in ("specs/<feature>/shakeout/*.revert.log", "revert-run", "Test: <path> :: <title>", "first in Evidence",
+                               "~/.claude/plugins/netdust-gates/bin/revert-run <feature> <test-path> <title> -- <command running that one test>",
+                               "specs/<feature>/shakeout/<name>.png", "never the scratchpad", "built assets",
+                               "the policy's fix round, then its stop", "re-driven", "git show", "one `shakeout.md`",
+                               "at the feature's end"))
+         and "until the checker exits 0" not in qa
+         and all(s in command for s in ("make shakeout name=<feature>", "steps 5-9"))
+         and not any(s in command for s in ("until it exits 0", "Step 4", "screenshot yield", "back to Step 3")),
+         "the shake-out proves each new test on the base (revert-run, the Test: marker, the derived log), captures to the repo, "
+         "runs the policy's one fix round, and leaves the yield to the Close"),
         (all(s in reviewer for s in ("The cut", "too broad", "artificially split")) and "/plan-review <topic>" in policy
          and "Spec:\\**" in plan_cmd and "in place of its menu" in policy and "Scope Check" in policy,
          "a spec cut into several plans is reviewed as one set, and the reviewer judges the cut"),
@@ -69,8 +79,7 @@ def run() -> list[tuple[bool, str]]:
                                "keeps the record", "in doubt, it is ours", "git diff --name-only", "actions it spent"))
          and "hunt" in qa.split("**Sweep.**")[1].split("**Drive.**")[0]
          and "hunt" in qa.split("Done when:")[1]
-         and all(s in command for s in ("hunt", "not ours:", "overrule", "back to Step 3", "✗ [shakeout-hunt]",
-                                        "the hunt's tally"))
+         and all(s in command for s in ("hunt", "not ours:", "✗ [shakeout-hunt]"))
          and not any(s in t for s in ("e2e.config.ts", "npx e2e", ".e2e/") for t in (qa, command))
          and all(s in _read("CLAUDE.md") for s in ("on trial", "^Hunt: [1-9]", "0 confirmed · 0 not ours")),
          "every browser shake-out hunts once on the dev site with no tool of its own, or says why not; a bug is a failed assertion; not-ours only when the diff provably misses the surface; the hunt is on trial"),

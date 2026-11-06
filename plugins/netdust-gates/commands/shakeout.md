@@ -1,9 +1,10 @@
 ---
-description: Close a user-facing change — make gate, shakeout-qa drives the artifact and writes the manifest, bin/shakeout-check.py must exit 0, the human sees one screenshot per surface. The review and its fix pass came before it (netdust-gates:policy Close).
+description: Drive a user-facing change — make gate, shakeout-qa drives the artifact, proves each new test on the base and writes the manifest, then make shakeout (bin/shakeout-check.py) must exit 0. The review and its fix pass came before it; the report and Stefan's read follow it (netdust-gates:policy Close).
 allowed_tools: ["Bash", "Read", "Glob", "Skill", "Agent", "Write", "Edit"]
 ---
 
-Run the close for `specs/<feature>/`. Four steps, in order — after one read.
+Run the shake-out for `specs/<feature>/`. Three steps, in order — after one read; what follows
+them is the policy's Close, steps 5-9.
 
 ## Step 0 — The registry
 
@@ -29,7 +30,7 @@ records what this feature should do except Stefan. Derive a proposal:
 
 1. What changed: `git diff --name-only $(git merge-base origin/<production> HEAD)..HEAD` and
    `git log --format=%s` over the same range — the routes, templates, forms, REST endpoints,
-   admin screens and shortcodes the branch touched. None user-facing: say so and go to Step 4.
+   admin screens and shortcodes the branch touched. None user-facing: say so and go to the Close.
 2. Explore only those surfaces on the running dev site (`superpowers-chrome:browsing`, or the
    Playwright planner against those URLs).
 3. Write `specs/<feature>/flows.md`: one line per flow — surface, what a person does, what they
@@ -46,34 +47,36 @@ flows the plan's `## Test map` names in its `E2E flows` column — or `flows.md`
 `specs/<feature>/shakeout.md` with a screenshot under `specs/<feature>/shakeout/` for every
 browser pass — and registers what it leaves in `specs/CHECKS.md`: the driven flows as `@e2e`
 (`make e2e env=staging` re-runs them after every deploy) and a read-only `@smoke` spec per
-surface (`make smoke`, production too). It reports the
-flow list it drove; read it for what is missing. With a browser flow it also runs the hunt,
-once — exploratory charters whose confirmed bugs arrive as `fail` rows like any other.
+surface (`make smoke`, production too). Each new test it commits is proven on the base with
+`revert-run` (its log committed beside the screenshots, the row's `Test:` marker naming the test);
+a re-driven row carries the marker only. It reports the flow list it drove; read it for what is
+missing. With a browser flow it also runs the hunt, once — exploratory charters whose confirmed
+bugs arrive as `fail` rows like any other. On a sliced plan each slice's flows are appended to the
+one `shakeout.md`, and the hunt runs once, at the feature's end.
 
-A change with no user-facing surface has nothing to drive: say so and go to Step 4.
+A change with no user-facing surface has nothing to drive: say so and go to the Close.
 
 ## Step 3 — The manifest gate
+
+`make shakeout name=<feature>` when the project declares `commands.shakeout` (netdust-devops);
+without the verb, the checker by path:
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/bin/shakeout-check.py" specs/<feature>
 ```
 
-On exit 1: each `fail` row is one fix, RED→GREEN; re-dispatch `shakeout-qa` for the affected
-flows; re-run the check until it exits 0. `✗ [shakeout-hunt]` is not a row: re-dispatch
-`shakeout-qa` to record the hunt, or why it could not run. Nothing after this runs while it fails.
+On exit 1: each `fail` row and each `✗ [shakeout-revert]` is one fix, RED→GREEN, in the policy's
+shake-out fix round; re-dispatch `shakeout-qa` for the affected flows and run the check again.
+`✗ [shakeout-hunt]` is not a row: re-dispatch `shakeout-qa` to record the hunt, or why it could
+not run. Nothing after this runs while it fails; a row still refused after the round is the
+policy's stop, Stefan's `Accepted-by-human:` or a sharper test.
 
-## Step 4 — The screenshot yield
+## Then the Close
 
-Show Stefan one screenshot per surface — the PNGs the manifest's browser rows name, never a
-per-flow slideshow. Beside them list every `✓ [shakeout-accepted]` row the check printed:
-`Accepted-by-human:` is agent-writable, so one Stefan did not write is reverted and its row
-re-driven. Then the hunt's tally the check printed, and its `not ours:` and `rejected:` lines: he
-can overrule either — it gets its repro and a `fail` row, back to Step 3 — and a `not ours:` bug
-he leaves is his to schedule. This is a stop; wait for him.
-
-The review and its fix pass came before this shake-out (the `netdust-gates:policy` Close); what
-remains is `superpowers:finishing-a-development-branch` — on a project with `site.yml`, push
-and hand Stefan `make promote name=<feature>` (it skips the saved review) — or run it under his
-standing OK for the staging verbs; a feature never
-merges into production by hand. Report the manifest and every `Ruling:`
-from the ledger together.
+The review and its fix pass came before this shake-out; what remains is the `netdust-gates:policy`
+Close, steps 5-9: the fix round, `make report name=<feature>`, the final `make gate`, Stefan's read
+of `report.md` — the screenshots, every `Accepted-by-human:` row, the hunt's `not ours:` and
+`rejected:` lines — and `superpowers:finishing-a-development-branch`: on a project with `site.yml`,
+push and run `make promote name=<feature>` under his standing OK (it finds the saved review); a
+feature never merges into production by hand. Report the manifest and every `Ruling:` from the
+ledger together.
