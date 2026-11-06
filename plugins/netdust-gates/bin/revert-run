@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# revert-run — prove ONE e2e test can fail: put the base's version of the branch's changed
+# non-test files in the working tree (the index never leaves HEAD), run that test, restore the
+# tree whatever happens and verify it, and write a classified log the shake-out checker reads.
+#
+#   revert-run <feature> <test-path> <test-title> -- <command running that one test…>
+#
+# Writes specs/<feature>/shakeout/<stem>.revert.txt, <stem> = the test path with / as __,
+# then --, then the title slugged. Its first line is `revert-run: assertion-failed`, `passed`
+# or `error`. Exit 0 when the log was written; 2 on a refusal, a git error, or a restore that
+# did not verify — then .git/revert-run.swapped still lists the swapped paths, the recovery line
+# is printed, and the next run refuses until it has been run. Never commits, never touches an
+# untracked or ignored file, never swaps tests/, specs/ or a submodule.
+set -uo pipefail
+export GIT_LITERAL_PATHSPECS=1
+
+usage() { echo "usage: revert-run <feature> <test-path> <test-title> -- <command running that one test>" >&2; exit 2; }
+[ $# -ge 5 ] && [ "$4" = "--" ] || usage
+feature=$1 test_path=$2 title=$3
+shift 4
+case "$feature" in
+    ''|*/*|.|..|-*) echo "revert-run: refused — <feature> names a directory under specs/, not '$feature'" >&2; exit 2 ;;
+esac
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "revert-run: not inside a git repository" >&2; exit 2; }
+cd "$root" || exit 2
+sentinel="$(git rev-parse --git-dir)/revert-run.swapped"
+
+# The sentinel lists the swap as `<M|A|D> <path>` lines from just before the swap until the
+# restore verified; its recovery line is what a human runs after a killed or failed run.
+recovery_line() {
+    local keep=() gone=() line
+    while IFS= read -r line; do
+        case "$line" in D\ *) gone+=("${line#D }") ;; [MA]\ *) keep+=("${line#? }") ;; esac
+    done < "$sentinel"
+    printf 'GIT_LITERAL_PATHSPECS=1'
+    [ ${#keep[@]} -eq 0 ] || { printf ' git restore --worktree --'; printf ' %q' "${keep[@]}"; printf ' &&'; }
+    [ ${#gone[@]} -eq 0 ] || { printf ' rm -f --'; printf ' %q' "${gone[@]}"; printf ' &&'; }
+    printf ' rm -f -- %q\n' "$sentinel"
+}
+
+if [ -e "$sentinel" ]; then
+    echo "revert-run: refused — an earlier run ended with the base's files in the tree ($sentinel):" >&2
+    sed 's/^/  /' "$sentinel" >&2
+    echo "  recover: $(recovery_line)" >&2
+    exit 2
+fi
+
+production_ref() {
+    local b c
+    b=$([ -x scripts/site ] && scripts/site environments.production.branch 2>/dev/null || true)
+    for c in "$b" main master; do
+        [ -n "$c" ] || continue
+        git rev-parse -q --verify "origin/$c^{commit}" >/dev/null 2>&1 && { echo "origin/$c"; return; }
+        git rev-parse -q --verify "refs/heads/$c^{commit}" >/dev/null 2>&1 && { echo "$c"; return; }
+    done
+    return 1
+}
+
+ref=$(production_ref) || { echo "revert-run: no production branch — scripts/site environments.production.branch, main or master" >&2; exit 2; }
+base=$(git merge-base "$ref" HEAD) || { echo "revert-run: no merge-base between $ref and HEAD" >&2; exit 2; }
+
+# The swap set, by status: M (and T, a type change) and D come back from the base, A is removed;
+# a submodule (mode 160000) is listed, never swapped — the gitlink would move, its content not.
+modified=() added=() deleted=() submodules=()
+while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
+    case "$path" in tests/*|specs/*) continue ;; esac
+    read -r old_mode new_mode _ _ status <<< "${meta#:}"
+    if [ "$old_mode" = 160000 ] || [ "$new_mode" = 160000 ]; then submodules+=("$path"); continue; fi
+    case "$status" in
+        M|T) modified+=("$path") ;;
+        A)   added+=("$path") ;;
+        D)   deleted+=("$path") ;;
+        *)   echo "revert-run: unexpected status $status for $path" >&2; exit 2 ;;
+    esac
+done < <(git diff -z --no-renames --raw "$base" HEAD)
+swap=("${modified[@]}" "${added[@]}" "${deleted[@]}")
+[ ${#swap[@]} -gt 0 ] || { echo "revert-run: nothing to swap — the branch changes no file outside tests/ and specs/" >&2; exit 2; }
+
+# Refuse before touching anything: an edit the swap would overwrite, or anything on disk — an
+# ignored file, a directory — at a path the branch deleted, which the base checkout would replace.
+problems=()
+for p in "${deleted[@]}"; do
+    if [ -e "$p" ] || [ -L "$p" ]; then
+        problems+=("$p exists at a path the branch deleted (ignored, untracked or a directory) — move it first")
+    fi
+done
+while IFS= read -r line; do
+    [ -n "$line" ] && problems+=("${line#???} has uncommitted changes — commit or discard them first")
+done <<< "$(git status --porcelain --untracked-files=all -- "${swap[@]}")"
+if [ ${#problems[@]} -gt 0 ]; then
+    echo "revert-run: refused — the swap set is not clean:" >&2
+    printf '  %s\n' "${problems[@]}" >&2
+    exit 2
+fi
+
+# The swap touches the working tree only (`git restore --worktree`): the index stays HEAD's, so
+# a killed run shows as unstaged changes beside the sentinel, and the restore is verified.
+keep=("${modified[@]}" "${added[@]}")
+prune() { local d; d=$(dirname -- "$1"); [ "$d" = . ] || rmdir -p --ignore-fail-on-non-empty -- "$d" 2>/dev/null; return 0; }
+restore() {
+    local p
+    for p in "${deleted[@]}"; do rm -f -- "$p"; prune "$p"; done
+    [ ${#keep[@]} -eq 0 ] || git restore --worktree -- "${keep[@]}"
+}
+verified() { [ -z "$(git status --porcelain --untracked-files=all --ignored -- "${swap[@]}")" ]; }
+finish() {
+    [ -z "${finished:-}" ] || return "$finish_rc"
+    finished=1 finish_rc=0
+    restore; verified && { rm -f -- "$sentinel"; return 0; }
+    sleep 1
+    restore; verified && { rm -f -- "$sentinel"; return 0; }
+    finish_rc=1
+    echo "revert-run: RESTORE FAILED — the base's files are still in the tree, listed in $sentinel:" >&2
+    git status --porcelain --untracked-files=all --ignored -- "${swap[@]}" | sed 's/^/  /' >&2
+    echo "  recover: $(recovery_line)" >&2
+    return 1
+}
+out=
+trap '[ -z "$out" ] || rm -f -- "$out"; finish || exit 2' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+{
+    [ ${#modified[@]} -eq 0 ] || printf 'M %s\n' "${modified[@]}"
+    [ ${#added[@]} -eq 0 ]    || printf 'A %s\n' "${added[@]}"
+    [ ${#deleted[@]} -eq 0 ]  || printf 'D %s\n' "${deleted[@]}"
+} > "$sentinel"
+for p in "${added[@]}"; do rm -f -- "$p"; done
+if [ ${#modified[@]} -gt 0 ] || [ ${#deleted[@]} -gt 0 ]; then
+    git restore --source="$base" --worktree -- "${modified[@]}" "${deleted[@]}" || { echo "revert-run: the base checkout failed" >&2; exit 2; }
+fi
+
+# The command runs in its own process group so a signal to revert-run ends its children too.
+out=$(mktemp) || exit 2
+if command -v setsid >/dev/null 2>&1; then setsid "$@" > "$out" 2>&1 & else "$@" > "$out" 2>&1 & fi
+child=$!
+on_signal() { kill -TERM -- "-$child" 2>/dev/null || kill -TERM "$child" 2>/dev/null; wait "$child" 2>/dev/null; exit 130; }
+trap on_signal INT TERM
+wait "$child"
+rc=$?
+trap - INT TERM
+finish || exit 2
+
+classify() {
+    [ "$rc" -ne 0 ] || { echo passed; return; }
+    if { grep -qE 'Error: expect\(' "$out" && grep -qE '^[[:space:]]*(Expected|Received)\b' "$out"; } \
+        || grep -q 'Failed asserting' "$out"; then echo assertion-failed; return; fi
+    echo error
+}
+class=$(classify)
+
+total=$(wc -l < "$out")
+marker=$(grep -nE 'Error: expect\(|Failed asserting' "$out" | head -1 | cut -d: -f1)
+[ -n "$marker" ] || marker=$(grep -nE 'TimeoutError|Error:' "$out" | head -1 | cut -d: -f1)
+if [ -n "$marker" ]; then
+    first=$(( marker - 5 )); [ "$first" -ge 1 ] || first=1
+else
+    first=$(( total - 19 )); [ "$first" -ge 1 ] || first=1
+fi
+last=$(( first + 19 )); [ "$last" -le "$total" ] || last=$total
+
+slug=$(printf '%s' "$title" | LC_ALL=C tr 'A-Z' 'a-z' | LC_ALL=C tr -cs 'a-z0-9' '-')
+stem="${test_path//\//__}--${slug}"
+log="specs/$feature/shakeout/$stem.revert.txt"
+mkdir -p "specs/$feature/shakeout"
+{
+    echo "revert-run: $class"
+    echo "feature: $feature"
+    echo "test: $test_path :: $title"
+    echo "base: $(git rev-parse --short=7 "$base") ($ref)"
+    for p in "${modified[@]}";   do echo "swapped: $p (M)"; done
+    for p in "${added[@]}";      do echo "swapped: $p (A)"; done
+    for p in "${deleted[@]}";    do echo "swapped: $p (D)"; done
+    for p in "${submodules[@]}"; do echo "not swapped: $p (submodule)"; done
+    printf 'command:'; printf ' %q' "$@"; echo
+    echo "exit: $rc"
+    echo "--- output: $total lines, excerpt $first-$last ---"
+    sed -n "${first},${last}p" "$out"
+} > "$log"
+echo "revert-run: $class — $log"

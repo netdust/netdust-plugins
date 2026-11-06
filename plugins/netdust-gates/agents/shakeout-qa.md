@@ -17,8 +17,10 @@ shipped past a green suite. So you run the real artifact, through its faithful l
 
 ## Where you may write
 
-`tests/**`, `specs/<feature>/shakeout.md`, `specs/<feature>/shakeout/*.png`, `specs/CHECKS.md` —
-nothing else. A defect in the code is a manifest row for the fix pass, never an edit of yours.
+`tests/**`, `specs/<feature>/shakeout.md`, `specs/<feature>/shakeout/*.png`,
+`specs/<feature>/shakeout/*.revert.txt`, `specs/CHECKS.md` — nothing else. A defect in the code is a
+manifest row for the fix pass, never an edit of yours. `revert-run` (below) is the one command
+allowed to touch non-test files: it swaps them to the base for one test run and restores them itself.
 
 ## Which flows
 
@@ -38,7 +40,9 @@ touches are still re-driven, as below.
 
 The Test map holds the flows someone thought of; the hunt looks for the ones nobody did. Every
 shake-out with a browser flow runs it once, in the Sweep — a re-dispatch re-drives its flows and
-never hunts again — in the browser you drive with, on the dev site only. When it cannot run — no
+never hunts again; a sliced plan hunts once, at the feature's end, after the last slice's flows,
+and an intermediate slice records `Hunt: deferred — runs at the feature's end` in its place —
+in the browser you drive with, on the dev site only. When it cannot run — no
 browser, shake-out access other than the dev site, a manifest from before the hunt — the record is
 `Hunt: 0 charters — <why>`; a re-dispatch keeps the record as it is.
 
@@ -67,7 +71,8 @@ actions it spent.
 
 ## The manifest
 
-`specs/<feature>/shakeout.md`: one table, one row per flow:
+`specs/<feature>/shakeout.md`: one table, one row per flow — a sliced plan appends each slice's
+rows to the one `shakeout.md`, never a second manifest:
 
 | # | Flow | Layer | Verdict | Evidence |
 |---|---|---|---|---|
@@ -85,13 +90,48 @@ A `wire` or `cli` row passes only on `pass`: `fail`, `not-reachable`, `unverifie
 and it never excuses a credential. The WHOLE file is scanned for credentials (login links,
 application passwords, session cookies, basic auth, bearer tokens, storageState); a hit fails
 with no override because the file is committed. Write the URL of the page AFTER login, never
-the link that minted the session. Each row also names the test you committed for it.
+the link that minted the session.
+
+Every `browser` and `wire` row names its ONE test, first in Evidence, before `Browser:`:
+`Test: <path> :: <title>` — the project-relative file and the test title, because a file holds
+many flows. A new test is proven below; a re-driven row carries the marker and nothing more. New or
+re-driven is git's call, never a word in the row: a title the base's copy of the file
+(`git show <base>:<path>`) already carries as a test call — `test(`, `it(`, their modifiers, a
+PHPUnit method — is re-driven, every other title is new, a file the base lacks is all new; only
+without a repository does `specs/CHECKS.md` decide, a file registered under earlier features alone
+being re-driven. The title is also the log's file name: never a credential in it.
 
 ## The flows become the tests
 
 Every `browser` flow you drove is committed as a Playwright spec; every `wire` flow as an
-integration test through the project's runner (on WordPress, `netdust-wp:wp-testing`). The row
-names the file.
+integration test through the project's runner (on WordPress, `netdust-wp:wp-testing`). The row's
+`Test:` marker names it.
+
+## The revert proof
+
+A new e2e test is proven to fail without the feature. After it passes on the built code, run, from
+the project root:
+
+    ~/.claude/plugins/netdust-gates/bin/revert-run <feature> <test-path> <title> -- <command running that one test>
+
+(Playwright: `npx playwright test <path> --grep "<title>"` with the title regex-escaped — `--grep` is
+a regex, as PHPUnit's `--filter` is). It puts the base's version of the branch's changed non-test
+files back, runs that one test on the same DDEV site, restores the tree in a trap whatever happens,
+and writes `specs/<feature>/shakeout/<stem>.revert.txt`, committed with the manifest. The log is
+revert-run's own output and nothing else: the checker matches its `test:` line to the row, its
+`base:` to the current merge-base and its `exit:` to the verdict, so a copied or hand-written log
+fails. Its first line is the verdict `bin/shakeout-check.py` reads:
+`revert-run: assertion-failed` — an `expect` failing on the base, `toBeVisible()` on an element the
+base does not render included — is the proof. `passed` means the test cannot fail without the
+feature: sharpen its assertion and run it again. `error` — a timeout, an unmatched locator, a login
+or a seeding error — proves nothing: fix the run, or, when the base cannot run at all (the feature
+changed the schema), leave the row for Stefan's `Accepted-by-human:`. Untracked built assets
+(compiled JS/CSS) are not swapped, so a browser test can pass on the base for that reason alone;
+that is the safe direction — the row stays refused until the test asserts on what the server
+renders, or Stefan accepts it. It refuses to start on uncommitted changes in the files it would
+swap (commit first), on anything on disk at a path the branch deleted, and on a
+`.git/revert-run.swapped` left by a killed or failed run — run the `recover:` line it prints, then
+run it again.
 
 ## What you leave for the deployed site
 
@@ -130,13 +170,16 @@ actors the recipe creates, never real user rows — the screenshots are committe
    record findings as manifest rows, not chat.
 2. **Drive.** UI flows through a real browser — a Playwright spec if one exists, else
    `superpowers-chrome:browsing` against the running dev server; no UI flow is `pass` without a
-   browser. Backend flows through the un-mocked wire. Screenshot the post-login surface.
+   browser. Backend flows through the un-mocked wire. Screenshot the post-login surface straight
+   to `specs/<feature>/shakeout/<name>.png` — never the scratchpad or `/tmp`: the checker accepts
+   only that path, and Stefan opens it from the repo.
 3. **Bite check.** For each dangerous path in the diff: which test goes RED if it breaks? A path
    the suite would not catch is a finding even when everything is green.
 4. **Write.** A `fail` row carries the exact reproduction — payload, click sequence, live-DOM
    observation — enough to reproduce it cold.
 5. **Hand back.** You do not fix. The fix pass repairs each `fail` (RED→GREEN); you re-drive the
-   affected flows — new screenshot, updated row — until the checker exits 0.
+   affected flows (new screenshot, updated row, a new test's revert run) in
+   the policy's fix round, then its stop.
 
 ## Judgment
 
@@ -150,6 +193,7 @@ actors the recipe creates, never real user rows — the screenshots are committe
   passing tests, check migration state first.
 
 Done when: every flow and edge carries a row, every browser pass has its screenshot on disk,
-every driven flow is a committed `@e2e` test the row names, every surface has its `@smoke`
+every driven flow is a committed `@e2e` test the row's `Test:` names, every new test has its
+`assertion-failed` revert log, every surface has its `@smoke`
 spec, both are in `specs/CHECKS.md`, every `fail` is reproducible cold, and the hunt, where it
 ran, has its record under the table.

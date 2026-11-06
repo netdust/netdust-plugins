@@ -13,6 +13,11 @@ def _read(rel: str) -> str:
     return (PLUGIN / rel).read_text()
 
 
+def _in_order(text: str, *needles: str) -> bool:
+    positions = [text.find(n) for n in needles]
+    return all(p >= 0 for p in positions) and positions == sorted(positions)
+
+
 def _frontmatter_ok(text: str, name: str) -> bool:
     m = re.match(r"---\n(?P<fm>.*?)\n---\n", text, re.S)
     return bool(m) and f"name: {name}" in m.group("fm") and "description:" in m.group("fm")
@@ -46,7 +51,17 @@ def run() -> list[tuple[bool, str]]:
          "/shakeout reads the registry first, and the policy close names both verbs"),
         (all(s in command for s in ("bin/shakeout-check.py", "make gate", "Accepted-by-human:", "shakeout-qa",
                                     "screenshot", "netdust-gates:policy", "came before")),
-         "/shakeout runs make gate, the qa agent, the checker, the screenshot yield and points at the policy close"),
+         "/shakeout runs make gate, the qa agent, the checker, and points at the policy close"),
+        (all(s in qa for s in ("specs/<feature>/shakeout/*.revert.txt", "revert-run", "Test: <path> :: <title>", "first in Evidence",
+                               "~/.claude/plugins/netdust-gates/bin/revert-run <feature> <test-path> <title> -- <command running that one test>",
+                               "specs/<feature>/shakeout/<name>.png", "never the scratchpad", "built assets",
+                               "the policy's fix round, then its stop", "re-driven", "git show", "one `shakeout.md`",
+                               "at the feature's end"))
+         and "until the checker exits 0" not in qa
+         and all(s in command for s in ("make shakeout name=<feature>", "steps 5-9"))
+         and not any(s in command for s in ("until it exits 0", "Step 4", "screenshot yield", "back to Step 3")),
+         "the shake-out proves each new test on the base (revert-run, the Test: marker, the derived log), captures to the repo, "
+         "runs the policy's one fix round, and leaves the yield to the Close"),
         (all(s in reviewer for s in ("The cut", "too broad", "artificially split")) and "/plan-review <topic>" in policy
          and "Spec:\\**" in plan_cmd and "in place of its menu" in policy and "Scope Check" in policy,
          "a spec cut into several plans is reviewed as one set, and the reviewer judges the cut"),
@@ -69,8 +84,7 @@ def run() -> list[tuple[bool, str]]:
                                "keeps the record", "in doubt, it is ours", "git diff --name-only", "actions it spent"))
          and "hunt" in qa.split("**Sweep.**")[1].split("**Drive.**")[0]
          and "hunt" in qa.split("Done when:")[1]
-         and all(s in command for s in ("hunt", "not ours:", "overrule", "back to Step 3", "✗ [shakeout-hunt]",
-                                        "the hunt's tally"))
+         and all(s in command for s in ("hunt", "not ours:", "✗ [shakeout-hunt]"))
          and not any(s in t for s in ("e2e.config.ts", "npx e2e", ".e2e/") for t in (qa, command))
          and all(s in _read("CLAUDE.md") for s in ("on trial", "^Hunt: [1-9]", "0 confirmed · 0 not ours")),
          "every browser shake-out hunts once on the dev site with no tool of its own, or says why not; a bug is a failed assertion; not-ours only when the diff provably misses the surface; the hunt is on trial"),
@@ -80,10 +94,32 @@ def run() -> list[tuple[bool, str]]:
             "specs/$ARGUMENTS/review.md"))
          and "/review-fix" in policy,
          "/review-fix: the saved report, Stefan picks, the policy's fix pass, the record in specs/, re-promote"),
-        (policy.index("make review name=<feature>") < policy.index("runs `/shakeout`")
-         and "(Close, step 4)" in policy and "\n5. Every change:" in policy
-         and "every Blocking and Should fix finding" in policy
+        (_in_order(policy, "make review name=<feature>", "runs `/shakeout`", "`make shakeout name=<feature>`",
+                   "`make report name=<feature>`", "7. `make gate`", "\n9. Every change:")
+         and "(Close, step 8)" in policy and "every Blocking and Should fix finding" in policy
          and "else `specs/$ARGUMENTS/review.md`" in _read("commands/review-fix.md"),
-         "Close orders by cost: gate, review, fix pass, then the shakeout once on settled code"),
+         "Close orders by cost: gate, review, fix pass, the shakeout and its check, the report, the last gate on the report's "
+         "commit (the stamp promote needs), the yield, the finish"),
+        (all(s in policy.split("8. ")[1].split("9. ")[0] for s in ("overrule", "the hunt's tally", "Accepted-by-human:", "report.md"))
+         and "Slice" in policy and "## Slice" not in policy and "the report yield" in policy
+         and all(s in _read(f) for f, _ in (("commands/feature-review.md", 0), ("agents/security-sentinel.md", 0),
+                                              ("agents/invariant-auditor.md", 0)) for s in ("studio-checks", "revert"))
+         and "INV-2" in _read("skills/policy/wordpress.md")
+         and all(s in _read("CLAUDE.md") for s in ("revert-passed:", "Slice M"))
+         and "layer" in reviewer
+         and "/plan-review` again" not in plan_cmd and "cap" in plan_cmd,
+         "the yield lives in the policy's step 8; slices in the plan rule; the reviewers check tests exist and leave quality to "
+         "studio-checks; the pack carries INV-2; CLAUDE.md the revert trial and the slice label; the plan reviewer flags a layer; "
+         "/plan-review defers to the cap"),
+        (all(s in policy.split("\n3. ")[1].split("\n4. ")[0] for s in ("copied from `make review`'s saved report", "specs/<feature>/review.md"))
+         and all(s in policy.split("\n6. ")[1].split("\n7. ")[0] for s in ("report.md", "specs/CHECKS.md"))
+         and all(s in qa for s in ("Hunt: deferred — runs at the feature's end", "regex-escaped", "revert-run's own output",
+                                   ".git/revert-run.swapped", "`recover:`"))
+         and "Hunt: deferred" in command
+         and all(s in _read("CLAUDE.md") for s in ("<date> · <feature> · revert-passed:", "| sort | tail -5"))
+         and "than the review it protects" not in _read("CLAUDE.md"),
+         "the fix pass's wording (review S7, N2): review.md copied from make review's saved report, report.md committed with "
+         "specs/CHECKS.md, an intermediate slice's deferred hunt, --grep regex-escaped, the log is revert-run's own output, the "
+         "sentinel's recover line; CLAUDE.md's trial line is dated and the removal grep sorts by it, the cost comparison gone"),
         (not stale, f"none of the 0.28 machinery survives in the close (found {stale})"),
     ]

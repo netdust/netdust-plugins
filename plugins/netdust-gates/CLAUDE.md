@@ -15,10 +15,18 @@ The spec is `specs/netdust-gates/spec.md`; it is the authority.
 An incident lands as **a gate tier in the project**, **a line in a constraints pack or the
 edge-class catalog**, or **an eval case**. Never as a plan section a skill does not own (the threat model and the
 test map are the two, each owned by its skill) or a new check on plan grammar. netdust-agent went 0.18 → 0.28 in six weeks by doing the opposite.
+The one approved exception to the grammar (gates-quality-loop R7) is the slice label `### Task N · Slice M:`, which
+`bin/feature-report.py` reads to write one report section per slice.
 
 The shake-out's hunt (0.13.0) is on trial: when the last five hunts that ran all found nothing
 (`0 confirmed · 0 not ours`), it comes out again. A feature in two sibling checkouts counts once:
 `grep -sl '^Hunt: [1-9]' ~/Sites/*/specs/*/shakeout.md | xargs -r -d '\n' ls -t | head -5 | xargs -r -d '\n' grep -H '^Hunt:'`.
+
+The revert proof (0.19.0) is on trial the same way: `bin/feature-report.py` writes one line per feature under
+`## Trial log` in `specs/CHECKS.md` (`<date> · <feature> · revert-passed: <n> · revert-errors: <n> · report-gaps: <n>`).
+When the last five features show it did nothing — `revert-passed: 0` everywhere and no `report-gaps` traced to a missing
+or failed revert log — it comes out: `grep -sh '· revert-passed:' ~/Sites/*/specs/CHECKS.md | sort | tail -5` (the date
+leads the line, so the sort is by recency).
 
 ## Boundaries
 

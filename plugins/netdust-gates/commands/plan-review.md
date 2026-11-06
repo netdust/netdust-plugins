@@ -32,8 +32,9 @@ Write the returned report verbatim to `specs/$ARGUMENTS/plan-review.md`. Its sec
 must be `Reviewed-plan: <sha>` — one such line per plan for a set, each followed by the plan's
 path — check it before writing.
 
-- **Blocking** findings: fix the plan now (it is yours to edit at this stage), then run
-  `/plan-review` again — the new blob needs its own review.
+- **Blocking** findings: fix the plan now (it is yours to edit at this stage), then review the
+  new blob — within the plan-review cap the `netdust-gates:policy` Close states; past it the plan
+  goes to Stefan with the open findings, the cap hit ledgered as a `Ruling:`.
 - **Should fix**: fix them the same way unless the fix needs Stefan's ruling; then leave
   them in the report for him.
 - **Note**: stays in the report.

@@ -31,7 +31,9 @@ codebase, checked in the codebase.
    the row's command runnable; each `Review Focus` line points at a row. A "never"/"only"/"exactly one" line names an
    `ARCHITECTURE-INVARIANTS.md` check instead; a test that reads source for it is Should fix.
    A snapshot guarding a refactor with no task deleting it is Should fix. Each threat-model
-   mitigation has a row. On a WordPress project the pack's constraints are
+   mitigation has a row. A sliced plan (`### Task N · Slice M:`) cuts vertically: each slice ends
+   in something Stefan can see or run; a slice that is a layer ("the database first", "the
+   model layer") is Should fix, naming the vertical cut instead. On a WordPress project the pack's constraints are
    met by the tasks, not merely pasted into `Global Constraints`; every data flow's four
    pillars are decided, and each flow's denial path is driven by a test.
 3. **Invention and contradiction.** A task no requirement asks for, a task that contradicts

@@ -39,6 +39,11 @@ name — the reinvention never shares the original's name. A working duplicate i
 drift: two homes diverge silently, and the next session extends the wrong one. Verdict:
 `REINVENTED — <new site> duplicates <existing home>`, with which one should survive.
 
+**Tests: existence, not quality.** Each Review Focus line that points at a Test map row names a
+test that exists and covers the convergence point; every e2e flow has its revert log
+(`specs/<feature>/shakeout/*.revert.txt`), a missing one being `make shakeout`'s to refuse, not
+yours. Do not re-judge assertions or redundancy — that is `studio-checks`' job, outside the build.
+
 **4. Unrecorded intent becomes a proposal, not a pass.** An intentional deviation nobody
 wrote down gets flagged with a proposed entry for the doc's `## Deliberate exceptions`
 section (create the section in the proposal if the doc lacks one). Silent tolerance is

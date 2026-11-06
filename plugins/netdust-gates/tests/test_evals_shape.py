@@ -14,7 +14,8 @@ from pathlib import Path
 
 EVALS = Path(__file__).resolve().parent.parent / "evals"
 IDS = ["wp-feature-constraints", "security-surface-review-focus", "small-tweak-no-artifacts", "unit-cut-plan",
-       "two-session-handoff", "coder-brief-no-recursion", "canary-home-write"]
+       "two-session-handoff", "coder-brief-no-recursion", "canary-home-write", "revert-log-passed-fails-shakeout",
+       "plan-review-flags-layer-slice"]
 KEYS = {"id", "prompt", "files", "expect", "absent", "timeout", "env", "stub_bin", "commit", "allow", "max_turns",
         "branch"}
 STUB = (EVALS / "stubs" / "hc").resolve()
