@@ -749,6 +749,68 @@ else
 fi
 
 echo
+echo "── make shakeout and make report: the Close's checks as verbs ──"
+# Both read commands.<verb> from site.yml the way review reads commands.review, pass the
+# feature name as SHAKEOUT_NAME / REPORT_NAME, refuse with the line to add when the key is
+# missing, and fail when the command does. doctor names a key never declared.
+cat > "$CLI/bin/record-verb" <<'SH'
+#!/bin/sh
+printf 'shakeout=%s report=%s\n' "${SHAKEOUT_NAME:-}" "${REPORT_NAME:-}" > "$(dirname "$0")/../verb.env"
+SH
+chmod +x "$CLI/bin/record-verb"
+cp site.yml "$WORK/site.yml.before-verbs"
+for v in shakeout report; do
+    out=$(M "$v" name=x); rc=$?; out=$(printf '%s' "$out" | strip)
+    case "$rc:$out" in
+        [12]:*"No commands.$v in site.yml"*"e.g. $v: "*) ok "make $v without commands.$v refuses and prints the line to add";;
+        *) bad "make $v without commands.$v refuses and prints the line to add" "rc $rc: $(printf '%s' "$out" | head -3)";;
+    esac
+    out=$(M "$v"); rc=$?; out=$(printf '%s' "$out" | strip)
+    case "$rc:$out" in
+        [12]:*"Usage: make $v name="*) ok "make $v without a name prints the usage";;
+        *) bad "make $v without a name prints the usage" "rc $rc: $(printf '%s' "$out" | head -2)";;
+    esac
+done
+out=$(M _doctor-commands | strip)
+case "$out" in
+    *"commands.shakeout not declared"*"shakeout: "*"commands.report not declared"*"report: "*)
+        ok "doctor names commands.shakeout and commands.report when never declared, each with its line";;
+    *) bad "doctor names commands.shakeout and commands.report when never declared, each with its line" "$(printf '%s' "$out" | grep -A1 'shakeout\|report' | head -6)";;
+esac
+out=$(M help | strip)
+case "$out" in
+    *"shakeout name=X"*"report name=X"*) ok "help documents shakeout name=X and report name=X";;
+    *) bad "help documents shakeout name=X and report name=X" "$(printf '%s' "$out" | grep -i 'shakeout\|report' | head -3)";;
+esac
+if grep -q '^commands: {gate: "true"}$' site.yml; then
+    sed -i 's/^commands: {gate: "true"}$/commands: {gate: "true", shakeout: "record-verb", report: "record-verb"}/' site.yml
+    for v in shakeout report; do
+        : > "$CLI/verb.env"
+        out=$(M "$v" name=feat-1); rc=$?
+        seen=$(cat "$CLI/verb.env" 2>/dev/null)
+        case "$v" in shakeout) want="shakeout=feat-1 report=";; *) want="shakeout= report=feat-1";; esac
+        [ $rc -eq 0 ] && [ "$seen" = "$want" ] \
+            && ok "make $v name=feat-1 runs commands.$v with the name in its env ($want)" \
+            || bad "make $v name=feat-1 runs commands.$v with the name in its env" "rc $rc, env '$seen': $(printf '%s' "$out" | strip | head -3)"
+    done
+    sed -i 's/shakeout: "record-verb", report: "record-verb"/shakeout: "false", report: "false"/' site.yml
+    for v in shakeout report; do
+        out=$(M "$v" name=feat-1); rc=$?; out=$(printf '%s' "$out" | strip)
+        case "$rc:$out" in
+            [12]:*"✗ $v failed for feat-1"*) ok "make $v refuses, naming the feature, when commands.$v fails";;
+            *) bad "make $v refuses, naming the feature, when commands.$v fails" "rc $rc: $(printf '%s' "$out" | head -2)";;
+        esac
+    done
+    out=$(M _doctor-commands | strip)
+    case "$out" in
+        *"✅ commands.shakeout declared"*"✅ commands.report declared"*) ok "doctor sees both keys once declared";;
+        *) bad "doctor sees both keys once declared" "$(printf '%s' "$out" | head -8)";;
+    esac
+else
+    bad "the fixture's commands line is the one this section rewrites" "$(grep -n '^commands:' site.yml)"
+fi
+cp "$WORK/site.yml.before-verbs" site.yml
+
 echo "── the deploy tag fails closed ──"
 # ship reads deployed/staging from origin to prove a tree was deployed, so a
 # tag that does not reach origin is a failed deploy, not a warning.

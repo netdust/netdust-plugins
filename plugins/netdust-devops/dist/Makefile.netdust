@@ -124,6 +124,10 @@ help: ## Show this help
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "e2e env=E"         "drive the e2e flows on a deployed environment (commands.e2e) — never production"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "smoke env=E"       "check the deployed site from outside (commands.smoke, read-only)"
 	@echo ""
+	@echo "$(YELLOW)CLOSE$(RESET)        a feature's checks before promote (netdust-gates:policy Close)"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "shakeout name=X" "check a feature's shake-out artifacts (commands.shakeout): manifest, screenshots, revert logs"
+	@printf "  $(GREEN)%-22s$(RESET) %s\n" "report name=X"   "generate a feature's report from its artifacts (commands.report), committed with it"
+	@echo ""
 	@echo "$(YELLOW)INSPECT$(RESET)      read-only — safe to run anywhere, any time"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "status"   "branch, flow position, what runs where"
 	@printf "  $(GREEN)%-22s$(RESET) %s\n" "deployed" "which commit runs on each environment"
@@ -620,6 +624,33 @@ review: ## Review a feature (make review name=X) or where staging's features mee
 	cat "$$OUT.tmp"; [ $$RC = 0 ] || { rm -f "$$OUT.tmp"; exit $$RC; }; mv "$$OUT.tmp" "$$OUT"; \
 	echo "$(YELLOW)report: $$OUT$(RESET)"; \
 	[ "$$S" = staging ] || echo "$(YELLOW)follow-up: /review-fix $$N — then make promote name=$$N again$(RESET)"
+
+# The shake-out check (commands.shakeout): the deterministic read of a feature's committed
+# manifest, screenshots and revert logs. Driving the browser stays /shakeout in a session;
+# this verb checks what it left, so a step cannot be skipped unseen.
+.PHONY: shakeout
+shakeout: ## Check a feature's shake-out artifacts (make shakeout name=X)
+	@$(call _check-name,shakeout,my-feature)
+	@R=$$($(SITE) commands.shakeout 2>/dev/null); \
+	if [ -z "$$R" ]; then \
+		echo "$(RED)✗ No commands.shakeout in site.yml — nothing knows how to check a shake-out$(RESET)"; \
+		printf "$(YELLOW)  e.g. %s$(RESET)\n" '$(_doctor-line-shakeout)'; exit 1; fi; \
+	echo "$(BLUE)$$R  ← $(name)$(RESET)"; \
+	SHAKEOUT_NAME="$(name)" sh -c "$$R" || { echo "$(RED)✗ shakeout failed for $(name)$(RESET)"; exit 1; }; \
+	echo "$(GREEN)✅ shake-out of $(name) checks out$(RESET)"
+
+# The feature report (commands.report): generated from the feature's artifacts, never
+# written, and committed with the feature before its final gate.
+.PHONY: report
+report: ## Generate a feature's report from its artifacts (make report name=X)
+	@$(call _check-name,report,my-feature)
+	@R=$$($(SITE) commands.report 2>/dev/null); \
+	if [ -z "$$R" ]; then \
+		echo "$(RED)✗ No commands.report in site.yml — nothing knows how to report a feature$(RESET)"; \
+		printf "$(YELLOW)  e.g. %s$(RESET)\n" '$(_doctor-line-report)'; exit 1; fi; \
+	echo "$(BLUE)$$R  ← $(name)$(RESET)"; \
+	REPORT_NAME="$(name)" sh -c "$$R" || { echo "$(RED)✗ report failed for $(name)$(RESET)"; exit 1; }; \
+	echo "$(GREEN)✅ report of $(name) written — commit it with the feature$(RESET)"
 
 .PHONY: test
 test: ## Run the deploy tooling + branch-flow tests (never contacts a server)
@@ -1183,11 +1214,13 @@ _ensure-clean-git:
 # core reads is reported here, with the line to add. `key: ''` is a decision (this
 # project has no such runner) and is respected; only a key never declared is a gap.
 # The lines are the wp stack's; another stack reads them as the shape to adapt.
-_DOCTOR_COMMANDS := gate smoke e2e review
+_DOCTOR_COMMANDS := gate smoke e2e review shakeout report
 _doctor-line-gate  := gate: composer gate
 _doctor-line-smoke := smoke: PLAYWRIGHT_BASE_URL=$$SMOKE_URL npx playwright test --grep @smoke
 _doctor-line-review := review: claude -p "/netdust-gates:feature-review"
 _doctor-line-e2e   := e2e: E2E_ENV=$$E2E_ENV PLAYWRIGHT_BASE_URL=$$E2E_URL bin/e2e.sh
+_doctor-line-shakeout := shakeout: python3 "$$HOME/.claude/plugins/netdust-gates/bin/shakeout-check.py" "specs/$$SHAKEOUT_NAME"
+_doctor-line-report := report: python3 "$$HOME/.claude/plugins/netdust-gates/bin/feature-report.py" "specs/$$REPORT_NAME"
 
 _doctor-commands:
 	@echo "$(BLUE)Commands (site.yml)$(RESET)"

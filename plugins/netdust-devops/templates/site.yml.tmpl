@@ -154,6 +154,14 @@ commands:
   # REVIEW_NAME and REVIEW_SCOPE set; `make promote name=<x>` runs it before its Continue?
   # unless a review is already saved (review=off skips). It reports; it gates nothing. '' opts out.
   review: claude -p "/netdust-gates:feature-review"
+  # The shake-out check, on demand: `make shakeout name=<x>` runs this with SHAKEOUT_NAME set —
+  # the deterministic read of the feature's committed manifest, screenshots and revert logs.
+  # Driving the browser stays /shakeout in a session; this checks what it left. '' opts out.
+  # (~/.claude/plugins/netdust-gates is the link netdust-gates' session-start hook keeps.)
+  shakeout: python3 "$HOME/.claude/plugins/netdust-gates/bin/shakeout-check.py" "specs/$SHAKEOUT_NAME"
+  # The feature report, generated from its artifacts: `make report name=<x>` runs this with
+  # REPORT_NAME set; the report is committed with the feature before its final gate. '' opts out.
+  report: python3 "$HOME/.claude/plugins/netdust-gates/bin/feature-report.py" "specs/$REPORT_NAME"
   # The local loop, read by mk/<stack>.mk. Empty means the stack has no such
   # verb — a DDEV stack gets its dev loop from `ddev start`, not from here.
   install: {{INSTALL_COMMAND}}
